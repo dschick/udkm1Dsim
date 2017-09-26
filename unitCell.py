@@ -120,7 +120,6 @@ class unitCell(object):
             raise ValueError('Heat capacity, thermal conductivity, linear \
                 thermal expansion and subsystem coupling have not the same number of elements!')
 
-        # calculate the area of the unit cell
         self.area           = self.aAxis * self.bAxis
         self.volume         = self.area * self.cAxis
 
@@ -164,52 +163,41 @@ class unitCell(object):
 
         return(classStr)
 
-#
-#     %% visualize
-#     % plots the atoms in the unitCell for a given strain. You can input
-#     % a figure handle.
-#     function visualize(obj,varargin)
-#         % initialize input parser and define defaults and validators
-#         p = inputParser;
-#         p.addRequired('obj'     , @(x)isa(x,'unitCell'));
-#         p.addParamValue('strain', 0     , @isnumeric);
-#         p.addParamValue('pause' , 0.05  , @isnumeric);
-#         p.addParamValue('handle', ''    , @ishandle);
-#         % parse the input
-#         p.parse(obj,varargin{:});
-#         % assign parser results to object properties
-#         if isempty(p.Results.handle)
-#             h = figure;
-#         else
-#             h = p.Results.handle;
-#         end
-#         strain = p.Results.strain;
-#         figure(h);
-#         colors = colormap(lines(obj.numAtoms));
-#         atomIDs = obj.getAtomIDs();
-#         atomsPlotted = zeros(size(atomIDs));
-#         for i = 1:length(strain)
-#             for j = 1:obj.numAtoms
-#                 l = plot(1+0*j,obj.atoms{j,2}(strain(i)),'Marker', 'o', 'MarkerSize', 5, 'MarkerEdgeColor', [0 0 0], 'MarkerFaceColor', colors(strcmp(obj.atoms{j,1}.ID, atomIDs),:), 'LineStyle', 'none');
-#                 % check if atom has already been plotted
-#                 if atomsPlotted(strcmp(obj.atoms{j,1}.ID, atomIDs))
-#                     % do not show the atom in the legend
-#                     hasbehavior(l,'legend',false);
-#                 else
-#                     % set that the atom had been plotted
-#                     atomsPlotted(strcmp(obj.atoms{j,1}.ID, atomIDs)) = true;
-#                 end%if
-#                 hold on;
-#             end%for
-# %                 axis([0.1 obj.numAtoms+0.9 -0.1 (1.1+max(strain))]); grid on; box on;
-#             title(sprintf('Strain: %.2f%%',strain(i)), 'FontSize', 18);
-#             ylabel('relative Position');
-#             xlabel('# Atoms');
-#             hold off
-#             pause(p.Results.pause)
-#         end%for
-#         legend(atomIDs,'Location','NorthWest');
-#     end%function
+    def visualize(self, **kwargs):
+        import matplotlib.pyplot as plt
+        import matplotlib.cm as cmx
+
+        strains = kwargs.get('strains', 0)
+        if not isinstance(strains, np.ndarray):
+            strains = np.array([strains])
+
+        colors          = [cmx.Dark2(x) for x in np.linspace(0, 1, self.numAtoms)]
+        atomIDs         = self.getAtomIDs()
+
+        for strain in strains:
+            plt.figure()
+            atomsPlotted    = np.zeros_like(atomIDs)
+            for j in range(self.numAtoms):
+                if not atomsPlotted[atomIDs.index(self.atoms[j][0].ID)]:
+                    label = self.atoms[j][0].ID
+                    atomsPlotted[atomIDs.index(self.atoms[j][0].ID)] = True
+                else:
+                    label = '_nolegend_'
+
+                l = plt.plot(1+j,self.atoms[j][1](strain), 'o', MarkerSize=10,
+                    markeredgecolor=[0, 0, 0], markerfaceColor=colors[atomIDs.index(self.atoms[j][0].ID)],
+                    label=label)
+                #  check if atom has already been plotted
+
+
+            plt.axis([0.1, self.numAtoms+0.9, -0.1, (1.1+np.max(strains))])
+            plt.grid(True)
+
+            plt.title('Strain: {:0.2f}%'.format(strain));
+            plt.ylabel('relative Position');
+            plt.xlabel('# Atoms');
+            plt.legend()
+            plt.show()
 
     def getPropertyStruct(self, **kwargs):
         """getParameterStruct
@@ -352,40 +340,6 @@ class unitCell(object):
         when no Smybolic Math Toolbox is installed.
         """
         self._intLinThermExp, self.intLinThermExpStr = self.checkCellArrayInput(intLinThermExp)
-
-
-    #
-    # %% getIntLinThermExp
-    # % Returns the anti-derrivative of theintegrated temperature-dependent
-    # % linear thermal expansion function. If the _intHeatCapacity_
-    # % property is not set, the symbolic integration is performed.
-    # function h = get.intLinThermExp(obj)
-    #     if iscell(obj.intLinThermExp)
-    #         h = obj.intLinThermExp;
-    #     elseif exist('syms')
-    #         % symbolic math toolbox is installed
-    #         syms T;
-    #         h = cell(length(obj.linThermExp),1);
-    #         for i=1:length(obj.linThermExp)
-    #             fstr = strrep(func2str(obj.linThermExp{i}),'@(T)','');
-    #             fstr = strrep(fstr,'.*','*');
-    #             fstr = strrep(fstr,'./','/');
-    #             fstr = strrep(fstr,'.^','^');
-    #             h{i} = str2func(['@(T)(' vectorize(int(sym(fstr),'T')) ')']);
-    #         end%for
-    #         obj.intLinThermExp = h;
-    #         clear T;
-    #     else
-    #         error('The MATLAB Symbolic Math Toolbox is not installed. Please set the analytical anti-derivative of the linear thermal expansion coefficient of your unit cells as anonymous function of the temperature T by typing UC.intLinThermExp = @(T)(a(T)); where UC is the name of the unit cell object.');
-    #     end%if
-    # end%function
-    #
-    # %% setIntLinThermExp
-    # % Set the integrated linear thermal expansion coefficient manually
-    # % when no Smybolic Math Toolbox is installed.
-    # function set.intLinThermExp(obj,value)
-    #     obj.intLinThermExp = obj.checkCellArrayInput(value);
-    # end%function
 
     def addAtom(self, atom, position):
         """ addAtom
