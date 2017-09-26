@@ -18,6 +18,8 @@
 import numpy as np
 import os
 import scipy.constants as constants
+import numericalunits as u
+u.reset_units('SI')
 
 class atom(object):
     """atom
@@ -84,7 +86,7 @@ class atom(object):
         classStr += 'name               : {:s}\n'.format(self.name)
         classStr += 'atomic number Z    : {:3.2f}\n'.format(self.atomicNumberZ)
         classStr += 'mass number   A    : {:3.2f} u\n'.format(self.massNumberA)
-        classStr += 'mass               : {:3.2e} kg\n'.format(self.mass)
+        classStr += 'mass               : {:3.2e} kg\n'.format(self.mass/u.kg)
         classStr += 'ionicity           : {:3.2f}\n'.format(self.ionicity)
         classStr += 'Cromer Mann coeff  : {:s}\n'.format(np.array_str(self.cromerMannCoeff))
         return(classStr)
@@ -110,7 +112,7 @@ class atom(object):
         Returns the complex atomic form factor $f(E)=f_1-\i f_2$ for the
         energy $E$ [J].
         """
-        E = E/constants.elementary_charge; # convert energy from [J] in [eV]
+        E = E/u.eV; # convert energy from [J] in [eV]
         # interpolate the real and imaginary part in dependence of E
         f1 = np.interp(E, self.atomicFormFactorCoeff[:,0],self.atomicFormFactorCoeff[:,1]);
         f2 = np.interp(E, self.atomicFormFactorCoeff[:,0],self.atomicFormFactorCoeff[:,2]);
@@ -143,7 +145,7 @@ class atom(object):
         Since the CM coefficients are fitted for $q_z$ in [Ang^-1]
         we have to convert it before!
         """
-        qz = qz/constants.angstrom**-1; # qz in [Ang^-1]
+        qz = qz/u.angstrom**-1; # qz in [Ang^-1]
         # See Ref. [2] (p. 235).
         #
         # $$f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -\i f_2(E)$$
@@ -235,10 +237,10 @@ class atomMixed(atom):
         self.numAtoms = self.numAtoms + 1
         # calculate the mixed atomic properties of the atomMixed
         # instance
-        self.atomicNumberZ    = self.atomicNumberZ     + fraction * atom.atomicNumberZ;
-        self.massNumberA      = self.massNumberA       + fraction * atom.massNumberA;
-        self.mass             = self.mass              + fraction * atom.mass;
-        self.ionicity         = self.ionicity          + fraction * atom.ionicity;
+        self.atomicNumberZ = self.atomicNumberZ + fraction * atom.atomicNumberZ;
+        self.massNumberA   = self.massNumberA   + fraction * atom.massNumberA;
+        self.mass          = self.mass          + fraction * atom.mass;
+        self.ionicity      = self.ionicity      + fraction * atom.ionicity;
 
     def getAtomicFormFactor(self, E):
         """getAtomicFormFactor

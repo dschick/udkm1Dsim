@@ -19,6 +19,8 @@ import numpy as np
 from inspect import isfunction
 from sympy import integrate, Symbol
 from sympy.utilities.lambdify import lambdify
+import numericalunits as u
+u.reset_units('SI')
 
 class unitCell(object):
     """unitCell
@@ -117,8 +119,8 @@ class unitCell(object):
             and len(self.heatCapacity) == len(self.subSystemCoupling):
             self.numSubSystems = len(self.heatCapacity)
         else:
-            raise ValueError('Heat capacity, thermal conductivity, linear \
-                thermal expansion and subsystem coupling have not the same number of elements!')
+            raise ValueError('Heat capacity, thermal conductivity, linear'
+                'thermal expansion and subsystem coupling have not the same number of elements!')
 
         self.area           = self.aAxis * self.bAxis
         self.volume         = self.area * self.cAxis
@@ -130,18 +132,18 @@ class unitCell(object):
         classStr  = 'Unit Cell with the following properties\n'
         classStr += 'ID                     : {:s}\n'.format(self.ID)
         classStr += 'name                   : {:s}\n'.format(self.name)
-        classStr += 'a-axis                 : {:3.2f} Å\n'.format(self.aAxis/1e-10)
-        classStr += 'b-axis                 : {:3.2f} Å\n'.format(self.bAxis/1e-10)
-        classStr += 'c-axis                 : {:3.2f} Å\n'.format(self.cAxis/1e-10)
-        classStr += 'area                   : {:3.2f} Å²\n'.format(self.area/1e-20)
-        classStr += 'volume                 : {:3.2f} Å³\n'.format(self.volume/1e-30)
-        classStr += 'mass                   : {:3.2e} kg\n'.format(self.mass)
-        classStr += 'density                : {:3.2e} kg/m³\n'.format(self.density)
-        classStr += 'Debye Waller Factor    : {:3.2f} m²\n'.format(self.debWalFac)
-        classStr += 'sound velocity         : {:3.2f} nm/ps\n'.format(self.soundVel/1e-9*1e-12)
-        classStr += 'spring constant        : {:s} kg/s²\n'.format(np.array_str(self.springConst))
-        classStr += 'phonon damping         : {:3.2f} kg/s\n'.format(self.phononDamping)
-        classStr += 'opt. pen. depth        : {:3.2f} nm\n'.format(self.optPenDepth/1e-9)
+        classStr += 'a-axis                 : {:3.2f} Å\n'.format(self.aAxis/u.angstrom)
+        classStr += 'b-axis                 : {:3.2f} Å\n'.format(self.bAxis/u.angstrom)
+        classStr += 'c-axis                 : {:3.2f} Å\n'.format(self.cAxis/u.angstrom)
+        classStr += 'area                   : {:3.2f} Å²\n'.format(self.area/u.angstrom**2)
+        classStr += 'volume                 : {:3.2f} Å³\n'.format(self.volume/u.angstrom**3)
+        classStr += 'mass                   : {:3.2e} kg\n'.format(self.mass/u.kg)
+        classStr += 'density                : {:3.2e} kg/m³\n'.format(self.density/(u.kg/u.m**3))
+        classStr += 'Debye Waller Factor    : {:3.2f} m²\n'.format(self.debWalFac/u.m**2)
+        classStr += 'sound velocity         : {:3.2f} nm/ps\n'.format(self.soundVel/(u.nm/u.ps))
+        classStr += 'spring constant        : {:s} kg/s²\n'.format(np.array_str(self.springConst/(u.kg/u.s**2)))
+        classStr += 'phonon damping         : {:3.2f} kg/s\n'.format(self.phononDamping/(u.kg/u.s))
+        classStr += 'opt. pen. depth        : {:3.2f} nm\n'.format(self.optPenDepth/u.nm)
         classStr += 'opt. refractive index  : {:3.2f}\n'.format(self.optRefIndex)
         classStr += 'opt. ref. index/strain : {:3.2f}\n'.format(self.optRefIndexPerStrain)
         classStr += 'thermal conduct. [W/m K]       :\n'
@@ -187,8 +189,6 @@ class unitCell(object):
                 l = plt.plot(1+j,self.atoms[j][1](strain), 'o', MarkerSize=10,
                     markeredgecolor=[0, 0, 0], markerfaceColor=colors[atomIDs.index(self.atoms[j][0].ID)],
                     label=label)
-                #  check if atom has already been plotted
-
 
             plt.axis([0.1, self.numAtoms+0.9, -0.1, (1.1+np.max(strains))])
             plt.grid(True)
@@ -255,9 +255,9 @@ class unitCell(object):
                 output.append(eval('lambda T: {:f}'.format(input)))
                 outputStrs.append('lambda T: {:f}'.format(input))
             else:
-                raise ValueError('Unit cell property input has to be a single or \
-                cell array of numerics, function handles or strings which can be \
-                converted into a function handle!')
+                raise ValueError('Unit cell property input has to be a single or'
+                'cell array of numerics, function handles or strings which can be'
+                'converted into a function handle!')
 
         return(output, outputStrs)
 
@@ -283,11 +283,11 @@ class unitCell(object):
                     self.intHeatCapacityStr.append('lambda T : ' + str(integral))
 
             except Exception as e:
-                print('The MATLAB Symbolic Math Toolbox is not installed. \
-                Please set the analytical anti-derivative of the heat capacity \
-                of your unit cells as anonymous function of the temperature \
-                T by typing UC.intHeatCapacity = @(T)(c(T)); \
-                where UC is the name of the unit cell object.')
+                print('The sympy integration did not work. You can set the'
+                'analytical anti-derivative of the heat capacity'
+                'of your unit cells as lambda function of the temperature'
+                'T by typing UC.intHeatCapacity = lambda T: c(T)'
+                'where UC is the name of the unit cell object.')
                 print(e)
 
         return(self._intHeatCapacity)
@@ -323,11 +323,11 @@ class unitCell(object):
                     self.intLinThermExpStr.append('lambda T : ' + str(integral))
 
             except Exception as e:
-                print('The MATLAB Symbolic Math Toolbox is not installed. \
-                Please set the analytical anti-derivative of the heat capacity \
-                of your unit cells as anonymous function of the temperature \
-                T by typing UC.intHeatCapacity = @(T)(c(T)); \
-                where UC is the name of the unit cell object.')
+                print('The sympy integration did not work. You can set the'
+                'the analytical anti-derivative of the heat capacity'
+                'of your unit cells as lambda function of the temperature'
+                'T by typing UC.intHeatCapacity = lambda T: c(T)'
+                'where UC is the name of the unit cell object.')
                 print(e)
 
         return(self._intLinThermExp)
@@ -364,8 +364,8 @@ class unitCell(object):
             positionStr = 'lambda strain: {:e}*(strain+1)'.format(position)
             position = eval(positionStr);
         else:
-            raise ValueError('Atom position input has to be a scalar, function \
-            handle or string which can be converted into a function handle!')
+            raise ValueError('Atom position input has to be a scalar, or string'
+                    'which can be converted into a lambda function!')
 
         # add the atom at the end of the array
         self.atoms.append([atom, position, positionStr])
@@ -381,7 +381,8 @@ class unitCell(object):
             self.mass = self.mass + self.atoms[i][0].mass
 
         self.density     = self.mass / self.volume
-        # self.mass        = self.mass * 1*units.ang^2 / self.area;
+        # set mass per unit area (do not know if necessary)
+        self.mass        = self.mass * 1*u.angstrom**2 / self.area
         self.calcSpringConst()
 
     def addMultipleAtoms(self, atom, position, Nb):
@@ -432,7 +433,9 @@ class unitCell(object):
         if HO.shape[0] > 1:
             HO = HO.T
 
-        self.springConst = np.delete(self.springConst, np.r_[1:len(self.springConst)]) # reset old higher order spring constants
+        # reset old higher order spring constants
+        self.springConst = np.delete(self.springConst,
+                            np.r_[1:len(self.springConst)])
         self.springConst = np.hstack((self.springConst, HO))
 
     def getAtomIDs(self):
@@ -459,8 +462,6 @@ class unitCell(object):
             strain = args
         else:
             strain = 0
-
-        # strains = strain*list(range(self.numAtoms))
 
         res = np.zeros([self.numAtoms])
         for i, atom in enumerate(self.atoms):
