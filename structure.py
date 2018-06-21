@@ -20,10 +20,8 @@
 #
 # Copyright (C) 2017 Daniel Schick
 
-
-#### **** NOT COMPLETE ******
-
 import more_itertools
+import itertools
 
 class structure(object):
     
@@ -129,62 +127,105 @@ class structure(object):
         pass
     
 
-
-#     def getUniqueUnitCells(self):
-        
-#         """Returns a cell array of IDs and handles of all unique unitCell instances in the structure.
-#         The uniqueness is determined by the handle of each unitCell instance."""
-        
-#         newList   = []
-#         newListID = []
-#         for i in range(len(self.substructures)):
-#             if isinstance(self.substructures[i][0],unitCell):
-#                 if self.substructures[i][0] not in newList:
-#                     newList   = newList   + [self.substructures[i][0]]
-#                     newListID = newListID + [self.substructures[i][0].ID]
-#             else:
-#                 newList   =  list(set(newList   + self.substructures[i][0].getUniqueUnitCells()[1]))
-#                 newListID =  list(set(newListID + self.substructures[i][0].getUniqueUnitCells()[0]))      
-#         return newListID,newList
-    
-    
-    
     
     def getUniqueUnitCells(self):
         
         """Returns a cell array of IDs and handles of all unique unitCell instances in the structure.
         The uniqueness is determined by the handle of each unitCell instance."""
         
-        UCs = []
+        UCIDs = []
+        UCHandles = []
+        #traverse the substructures
         for i in range(len(self.substructures)):
             if isinstance(self.substructures[i][0],unitCell):
-                if self.substructures[i][0] not in UCs:
-                    UCs = UCs + [self.substructures[i][0].ID]
+                #its a UnitCell
+                ID = self.substructures[i][0].ID
+                if not UCIDs:
+                    #the cell array is empty at the beginning so add
+                    #the first unitCell
+                    UCIDs = UCIDs + [ID]
+                    UCHandles = UCHandles + [S.substructures[i][0]]
+                else:
+                    #the cell array is not empty so check if the ID is
+                    #already in the UCs ID vector
+                    if ID not in UCIDs:
+                        #if ID not in list, so add it
+                        UCIDs = UCIDs + [ID]
+                        UCHandles = UCHandles + [S.substructures[i][0]]
             else:
-                UCs = UCs + self.substructures[i][0].getUniqueUnitCells()    
-        return UCs 
+                #its a substructure
+                if not UCIDs:
+                    #the cell array is empty at the beginning so call
+                    #the method recursively and add the result to the
+                    #UCs array
+                    UCIDs = self.substructures[i][0].getUniqueUnitCells()[0]
+                    UCHandles = self.substructures[i][0].getUniqueUnitCells()[1]
+                else:
+                    #the cell array is not empty so check if the IDs
+                    #from the recursive call are already in the UCs ID
+                    #vector.
+                    temp1 = self.substructures[i][0].getUniqueUnitCells()[0]
+                    temp2 = self.substructures[i][0].getUniqueUnitCells()[1]
+                    for j in range(len(temp1)):
+                        #check all IDs from recursive call
+                        if temp1[j] not in UCIDs:
+                            #IDs not in list, so add them
+                            UCIDs = UCIDs + [temp1[j]]
+                            UCHandles = UCHandles + [temp2[j]] 
+                            
+        return UCIDs,UCHandles
     
     
     
-    #def getUnitCellVectors(self):
-     #   Index     =  []
-      #  newList   =  []
-       # newListID =  []
-        #for j in range(len(self.substructures)):
-        #    if isinstance(self.substructures[j][0],unitCell):
-         #       Index     = Index     + [i for i, v in enumerate(self.getUniqueUnitCells()[1]) if v == self.substructures[j][0]]*self.substructures[j][1]
-          #      newList   = newList   + [v for i, v in enumerate(self.getUniqueUnitCells()[1]) if v == self.substructures[j][0]]*self.substructures[j][1]
-           #     newListID = newListID + [v.ID for i, v in enumerate(self.getUniqueUnitCells()[1]) if v == self.substructures[j][0]]*self.substructures[j][1]
-            #else:
-             #   Index      = Index     + [self.substructures[j][0].getUnitCellVectors()[0]]*self.substructures[j][1]
-              #  newList    = newList   + [self.substructures[j][0].getUnitCellVectors()[1]]*self.substructures[j][1]
-              #  newListID  = newListID + [self.substructures[j][0].getUnitCellVectors()[2]]*self.substructures[j][1]
-        #return list(more_itertools.collapse(Index)),list(more_itertools.collapse(newList)),list(more_itertools.collapse(newListID))   
     
-    #def getAllPositionsPerUniqueUnitCell(self):
-     #   Index            =   self.getUnitCellVectors()[1]
-      #  UniqueUnitCells  =   self.getUniqueUnitCells()[1]
-       # Positions        =   []
-        #for j in UniqueUnitCells:
-         #   Positions.append([i for i, v in enumerate(Index) if v == j])
-        #return Positions
+
+    def getUnitCellVectors(self,*args):
+        
+        """Returns three vectors with the numeric index of all unit cells in a structure given by the getUniqueUnitCells() method and addidionally vectors with the IDs and Handles of the corresponding unitCell instances. 
+        The list and order of the unique unitCells can be either handed as an input parameter or is requested at the beginning."""
+        
+
+        Indices     =  []
+        UCIDs       =  []
+        UCHandles   =  []
+        # if no UCs (UniqueUnitCells) are given, we have to get them
+        if (len(args)<1):
+            UCs = self.getUniqueUnitCells()
+        else:
+            UCs = args[0]
+        # traverse the substructres
+        for i in range(len(self.substructures)):
+            if isinstance(self.substructures[i][0],unitCell):
+            #its a UnitCell
+            #find the index of the current UC ID in the unique
+            #unitCell vector
+                Index = UCs[0].index(self.substructures[i][0].ID)
+                #add the index N times to the Indices vector
+                Indices = np.append(Indices,Index*np.ones(self.substructures[i][1]))
+                #create a cell array of N unitCell IDs and add them to
+                #the IDs cell array
+                temp1 = list(itertools.repeat(self.substructures[i][0].ID, self.substructures[i][1]))
+                UCIDs = UCIDs + list(temp1)
+                #% create a cell array of N unitCell handles and add them to
+                #the Handles cell array
+                temp2 = list(itertools.repeat(self.substructures[i][0], self.substructures[i][1]))
+                UCHandles = UCHandles + list(temp2)
+            else:
+                #its a structure
+                #make a recursive call and hand in the same unique
+                #unit cell vector as we used before
+                [temp1, temp2, temp3] =  self.substructures[i][0].getUnitCellVectors()
+                temp11 = []
+                temp22 = []
+                temp33 = []
+                # concat the temporary arrays N times
+                for j in range(self.substructures[i][1]):
+                    temp11 = temp11 + list(temp1)
+                    temp22 = temp22 + list(temp2)
+                    temp33 = temp33 + list(temp3)
+                #add the temporary arrays to the outputs
+                Indices = np.append(Indices,temp11)
+                UCIDs = UCIDs + list(temp22)
+                UCHandles = UCHandles + list(temp33)
+        return Indices, UCIDs, UCHandles   
+    
