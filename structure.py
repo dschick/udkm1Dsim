@@ -214,7 +214,7 @@ class structure(object):
                 #its a structure
                 #make a recursive call and hand in the same unique
                 #unit cell vector as we used before
-                [temp1, temp2, temp3] =  self.substructures[i][0].getUnitCellVectors()
+                [temp1, temp2, temp3] =  self.substructures[i][0].getUnitCellVectors(UCs)
                 temp11 = []
                 temp22 = []
                 temp33 = []
