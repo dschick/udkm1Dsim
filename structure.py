@@ -176,8 +176,6 @@ class structure(object):
         return UCIDs,UCHandles
     
     
-    
-    
 
     def getUnitCellVectors(self,*args):
         
@@ -227,5 +225,79 @@ class structure(object):
                 Indices = np.append(Indices,temp11)
                 UCIDs = UCIDs + list(temp22)
                 UCHandles = UCHandles + list(temp33)
-        return Indices, UCIDs, UCHandles   
+        return Indices, UCIDs, UCHandles
+    
+    
+    def getAllPositionsPerUniqueUnitCell(self):
+        
+            """Returns a cell array with one vector of position indices for each unique unitCell in the structure."""
+            
+            UCs     = self.getUniqueUnitCells()
+            Indices = self.getUnitCellVectors()[0]
+            Pos     = {} # Dictionary used instead of array
+            for i in range(len(UCs[0])):
+                Pos[UCs[0][i]] = list(np.where(Indices == i))
+            #Each element accessible through Unit cell ID
+            return Pos
+    
+    
+    def getDistancesOfUnitCells(self):
+        
+        """Returns a vector of the distance from the surface for each unit cell starting at 0 (dStart) 
+        and starting at the end of the first UC (dEnd) and from the center of each UC (dMid)."""
+        
+        cAxes = self.getUnitCellPropertyVector(types = 'cAxis')
+        dEnd  = np.cumsum(cAxes)
+        dStart= np.hstack([[0],dEnd[0:-1]])
+        dMid  = (dStart + cAxes)/2
+        return dStart,dEnd,dMid 
+    
+    
+   def getUnitCellPropertyVector(self,**kwargs):
+        
+   
+        """Returns a vector for a property of all unitCells in the structure.
+        The property is determined by the propertyName and returns a scalar value or a function handle."""
+        
+        types = kwargs.get('types')
+        
+
+        #get the Handle to all unitCells in the Structure
+        Handles = self.getUnitCellVectors()[2]
+
+        
+        if callable(getattr(Handles[0],types)):
+            Prop = np.zeros([self.getNumberOfUnitCells()])
+            for i in range(self.getNumberOfUnitCells()):
+                Prop[i] = getattr(Handles[i],types)
+        
+        elif type(getattr(Handles[0],types)) is list:
+            #Prop = np.zeros([self.getNumberOfUnitCells(),len(getattr(Handles[0],types))])
+            #Prop[]
+            Prop = {} 
+            for i in range(self.getNumberOfUnitCells()):
+                #Prop = Prop + getattr(Handles[i],types)
+                Prop[i] =  getattr(Handles[i],types)
+        else:
+            
+            UCs = self.getUniqueUnitCells()
+            Prop = np.zeros([self.getNumberOfUnitCells()])
+        
+            #% traverse all unitCells
+            
+            for i in range(self.getNumberOfUnitCells()):
+                temp = getattr(Handles[i],types)
+                Prop[i] = temp
+                
+        return Prop    
+    
+    
+    def getUnitCellHandle(self,i):
+        
+        """Returns the handle to the unitCell at position i in the structure."""
+        
+        Handles = self.getUnitCellVectors()[2]
+        Handle  = Handles[i]
+        return Handle
+    
     
