@@ -4,7 +4,9 @@ sudo: required
 
 python:
   - "3.4"
-
+  - "3.5"
+  - "3.6"
+    
 env:
   - TEST="flake8"
 
@@ -15,5 +17,9 @@ before_install:
   - if [ $TEST == "flake8" ]; then sudo apt-get install -qq python-pip; fi
   - if [ $TEST == "flake8" ]; then sudo pip install flake8; fi
 
+install:
+  - pip install -r requirements.txt
+
 script:
   - flake8 .
+  - pytest .
