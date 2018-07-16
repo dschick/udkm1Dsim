@@ -253,7 +253,7 @@ class structure(object):
         return dStart,dEnd,dMid 
     
     
-   def getUnitCellPropertyVector(self,**kwargs):
+    def getUnitCellPropertyVector(self,**kwargs):
         
    
         """Returns a vector for a property of all unitCells in the structure.

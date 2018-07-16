@@ -21,7 +21,7 @@ setup(
     version='0.1',
     packages=['udkm1Dsimpy'],
     url='https://github.com/dschick/udkm1Dsimpy',  # Optional
-    install_requires=['numpy', 'os', 'scipy', 'numericalunits', 'itertools', 'more_itertools', 'inspect', 'sympy'],  # Optional
+    install_requires=['numpy', 'scipy', 'numericalunits', 'more_itertools', 'sympy'],  # Optional
     license='GPL3',
     author='Daniel Schick, et. al.',
     author_email='schick.daniel@gmail.com',
