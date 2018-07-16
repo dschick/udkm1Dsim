@@ -11,8 +11,8 @@ git clone https://github.com/dschick/udkm1Dsimpy.git udkm1Dsimpy
 Then, to work in editable mode (source is only linked 
 but not copied to the python site-packages), just do:
 
-pip install -e ./udkm1Dsimpy
+    pip install -e ./udkm1Dsimpy
 
 Or to do a normal installation
 
-pip install ./udkm1Dsimpy
+    pip install ./udkm1Dsimpy
