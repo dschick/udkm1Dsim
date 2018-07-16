@@ -1,4 +1,4 @@
-from .atoms import atom, atomMixed
-from .unitCell import unitCell
-from .structure import structure
-__all__ = ['atom', 'atomMixed', 'unitCell', 'structure']
+from .atoms import Atom, AtomMixed
+from .unitCell import UnitCell
+from .structure import Structure
+__all__ = ['Atom', 'AtomMixed', 'UnitCell', 'Structure']

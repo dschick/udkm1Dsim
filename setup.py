@@ -24,7 +24,7 @@ setup(
                       'scipy',
                       'numericalunits',
                       'sympy'],
-    license='GPL3',
+    license='GPLv3',
     author='Daniel Schick, et. al.',
     author_email='schick.daniel@gmail.com',
     description='A Simulation Toolkit for ' \
