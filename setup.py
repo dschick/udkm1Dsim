@@ -4,7 +4,7 @@ https://packaging.python.org/en/latest/distributing.html
 https://github.com/pypa/sampleproject
 """
 # Always prefer setuptools over distutils
-from setuptools import setup
+from setuptools import setup, find_packages
 # To use a consistent encoding
 from codecs import open
 from os import path
@@ -18,7 +18,11 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 setup(
     name='udkm1Dsimpy',
     version='0.1',
-    packages=['udkm1Dsimpy'],
+    packages=find_packages(exclude=['tests']),
+    package_data = {
+        # If any package contains *.txt or *.rst files, include them:
+        '': ['*.txt', '*.dat', '*.nff'],
+    },
     url='https://github.com/dschick/udkm1Dsimpy',  # Optional
     install_requires=['numpy',
                       'scipy',
