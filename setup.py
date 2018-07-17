@@ -19,7 +19,7 @@ setup(
     name='udkm1Dsimpy',
     version='0.1',
     packages=find_packages(exclude=['tests']),
-    package_data = {
+    package_data={
         # If any package contains *.txt or *.rst files, include them:
         '': ['*.txt', '*.dat', '*.nff'],
     },
