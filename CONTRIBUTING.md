@@ -24,6 +24,12 @@ For the contributions, we use the [Fork & Pull Model][]:
    requestor's branch until the result is satisfactory.
 5. once the proposed code is considered ready by an appointed udmkm1Dsimpy 
    integrator, the integrator merges the pull request into `develop`.
+6. In order to keep your fork up to date with the official repository do 
+   the following within your local copy of the repository:
+
+    git remote add upstream git://github.com/dschick/udkm1Dsimpy.git
+    git fetch upstream
+    git pull upstream develop
    
    
 ## Important considerations:
