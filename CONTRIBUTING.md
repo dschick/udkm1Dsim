@@ -62,11 +62,9 @@ In general, the contributions to udmkm1Dsimpy should consider following:
   those for the [GithubFlow][] workflow. Basically, most of what the 
   GitHubFlow recommends can be applied for udmkm1Dsimpy except that the 
   role of the `master` branch in GithubFlow is done by `develop` in our 
-  case. 
-  
+  case.  
 - If the contributor wants to explicitly bring the attention of some 
   specific person to the review process, [mentions][] can be used
-  
 - If a pull request (or a specific commit) fixes an open issue, the pull
   request (or commit) message may contain a `Fixes #N` tag (N being 
   the number of the issue) which will automatically [close the related 
