@@ -26,11 +26,11 @@ For the contributions, we use the [Fork & Pull Model][]:
    integrator, the integrator merges the pull request into `develop`.
 6. In order to keep your fork up to date with the official repository do 
    the following within your local copy of the repository::
-
+```
     git remote add upstream git://github.com/dschick/udkm1Dsimpy.git
     git fetch upstream
     git pull upstream develop
-   
+```   
    
 ## Important considerations:
 
@@ -46,13 +46,10 @@ In general, the contributions to udmkm1Dsimpy should consider following:
   help in the PR conversation! We will not reject any contribution due
   to these errors - the purpose of this check is just to maintain the code
   base clean.
-
 - The contributor must be clearly identified. The commit author 
   email should be valid and usable for contacting him/her.
-
 - Commit messages  should follow the [commit message guidelines][]. 
   Contributions may be rejected if their commit messages are poor.
-  
 - The licensing terms for the contributed code must be compatible 
   with (and preferably the same as) the license chosen for the udmkm1Dsimpy 
   project (at the time of writing this file, it is the [LGPL][], 
@@ -86,9 +83,8 @@ In general, the contributions to udmkm1Dsimpy should consider following:
 - In the same file, different classes should be separated by 2 lines
 - use ``lowercase`` for module names.
 - use ``CamelCase`` for class names
-- python module first line should be::
-
-    #!/usr/bin/env python
+- python module first line should be:
+  `#!/usr/bin/env python` 
 - python module should contain license information (see template below)
 - avoid poluting namespace by making private definitions private (``__`` prefix)
   or/and implementing ``__all__`` (see template below)
@@ -98,7 +94,7 @@ In general, the contributions to udmkm1Dsimpy should consider following:
 - document all code using [Sphinx][] extension to [reStructuredText][]
 
 The following code can serve as a template for writing new python modules to
-udmkm1Dsimpy::
+udmkm1Dsimpy:
 
     #!/usr/bin/env python
     # -*- coding: utf-8 -*-
