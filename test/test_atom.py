@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from udkm1Dsimpy.atoms import Atom, AtomMixed
+from udkm1Dsim.atoms import Atom, AtomMixed
 
 
 def test_atom():

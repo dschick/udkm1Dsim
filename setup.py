@@ -16,9 +16,9 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='udkm1Dsimpy',
+    name='udkm1Dsim',
     version='0.1',
-    packages=find_packages(exclude=['tests']),
+    packages=find_packages(),
     package_data={
         # If any package contains *.txt or *.rst files, include them:
         '': ['*.txt', '*.dat', '*.nff'],
