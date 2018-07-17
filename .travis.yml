@@ -4,16 +4,20 @@ sudo: required
 
 python:
   - "3.4"
-
-env:
-  - TEST="flake8"
+  - "3.5"
+  - "3.6"
 
 before_install:
   # install flake8 to perform python code style check in the script part
   # install it using pip in order to get the newest version
-  - if [ $TEST == "flake8" ]; then sudo apt-get update -qq ; fi
-  - if [ $TEST == "flake8" ]; then sudo apt-get install -qq python-pip; fi
-  - if [ $TEST == "flake8" ]; then sudo pip install flake8; fi
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq python-pip
+
+install:
+  - pip install flake8
+  - pip install pytest
+  - pip install .
 
 script:
   - flake8 .
+  - pytest .
