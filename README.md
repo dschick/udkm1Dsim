@@ -6,7 +6,7 @@ Porting the udkm1Dsim toolbox from MATLAB(C) to Python 1:1
 
 You can clone udkm1Dsimpy from the main git repository:
 
-git clone https://github.com/dschick/udkm1Dsimpy.git udkm1Dsim
+    git clone https://github.com/dschick/udkm1Dsimpy.git udkm1Dsim
 
 Note that the repository and the package do not have the same name yes!
 
