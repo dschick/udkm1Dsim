@@ -27,7 +27,6 @@ from tabulate import tabulate
 from . import u
 
 
-
 class Atom:
     """Atom
 
@@ -100,7 +99,7 @@ class Atom:
                             np.array_str(self.cromer_mann_coeff[8:])]}
 
         return 'Atom with the following properties\n' + \
-                tabulate(output, colalign=('right',), floatfmt=('.2f', '.2f'))
+               tabulate(output, colalign=('right',), floatfmt=('.2f', '.2f'))
 
     def readatomic_form_factor_coeff(self):
         """readatomic_form_factor_coeff
@@ -154,8 +153,8 @@ class Atom:
                   filename)
             print(e)
 
-        return cm[(cm[:, 0] == self.atomic_number_z) &
-                  (cm[:, 1] == self.ionicity)][0]
+        return cm[(cm[:, 0] == self.atomic_number_z)
+                  & (cm[:, 1] == self.ionicity)][0]
 
     @u.wraps(None, (None, 'eV', 'angstrom**-1'), strict=True)
     def get_CM_atomic_form_factor(self, E, qz):
@@ -177,7 +176,7 @@ class Atom:
         f_cm = np.dot(self.cromer_mann_coeff[0:3],
                       np.exp(np.dot(-self.cromer_mann_coeff[4:7],
                                     (qz/(4*np.pi))**2))) + \
-                      self.cromer_mann_coeff[8]
+               self.cromer_mann_coeff[8]
         # $\delta f_1(E)$ is the dispersion correction:
         #
         # $$ \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\right)$$
@@ -189,8 +188,9 @@ class Atom:
         #
         # $$ f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
         # + f_1(E) -\i f_2(E) - \sum(a_i) $$
-        return f_cm + self.get_atomic_form_factor(E*u.eV) \
-            - (np.sum(self.cromer_mann_coeff[0:3]) + self.cromer_mann_coeff[8])
+        return f_cm + self.get_atomic_form_factor(E*u.eV) -\
+               (np.sum(self.cromer_mann_coeff[0:3]) +\
+               self.cromer_mann_coeff[8])
 
 
 class AtomMixed(Atom):

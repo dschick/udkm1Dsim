@@ -27,7 +27,6 @@ __docformat__ = "restructuredtext"
 import itertools
 import numpy as np
 from .unitCell import UnitCell
-from . import u
 
 
 class Structure:
@@ -57,7 +56,7 @@ class Structure:
         # check of the sub_structure is an instance of the unitCell of structure class
 
         if not isinstance(sub_structure, UnitCell, Structure):
-            raise ValueError('Class ' + type(sub_structure).__name__ +
+            raise ValueError('Class ' + type(sub_structure).__name__+\
                              ' is no possible sub structure. Only UnitCell and'
                              'Structure classes are allowed!')
 
@@ -68,9 +67,10 @@ class Structure:
 
         # check the number of subsystems of the sub_structure
 
-        if (self.num_sub_systems > 1) and not (sub_structure.num_sub_systems ==
+        if (self.num_sub_systems > 1) and not (sub_structure.num_sub_systems ==\
                                                self.num_sub_systems):
-            raise ValueError('The number of subsystems in each sub_structure must be the same!')
+            raise ValueError('The number of subsystems in each sub_structure'
+                             'must be the same!')
         else:
             self.num_sub_systems = sub_structure.num_sub_systems
 
