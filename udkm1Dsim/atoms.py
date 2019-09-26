@@ -23,7 +23,9 @@
 import os
 import numpy as np
 import scipy.constants as constants
+from tabulate import tabulate
 from . import u
+
 
 
 class Atom:
@@ -68,7 +70,7 @@ class Atom:
             filename = os.path.join(os.path.dirname(__file__),
                                     'parameters/elements/elements.dat')
             symbols = np.genfromtxt(filename, dtype='U2', usecols=(0))
-            elements = np.genfromtxt(filename, dtype='U15, i8, f8', 
+            elements = np.genfromtxt(filename, dtype='U15, i8, f8',
                                      usecols=(1, 2, 3))
             [rowidx] = np.where(symbols == self.symbol)
             element = elements[rowidx[0]]
@@ -87,19 +89,18 @@ class Atom:
         """String representation of this class
 
         """
-        class_str = 'Atom with the following properties\n'
-        class_str += 'id                 : {:s}\n'.format(self.id)
-        class_str += 'symbol             : {:s}\n'.format(self.symbol)
-        class_str += 'name               : {:s}\n'.format(self.name)
-        class_str += 'atomic number Z    : {:3.2f}\n'.format(
-                                            self.atomic_number_z)
-        class_str += 'mass number   A    : {:3.2f} u\n'.format(
-                                            self.mass_number_a)
-        class_str += 'mass               : {:3.2~P}\n'.format(self.mass)
-        class_str += 'ionicity           : {:3.2f}\n'.format(self.ionicity)
-        class_str += 'Cromer Mann coeff  : {:s}\n'.format(
-                                            np.array_str(self.cromer_mann_coeff))
-        return class_str
+        output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z',
+                                'mass number A', 'mass', 'ionicity',
+                                'Cromer Mann coeff', '', ''],
+                  'value': [self.id, self.symbol, self.name,
+                            self.atomic_number_z, self.mass_number_a,
+                            '{:.4~P}'.format(self.mass), self.ionicity,
+                            np.array_str(self.cromer_mann_coeff[0:4]),
+                            np.array_str(self.cromer_mann_coeff[4:8]),
+                            np.array_str(self.cromer_mann_coeff[8:])]}
+
+        return 'Atom with the following properties\n' + \
+                tabulate(output, colalign=('right',), floatfmt=('.2f', '.2f'))
 
     def readatomic_form_factor_coeff(self):
         """readatomic_form_factor_coeff
@@ -108,54 +109,57 @@ class Atom:
         read from a parameter file given by Ref. [3].
         """
         filename = os.path.join(os.path.dirname(__file__),
-                                'parameters/atomicFormFactors/{:s}.nff'.format(self.symbol.lower()))
+                                'parameters/atomicFormFactors/{:s}.nff'.format(
+                                    self.symbol.lower()))
         try:
             f = np.genfromtxt(filename, skip_header=1)
         except Exception as e:
             print('File {:s} not found!\nMake sure the path '
-                  '/parameters/atomicFormFactors/ is in your search path!', filename)
+                  '/parameters/atomicFormFactors/ is in your search path!',
+                  filename)
             print(e)
 
         return f
 
     @u.wraps(None, (None, 'eV'), strict=True)
-    def getAtomicFormFactor(self, E):
-        """getAtomicFormFactor
+    def get_atomic_form_factor(self, E):
+        """get_atomic_form_factor
 
         Returns the complex atomic form factor $f(E)=f_1-\i f_2$ for the
         energy $E$ [eV].
         """
         # interpolate the real and imaginary part in dependence of E
-        f1 = np.interp(E, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 1])
-        f2 = np.interp(E, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 2])
+        f1 = np.interp(E, self.atomic_form_factor_coeff[:, 0],
+                       self.atomic_form_factor_coeff[:, 1])
+        f2 = np.interp(E, self.atomic_form_factor_coeff[:, 0],
+                       self.atomic_form_factor_coeff[:, 2])
         # Convention of Ref. [2] (p. 11, footnote) is a negative $f_2$
         return f1 - f2*1j
 
     def readcromer_mann_coeff(self):
         """readcromer_mann_coeff
 
-        The Cromer-Mann coefficients (Ref. [1]) are read from a parameter file and
-        are returned in the following order:
-
+        The Cromer-Mann coefficients (Ref. [1]) are read from a parameter file
+        and are returned in the following order:
         $$ a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c $$
         """
         filename = os.path.join(os.path.dirname(__file__),
                                 'parameters/atomicFormFactors/cromermann.txt')
         try:
-            cm = np.genfromtxt(filename, skip_header=1, 
+            cm = np.genfromtxt(filename, skip_header=1,
                                usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
         except Exception as e:
             print('File {:s} not found!\nMake sure the path'
-                  '/parameters/atomicFormFactors/ is in your search path!', 
+                  '/parameters/atomicFormFactors/ is in your search path!',
                   filename)
             print(e)
 
-        return cm[(cm[:, 0] == self.atomic_number_z) & 
+        return cm[(cm[:, 0] == self.atomic_number_z) &
                   (cm[:, 1] == self.ionicity)][0]
 
     @u.wraps(None, (None, 'eV', 'angstrom**-1'), strict=True)
-    def getCMAtomicFormFactor(self, E, qz):
-        """getAtomicFormFactor
+    def get_CM_atomic_form_factor(self, E, qz):
+        """get_CM_atomic_form_factor
 
         Returns the atomic form factor $f$ in dependence of the energy
         $E$ [J] and the $z$-component of the scattering vector $q_z$
@@ -172,19 +176,20 @@ class Atom:
         # $$f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c$$
         f_cm = np.dot(self.cromer_mann_coeff[0:3],
                       np.exp(np.dot(-self.cromer_mann_coeff[4:7],
-                            (qz/(4*np.pi))**2))) + self.cromer_mann_coeff[8]
-
+                                    (qz/(4*np.pi))**2))) + \
+                      self.cromer_mann_coeff[8]
         # $\delta f_1(E)$ is the dispersion correction:
         #
         # $$ \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\right)$$
         #
         # Thus:
         #
-        # $$ f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi)) + c + f_1(E)-\i f_2(E) - \left(\sum(a_i)
-        # + c\right) $$
+        # $$ f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi)) +
+        # c + f_1(E)-\i f_2(E) - \left(\sum(a_i) + c\right) $$
         #
-        # $$ f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi)) + f_1(E) -\i f_2(E) - \sum(a_i) $$
-        return f_cm + self.getAtomicFormFactor(E*u.eV) \
+        # $$ f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
+        # + f_1(E) -\i f_2(E) - \sum(a_i) $$
+        return f_cm + self.get_atomic_form_factor(E*u.eV) \
             - (np.sum(self.cromer_mann_coeff[0:3]) + self.cromer_mann_coeff[8])
 
 
@@ -240,12 +245,12 @@ class AtomMixed(Atom):
         class_str = super().__str__()
         class_str += '{:d} Constituents:\n'.format(self.num_atoms)
         for i in range(self.num_atoms):
-            class_str += '\t {:s} \t {:3.2f}%\n'.format(self.atoms[i][0].name, 
-                                                         self.atoms[i][1]*100)
+            class_str += '\t {:s} \t {:3.2f}%\n'.format(self.atoms[i][0].name,
+                                                        self.atoms[i][1]*100)
 
         return class_str
 
-    def addAtom(self, atom, fraction):
+    def add_atom(self, atom, fraction):
         """addAtom
 
         Add a atomBase instance with its stochiometric fraction to the
@@ -261,8 +266,8 @@ class AtomMixed(Atom):
         self.mass = self.mass + fraction * atom.mass
         self.ionicity = self.ionicity + fraction * atom.ionicity
 
-    def getAtomicFormFactor(self, E):
-        """getAtomicFormFactor
+    def get_atomic_form_factor(self, E):
+        """get_atomic_form_factor
 
         Returns the mixed energy dependent atomic form factor.
         """
@@ -272,14 +277,15 @@ class AtomMixed(Atom):
 
         return f
 
-    def getCMAtomicFormFactor(self, E, qz):
-        """getCMAtomicFormFactor
+    def get_CM_atomic_form_factor(self, E, qz):
+        """get_CM_atomic_form_factor
 
         Returns the mixed energy and angle dependent atomic form factor.
         """
         f = 0
         for i in range(self.num_atoms):
-            f += self.atoms[i][0].getCMAtomicFormFactor(E, qz) * self.atoms[i][1]
+            f += self.atoms[i][0].get_CM_atomic_form_factor(E, qz) \
+                * self.atoms[i][1]
 
         return f
 
