@@ -118,13 +118,13 @@ class Atom:
 
         return f
 
+    @u.wraps(None, (None, 'eV'), strict=True)
     def getAtomicFormFactor(self, E):
         """getAtomicFormFactor
 
         Returns the complex atomic form factor $f(E)=f_1-\i f_2$ for the
-        energy $E$ [J].
+        energy $E$ [eV].
         """
-        E = E/u.eV  # convert energy from [J] in [eV]
         # interpolate the real and imaginary part in dependence of E
         f1 = np.interp(E, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 1])
         f2 = np.interp(E, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 2])
@@ -142,14 +142,18 @@ class Atom:
         filename = os.path.join(os.path.dirname(__file__),
                                 'parameters/atomicFormFactors/cromermann.txt')
         try:
-            cm = np.genfromtxt(filename, skip_header=1, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
+            cm = np.genfromtxt(filename, skip_header=1, 
+                               usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
         except Exception as e:
             print('File {:s} not found!\nMake sure the path'
-                  '/parameters/atomicFormFactors/ is in your search path!', filename)
+                  '/parameters/atomicFormFactors/ is in your search path!', 
+                  filename)
             print(e)
 
-        return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
+        return cm[(cm[:, 0] == self.atomic_number_z) & 
+                  (cm[:, 1] == self.ionicity)][0]
 
+    @u.wraps(None, (None, 'eV', 'angstrom**-1'), strict=True)
     def getCMAtomicFormFactor(self, E, qz):
         """getAtomicFormFactor
 
@@ -159,7 +163,6 @@ class Atom:
         Since the CM coefficients are fitted for $q_z$ in [Ang^-1]
         we have to convert it before!
         """
-        qz = qz/u.angstrom**-1  # qz in [Ang^-1]
         # See Ref. [2] (p. 235).
         #
         # $$f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -\i f_2(E)$$
@@ -167,10 +170,9 @@ class Atom:
         # $f_{CM}(q_z)$ is given in Ref. 1:
         #
         # $$f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c$$
-        # print(np.exp(-self.cromer_mann_coeff[4:7].T * (qz/(4*np.pi))**2))
         f_cm = np.dot(self.cromer_mann_coeff[0:3],
                       np.exp(np.dot(-self.cromer_mann_coeff[4:7],
-                                    (qz/(4*np.pi))**2))) + self.cromer_mann_coeff[8]
+                            (qz/(4*np.pi))**2))) + self.cromer_mann_coeff[8]
 
         # $\delta f_1(E)$ is the dispersion correction:
         #
@@ -182,7 +184,7 @@ class Atom:
         # + c\right) $$
         #
         # $$ f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi)) + f_1(E) -\i f_2(E) - \sum(a_i) $$
-        return f_cm + self.getAtomicFormFactor(E) \
+        return f_cm + self.getAtomicFormFactor(E*u.eV) \
             - (np.sum(self.cromer_mann_coeff[0:3]) + self.cromer_mann_coeff[8])
 
 
@@ -238,7 +240,8 @@ class AtomMixed(Atom):
         class_str = super().__str__()
         class_str += '{:d} Constituents:\n'.format(self.num_atoms)
         for i in range(self.num_atoms):
-            class_str += '\t {:s} \t {:3.2f}%\n'.format(self.atoms[i][0].name, self.atoms[i][1]*100)
+            class_str += '\t {:s} \t {:3.2f}%\n'.format(self.atoms[i][0].name, 
+                                                         self.atoms[i][1]*100)
 
         return class_str
 
@@ -252,7 +255,8 @@ class AtomMixed(Atom):
         self.num_atoms = self.num_atoms + 1
         # calculate the mixed atomic properties of the atomMixed
         # instance
-        self.atomic_number_z = self.atomic_number_z + fraction * atom.atomic_number_z
+        self.atomic_number_z = self.atomic_number_z + \
+                                fraction * atom.atomic_number_z
         self.mass_number_a = self.mass_number_a + fraction * atom.mass_number_a
         self.mass = self.mass + fraction * atom.mass
         self.ionicity = self.ionicity + fraction * atom.ionicity
