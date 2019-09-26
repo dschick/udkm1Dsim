@@ -27,6 +27,7 @@ __docformat__ = "restructuredtext"
 import itertools
 import numpy as np
 from .unitCell import UnitCell
+from . import u
 
 
 class Structure:

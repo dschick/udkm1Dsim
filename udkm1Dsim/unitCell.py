@@ -28,8 +28,7 @@ import numpy as np
 from inspect import isfunction
 from sympy import integrate, Symbol
 from sympy.utilities.lambdify import lambdify
-import numericalunits as u
-u.reset_units('SI')
+from . import u
 
 
 class UnitCell:

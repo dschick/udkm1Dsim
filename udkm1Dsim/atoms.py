@@ -23,8 +23,7 @@
 import os
 import numpy as np
 import scipy.constants as constants
-import numericalunits as u
-u.reset_units('SI')
+from . import u
 
 
 class Atom:
@@ -66,9 +65,11 @@ class Atom:
         self.ionicity = kwargs.get('ionicity', 0)
 
         try:
-            filename = os.path.join(os.path.dirname(__file__), 'parameters/elements/elements.dat')
+            filename = os.path.join(os.path.dirname(__file__),
+                                    'parameters/elements/elements.dat')
             symbols = np.genfromtxt(filename, dtype='U2', usecols=(0))
-            elements = np.genfromtxt(filename, dtype='U15, i8, f8', usecols=(1, 2, 3))
+            elements = np.genfromtxt(filename, dtype='U15, i8, f8', 
+                                     usecols=(1, 2, 3))
             [rowidx] = np.where(symbols == self.symbol)
             element = elements[rowidx[0]]
         except Exception as e:
@@ -78,7 +79,7 @@ class Atom:
         self.name = element[0]
         self.atomic_number_z = element[1]
         self.mass_number_a = element[2]
-        self.mass = self.mass_number_a * constants.atomic_mass
+        self.mass = self.mass_number_a*constants.atomic_mass*u.kg
         self.atomic_form_factor_coeff = self.readatomic_form_factor_coeff()
         self.cromer_mann_coeff = self.readcromer_mann_coeff()
 
@@ -90,11 +91,14 @@ class Atom:
         class_str += 'id                 : {:s}\n'.format(self.id)
         class_str += 'symbol             : {:s}\n'.format(self.symbol)
         class_str += 'name               : {:s}\n'.format(self.name)
-        class_str += 'atomic number Z    : {:3.2f}\n'.format(self.atomic_number_z)
-        class_str += 'mass number   A    : {:3.2f} u\n'.format(self.mass_number_a)
-        class_str += 'mass               : {:3.2e} kg\n'.format(self.mass/u.kg)
+        class_str += 'atomic number Z    : {:3.2f}\n'.format(
+                                            self.atomic_number_z)
+        class_str += 'mass number   A    : {:3.2f} u\n'.format(
+                                            self.mass_number_a)
+        class_str += 'mass               : {:3.2~P}\n'.format(self.mass)
         class_str += 'ionicity           : {:3.2f}\n'.format(self.ionicity)
-        class_str += 'Cromer Mann coeff  : {:s}\n'.format(np.array_str(self.cromer_mann_coeff))
+        class_str += 'Cromer Mann coeff  : {:s}\n'.format(
+                                            np.array_str(self.cromer_mann_coeff))
         return class_str
 
     def readatomic_form_factor_coeff(self):
