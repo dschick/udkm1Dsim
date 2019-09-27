@@ -28,7 +28,8 @@ import numpy as np
 from inspect import isfunction
 from sympy import integrate, Symbol
 from sympy.utilities.lambdify import lambdify
-from . import u
+from tabulate import tabulate
+from . import u, Q_
 
 
 class UnitCell:
@@ -79,30 +80,6 @@ class UnitCell:
     """
 
     def __init__(self, id, name, c_axis, **kwargs):
-        # % initialize input parser and define defaults and validators
-        # p = inputParser
-        # p.addRequired('id'                      , @ischar)
-        # p.addRequired('name'                    , @ischar)
-        # p.addRequired('c_axis'                   , @isnumeric)
-        # p.addParamValue('a_axis'                 , c_axis , @isnumeric)
-        # p.addParamValue('b_axis'                 , c_axis , @isnumeric)
-        # p.addParamValue('deb_wal_fac'             , 0     , @isnumeric)
-        # p.addParamValue('sound_vel'              , 0     , @isnumeric)
-        # p.addParamValue('phonon_damping'         , 0     , @isnumeric)
-        # p.addParamValue('opt_pen_depth'           , 0     , @isnumeric)
-        # p.addParamValue('opt_ref_index'           , [0,0] , @(x) (isnumeric(x) && numel(x) == 2))
-        # p.addParamValue('opt_ref_index_per_strain', [0,0] , @(x) (isnumeric(x) && numel(x) == 2))
-        # p.addParamValue('therm_cond'             , 0     , @(x)(isnumeric(x) ||
-        # isa(x,'function_handle') || ischar(x) || iscell(x)))
-        # p.addParamValue('lin_therm_exp'           , 0     , @(x)(isnumeric(x) ||
-        # isa(x,'function_handle') || ischar(x) || iscell(x)))
-        # p.addParamValue('heat_capacity'          , 0     , @(x)(isnumeric(x) ||
-        # isa(x,'function_handle') || ischar(x) || iscell(x)))
-        # p.addParamValue('sub_system_coupling'     , 0     , @(x)(isnumeric(x) ||
-        # isa(x,'function_handle') || ischar(x) || iscell(x)))
-        # % parse the input
-        # p.parse(id,name,c_axis,varargin{:})
-        # % assign parser results to object properties
         self.id = id
         self.name = name
         self.c_axis = c_axis
@@ -110,26 +87,27 @@ class UnitCell:
         self.b_axis = kwargs.get('b_axis', self.a_axis)
         self.atoms = []
         self.num_atoms = 0
-        self.mass = 0
-        self.density = 0
+        self.mass = 0*u.kg
+        self.density = 0*u.kg/u.m**2
         self.spring_const = np.array([0])
-        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0)
+        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0*u.m**2)
         self.sound_vel = kwargs.get('sound_vel', 0)
-        self.phonon_damping = kwargs.get('phonon_damping', 0)
-        self.opt_pen_depth = kwargs.get('opt_pen_depth', 0)
+        self.phonon_damping = kwargs.get('phonon_damping', 0*u.kg/u.s)
+        self.opt_pen_depth = kwargs.get('opt_pen_depth', 0*u.nm)
         self.opt_ref_index = kwargs.get('opt_ref_index', 0)
         self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0)
-        self.heat_capacity, self.heat_capacity_str = self.checkCellArrayInput(
+        self.heat_capacity, self.heat_capacity_str = self.check_cell_array_input(
                 kwargs.get('heat_capacity', 0))
-        self.therm_cond, self.therm_cond_str = self.checkCellArrayInput(kwargs.get('therm_cond', 0))
-        self.lin_therm_exp, self.lin_therm_exp_str = self.checkCellArrayInput(
+        self.therm_cond, self.therm_cond_str = self.check_cell_array_input(
+                kwargs.get('therm_cond', 0))
+        self.lin_therm_exp, self.lin_therm_exp_str = self.check_cell_array_input(
                 kwargs.get('lin_therm_exp', 0))
-        self.sub_system_coupling, self.sub_system_coupling_str = self.checkCellArrayInput(
+        self.sub_system_coupling, self.sub_system_coupling_str = self.check_cell_array_input(
                 kwargs.get('sub_system_coupling', 0))
 
-        if len(self.heat_capacity) == len(self.therm_cond) \
-                and len(self.heat_capacity) == len(self.lin_therm_exp) \
-                and len(self.heat_capacity) == len(self.sub_system_coupling):
+        if (len(self.heat_capacity) == len(self.therm_cond)
+            and len(self.heat_capacity) == len(self.lin_therm_exp)
+            and len(self.heat_capacity) == len(self.sub_system_coupling)):
             self.num_sub_systems = len(self.heat_capacity)
         else:
             raise ValueError('Heat capacity, thermal conductivity, linear'
@@ -143,43 +121,39 @@ class UnitCell:
         """String representation of this class
 
         """
-        class_str = 'Unit Cell with the following properties\n'
-        class_str += 'id                     : {:s}\n'.format(self.id)
-        class_str += 'name                   : {:s}\n'.format(self.name)
-        class_str += 'a-axis                 : {:3.2f} Å\n'.format(self.a_axis/u.angstrom)
-        class_str += 'b-axis                 : {:3.2f} Å\n'.format(self.b_axis/u.angstrom)
-        class_str += 'c-axis                 : {:3.2f} Å\n'.format(self.c_axis/u.angstrom)
-        class_str += 'area                   : {:3.2f} Å²\n'.format(self.area/u.angstrom**2)
-        class_str += 'volume                 : {:3.2f} Å³\n'.format(self.volume/u.angstrom**3)
-        class_str += 'mass                   : {:3.2e} kg\n'.format(self.mass/u.kg)
-        class_str += 'density                : {:3.2e} kg/m³\n'.format(self.density/(u.kg/u.m**3))
-        class_str += 'Debye Waller Factor    : {:3.2f} m²\n'.format(self.deb_wal_fac/u.m**2)
-        class_str += 'sound velocity         : {:3.2f} nm/ps\n'.format(self.sound_vel/(u.nm/u.ps))
-        class_str += 'spring constant        : {:s} kg/s²\n'.format(np.array_str(
-                self.spring_const/(u.kg/u.s**2)))
-        class_str += 'phonon damping         : {:3.2f} kg/s\n'.format(
-                self.phonon_damping/(u.kg/u.s))
-        class_str += 'opt. pen. depth        : {:3.2f} nm\n'.format(self.opt_pen_depth/u.nm)
-        class_str += 'opt. refractive index  : {:3.2f}\n'.format(self.opt_ref_index)
-        class_str += 'opt. ref. index/strain : {:3.2f}\n'.format(self.opt_ref_index_per_strain)
-        class_str += 'thermal conduct. [W/m K]       :\n'
-        for func in self.therm_cond_str:
-            class_str += '\t\t\t {:s}\n'.format(func)
-        class_str += 'linear thermal expansion [1/K] :\n'
-        for func in self.lin_therm_exp_str:
-            class_str += '\t\t\t {:s}\n'.format(func)
-        class_str += 'heat capacity [J/kg K]         :\n'
-        for func in self.heat_capacity_str:
-            class_str += '\t\t\t {:s}\n'.format(func)
-        class_str += 'subsystem coupling [W/m^3]     :\n'
-        for func in self.sub_system_coupling_str:
-            class_str += '\t\t\t {:s}\n'.format(func)
-        # display the constituents
-        class_str += str(self.num_atoms) + ' Constituents:\n'
-        for i in range(self.num_atoms):
-            class_str += '{:s} \t {:0.2f} \t {:s}\n'.format(self.atoms[i][0].name,
-                                                            self.atoms[i][1](0), self.atoms[i][2])
+        output = [['id', self.id],
+                  ['name', self.name],
+                  ['a-axis', '{:.4~P}'.format(self.a_axis)],
+                  ['b-axis', '{:.4~P}'.format(self.b_axis)],
+                  ['c-axis', '{:.4~P}'.format(self.c_axis)],
+                  ['area', '{:.4~P}'.format(self.area.to('angstrom**2'))],
+                  ['volume', '{:.4~P}'.format(self.volume.to('angstrom**3'))],
+                  ['mass', '{:.4~P}'.format(self.mass)],
+                  ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
+                  ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
+                  ['sound velocity', '{:.4~P}'.format(self.sound_vel.to('meter/s'))],
+                  ['spring constant', self.spring_const*u.kg/u.s**2],
+                  ['phonon damping', self.phonon_damping.to('kg/s')],
+                  ['opt. pen. depth', self.opt_pen_depth.to('nm')],
+                  ['opt. refractive index', self.opt_ref_index],
+                  ['opt. ref. index/strain', self.opt_ref_index_per_strain],
+                  ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
+                  ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
+                  ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
+                  ['subsystem coupling', ' W/m³\n'.join(self.sub_system_coupling_str) + ' W/m³']]
 
+        class_str = 'Unit Cell with the following properties\n\n'
+        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
+                              colalign=('right',), floatfmt=('.2f', '.2f'))
+        class_str += '\n\n' + str(self.num_atoms) + ' Constituents:\n'
+
+        atoms_str = []
+        for i in range(self.num_atoms):
+            atoms_str.append([self.atoms[i][0].name,
+                              '{:0.2f}'.format(self.atoms[i][1](0)),
+                              self.atoms[i][2]])
+        class_str += tabulate(atoms_str, headers=['atom', 'position', 'position function'],
+                              tablefmt="rst")
         return class_str
 
     def visualize(self, **kwargs):
@@ -217,8 +191,8 @@ class UnitCell:
             plt.legend()
             plt.show()
 
-    def getPropertyStruct(self, **kwargs):
-        """getParameterStruct
+    def get_property_struct(self, **kwargs):
+        """get_property_struct
 
         Returns a struct with all parameters. objects or cell arrays and
         objects are converted to strings. if a type is given, only these
@@ -248,8 +222,8 @@ class UnitCell:
 
         return S
 
-    def checkCellArrayInput(self, inputs):
-        """ checkCellArrayInput
+    def check_cell_array_input(self, inputs):
+        """ check_cell_array_input
 
         Checks the input for inputs which are cell arrays of function
         handles, such as the heat capacity which is a cell array of N
@@ -277,8 +251,11 @@ class UnitCell:
             elif isinstance(input, (int, float)):
                 output.append(eval('lambda T: {:f}'.format(input)))
                 outputStrs.append('lambda T: {:f}'.format(input))
+            elif isinstance(input, object):
+                output.append(eval('lambda T: {:f}'.format(input.to_base_units().magnitude)))
+                outputStrs.append('lambda T: {:f}'.format(input.to_base_units().magnitude))
             else:
-                raise ValueError('Unit cell property input has to be a single or'
+                raise ValueError('Unit cell property input has to be a single or '
                                  'cell array of numerics, function handles or strings which can be'
                                  'converted into a function handle!')
 
@@ -366,8 +343,8 @@ class UnitCell:
         self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.checkCellArrayInput(
                 int_lin_therm_exp)
 
-    def addAtom(self, atom, position):
-        """ addAtom
+    def add_atom(self, atom, position):
+        """ add_atom
         Adds an atomBase/atomMixed at a relative position of the unit
         cell.
         """
@@ -401,17 +378,17 @@ class UnitCell:
         #
         # $$ \kappa = m \cdot (v_s / c)^2 $$
 
-        self.mass = 0
+        self.mass = 0*u.kg
         for i in range(self.num_atoms):
             self.mass = self.mass + self.atoms[i][0].mass
 
         self.density = self.mass / self.volume
         # set mass per unit area (do not know if necessary)
         self.mass = self.mass * 1*u.angstrom**2 / self.area
-        self.calcspring_const()
+        self.calc_spring_const()
 
-    def addMultipleAtoms(self, atom, position, Nb):
-        """addMultipleAtoms
+    def add_multiple_atoms(self, atom, position, Nb):
+        """add_multiple_atoms
 
         Adds multiple atomBase/atomMixed at a relative position of the unit
         cell.
@@ -419,25 +396,88 @@ class UnitCell:
         for i in range(Nb):
             self.addAtom(atom, position)
 
-    def calcspring_const(self):
-        """ calcspring_const
+    def calc_spring_const(self):
+        """ calc_spring_const
 
         Calculates the spring constant of the unit cell from the mass,
         sound velocity and c-axis
 
         $$ k = m \, \left(\frac{v}{c}\right)^2 $$
         """
-        self.spring_const[0] = self.mass * (self.sound_vel/self.c_axis)**2
+        self.spring_const[0] = (self._mass * (self._sound_vel/self._c_axis)**2)
 
-    def getAcousticImpedance(self):
-        """getAcousticImpedance
+    def get_acoustic_impedance(self):
+        """get_acoustic_impedance
         """
         Z = np.sqrt(self.spring_const[0] * self.mass/self.area**2)
         return Z
 
     @property
+    def a_axis(self):
+        return Q_(self._a_axis, u.meter).to('angstrom')
+
+    @a_axis.setter
+    def a_axis(self, a_axis):
+        """set.a_axis"""
+        self._a_axis = a_axis.to_base_units().magnitude
+
+    @property
+    def b_axis(self):
+        return Q_(self._b_axis, u.meter).to('angstrom')
+
+    @b_axis.setter
+    def b_axis(self, b_axis):
+        """set.a_axis"""
+        self._b_axis = b_axis.to_base_units().magnitude
+
+    @property
+    def c_axis(self):
+        return Q_(self._c_axis, u.meter).to('angstrom')
+
+    @c_axis.setter
+    def c_axis(self, c_axis):
+        """set.c_axis"""
+        self._c_axis = c_axis.to_base_units().magnitude
+
+    @property
+    def mass(self):
+        return Q_(self._mass, u.kg)
+
+    @mass.setter
+    def mass(self, mass):
+        """set.mass"""
+        self._mass = mass.to_base_units().magnitude
+
+    @property
+    def density(self):
+        return Q_(self._density, u.kg/u.m**3)
+
+    @density.setter
+    def density(self, density):
+        """set.density"""
+        self._density = density.to_base_units().magnitude
+
+    @property
+    def area(self):
+        return Q_(self._area, u.m**2)
+
+    @area.setter
+    def area(self, area):
+        """set.area"""
+        self._area = area.to_base_units().magnitude
+
+    @property
+    def volume(self):
+        return Q_(self._volume, u.m**3)
+
+    @volume.setter
+    def volume(self, volume):
+        """set.volume"""
+        self._volume = volume.to_base_units().magnitude
+
+    @property
     def sound_vel(self):
-        return self._sound_vel
+        return Q_(self._sound_vel, u.m/u.s)
 
     @sound_vel.setter
     def sound_vel(self, sound_vel):
@@ -445,11 +485,11 @@ class UnitCell:
         If the sound velocity is set, the spring constant is
         (re)calculated.
         """
-        self._sound_vel = sound_vel
-        self.calcspring_const()
+        self._sound_vel = sound_vel.to_base_units().magnitude
+        self.calc_spring_const()
 
-    def setHOspringConstants(self, HO):
-        """setHOspringConstants
+    def set_ho_spring_constants(self, HO):
+        """set_ho_spring_constants
 
         Set the higher orders of the spring constant for anharmonic
         phonon simulations.
@@ -462,8 +502,8 @@ class UnitCell:
         self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
         self.spring_const = np.hstack((self.spring_const, HO))
 
-    def getAtomIDs(self):
-        """getAtomIDs
+    def get_atom_ids(self):
+        """get_atom_ids
 
         Returns a cell array of all atom ids in the unit cell.
         """
@@ -475,8 +515,8 @@ class UnitCell:
 
         return ids
 
-    def getAtomPositions(self, *args):
-        """getAtomPositions
+    def get_atom_positions(self, *args):
+        """get_atom_positions
 
         Returns a vector of all relative postion of the atoms in the unit
         cell.
