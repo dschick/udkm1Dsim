@@ -13,7 +13,7 @@ def test_atom():
     assert Dy.name == 'Dysprosium'
     assert Dy.atomic_number_z == 66
     assert Dy.mass_number_a == 162.5
-    assert round(Dy.mass, 28) == 2.698e-25
+    assert round(Dy.mass.magnitude, 28) == 2.698e-25
     # check if python hash works the same on different systems
     assert np.array_equal(Dy.atomic_form_factor_coeff[10],
                           np.array([1.17404e+01, -9.99900e+03, 2.25052e-01]))
