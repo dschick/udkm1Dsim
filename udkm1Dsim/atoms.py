@@ -47,7 +47,7 @@ class Atom:
            coefficients for energy-dependent atomic form factor
         cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
            angular-dependent atomic form factor
-                                                  
+
     """
 
     def __init__(self, symbol, **kwargs):
@@ -55,7 +55,7 @@ class Atom:
 
         Args:
             symbol (str): symbol of the atom
-        Kwargs**:            
+        Kwargs**:
             id (str): id of the atom
             ionicity (int): ionicity of the atom
 
@@ -99,7 +99,8 @@ class Atom:
     def read_atomic_form_factor_coeff(self):
         """read_atomic_form_factor_coeff
 
-        The atomic form factor :math:`f` in dependence from the energy $E$ is read from a parameter file
+        The atomic form factor :math:`f` in dependence from
+        the energy $E$ is read from a parameter file
         given by Ref. [3].
         """
         filename = os.path.join(os.path.dirname(__file__),
@@ -118,9 +119,9 @@ class Atom:
     def get_atomic_form_factor(self, E):
         """get_atomic_form_factor
 
-        Returns the complex atomic form factor 
+        Returns the complex atomic form factor
         $$f(E)=f_1-\i f_2$$
-        for the energy 
+        for the energy
         $$E$$
         [eV].
         """
@@ -156,30 +157,32 @@ class Atom:
         Returns the atomic form factor $f$ in dependence of the energy $E$ [J] and the $z$-component
         of the scattering vector $q_z$ [Ang^-1] (Ref. [1]). Since the CM coefficients are fitted for
         $q_z$ in [Ang^-1] we have to convert it before!
-        
+
         See Ref. [2] (p. 235).
-        
+
         .. math:: f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -i f_2(E)
-        
+
         $f_{CM}(q_z)$ is given in Ref. 1:
-        
+
         .. math:: f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c
         :math:`\delta f_1(E)` is the dispersion correction:
-        
+
         .. math:: \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\right)
-        
+
         Thus:
-        
-        .. math:: f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi)) + c + f_1(E)-\i f_2(E) - \left(\sum(a_i) + c\right)
-        
-        .. math:: f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi)) + f_1(E) -\i f_2(E) - \sum(a_i) $$
-           
+
+        .. math:: f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
+           + c + f_1(E)-\i f_2(E) - \left(\sum(a_i) + c\right)
+
+        .. math:: f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
+           + f_1(E) -\i f_2(E) - \sum(a_i) $$
+
         """
-        
+
         f_cm = np.dot(self.cromer_mann_coeff[0:3],
                       np.exp(np.dot(-self.cromer_mann_coeff[4:7],
                                     (qz/(4*np.pi))**2))) + self.cromer_mann_coeff[8]
-       
+
         return f_cm + self.get_atomic_form_factor(E*u.eV) -\
             (np.sum(self.cromer_mann_coeff[0:3]) + self.cromer_mann_coeff[8])
 
