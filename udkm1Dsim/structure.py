@@ -56,9 +56,10 @@ class Structure:
         # check of the sub_structure is an instance of the unitCell of structure class
 
         if not isinstance(sub_structure, UnitCell, Structure):
-            raise ValueError('Class ' + type(sub_structure).__name__ +
-                             ' is no possible sub structure. Only UnitCell and'
-                             'Structure classes are allowed!')
+            raise ValueError('Class '
+                             + type(sub_structure).__name__
+                             + ' is no possible sub structure. Only UnitCell and'
+                             + 'Structure classes are allowed!')
 
         # if a structure is added as a sub_structure, the sub_structure can not have a substrate
         if isinstance(sub_structure, Structure):
@@ -67,9 +68,10 @@ class Structure:
 
         # check the number of subsystems of the sub_structure
 
-        if (self.num_sub_systems > 1) and not (sub_structure.num_sub_systems ==
-                                               self.num_sub_systems):
-            raise ValueError('The number of subsystems in each sub_structure must be the same!')
+        if ((self.num_sub_systems > 1) and not
+            (sub_structure.num_sub_systems == self.num_sub_systems)):
+            raise ValueError('The number of subsystems in each sub_structure'
+                             'must be the same!')
         else:
             self.num_sub_systems = sub_structure.num_sub_systems
 
@@ -80,8 +82,9 @@ class Structure:
         """Add a structure as static substrate to the structure"""
 
         if not isinstance(sub_structure, Structure):
-            raise ValueError('Class ' + type(sub_structure).__name__ +
-                             ' is no possible substrate. Only structure class is allowed!')
+            raise ValueError('Class '
+                             + type(sub_structure).__name__
+                             + ' is no possible substrate. Only structure class is allowed!')
 
         self.substrate = sub_structure
 

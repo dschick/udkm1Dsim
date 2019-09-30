@@ -25,10 +25,11 @@ setup(
     },
     url='https://github.com/dschick/udkm1Dsimpy',  # Optional
     install_requires=['numpy',
+                      'pint',
+                      'pytest',
                       'scipy',
-                      'numericalunits',
                       'sympy',
-                      'pytest'],
+                      'tabulate'],
     license='GPLv3',
     author='Daniel Schick, et. al.',
     author_email='schick.daniel@gmail.com',
