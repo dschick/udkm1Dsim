@@ -157,6 +157,14 @@ class UnitCell:
         return class_str
 
     def visualize(self, **kwargs):
+        """visulaization of atoms in unit cell.
+
+        allow for 3D presentation of unit cell by allow for a & b coordinate
+        of atoms.
+        Also add magnetization per atom.
+        ToDo: use the avogadro project as plugin
+        ToDo: create unit cell from CIF file e.g. by xrayutilities plugin
+        """
         import matplotlib.pyplot as plt
         import matplotlib.cm as cmx
 
@@ -165,7 +173,7 @@ class UnitCell:
             strains = np.array([strains])
 
         colors = [cmx.Dark2(x) for x in np.linspace(0, 1, self.num_atoms)]
-        atom_ids = self.getAtomIDs()
+        atom_ids = self.get_atom_ids()
 
         for strain in strains:
             plt.figure()
@@ -174,6 +182,11 @@ class UnitCell:
                 if not atoms_plotted[atom_ids.index(self.atoms[j][0].id)]:
                     label = self.atoms[j][0].id
                     atoms_plotted[atom_ids.index(self.atoms[j][0].id)] = True
+                    plt.plot(1+j, self.atoms[j][1](strain), 'o',
+                             MarkerSize=10,
+                             markeredgecolor=[0, 0, 0],
+                             markerfaceColor=colors[atom_ids.index(self.atoms[j][0].id)],
+                             label=label)
                 else:
                     label = '_nolegend_'
                     plt.plot(1+j, self.atoms[j][1](strain), 'o',
@@ -191,23 +204,23 @@ class UnitCell:
             plt.legend()
             plt.show()
 
-    def get_property_struct(self, **kwargs):
-        """get_property_struct
+    def get_property_dict(self, **kwargs):
+        """get_property_dict
 
-        Returns a struct with all parameters. objects or cell arrays and
+        Returns a dictionary with all parameters. objects or dicts and
         objects are converted to strings. if a type is given, only these
         properties are returned.
         """
         # initialize input parser and define defaults and validators
         types = ['all', 'heat', 'phonon', 'XRD', 'optical']
-        properties_by_types = {'heat': ['c_axis', 'area', 'volume', 'opt_pen_depth',
+        properties_by_types = {'heat': ['_c_axis', '_area', '_volume', '_opt_pen_depth',
                                         'therm_cond_str', 'heat_capacity_str',
                                         'int_heat_capacity_str', 'sub_system_coupling_str',
                                         'num_sub_systems'],
-                               'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', 'c_axis',
-                                          'mass', 'spring_const', 'phonon_damping'],
-                               'XRD': ['num_atoms', 'atoms', 'area', 'deb_wal_fac', 'c_axis'],
-                               'optical': ['c_axis', 'opt_pen_depth', 'opt_ref_index',
+                               'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_c_axis',
+                                          '_mass', '_spring_const', '_phonon_damping'],
+                               'XRD': ['num_atoms', 'atoms', '_area', '_deb_wal_fac', '_c_axis'],
+                               'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
                                }
 
@@ -299,7 +312,7 @@ class UnitCell:
         Set the integrated heat capacity manually when no Smybolic Math
         Toolbox is installed.
         """
-        self._int_heat_capacity, self.int_heat_capacity_str = self.checkCellArrayInput(
+        self._int_heat_capacity, self.int_heat_capacity_str = self.check_cell_array_input(
                 int_heat_capacity)
 
     @property
@@ -340,7 +353,7 @@ class UnitCell:
         Set the integrated linear thermal expansion coefficient manually
         when no Smybolic Math Toolbox is installed.
         """
-        self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.checkCellArrayInput(
+        self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_cell_array_input(
                 int_lin_therm_exp)
 
     def add_atom(self, atom, position):
@@ -411,6 +424,45 @@ class UnitCell:
         """
         Z = np.sqrt(self.spring_const[0] * self.mass/self.area**2)
         return Z
+
+    def set_ho_spring_constants(self, HO):
+        """set_ho_spring_constants
+
+        Set the higher orders of the spring constant for anharmonic
+        phonon simulations.
+        """
+        # reset old higher order spring constants
+        self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
+        self.spring_const = np.hstack((self.spring_const, HO))
+
+    def get_atom_ids(self):
+        """get_atom_ids
+
+        Returns a cell array of all atom ids in the unit cell.
+        """
+        ids = []
+        for i in range(self.num_atoms):
+            if not self.atoms[i][0].id in ids:
+                ids.append(self.atoms[i][0].id)
+
+        return ids
+
+    def get_atom_positions(self, *args):
+        """get_atom_positions
+
+        Returns a vector of all relative postion of the atoms in the unit
+        cell.
+        """
+        if args:
+            strain = args[0]
+        else:
+            strain = 0
+
+        res = np.zeros([self.num_atoms])
+        for i, atom in enumerate(self.atoms):
+            res[i] = atom[1](strain)
+
+        return res
 
     @property
     def a_axis(self):
@@ -488,47 +540,20 @@ class UnitCell:
         self._sound_vel = sound_vel.to_base_units().magnitude
         self.calc_spring_const()
 
-    def set_ho_spring_constants(self, HO):
-        """set_ho_spring_constants
+    @property
+    def phonon_damping(self):
+        return Q_(self._phonon_damping, u.kg/u.s)
 
-        Set the higher orders of the spring constant for anharmonic
-        phonon simulations.
-        """
-        # check if HO is column vector and transpose it in this case
-        if HO.shape[0] > 1:
-            HO = HO.T
+    @phonon_damping.setter
+    def phonon_damping(self, phonon_damping):
+        """set.phonon_damping"""
+        self._phonon_damping = phonon_damping.to_base_units().magnitude
 
-        # reset old higher order spring constants
-        self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
-        self.spring_const = np.hstack((self.spring_const, HO))
+    @property
+    def opt_pen_depth(self):
+        return Q_(self._opt_pen_depth, u.meter).to('nanometer')
 
-    def get_atom_ids(self):
-        """get_atom_ids
-
-        Returns a cell array of all atom ids in the unit cell.
-        """
-
-        ids = []
-        for i in range(self.num_atoms):
-            if not self.atoms[i][0].id in ids:
-                ids.append(self.atoms[i][0].id)
-
-        return ids
-
-    def get_atom_positions(self, *args):
-        """get_atom_positions
-
-        Returns a vector of all relative postion of the atoms in the unit
-        cell.
-        """
-
-        if args:
-            strain = args
-        else:
-            strain = 0
-
-        res = np.zeros([self.num_atoms])
-        for i, atom in enumerate(self.atoms):
-            res[i] = atom[1](strain)
-
-        return res
+    @opt_pen_depth.setter
+    def opt_pen_depth(self, opt_pen_depth):
+        """set.opt_pen_depth"""
+        self._opt_pen_depth = opt_pen_depth.to_base_units().magnitude
