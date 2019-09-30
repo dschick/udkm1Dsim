@@ -1,0 +1,18 @@
+udkm1Dsim.parameters package
+============================
+
+Subpackages
+-----------
+
+.. toctree::
+
+    udkm1Dsim.parameters.atomicFormFactors
+    udkm1Dsim.parameters.elements
+
+Module contents
+---------------
+
+.. automodule:: udkm1Dsim.parameters
+    :members:
+    :undoc-members:
+    :show-inheritance:

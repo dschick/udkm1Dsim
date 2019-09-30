@@ -1,0 +1,10 @@
+udkm1Dsim.parameters.atomicFormFactors package
+==============================================
+
+Module contents
+---------------
+
+.. automodule:: udkm1Dsim.parameters.atomicFormFactors
+    :members:
+    :undoc-members:
+    :show-inheritance:

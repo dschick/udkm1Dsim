@@ -1,0 +1,557 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Welcome to udkm1Dsimpy’s documentation! &#8212; udkm1Dsimpy 0.1-beta documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="welcome-to-udkm1dsimpy-s-documentation">
+<h1>Welcome to udkm1Dsimpy’s documentation!<a class="headerlink" href="#welcome-to-udkm1dsimpy-s-documentation" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+</div>
+<span class="target" id="module-udkm1Dsim"></span><dl class="class">
+<dt id="udkm1Dsim.Atom">
+<em class="property">class </em><code class="descclassname">udkm1Dsim.</code><code class="descname">Atom</code><span class="sig-paren">(</span><em>symbol</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Atom" title="Permalink to this definition">¶</a></dt>
+<dd><p>The atom class is the smallest structural unit of which one can build
+larger structures. It holds real physical properties of atoms defined in
+the attrubutes section can return parameters and data necessary for
+different simulation types.</p>
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.symbol">
+<code class="descname">symbol</code><a class="headerlink" href="#udkm1Dsim.Atom.symbol" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – symbol of the element</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.id">
+<code class="descname">id</code><a class="headerlink" href="#udkm1Dsim.Atom.id" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – identifier of the atom, may differ from symbol and/or name</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.name">
+<code class="descname">name</code><a class="headerlink" href="#udkm1Dsim.Atom.name" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – name of the element (generic)</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.atomic_number_z">
+<code class="descname">atomic_number_z</code><a class="headerlink" href="#udkm1Dsim.Atom.atomic_number_z" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – Z atomic number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.mass_number_a">
+<code class="descname">mass_number_a</code><a class="headerlink" href="#udkm1Dsim.Atom.mass_number_a" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – A atomic mass number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.ionicity">
+<code class="descname">ionicity</code><a class="headerlink" href="#udkm1Dsim.Atom.ionicity" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – ionicity of the atom</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.mass">
+<code class="descname">mass</code><a class="headerlink" href="#udkm1Dsim.Atom.mass" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – mass of the atom [kg]</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.atomic_form_factor_coeff">
+<code class="descname">atomic_form_factor_coeff</code><a class="headerlink" href="#udkm1Dsim.Atom.atomic_form_factor_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – atomic form factor
+coefficients for energy-dependent atomic form factor</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.cromer_mann_coeff">
+<code class="descname">cromer_mann_coeff</code><a class="headerlink" href="#udkm1Dsim.Atom.cromer_mann_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – cromer-mann coefficients for
+angular-dependent atomic form factor</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Atom.get_atomic_form_factor">
+<code class="descname">get_atomic_form_factor</code><span class="sig-paren">(</span><em>E</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Atom.get_atomic_form_factor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the complex atomic form factor
+$$f(E)=f_1-i f_2$$
+for the energy
+$$E$$
+[eV].</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Atom.get_cm_atomic_form_factor">
+<code class="descname">get_cm_atomic_form_factor</code><span class="sig-paren">(</span><em>E</em>, <em>qz</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Atom.get_cm_atomic_form_factor" title="Permalink to this definition">¶</a></dt>
+<dd><blockquote>
+<div><p>Returns the atomic form factor $f$ in dependence of the energy $E$ [J] and the $z$-component
+of the scattering vector $q_z$ [Ang^-1] (Ref. [1]). Since the CM coefficients are fitted for
+$q_z$ in [Ang^-1] we have to convert it before!</p>
+<p>See Ref. [2] (p. 235).</p>
+<div class="math notranslate">
+\[f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -i f_2(E)\]</div>
+<p>$f_{CM}(q_z)$ is given in Ref. 1:</p>
+<div class="math notranslate">
+\[f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c\]</div>
+<p><span class="math notranslate">\(\delta f_1(E)\)</span> is the dispersion correction:</p>
+<div class="math notranslate">
+\[\delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\]</div>
+</div></blockquote>
+<p>ight)</p>
+<blockquote>
+<div><p>Thus:</p>
+<div class="math notranslate">
+\[f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi)) + c + f_1(E)-\i f_2(E) - \left(\sum(a_i) + c\]</div>
+</div></blockquote>
+<p>ight)</p>
+<blockquote>
+<div><div class="math notranslate">
+\[f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi)) + f_1(E) -\i f_2(E) - \sum(a_i) $$\]</div>
+</div></blockquote>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Atom.read_atomic_form_factor_coeff">
+<code class="descname">read_atomic_form_factor_coeff</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Atom.read_atomic_form_factor_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p>The atomic form factor <span class="math notranslate">\(f\)</span> in dependence from the energy $E$ is read from a parameter file
+given by Ref. [3].</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Atom.read_cromer_mann_coeff">
+<code class="descname">read_cromer_mann_coeff</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Atom.read_cromer_mann_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p>readcromer_mann_coeff</p>
+<p>The Cromer-Mann coefficients (Ref. [1]) are read from a parameter file and are returned in
+the following order:
+$$ a_1; a_2; a_3; a_4; b_1; b_2; b_3; b_4; c $$</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="udkm1Dsim.AtomMixed">
+<em class="property">class </em><code class="descclassname">udkm1Dsim.</code><code class="descname">AtomMixed</code><span class="sig-paren">(</span><em>symbol</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.AtomMixed" title="Permalink to this definition">¶</a></dt>
+<dd><p>mixed atom</p>
+<p>The atomMixed class is sub class of atomBase and enables mixed atoms for certain alloys and
+stochiometric mixtures. All properties of the included sub-atoms of class atomBase are averaged
+and weighted with their stochiometric ratio</p>
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.symbol">
+<code class="descname">symbol</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.symbol" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – symbol of the element</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.id">
+<code class="descname">id</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.id" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – identifier of the atom, may differ from symbol and/or name</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.name">
+<code class="descname">name</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.name" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – name of the element (generic)</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.atomic_number_z">
+<code class="descname">atomic_number_z</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.atomic_number_z" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – Z atomic number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.mass_number_a">
+<code class="descname">mass_number_a</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.mass_number_a" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – A atomic mass number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.ionicity">
+<code class="descname">ionicity</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.ionicity" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – ionicity of the atom</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.mass">
+<code class="descname">mass</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.mass" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – mass of the atom [kg]</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.atomic_form_factor_coeff">
+<code class="descname">atomic_form_factor_coeff</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.atomic_form_factor_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – atomic form factor coefficients for
+energy-dependent atomic form factor</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.cromer_mann_coeff">
+<code class="descname">cromer_mann_coeff</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.cromer_mann_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – cromer-mann coefficients for angular-dependent
+atomic form factor</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.AtomMixed.add_atom">
+<code class="descname">add_atom</code><span class="sig-paren">(</span><em>atom</em>, <em>fraction</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.AtomMixed.add_atom" title="Permalink to this definition">¶</a></dt>
+<dd><p>addAtom</p>
+<p>Add a atomBase instance with its stochiometric fraction to the atomMixed instance.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.AtomMixed.get_atomic_form_factor">
+<code class="descname">get_atomic_form_factor</code><span class="sig-paren">(</span><em>E</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.AtomMixed.get_atomic_form_factor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the mixed energy dependent atomic form factor.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.AtomMixed.get_cm_atomic_form_factor">
+<code class="descname">get_cm_atomic_form_factor</code><span class="sig-paren">(</span><em>E</em>, <em>qz</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.AtomMixed.get_cm_atomic_form_factor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the mixed energy and angle dependent atomic form factor.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="udkm1Dsim.UnitCell">
+<em class="property">class </em><code class="descclassname">udkm1Dsim.</code><code class="descname">UnitCell</code><span class="sig-paren">(</span><em>id</em>, <em>name</em>, <em>c_axis</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell" title="Permalink to this definition">¶</a></dt>
+<dd><blockquote>
+<div><p>The unitCell class hold different structural properties of real physical
+unit cells and also an array of atoms at different postions in the unit
+cell.</p>
+<p>id (str)                        : id of the unit cell
+name (str)                      : name of the unit cell
+atoms (list[atom, &#64;lambda])     : list of atoms and funtion handle for</p>
+<blockquote>
+<div>strain dependent displacement</div></blockquote>
+<p>num_atoms (int)                  : number of atoms in unit cell
+a_axis (float)                   : in-plane a-axis [m]
+b_axis (float)                   : in-plane b-axis [m]
+c_axis (float)                   : out-of-plane c-axis [m]
+area  (float)                   : area of epitaxial unit cells</p>
+<blockquote>
+<div>need for normation for correct intensities) [m^2]</div></blockquote>
+<p>volume (float)                  : volume of unit cell [m^3]
+mass (float)                    : mass of unit cell normalized to an area of 1 Ang^2 [kg]
+density (float)                 : density of the unitCell [kg/m^3]
+deb_wal_fac (float)               : Debye Waller factor &lt;u&gt;^2 [m^2]
+sound_vel (float)                : sound velocity in the unit cell [m/s]
+spring_const (ndarray[float])    : spring constant of the unit cell [kg/s^2] and higher orders
+phonon_damping (float)           : damping constant of phonon propagation [kg/s]
+opt_pen_depth (float)             : penetration depth for pump always for 1st subsystem</p>
+<blockquote>
+<div>light in the unit cell [m]</div></blockquote>
+<dl class="docutils">
+<dt>opt_ref_index (ndarray[float]) <span class="classifier-delimiter">:</span> <span class="classifier">optical refractive index - real and imagenary part</span></dt>
+<dd>$n + ikappa$</dd>
+<dt>opt_ref_index_per_strain (ndarray[float])   :</dt>
+<dd>optical refractive index change per strain -
+real and imagenary part %</dd>
+</dl>
+</div></blockquote>
+<p>rac{d n}{d eta} + i
+rac{d kappa}{d eta}$</p>
+<blockquote>
+<div><dl class="docutils">
+<dt>therm_cond (list[&#64;lambda])               :</dt>
+<dd>list of HANDLES T-dependent thermal conductivity [W/(m K)]</dd>
+<dt>lin_therm_exp (list[&#64;lambda])             :</dt>
+<dd>list of HANDLES T-dependent linear thermal expansion coefficient (relative)</dd>
+<dt>int_lin_therm_exp (list[&#64;lambda])          :</dt>
+<dd>list of HANDLES T-dependent integrated linear thermal expansion coefficient</dd>
+<dt>heat_capacity (list[&#64;lambda])            :</dt>
+<dd>list of HANDLES T-dependent heat capacity function [J/(kg K)]</dd>
+<dt>int_heat_capacity (list[&#64;lambda])         :</dt>
+<dd>list of HANDLES T-dependent integrated heat capacity function</dd>
+<dt>sub_system_coupling (list[&#64;lambda])       :</dt>
+<dd>list of HANDLES of coupling functions of different subsystems [W/m^3]</dd>
+<dt>num_sub_systems (int)                     :</dt>
+<dd>number of subsystems for heat and phonons (electrons, lattice, spins, …)</dd>
+</dl>
+</div></blockquote>
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.add_atom">
+<code class="descname">add_atom</code><span class="sig-paren">(</span><em>atom</em>, <em>position</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.add_atom" title="Permalink to this definition">¶</a></dt>
+<dd><p>Adds an atomBase/atomMixed at a relative position of the unit
+cell.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.add_multiple_atoms">
+<code class="descname">add_multiple_atoms</code><span class="sig-paren">(</span><em>atom</em>, <em>position</em>, <em>Nb</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.add_multiple_atoms" title="Permalink to this definition">¶</a></dt>
+<dd><p>Adds multiple atomBase/atomMixed at a relative position of the unit
+cell.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.calc_spring_const">
+<code class="descname">calc_spring_const</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.calc_spring_const" title="Permalink to this definition">¶</a></dt>
+<dd><blockquote>
+<div><p>Calculates the spring constant of the unit cell from the mass,
+sound velocity and c-axis</p>
+<p>$$ k = m , left(</p>
+</div></blockquote>
+<p>rac{v}{c}
+ight)^2 $$</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.check_cell_array_input">
+<code class="descname">check_cell_array_input</code><span class="sig-paren">(</span><em>inputs</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.check_cell_array_input" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks the input for inputs which are cell arrays of function
+handles, such as the heat capacity which is a cell array of N
+function handles.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.get_acoustic_impedance">
+<code class="descname">get_acoustic_impedance</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.get_acoustic_impedance" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.get_atom_ids">
+<code class="descname">get_atom_ids</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.get_atom_ids" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a cell array of all atom ids in the unit cell.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.get_atom_positions">
+<code class="descname">get_atom_positions</code><span class="sig-paren">(</span><em>*args</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.get_atom_positions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a vector of all relative postion of the atoms in the unit
+cell.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.get_property_dict">
+<code class="descname">get_property_dict</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.get_property_dict" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a dictionary with all parameters. objects or dicts and
+objects are converted to strings. if a type is given, only these
+properties are returned.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.UnitCell.int_heat_capacity">
+<code class="descname">int_heat_capacity</code><a class="headerlink" href="#udkm1Dsim.UnitCell.int_heat_capacity" title="Permalink to this definition">¶</a></dt>
+<dd><p>get int_heat_capacity</p>
+<p>Returns the anti-derrivative of the temperature-dependent heat
+$c(T)$ capacity function. If the _int_heat_capacity_ property is
+not set, the symbolic integration is performed.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.UnitCell.int_lin_therm_exp">
+<code class="descname">int_lin_therm_exp</code><a class="headerlink" href="#udkm1Dsim.UnitCell.int_lin_therm_exp" title="Permalink to this definition">¶</a></dt>
+<dd><p>get int_lin_therm_exp</p>
+<p>Returns the anti-derrivative of theintegrated temperature-dependent
+linear thermal expansion function. If the __int_lin_therm_exp__
+property is not set, the symbolic integration is performed.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.set_ho_spring_constants">
+<code class="descname">set_ho_spring_constants</code><span class="sig-paren">(</span><em>HO</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.set_ho_spring_constants" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the higher orders of the spring constant for anharmonic
+phonon simulations.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.UnitCell.visualize">
+<code class="descname">visualize</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.UnitCell.visualize" title="Permalink to this definition">¶</a></dt>
+<dd><p>visulaization of atoms in unit cell.</p>
+<p>allow for 3D presentation of unit cell by allow for a &amp; b coordinate
+of atoms.
+Also add magnetization per atom.
+ToDo: use the avogadro project as plugin
+ToDo: create unit cell from CIF file e.g. by xrayutilities plugin</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="udkm1Dsim.Structure">
+<em class="property">class </em><code class="descclassname">udkm1Dsim.</code><code class="descname">Structure</code><span class="sig-paren">(</span><em>name</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure" title="Permalink to this definition">¶</a></dt>
+<dd><p>The structure class can hold various sub_structures.
+Each sub_structure can be either a layer of N unitCell objects or a structure by itself.
+Thus it is possible to recursively build up 1D structures.</p>
+<dl class="method">
+<dt id="udkm1Dsim.Structure.addSubstrate">
+<code class="descname">addSubstrate</code><span class="sig-paren">(</span><em>sub_structure</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.addSubstrate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a structure as static substrate to the structure</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.addsub_structure">
+<code class="descname">addsub_structure</code><span class="sig-paren">(</span><em>sub_structure</em>, <em>N</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.addsub_structure" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a sub_structure of N unitCells or N structures to the structure.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getAllPositionsPerUniqueUnitCell">
+<code class="descname">getAllPositionsPerUniqueUnitCell</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getAllPositionsPerUniqueUnitCell" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a cell array with one vector of position indices for each unique unitCell
+in the structure.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getDistancesOfUnitCells">
+<code class="descname">getDistancesOfUnitCells</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getDistancesOfUnitCells" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a vector of the distance from the surface for each unit cell starting at 0
+(dStart) and starting at the end of the first UC (dEnd) and from the center of each UC
+(dMid).</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getLength">
+<code class="descname">getLength</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getLength" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the length from surface to bottom of the structure</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getNumberOfUniqueUnitCells">
+<code class="descname">getNumberOfUniqueUnitCells</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getNumberOfUniqueUnitCells" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the number of unique unitCells in the structure.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getNumberOfUnitCells">
+<code class="descname">getNumberOfUnitCells</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getNumberOfUnitCells" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the number of all unitCells in the structure.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getNumberOfsub_structures">
+<code class="descname">getNumberOfsub_structures</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getNumberOfsub_structures" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the number of all sub structures.
+This methods does not return the number of all unitCells in the structure,
+see getNumberOfUnitCells().</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getUniqueUnitCells">
+<code class="descname">getUniqueUnitCells</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getUniqueUnitCells" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a cell array of ids and handles of all unique UnitCell instances in the
+structure.
+The uniqueness is determined by the handle of each unitCell instance.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getUnitCellHandle">
+<code class="descname">getUnitCellHandle</code><span class="sig-paren">(</span><em>i</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getUnitCellHandle" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the handle to the unitCell at position i in the structure.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getUnitCellPropertyVector">
+<code class="descname">getUnitCellPropertyVector</code><span class="sig-paren">(</span><em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getUnitCellPropertyVector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a vector for a property of all unitCells in the structure.
+The property is determined by the propertyName and returns a scalar value or a function
+handle.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="udkm1Dsim.Structure.getUnitCellVectors">
+<code class="descname">getUnitCellVectors</code><span class="sig-paren">(</span><em>*args</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Structure.getUnitCellVectors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns three vectors with the numeric index of all unit cells in a structure given by
+the getUniqueUnitCells() method and addidionally vectors with the ids and Handles of the
+corresponding unitCell instances.
+The list and order of the unique unitCells can be either handed as an input parameter or
+is requested at the beginning.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></li>
+<li><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></li>
+<li><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Welcome to udkm1Dsimpy’s documentation!</a></li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/index.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Daniel Schick, et.al..
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
