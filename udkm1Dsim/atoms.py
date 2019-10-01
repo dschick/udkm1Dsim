@@ -16,9 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright (C) 2017 Daniel Schick
+# Copyright (C) 2019 Daniel Schick
 
-"""A :mod:`Structure` module """
+__all__ = ["Atom", "AtomMixed"]
+
+__docformat__ = "restructuredtext"
 
 import os
 import numpy as np
@@ -32,39 +34,50 @@ class Atom:
 
     The atom class is the smallest structural unit of which one can build
     larger structures. It holds real physical properties of atoms defined in
-    the attrubutes section can return parameters and data necessary for
+    the attrubutes section and can return parameters and data necessary for
     different simulation types.
 
+    Args:
+        symbol (str): symbol of the atom
+
+    Keyword Args:
+        id (str): id of the atom
+        ionicity (int): ionicity of the atom
+
     Attributes:
-        symbol (str)                 : symbol of the element
-        id (str)                     : identifier of the atom, may differ from symbol and/or name
-        name (str)                   : name of the element (generic)
-        atomic_number_z (int)        : Z atomic number
-        mass_number_a (float)        : A atomic mass number
-        ionicity (int)               : ionicity of the atom
-        mass (float)                 : mass of the atom [kg]
-        atomic_form_factor_coeff (ndarray[float]): atomic form factor coefficients for
-                                                    energy-dependent atomic form factor
-        cromer_mann_coeff (ndarray[float])       : cromer-mann coefficients for angular-dependent
-                                                   atomic form factor
+        symbol (str): symbol of the element
+        id (str): identifier of the atom, may differ from symbol and/or name
+        name (str): name of the element (generic)
+        atomic_number_z (int): Z atomic number
+        mass_number_a (float): A atomic mass number
+        ionicity (int): ionicity of the atom
+        mass (float): mass of the atom [kg]
+        atomic_form_factor_coeff (ndarray[float]): atomic form factor
+           coefficients for energy-dependent atomic form factor
+        cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
+           angular-dependent atomic form factor
+
+    References:
+
+        .. [1] D. T. Cromer & J. B. Mann (1968). X-ray scattering factors computed from
+           numerical Hartree–Fock wave functions. `Acta Crystallographica Section A,
+           24(2), 321–324. <http://www.doi.org/10.1107/S0567739468000550>`_
+        .. [2] J. Als-Nielson, & D. McMorrow (2001). `Elements of Modern X-Ray
+           Physics. New York: John Wiley & Sons, Ltd. <http://www.doi.org/10.1002/9781119998365>`_
+        .. [3] B. L. Henke, E. M. Gullikson & J. C. Davis (1993). _X-Ray Interactions:
+           Photoabsorption, Scattering, Transmission, and Reflection at
+           E = 50-30,000 eV, Z = 1-92. `Atomic Data and Nuclear Data Tables, 54(2),
+           181–342. <http://www.doi.org/10.1006/adnd.1993.1013>`_
     """
 
     def __init__(self, symbol, **kwargs):
-        """Initialize the class, set all file names and load the spec file.
-
-        Args:
-            name (str)                  : Name of the spec file.
-            filePath (str)              : Base path of the spec and HDF5 files.
-            specFileExt (Optional[str]) : File extension of the spec file,
-                                          default is none.
-
-        """
         self.symbol = symbol
         self.id = kwargs.get('id', symbol)
         self.ionicity = kwargs.get('ionicity', 0)
 
         try:
-            filename = os.path.join(os.path.dirname(__file__), 'parameters/elements/elements.dat')
+            filename = os.path.join(os.path.dirname(__file__),
+                                    'parameters/elements/elements.dat')
             symbols = np.genfromtxt(filename, dtype='U2', usecols=(0))
             elements = np.genfromtxt(filename, dtype='U15, i8, f8', usecols=(1, 2, 3))
             [rowidx] = np.where(symbols == self.symbol)
@@ -77,13 +90,11 @@ class Atom:
         self.atomic_number_z = element[1]
         self.mass_number_a = element[2]
         self.mass = self.mass_number_a*constants.atomic_mass*u.kg
-        self.atomic_form_factor_coeff = self.readatomic_form_factor_coeff()
+        self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff()
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
     def __str__(self):
-        """String representation of this class
-
-        """
+        """String representation of this class"""
         output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
                                 'ionicity', 'Cromer Mann coeff', '', ''],
                   'value': [self.id, self.symbol, self.name, self.atomic_number_z,
@@ -95,11 +106,13 @@ class Atom:
         return 'Atom with the following properties\n' + \
                tabulate(output, colalign=('right',), tablefmt="rst", floatfmt=('.2f', '.2f'))
 
-    def readatomic_form_factor_coeff(self):
-        """readatomic_form_factor_coeff
+    def read_atomic_form_factor_coeff(self):
+        """read_atomic_form_factor_coeff
 
-        The atomic form factor $f$ in dependence from the energy $E$ is read from a parameter file
-        given by Ref. [3].
+        The atomic form factor :math:`f` in dependence from
+        the energy :math:`E` is read from a parameter file
+        given by [3]_.
+
         """
         filename = os.path.join(os.path.dirname(__file__),
                                 'parameters/atomicFormFactors/{:s}.nff'.format(self.symbol.lower()))
@@ -117,20 +130,29 @@ class Atom:
     def get_atomic_form_factor(self, E):
         """get_atomic_form_factor
 
-        Returns the complex atomic form factor $f(E)=f_1-\i f_2$ for the energy $E$ [eV].
+        Returns the complex atomic form factor
+
+        .. math:: f(E)=f_1-i f_2
+
+        for the energy :math:`E` [eV].
+
+        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`
+
         """
         # interpolate the real and imaginary part in dependence of E
         f1 = np.interp(E, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 1])
         f2 = np.interp(E, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 2])
-        # Convention of Ref. [2] (p. 11, footnote) is a negative $f_2$
+
         return f1 - f2*1j
 
     def read_cromer_mann_coeff(self):
-        """readcromer_mann_coeff
+        """read_cromer_mann_coeff
 
-        The Cromer-Mann coefficients (Ref. [1]) are read from a parameter file and are returned in
+        The Cromer-Mann coefficients (Ref. [1]_) are read from a parameter file and are returned in
         the following order:
-        $$ a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c $$
+
+        .. math:: a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c
+
         """
         filename = os.path.join(os.path.dirname(__file__),
                                 'parameters/atomicFormFactors/cromermann.txt')
@@ -148,66 +170,73 @@ class Atom:
     def get_cm_atomic_form_factor(self, E, qz):
         """get_cm_atomic_form_factor
 
-        Returns the atomic form factor $f$ in dependence of the energy $E$ [J] and the $z$-component
-        of the scattering vector $q_z$ [Ang^-1] (Ref. [1]). Since the CM coefficients are fitted for
-        $q_z$ in [Ang^-1] we have to convert it before!
+        Returns the atomic form factor :math:`f` in dependence of the energy :math:`E` [J]
+        and the :math:`z`-component of the scattering vector
+        :math:`q_z` [Å :math:`^{-1}`] (Ref. [1]_).
+        Since the CM coefficients are fitted for
+        :math:`q_z` in [Å :math:`^{-1}`] we have to convert it before!
+
+        See Ref. [2]_ (p. 235).
+
+        .. math:: f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -i f_2(E)
+
+        :math:`f_{CM}(q_z)` is given in Ref. 1:
+
+        .. math:: f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c
+
+        :math:`\delta f_1(E)` is the dispersion correction:
+
+        .. math:: \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\\right)
+
+        Thus:
+
+        .. math:: f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
+           + c + f_1(E)-i f_2(E) - \left(\sum(a_i) + c\\right)
+
+        .. math:: f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
+           + f_1(E) -i f_2(E) - \sum(a_i)
+
         """
-        # See Ref. [2] (p. 235).
-        #
-        # $$f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -\i f_2(E)$$
-        #
-        # $f_{CM}(q_z)$ is given in Ref. 1:
-        #
-        # $$f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c$$
+
         f_cm = np.dot(self.cromer_mann_coeff[0:3],
                       np.exp(np.dot(-self.cromer_mann_coeff[4:7],
                                     (qz/(4*np.pi))**2))) + self.cromer_mann_coeff[8]
-        # $\delta f_1(E)$ is the dispersion correction:
-        #
-        # $$ \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\right)$$
-        #
-        # Thus:
-        #
-        # $$ f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi)) +
-        # c + f_1(E)-\i f_2(E) - \left(\sum(a_i) + c\right) $$
-        #
-        # $$ f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
-        # + f_1(E) -\i f_2(E) - \sum(a_i) $$
+
         return f_cm + self.get_atomic_form_factor(E*u.eV) -\
             (np.sum(self.cromer_mann_coeff[0:3]) + self.cromer_mann_coeff[8])
 
 
 class AtomMixed(Atom):
-    """mixed atom
+    """AtomMixed
 
-    The atomMixed class is sub class of atomBase and enables mixed atoms for certain alloys and
-    stochiometric mixtures. All properties of the included sub-atoms of class atomBase are averaged
-    and weighted with their stochiometric ratio
+    The AtomMixed class is sub class of Atom and enables mixed atoms
+    for certain alloys and stochiometric mixtures. All properties of
+    the included sub-atoms of class atomBase are averaged and
+    weighted with their stochiometric ratio
+
+    Args:
+        symbol (str): symbol of the atom
+
+    Keyword Args:
+        id (str): id of the atom
+        ionicity (int): ionicity of the atom
 
     Attributes:
-        symbol (str)                 : symbol of the element
-        id (str)                     : identifier of the atom, may differ from symbol and/or name
-        name (str)                   : name of the element (generic)
-        atomic_number_z (int)        : Z atomic number
-        mass_number_a (float)        : A atomic mass number
-        ionicity (int)               : ionicity of the atom
-        mass (float)                 : mass of the atom [kg]
-        atomic_form_factor_coeff (ndarray[float]): atomic form factor coefficients for
-                                                    energy-dependent atomic form factor
-        cromer_mann_coeff (ndarray[float])       : cromer-mann coefficients for angular-dependent
-                                                   atomic form factor
+        symbol (str): symbol of the element
+        id (str): identifier of the atom, may differ from symbol and/or name
+        name (str): name of the element (generic)
+        atomic_number_z (int): Z atomic number
+        mass_number_a (float): A atomic mass number
+        ionicity (int): ionicity of the atom
+        mass (float): mass of the atom [kg]
+        atomic_form_factor_coeff (ndarray[float]): atomic form factor coefficients
+           for energy-dependent atomic form factor
+        cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
+           angular-dependent atomic form factor
+
     """
 
     def __init__(self, symbol, **kwargs):
-        """Initialize the class, set all file names and load the spec file.
-
-        Args:
-            name (str)                  : Name of the spec file.
-            filePath (str)              : Base path of the spec and HDF5 files.
-            specFileExt (Optional[str]) : File extension of the spec file,
-                                          default is none.
-
-        """
         self.symbol = symbol
         self.id = kwargs.get('id', symbol)
         self.name = kwargs.get('name', symbol)
@@ -220,9 +249,7 @@ class AtomMixed(Atom):
         self.cromer_mann_coeff = np.array([])
 
     def __str__(self):
-        """String representation of this class
-
-        """
+        """String representation of this class"""
         output = []
         for i in range(self.num_atoms):
             output.append([self.atoms[i][0].name, '{:.1f} %'.format(self.atoms[i][1]*100)])
@@ -232,9 +259,9 @@ class AtomMixed(Atom):
                 + tabulate(output, colalign=('right',), floatfmt=('.2f', '.2f')))
 
     def add_atom(self, atom, fraction):
-        """addAtom
+        """add_atom
 
-        Add a atomBase instance with its stochiometric fraction to the atomMixed instance.
+        Add an Atom instance with its stochiometric fraction to the AtomMixed instance.
         """
         self.atoms.append([atom, fraction])
         self.num_atoms = self.num_atoms + 1
@@ -266,15 +293,3 @@ class AtomMixed(Atom):
             f += self.atoms[i][0].get_cm_atomic_form_factor(E, qz) * self.atoms[i][1]
 
         return f
-
-# References
-#
-# # D. T. Cromer & J. B. Mann (1968). _X-ray scattering factors computed from
-# numerical Hartree–Fock wave functions_. Acta Crystallographica Section A,
-# 24(2), 321–324. doi:10.1107/S0567739468000550
-# # J. Als-Nielson, & D. McMorrow (2001). _Elements of Modern X-Ray
-# Physics_. New York: John Wiley & Sons, Ltd. doi:10.1002/9781119998365
-# # B. L. Henke, E. M. Gullikson & J. C. Davis (1993). _X-Ray Interactions:
-# Photoabsorption, Scattering, Transmission, and Reflection at
-# E = 50-30,000 eV, Z = 1-92_. Atomic Data and Nuclear Data Tables, 54(2),
-# 181–342. doi:10.1006/adnd.1993.1013

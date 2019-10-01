@@ -8,3 +8,8 @@
 /*.egg-info
 project/
 .pytest_cache/
+
+#sphinx documentation
+_build
+_static
+_templates
