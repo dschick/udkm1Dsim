@@ -1,34 +1,181 @@
 
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
-<html xmlns="http://www.w3.org/1999/xhtml">
-  <head>
-    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title>udkm1Dsim package &#8212; udkm1Dsimpy 0.1-beta documentation</title>
-    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
-    <script type="text/javascript" src="../_static/documentation_options.js"></script>
-    <script type="text/javascript" src="../_static/jquery.js"></script>
-    <script type="text/javascript" src="../_static/underscore.js"></script>
-    <script type="text/javascript" src="../_static/doctools.js"></script>
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-    <link rel="index" title="Index" href="../genindex.html" />
-    <link rel="search" title="Search" href="../search.html" />
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>udkm1Dsim package &mdash; udkm1Dsimpy 0.1-beta documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="../genindex.html"/>
+        <link rel="search" title="Search" href="../search.html"/>
+    <link rel="top" title="udkm1Dsimpy 0.1-beta documentation" href="../index.html"/>
+        <link rel="up" title="udkm1Dsim" href="modules.html"/>
+        <link rel="next" title="udkm1Dsim.parameters package" href="udkm1Dsim.parameters.html"/>
+        <link rel="prev" title="udkm1Dsim" href="modules.html"/> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
    
-  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
-  
-  
-  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+  <div class="wy-grid-for-nav">
 
-  </head><body>
-  
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
 
-    <div class="document">
-      <div class="documentwrapper">
-        <div class="bodywrapper">
-          <div class="body" role="main">
+          
+            <a href="../index.html" class="icon icon-home"> udkm1Dsimpy
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/dschick/udkm1Dsimpy">Project Page</a></li>
+<li class="toctree-l1"><a class="reference external" href="http://pypi.python.org/pypi/udkm1Dsimpy">Download from PyPI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="modules.html">udkm1Dsim</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">udkm1Dsim package</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#subpackages">Subpackages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="udkm1Dsim.parameters.html">udkm1Dsim.parameters package</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#submodules">Submodules</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-udkm1Dsim.atoms">udkm1Dsim.atoms module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-udkm1Dsim.structure">udkm1Dsim.structure module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-udkm1Dsim.unitCell">udkm1Dsim.unitCell module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-udkm1Dsim">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">udkm1Dsimpy</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="modules.html">udkm1Dsim</a> &raquo;</li>
+        
+      <li>udkm1Dsim package</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/api/udkm1Dsim.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
             
   <div class="section" id="udkm1dsim-package">
 <h1>udkm1Dsim package<a class="headerlink" href="#udkm1dsim-package" title="Permalink to this headline">¶</a></h1>
@@ -68,58 +215,111 @@
 larger structures. It holds real physical properties of atoms defined in
 the attrubutes section can return parameters and data necessary for
 different simulation types.</p>
-<dl class="docutils">
-<dt>Attributes:</dt>
-<dd><blockquote class="first">
-<div><p>symbol (str): symbol of the element
-id (str): identifier of the atom, may differ from symbol and/or name
-name (str): name of the element (generic)
-atomic_number_z (int): Z atomic number
-mass_number_a (float): A atomic mass number
-ionicity (int): ionicity of the atom
-mass (float): mass of the atom [kg]
-atomic_form_factor_coeff (ndarray[float]): atomic form factor coefficients for</p>
-<blockquote>
-<div>energy-dependent atomic form factor</div></blockquote>
-</div></blockquote>
-<dl class="last docutils">
-<dt>cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for angular-dependent</dt>
-<dd>atomic form factor</dd>
-</dl>
-</dd>
-</dl>
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.Atom.symbol">
+<code class="descname">symbol</code><a class="headerlink" href="#udkm1Dsim.atoms.Atom.symbol" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – symbol of the element</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.Atom.id">
+<code class="descname">id</code><a class="headerlink" href="#udkm1Dsim.atoms.Atom.id" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – identifier of the atom, may differ from symbol and/or name</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.Atom.name">
+<code class="descname">name</code><a class="headerlink" href="#udkm1Dsim.atoms.Atom.name" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – name of the element (generic)</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.Atom.atomic_number_z">
+<code class="descname">atomic_number_z</code><a class="headerlink" href="#udkm1Dsim.atoms.Atom.atomic_number_z" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – Z atomic number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.Atom.mass_number_a">
+<code class="descname">mass_number_a</code><a class="headerlink" href="#udkm1Dsim.atoms.Atom.mass_number_a" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – A atomic mass number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.Atom.ionicity">
+<code class="descname">ionicity</code><a class="headerlink" href="#udkm1Dsim.atoms.Atom.ionicity" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – ionicity of the atom</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.Atom.mass">
+<code class="descname">mass</code><a class="headerlink" href="#udkm1Dsim.atoms.Atom.mass" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – mass of the atom [kg]</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.Atom.atomic_form_factor_coeff">
+<code class="descname">atomic_form_factor_coeff</code><a class="headerlink" href="#udkm1Dsim.atoms.Atom.atomic_form_factor_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – atomic form factor
+coefficients for energy-dependent atomic form factor</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.Atom.cromer_mann_coeff">
+<code class="descname">cromer_mann_coeff</code><a class="headerlink" href="#udkm1Dsim.atoms.Atom.cromer_mann_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – cromer-mann coefficients for
+angular-dependent atomic form factor</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="udkm1Dsim.atoms.Atom.get_atomic_form_factor">
 <code class="descname">get_atomic_form_factor</code><span class="sig-paren">(</span><em>E</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.atoms.Atom.get_atomic_form_factor" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the complex atomic form factor 
-$$f(E)=f_1-i f_2$$
-for the energy 
-$$E$$
-[eV].</p>
+<dd><p>Returns the complex atomic form factor
+.. math:: f(E)=f_1-i f_2
+for the energy <span class="math notranslate">\(E\)</span> [eV].</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="udkm1Dsim.atoms.Atom.get_cm_atomic_form_factor">
 <code class="descname">get_cm_atomic_form_factor</code><span class="sig-paren">(</span><em>E</em>, <em>qz</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.atoms.Atom.get_cm_atomic_form_factor" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the atomic form factor $f$ in dependence of the energy $E$ [J] and the $z$-component
-of the scattering vector $q_z$ [Ang^-1] (Ref. [1]). Since the CM coefficients are fitted for
-$q_z$ in [Ang^-1] we have to convert it before!</p>
+<dd><p>Returns the atomic form factor <span class="math notranslate">\(f\)</span> in dependence of the energy <span class="math notranslate">\(E\)</span> [J]
+and the <span class="math notranslate">\(z\)</span>-component of the scattering vector
+<span class="math notranslate">\(q_z\)</span> [Å <span class="math notranslate">\(^{-1}\)</span>] (Ref. [1]).
+Since the CM coefficients are fitted for
+<span class="math notranslate">\(q_z\)</span> in [Å <span class="math notranslate">\(^{-1}\)</span>] we have to convert it before!</p>
+<p>See Ref. [2] (p. 235).</p>
+<div class="math notranslate">
+\[f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -i f_2(E)\]</div>
+<p><span class="math notranslate">\(f_{CM}(q_z)\)</span> is given in Ref. 1:</p>
+<div class="math notranslate">
+\[f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c\]</div>
+<p><span class="math notranslate">\(\delta f_1(E)\)</span> is the dispersion correction:</p>
+<div class="math notranslate">
+\[\delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\right)\]</div>
+<p>Thus:</p>
+<div class="math notranslate">
+\[f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
++ c + f_1(E)-i f_2(E) - \left(\sum(a_i) + c\right)\]</div>
+<div class="math notranslate">
+\[f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
++ f_1(E) -i f_2(E) - \sum(a_i)\]</div>
 </dd></dl>
 
 <dl class="method">
 <dt id="udkm1Dsim.atoms.Atom.read_atomic_form_factor_coeff">
 <code class="descname">read_atomic_form_factor_coeff</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.atoms.Atom.read_atomic_form_factor_coeff" title="Permalink to this definition">¶</a></dt>
-<dd><p>The atomic form factor $f$ in dependence from the energy $E$ is read from a parameter file
+<dd><p>The atomic form factor <span class="math notranslate">\(f\)</span> in dependence from
+the energy <span class="math notranslate">\(E\)</span> is read from a parameter file
 given by Ref. [3].</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="udkm1Dsim.atoms.Atom.read_cromer_mann_coeff">
 <code class="descname">read_cromer_mann_coeff</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.atoms.Atom.read_cromer_mann_coeff" title="Permalink to this definition">¶</a></dt>
-<dd><p>readcromer_mann_coeff</p>
-<p>The Cromer-Mann coefficients (Ref. [1]) are read from a parameter file and are returned in
-the following order:
-$$ a_1; a_2; a_3; a_4; b_1; b_2; b_3; b_4; c $$</p>
+<dd><p>The Cromer-Mann coefficients (Ref. [1]) are read from a parameter file and are returned in
+the following order:</p>
+<div class="math notranslate">
+\[a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c\]</div>
 </dd></dl>
 
 </dd></dl>
@@ -127,29 +327,67 @@ $$ a_1; a_2; a_3; a_4; b_1; b_2; b_3; b_4; c $$</p>
 <dl class="class">
 <dt id="udkm1Dsim.atoms.AtomMixed">
 <em class="property">class </em><code class="descclassname">udkm1Dsim.atoms.</code><code class="descname">AtomMixed</code><span class="sig-paren">(</span><em>symbol</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="../udkm1Dsim.html#udkm1Dsim.atoms.Atom" title="udkm1Dsim.atoms.Atom"><code class="xref py py-class docutils literal notranslate"><span class="pre">udkm1Dsim.atoms.Atom</span></code></a></p>
+<dd><p>Bases: <a class="reference internal" href="#udkm1Dsim.atoms.Atom" title="udkm1Dsim.atoms.Atom"><code class="xref py py-class docutils literal notranslate"><span class="pre">udkm1Dsim.atoms.Atom</span></code></a></p>
 <p>mixed atom</p>
 <p>The atomMixed class is sub class of atomBase and enables mixed atoms for certain alloys and
 stochiometric mixtures. All properties of the included sub-atoms of class atomBase are averaged
 and weighted with their stochiometric ratio</p>
-<dl class="docutils">
-<dt>Attributes:</dt>
-<dd><p class="first">symbol (str)                 : symbol of the element
-id (str)                     : identifier of the atom, may differ from symbol and/or name
-name (str)                   : name of the element (generic)
-atomic_number_z (int)        : Z atomic number
-mass_number_a (float)        : A atomic mass number
-ionicity (int)               : ionicity of the atom
-mass (float)                 : mass of the atom [kg]
-atomic_form_factor_coeff (ndarray[float]): atomic form factor coefficients for</p>
-<blockquote>
-<div>energy-dependent atomic form factor</div></blockquote>
-<dl class="last docutils">
-<dt>cromer_mann_coeff (ndarray[float]) <span class="classifier-delimiter">:</span> <span class="classifier">cromer-mann coefficients for angular-dependent</span></dt>
-<dd>atomic form factor</dd>
-</dl>
-</dd>
-</dl>
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.AtomMixed.symbol">
+<code class="descname">symbol</code><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.symbol" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – symbol of the element</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.AtomMixed.id">
+<code class="descname">id</code><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.id" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – identifier of the atom, may differ from symbol and/or name</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.AtomMixed.name">
+<code class="descname">name</code><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.name" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – name of the element (generic)</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.AtomMixed.atomic_number_z">
+<code class="descname">atomic_number_z</code><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.atomic_number_z" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – Z atomic number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.AtomMixed.mass_number_a">
+<code class="descname">mass_number_a</code><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.mass_number_a" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – A atomic mass number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.AtomMixed.ionicity">
+<code class="descname">ionicity</code><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.ionicity" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – ionicity of the atom</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.AtomMixed.mass">
+<code class="descname">mass</code><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.mass" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – mass of the atom [kg]</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.AtomMixed.atomic_form_factor_coeff">
+<code class="descname">atomic_form_factor_coeff</code><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.atomic_form_factor_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – atomic form factor coefficients for
+energy-dependent atomic form factor</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.atoms.AtomMixed.cromer_mann_coeff">
+<code class="descname">cromer_mann_coeff</code><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.cromer_mann_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – cromer-mann coefficients for angular-dependent
+atomic form factor</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="udkm1Dsim.atoms.AtomMixed.add_atom">
 <code class="descname">add_atom</code><span class="sig-paren">(</span><em>atom</em>, <em>fraction</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.atoms.AtomMixed.add_atom" title="Permalink to this definition">¶</a></dt>
@@ -490,58 +728,111 @@ ToDo: create unit cell from CIF file e.g. by xrayutilities plugin</p>
 larger structures. It holds real physical properties of atoms defined in
 the attrubutes section can return parameters and data necessary for
 different simulation types.</p>
-<dl class="docutils">
-<dt>Attributes:</dt>
-<dd><blockquote class="first">
-<div><p>symbol (str): symbol of the element
-id (str): identifier of the atom, may differ from symbol and/or name
-name (str): name of the element (generic)
-atomic_number_z (int): Z atomic number
-mass_number_a (float): A atomic mass number
-ionicity (int): ionicity of the atom
-mass (float): mass of the atom [kg]
-atomic_form_factor_coeff (ndarray[float]): atomic form factor coefficients for</p>
-<blockquote>
-<div>energy-dependent atomic form factor</div></blockquote>
-</div></blockquote>
-<dl class="last docutils">
-<dt>cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for angular-dependent</dt>
-<dd>atomic form factor</dd>
-</dl>
-</dd>
-</dl>
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.symbol">
+<code class="descname">symbol</code><a class="headerlink" href="#udkm1Dsim.Atom.symbol" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – symbol of the element</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.id">
+<code class="descname">id</code><a class="headerlink" href="#udkm1Dsim.Atom.id" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – identifier of the atom, may differ from symbol and/or name</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.name">
+<code class="descname">name</code><a class="headerlink" href="#udkm1Dsim.Atom.name" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – name of the element (generic)</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.atomic_number_z">
+<code class="descname">atomic_number_z</code><a class="headerlink" href="#udkm1Dsim.Atom.atomic_number_z" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – Z atomic number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.mass_number_a">
+<code class="descname">mass_number_a</code><a class="headerlink" href="#udkm1Dsim.Atom.mass_number_a" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – A atomic mass number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.ionicity">
+<code class="descname">ionicity</code><a class="headerlink" href="#udkm1Dsim.Atom.ionicity" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – ionicity of the atom</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.mass">
+<code class="descname">mass</code><a class="headerlink" href="#udkm1Dsim.Atom.mass" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – mass of the atom [kg]</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.atomic_form_factor_coeff">
+<code class="descname">atomic_form_factor_coeff</code><a class="headerlink" href="#udkm1Dsim.Atom.atomic_form_factor_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – atomic form factor
+coefficients for energy-dependent atomic form factor</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.Atom.cromer_mann_coeff">
+<code class="descname">cromer_mann_coeff</code><a class="headerlink" href="#udkm1Dsim.Atom.cromer_mann_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – cromer-mann coefficients for
+angular-dependent atomic form factor</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="udkm1Dsim.Atom.get_atomic_form_factor">
 <code class="descname">get_atomic_form_factor</code><span class="sig-paren">(</span><em>E</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Atom.get_atomic_form_factor" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the complex atomic form factor 
-$$f(E)=f_1-i f_2$$
-for the energy 
-$$E$$
-[eV].</p>
+<dd><p>Returns the complex atomic form factor
+.. math:: f(E)=f_1-i f_2
+for the energy <span class="math notranslate">\(E\)</span> [eV].</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="udkm1Dsim.Atom.get_cm_atomic_form_factor">
 <code class="descname">get_cm_atomic_form_factor</code><span class="sig-paren">(</span><em>E</em>, <em>qz</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Atom.get_cm_atomic_form_factor" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the atomic form factor $f$ in dependence of the energy $E$ [J] and the $z$-component
-of the scattering vector $q_z$ [Ang^-1] (Ref. [1]). Since the CM coefficients are fitted for
-$q_z$ in [Ang^-1] we have to convert it before!</p>
+<dd><p>Returns the atomic form factor <span class="math notranslate">\(f\)</span> in dependence of the energy <span class="math notranslate">\(E\)</span> [J]
+and the <span class="math notranslate">\(z\)</span>-component of the scattering vector
+<span class="math notranslate">\(q_z\)</span> [Å <span class="math notranslate">\(^{-1}\)</span>] (Ref. [1]).
+Since the CM coefficients are fitted for
+<span class="math notranslate">\(q_z\)</span> in [Å <span class="math notranslate">\(^{-1}\)</span>] we have to convert it before!</p>
+<p>See Ref. [2] (p. 235).</p>
+<div class="math notranslate">
+\[f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -i f_2(E)\]</div>
+<p><span class="math notranslate">\(f_{CM}(q_z)\)</span> is given in Ref. 1:</p>
+<div class="math notranslate">
+\[f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c\]</div>
+<p><span class="math notranslate">\(\delta f_1(E)\)</span> is the dispersion correction:</p>
+<div class="math notranslate">
+\[\delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\right)\]</div>
+<p>Thus:</p>
+<div class="math notranslate">
+\[f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
++ c + f_1(E)-i f_2(E) - \left(\sum(a_i) + c\right)\]</div>
+<div class="math notranslate">
+\[f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
++ f_1(E) -i f_2(E) - \sum(a_i)\]</div>
 </dd></dl>
 
 <dl class="method">
 <dt id="udkm1Dsim.Atom.read_atomic_form_factor_coeff">
 <code class="descname">read_atomic_form_factor_coeff</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Atom.read_atomic_form_factor_coeff" title="Permalink to this definition">¶</a></dt>
-<dd><p>The atomic form factor $f$ in dependence from the energy $E$ is read from a parameter file
+<dd><p>The atomic form factor <span class="math notranslate">\(f\)</span> in dependence from
+the energy <span class="math notranslate">\(E\)</span> is read from a parameter file
 given by Ref. [3].</p>
 </dd></dl>
 
 <dl class="method">
 <dt id="udkm1Dsim.Atom.read_cromer_mann_coeff">
 <code class="descname">read_cromer_mann_coeff</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.Atom.read_cromer_mann_coeff" title="Permalink to this definition">¶</a></dt>
-<dd><p>readcromer_mann_coeff</p>
-<p>The Cromer-Mann coefficients (Ref. [1]) are read from a parameter file and are returned in
-the following order:
-$$ a_1; a_2; a_3; a_4; b_1; b_2; b_3; b_4; c $$</p>
+<dd><p>The Cromer-Mann coefficients (Ref. [1]) are read from a parameter file and are returned in
+the following order:</p>
+<div class="math notranslate">
+\[a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c\]</div>
 </dd></dl>
 
 </dd></dl>
@@ -549,29 +840,67 @@ $$ a_1; a_2; a_3; a_4; b_1; b_2; b_3; b_4; c $$</p>
 <dl class="class">
 <dt id="udkm1Dsim.AtomMixed">
 <em class="property">class </em><code class="descclassname">udkm1Dsim.</code><code class="descname">AtomMixed</code><span class="sig-paren">(</span><em>symbol</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.AtomMixed" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="../udkm1Dsim.html#udkm1Dsim.atoms.Atom" title="udkm1Dsim.atoms.Atom"><code class="xref py py-class docutils literal notranslate"><span class="pre">udkm1Dsim.atoms.Atom</span></code></a></p>
+<dd><p>Bases: <a class="reference internal" href="#udkm1Dsim.atoms.Atom" title="udkm1Dsim.atoms.Atom"><code class="xref py py-class docutils literal notranslate"><span class="pre">udkm1Dsim.atoms.Atom</span></code></a></p>
 <p>mixed atom</p>
 <p>The atomMixed class is sub class of atomBase and enables mixed atoms for certain alloys and
 stochiometric mixtures. All properties of the included sub-atoms of class atomBase are averaged
 and weighted with their stochiometric ratio</p>
-<dl class="docutils">
-<dt>Attributes:</dt>
-<dd><p class="first">symbol (str)                 : symbol of the element
-id (str)                     : identifier of the atom, may differ from symbol and/or name
-name (str)                   : name of the element (generic)
-atomic_number_z (int)        : Z atomic number
-mass_number_a (float)        : A atomic mass number
-ionicity (int)               : ionicity of the atom
-mass (float)                 : mass of the atom [kg]
-atomic_form_factor_coeff (ndarray[float]): atomic form factor coefficients for</p>
-<blockquote>
-<div>energy-dependent atomic form factor</div></blockquote>
-<dl class="last docutils">
-<dt>cromer_mann_coeff (ndarray[float]) <span class="classifier-delimiter">:</span> <span class="classifier">cromer-mann coefficients for angular-dependent</span></dt>
-<dd>atomic form factor</dd>
-</dl>
-</dd>
-</dl>
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.symbol">
+<code class="descname">symbol</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.symbol" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – symbol of the element</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.id">
+<code class="descname">id</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.id" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – identifier of the atom, may differ from symbol and/or name</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.name">
+<code class="descname">name</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.name" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>str</em> – name of the element (generic)</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.atomic_number_z">
+<code class="descname">atomic_number_z</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.atomic_number_z" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – Z atomic number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.mass_number_a">
+<code class="descname">mass_number_a</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.mass_number_a" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – A atomic mass number</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.ionicity">
+<code class="descname">ionicity</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.ionicity" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>int</em> – ionicity of the atom</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.mass">
+<code class="descname">mass</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.mass" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>float</em> – mass of the atom [kg]</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.atomic_form_factor_coeff">
+<code class="descname">atomic_form_factor_coeff</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.atomic_form_factor_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – atomic form factor coefficients for
+energy-dependent atomic form factor</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="udkm1Dsim.AtomMixed.cromer_mann_coeff">
+<code class="descname">cromer_mann_coeff</code><a class="headerlink" href="#udkm1Dsim.AtomMixed.cromer_mann_coeff" title="Permalink to this definition">¶</a></dt>
+<dd><p><em>ndarray[float]</em> – cromer-mann coefficients for angular-dependent
+atomic form factor</p>
+</dd></dl>
+
 <dl class="method">
 <dt id="udkm1Dsim.AtomMixed.add_atom">
 <code class="descname">add_atom</code><span class="sig-paren">(</span><em>atom</em>, <em>fraction</em><span class="sig-paren">)</span><a class="headerlink" href="#udkm1Dsim.AtomMixed.add_atom" title="Permalink to this definition">¶</a></dt>
@@ -897,67 +1226,76 @@ is requested at the beginning.</p>
 </div>
 
 
+           </div>
+           <div class="articleComments">
+            
+           </div>
           </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="udkm1Dsim.parameters.html" class="btn btn-neutral float-right" title="udkm1Dsim.parameters package" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="modules.html" class="btn btn-neutral" title="udkm1Dsim" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, Daniel Schick, et.al..
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
-        <div class="sphinxsidebarwrapper">
-  <h3><a href="../index.html">Table Of Contents</a></h3>
-  <ul>
-<li><a class="reference internal" href="#">udkm1Dsim package</a><ul>
-<li><a class="reference internal" href="#subpackages">Subpackages</a></li>
-<li><a class="reference internal" href="#submodules">Submodules</a></li>
-<li><a class="reference internal" href="#module-udkm1Dsim.atoms">udkm1Dsim.atoms module</a></li>
-<li><a class="reference internal" href="#module-udkm1Dsim.structure">udkm1Dsim.structure module</a></li>
-<li><a class="reference internal" href="#module-udkm1Dsim.unitCell">udkm1Dsim.unitCell module</a></li>
-<li><a class="reference internal" href="#module-udkm1Dsim">Module contents</a></li>
-</ul>
-</li>
-</ul>
-<div class="relations">
-<h3>Related Topics</h3>
-<ul>
-  <li><a href="../index.html">Documentation overview</a><ul>
-  </ul></li>
-</ul>
-</div>
-  <div role="note" aria-label="source link">
-    <h3>This Page</h3>
-    <ul class="this-page-menu">
-      <li><a href="../_sources/api/udkm1Dsim.rst.txt"
-            rel="nofollow">Show Source</a></li>
-    </ul>
-   </div>
-<div id="searchbox" style="display: none" role="search">
-  <h3>Quick search</h3>
-    <div class="searchformwrapper">
-    <form class="search" action="../search.html" method="get">
-      <input type="text" name="q" />
-      <input type="submit" value="Go" />
-      <input type="hidden" name="check_keywords" value="yes" />
-      <input type="hidden" name="area" value="default" />
-    </form>
-    </div>
-</div>
-<script type="text/javascript">$('#searchbox').show(0);</script>
-        </div>
-      </div>
-      <div class="clearer"></div>
-    </div>
-    <div class="footer">
-      &copy;2019, Daniel Schick, et.al..
-      
-      |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.7.2</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.10</a>
-      
-      |
-      <a href="../_sources/api/udkm1Dsim.rst.txt"
-          rel="nofollow">Page source</a>
-    </div>
 
-    
+    </section>
 
-    
-  </body>
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.1-beta',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
 </html>

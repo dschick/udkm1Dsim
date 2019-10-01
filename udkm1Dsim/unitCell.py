@@ -416,6 +416,7 @@ class UnitCell:
         sound velocity and c-axis
 
         $$ k = m \, \left(\frac{v}{c}\right)^2 $$
+
         """
         self.spring_const[0] = (self._mass * (self._sound_vel/self._c_axis)**2)
 
