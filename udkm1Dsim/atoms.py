@@ -16,9 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright (C) 2017 Daniel Schick
+# Copyright (C) 2019 Daniel Schick
 
-"""A :mod:`Structure` module """
+__all__ = ["Atom", "AtomMixed"]
+
+__docformat__ = "restructuredtext"
 
 import os
 import numpy as np
@@ -56,7 +58,7 @@ class Atom:
            angular-dependent atomic form factor
 
     References:
-        
+
         .. [1] D. T. Cromer & J. B. Mann (1968). X-ray scattering factors computed from
            numerical Hartree–Fock wave functions. `Acta Crystallographica Section A,
            24(2), 321–324. <http://www.doi.org/10.1107/S0567739468000550>`_
@@ -92,9 +94,7 @@ class Atom:
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
     def __str__(self):
-        """String representation of this class
-
-        """
+        """String representation of this class"""
         output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
                                 'ionicity', 'Cromer Mann coeff', '', ''],
                   'value': [self.id, self.symbol, self.name, self.atomic_number_z,
@@ -131,9 +131,9 @@ class Atom:
         """get_atomic_form_factor
 
         Returns the complex atomic form factor
-        
+
         .. math:: f(E)=f_1-i f_2
-        
+
         for the energy :math:`E` [eV].
 
         Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`

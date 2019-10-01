@@ -16,9 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
-# Copyright (C) 2017 Daniel Schick
-
-"""A :mod:`UnitCell` module """
+# Copyright (C) 2019 Daniel Schick
 
 __all__ = ["UnitCell"]
 
@@ -39,44 +37,53 @@ class UnitCell:
     unit cells and also an array of atoms at different postions in the unit
     cell.
 
-    id (str)                        : id of the unit cell
-    name (str)                      : name of the unit cell
-    atoms (list[atom, @lambda])     : list of atoms and funtion handle for
-                                    strain dependent displacement
-    num_atoms (int)                  : number of atoms in unit cell
-    a_axis (float)                   : in-plane a-axis [m]
-    b_axis (float)                   : in-plane b-axis [m]
-    c_axis (float)                   : out-of-plane c-axis [m]
-    area  (float)                   : area of epitaxial unit cells
-                                      need for normation for correct intensities) [m^2]
-    volume (float)                  : volume of unit cell [m^3]
-    mass (float)                    : mass of unit cell normalized to an area of 1 Ang^2 [kg]
-    density (float)                 : density of the unitCell [kg/m^3]
-    deb_wal_fac (float)               : Debye Waller factor <u>^2 [m^2]
-    sound_vel (float)                : sound velocity in the unit cell [m/s]
-    spring_const (ndarray[float])    : spring constant of the unit cell [kg/s^2] and higher orders
-    phonon_damping (float)           : damping constant of phonon propagation [kg/s]
-    opt_pen_depth (float)             : penetration depth for pump always for 1st subsystem
-                                    light in the unit cell [m]
-    opt_ref_index (ndarray[float])    : optical refractive index - real and imagenary part
-                                    $n + i\kappa$
-    opt_ref_index_per_strain (ndarray[float])   :
-            optical refractive index change per strain -
-            real and imagenary part %\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}$
-    therm_cond (list[@lambda])               :
-            list of HANDLES T-dependent thermal conductivity [W/(m K)]
-    lin_therm_exp (list[@lambda])             :
-            list of HANDLES T-dependent linear thermal expansion coefficient (relative)
-    int_lin_therm_exp (list[@lambda])          :
-            list of HANDLES T-dependent integrated linear thermal expansion coefficient
-    heat_capacity (list[@lambda])            :
-            list of HANDLES T-dependent heat capacity function [J/(kg K)]
-    int_heat_capacity (list[@lambda])         :
-            list of HANDLES T-dependent integrated heat capacity function
-    sub_system_coupling (list[@lambda])       :
-            list of HANDLES of coupling functions of different subsystems [W/m^3]
-    num_sub_systems (int)                     :
-            number of subsystems for heat and phonons (electrons, lattice, spins, ...)
+    Args:
+        id (str): id of the UnitCell
+        name (str): name of the UnitCell
+        c_axis (float): c-axis of the UnitCell
+
+    Keyword Args:
+        a_axis (float): a-axis of the UnitCell
+        b_axis (float): b-axis of the UnitCell
+        deb_wal_fac (float): Debye Waller factor
+        sound_vel (float): sound velocity
+        phonon_damping (float): phonon damping
+        opt_pen_depth (float): optical penetration depth
+        opt_ref_index (float): refractive index
+        opt_ref_index_per_strain (float): change of refractive index per strain
+        heat_capacity (float): heat capacity
+        therm_cond (float): thermal conductivity
+        lin_therm_exp (float): linear thermal expansion
+        sub_system_coupling (float): sub-system coupling
+
+    Attributes:
+        id (str): id of the unit cell
+        name (str): name of the unit cell
+        atoms (list[atom, @lambda]): list of atoms and funtion handle for
+           strain dependent displacement
+        num_atoms (int): number of atoms in unit cell
+        deb_wal_fac (float): Debye Waller factor <u>² [m²]
+        spring_const (ndarray[float]): spring constant of the unit cell [kg/s²]
+           and higher orders
+        opt_ref_index (ndarray[float]): optical refractive index - real and imagenary
+           part :math:`n + i\kappa`
+        opt_ref_index_per_strain (ndarray[float]): optical refractive index change per
+           strain - real and imagenary part
+           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`
+        therm_cond (list[@lambda]): list of HANDLES T-dependent thermal conductivity [W/(m K)]
+        lin_therm_exp (list[@lambda]): list of HANDLES T-dependent linear thermal expansion
+           coefficient (relative)
+        int_lin_therm_exp (list[@lambda]): list of HANDLES T-dependent integrated linear
+           thermal expansion coefficient
+        heat_capacity (list[@lambda]): list of HANDLES T-dependent heat capacity
+           function [J/(kg K)]
+        int_heat_capacity (list[@lambda]): list of HANDLES T-dependent integrated
+           heat capacity function
+        sub_system_coupling (list[@lambda]): list of HANDLES of coupling functions
+           of different subsystems [W/m³]
+        num_sub_systems (int): number of subsystems for heat and phonons
+           (electrons, lattice, spins, ...)
+
     """
 
     def __init__(self, id, name, c_axis, **kwargs):
@@ -118,9 +125,7 @@ class UnitCell:
         self.volume = self.area * self.c_axis
 
     def __str__(self):
-        """String representation of this class
-
-        """
+        """String representation of this class"""
         output = [['id', self.id],
                   ['name', self.name],
                   ['a-axis', '{:.4~P}'.format(self.a_axis)],
@@ -157,13 +162,15 @@ class UnitCell:
         return class_str
 
     def visualize(self, **kwargs):
-        """visulaization of atoms in unit cell.
+        """visualize
 
-        allow for 3D presentation of unit cell by allow for a & b coordinate
+        Allows for 3D presentation of unit cell by allow for a & b coordinate
         of atoms.
         Also add magnetization per atom.
-        ToDo: use the avogadro project as plugin
-        ToDo: create unit cell from CIF file e.g. by xrayutilities plugin
+
+        Todo: use the avogadro project as plugin
+        Todo: create unit cell from CIF file e.g. by xrayutilities plugin
+
         """
         import matplotlib.pyplot as plt
         import matplotlib.cm as cmx
@@ -210,6 +217,7 @@ class UnitCell:
         Returns a dictionary with all parameters. objects or dicts and
         objects are converted to strings. if a type is given, only these
         properties are returned.
+
         """
         # initialize input parser and define defaults and validators
         types = ['all', 'heat', 'phonon', 'XRD', 'optical']
@@ -241,6 +249,7 @@ class UnitCell:
         Checks the input for inputs which are cell arrays of function
         handles, such as the heat capacity which is a cell array of N
         function handles.
+
         """
         output = []
         outputStrs = []
@@ -279,10 +288,10 @@ class UnitCell:
         """get int_heat_capacity
 
         Returns the anti-derrivative of the temperature-dependent heat
-        $c(T)$ capacity function. If the _int_heat_capacity_ property is
+        :math:`c(T)` capacity function. If the _int_heat_capacity_ property is
         not set, the symbolic integration is performed.
-        """
 
+        """
         if hasattr(self, '_int_heat_capacity') and isinstance(self._int_heat_capacity, list):
             return self._int_heat_capacity
         else:
@@ -309,8 +318,8 @@ class UnitCell:
     def int_heat_capacity(self, int_heat_capacity):
         """set int_heat_capacity
 
-        Set the integrated heat capacity manually when no Smybolic Math
-        Toolbox is installed.
+        Set the integrated heat capacity manually when no sympy is installed.
+
         """
         self._int_heat_capacity, self.int_heat_capacity_str = self.check_cell_array_input(
                 int_heat_capacity)
@@ -320,8 +329,9 @@ class UnitCell:
         """get int_lin_therm_exp
 
         Returns the anti-derrivative of theintegrated temperature-dependent
-        linear thermal expansion function. If the __int_lin_therm_exp__
+        linear thermal expansion function. If the *int_lin_therm_exp*
         property is not set, the symbolic integration is performed.
+
         """
 
         if hasattr(self, '_int_lin_therm_exp') and isinstance(self._int_lin_therm_exp, list):
@@ -351,17 +361,24 @@ class UnitCell:
         """set int_lin_therm_exp
 
         Set the integrated linear thermal expansion coefficient manually
-        when no Smybolic Math Toolbox is installed.
+        when no sympy installed.
+
         """
         self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_cell_array_input(
                 int_lin_therm_exp)
 
     def add_atom(self, atom, position):
         """ add_atom
+
         Adds an atomBase/atomMixed at a relative position of the unit
         cell.
-        """
 
+        Update the mass, density and spring constant of the unit cell
+        automatically:
+
+        .. math:: \kappa = m \cdot (v_s / c)^2
+
+        """
         position_str = ''
         # test the input type of the position
         if isfunction(position):
@@ -386,10 +403,6 @@ class UnitCell:
         self.atoms.append([atom, position, position_str])
         # increase the number of atoms
         self.num_atoms = self.num_atoms + 1
-        # Update the mass, density and spring constant of the unit cell
-        # automatically:
-        #
-        # $$ \kappa = m \cdot (v_s / c)^2 $$
 
         self.mass = 0*u.kg
         for i in range(self.num_atoms):
@@ -405,24 +418,24 @@ class UnitCell:
 
         Adds multiple atomBase/atomMixed at a relative position of the unit
         cell.
+
         """
         for i in range(Nb):
             self.addAtom(atom, position)
 
     def calc_spring_const(self):
-        """ calc_spring_const
+        """calc_spring_const
 
         Calculates the spring constant of the unit cell from the mass,
         sound velocity and c-axis
 
-        $$ k = m \, \left(\frac{v}{c}\right)^2 $$
+        .. math:: k = m \, \left(\\frac{v}{c}\\right)^2
 
         """
         self.spring_const[0] = (self._mass * (self._sound_vel/self._c_axis)**2)
 
     def get_acoustic_impedance(self):
-        """get_acoustic_impedance
-        """
+        """get_acoustic_impedance"""
         Z = np.sqrt(self.spring_const[0] * self.mass/self.area**2)
         return Z
 
@@ -431,6 +444,7 @@ class UnitCell:
 
         Set the higher orders of the spring constant for anharmonic
         phonon simulations.
+
         """
         # reset old higher order spring constants
         self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
@@ -440,6 +454,7 @@ class UnitCell:
         """get_atom_ids
 
         Returns a cell array of all atom ids in the unit cell.
+
         """
         ids = []
         for i in range(self.num_atoms):
@@ -453,6 +468,7 @@ class UnitCell:
 
         Returns a vector of all relative postion of the atoms in the unit
         cell.
+
         """
         if args:
             strain = args[0]
@@ -467,6 +483,7 @@ class UnitCell:
 
     @property
     def a_axis(self):
+        """float: in-plane a-axis [m]"""
         return Q_(self._a_axis, u.meter).to('angstrom')
 
     @a_axis.setter
@@ -476,6 +493,7 @@ class UnitCell:
 
     @property
     def b_axis(self):
+        """float: in-plane b-axis [m]"""
         return Q_(self._b_axis, u.meter).to('angstrom')
 
     @b_axis.setter
@@ -485,6 +503,7 @@ class UnitCell:
 
     @property
     def c_axis(self):
+        """float: out-of-plane c-axis [m]"""
         return Q_(self._c_axis, u.meter).to('angstrom')
 
     @c_axis.setter
@@ -494,6 +513,7 @@ class UnitCell:
 
     @property
     def mass(self):
+        """float: mass of unit cell normalized to an area of 1 Å² [kg]"""
         return Q_(self._mass, u.kg)
 
     @mass.setter
@@ -503,6 +523,7 @@ class UnitCell:
 
     @property
     def density(self):
+        """float: density of the unitCell [kg/m³]"""
         return Q_(self._density, u.kg/u.m**3)
 
     @density.setter
@@ -512,6 +533,11 @@ class UnitCell:
 
     @property
     def area(self):
+        """
+        float: area of epitaxial unit cells need for normation for
+        correct intensities) [m²]
+
+        """
         return Q_(self._area, u.m**2)
 
     @area.setter
@@ -521,6 +547,7 @@ class UnitCell:
 
     @property
     def volume(self):
+        """float: volume of unit cell [m³]"""
         return Q_(self._volume, u.m**3)
 
     @volume.setter
@@ -530,6 +557,7 @@ class UnitCell:
 
     @property
     def sound_vel(self):
+        """float: sound velocity in the unit cell [m/s]"""
         return Q_(self._sound_vel, u.m/u.s)
 
     @sound_vel.setter
@@ -543,6 +571,7 @@ class UnitCell:
 
     @property
     def phonon_damping(self):
+        """float: damping constant of phonon propagation [kg/s]"""
         return Q_(self._phonon_damping, u.kg/u.s)
 
     @phonon_damping.setter
@@ -552,6 +581,11 @@ class UnitCell:
 
     @property
     def opt_pen_depth(self):
+        """
+        float: penetration depth for pump always for 1st subsystem
+        light in the unit cell [m]
+
+        """
         return Q_(self._opt_pen_depth, u.meter).to('nanometer')
 
     @opt_pen_depth.setter
