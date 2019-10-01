@@ -114,7 +114,7 @@ class UnitCell:
 
         if (len(self.heat_capacity) == len(self.therm_cond)
             and len(self.heat_capacity) == len(self.lin_therm_exp)
-            and len(self.heat_capacity) == len(self.sub_system_coupling)):
+                and len(self.heat_capacity) == len(self.sub_system_coupling)):
             self.num_sub_systems = len(self.heat_capacity)
         else:
             raise ValueError('Heat capacity, thermal conductivity, linear'
@@ -137,7 +137,7 @@ class UnitCell:
                   ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
                   ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
                   ['sound velocity', '{:.4~P}'.format(self.sound_vel.to('meter/s'))],
-                  ['spring constant', self.spring_const*u.kg/u.s**2],
+                  ['spring constant', self.spring_const * u.kg/u.s**2],
                   ['phonon damping', self.phonon_damping.to('kg/s')],
                   ['opt. pen. depth', self.opt_pen_depth.to('nm')],
                   ['opt. refractive index', self.opt_ref_index],

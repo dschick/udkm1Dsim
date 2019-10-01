@@ -68,8 +68,9 @@ class Structure:
 
         # check the number of subsystems of the sub_structure
 
-        if ((self.num_sub_systems > 1) and not
-            (sub_structure.num_sub_systems == self.num_sub_systems)):
+        if ((self.num_sub_systems > 1)
+           and not (sub_structure.num_sub_systems == self.num_sub_systems)):
+
             raise ValueError('The number of subsystems in each sub_structure'
                              'must be the same!')
         else:
@@ -203,7 +204,8 @@ class Structure:
                 uc_ids = uc_ids + list(temp1)
                 # create a cell array of N unitCell handles and add them to
                 # the Handles cell array
-                temp2 = list(itertools.repeat(self.sub_structures[i][0], self.sub_structures[i][1]))
+                temp2 = list(itertools.repeat(self.sub_structures[i][0],
+                                              self.sub_structures[i][1]))
                 uc_handles = uc_handles + list(temp2)
             else:
                 # its a structure

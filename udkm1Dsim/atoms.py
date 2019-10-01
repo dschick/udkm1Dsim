@@ -115,7 +115,8 @@ class Atom:
 
         """
         filename = os.path.join(os.path.dirname(__file__),
-                                'parameters/atomicFormFactors/{:s}.nff'.format(self.symbol.lower()))
+                                'parameters/atomicFormFactors/{:s}.nff'.format(
+                                        self.symbol.lower()))
         try:
             f = np.genfromtxt(filename, skip_header=1)
         except Exception as e:
@@ -157,7 +158,8 @@ class Atom:
         filename = os.path.join(os.path.dirname(__file__),
                                 'parameters/atomicFormFactors/cromermann.txt')
         try:
-            cm = np.genfromtxt(filename, skip_header=1, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
+            cm = np.genfromtxt(filename, skip_header=1,
+                               usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
         except Exception as e:
             print('File {:s} not found!\nMake sure the path'
                   '/parameters/atomicFormFactors/ is in your search path!',
