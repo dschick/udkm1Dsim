@@ -137,7 +137,7 @@ class Structure:
 #            p.addParamValue('handle', '', @ishandle);
 #            % parse the input
 #            p.parse(obj,varargin{:});
-#            % assign parser results to object properties 
+#            % assign parser results to object properties
 #            if isempty(p.Results.handle)
 #                h = figure;
 #            else
@@ -151,7 +151,7 @@ class Structure:
 #            axis([min(distances) max(distances) 0.9 length(obj.getUniqueUnitCells)+0.1]);
 #            xlabel('Distance [nm]');
 #            title('Structure Visualization');
-#            set(gca,'YTick',1:N,'YTickLabel', a(:,1)); 
+#            set(gca,'YTick',1:N,'YTickLabel', a(:,1));
         pass
 
     def get_hash(self):
@@ -160,7 +160,7 @@ class Structure:
 #            param = cell(size(UCs,1),1);
 #            for i=1:size(UCs,1)
 #                param{i} = UCs{i,2}.getPropertyStruct(varargin{:});
-#            end%for           
+#            end%for
 #            [~, IDs] = obj.getUnitCellVectors();
 #            param(end+1) = {IDs};
 #            % dataHash is an external function
@@ -413,6 +413,58 @@ class Structure:
         d_start = np.hstack([[0], d_end[0:-1]])
         d_mid = (d_start + c_axes)/2
         return d_start, d_end, d_mid
+
+        def get_distances_of_interfaces(self):
+            """get_distances_of_interfaces"""
+#            % Returns the distances from the surface of each interface of the
+#            % structure.
+#            function [distIntf Indices] = getDistancesOfInterfaces(obj)
+#                [dStart dEnd]   = obj.getDistancesOfUnitCells();
+#                Indices         = [1 diff(obj.getUnitCellVectors())'];
+#                distIntf        = [dStart(Indices ~= 0)' dEnd(end)]';
+#            end
+            pass
+
+        def interp_distance_at_interfaces(self):
+            """interp_distance_at_interfaces"""
+#            % Returns a distance Vector of the center of UCs interpolated by an
+#            % odd number N at the interface of sturctures.
+#            function [distInterp originalIndicies] = interpDistanceAtInterfaces(obj,N)
+#                [dStart,dEnd,dMid] = obj.getDistancesOfUnitCells();
+#                % these are the distances of the interfaces
+#                distIntf = obj.getDistancesOfInterfaces();
+#                % we start with the distances of the centers of the unit cells
+#                distInterp = dMid;
+#
+#                N = floor(N); % make N an integer
+#                if mod(N,2) == 0
+#                    % we want to have odd numbers
+#                    N = N+1;
+#                end%if
+#
+#                % traverse all distances
+#                for i=1:length(distIntf)
+#                    x = distIntf(i); % this is the distance of an interface
+#
+#                    inda = finderb(x,dStart); % this is the index of an UC after the interface
+#                    indb = inda-1; % this is the index of an UC before the interface
+#
+#                    % now interpolate linearly N new distances at the interface
+#                    if indb == 0 % this is the surface interface
+#                        distInterp = vertcat(distInterp,linspace(0,dMid(inda),2+(N-1)/2)');
+#                    elseif inda >= length(dMid) % this is the bottom interface
+#                        distInterp = vertcat(distInterp,
+#                       linspace(dMid(inda),dEnd(end),2+(N-1)/2)');
+#                    else % this is a surface inside the structure
+#                        distInterp = vertcat(distInterp,linspace(dMid(indb),dMid(inda),2+N)');
+#                    end%if
+#                end%for
+#
+#                distInterp = unique(sort(distInterp)); % sort and unify the distances
+#                % these are the indicies of the original distances in the interpolated new vector
+#                originalIndicies = finderb(dMid,distInterp);
+#            end%function
+            pass
 
     def get_unit_cell_property_vector(self, property_name):
         """get_unit_cell_property_vector

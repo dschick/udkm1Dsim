@@ -164,6 +164,7 @@ class UnitCell:
         return class_str
 
     def clone_2_multiple(self, N, *args):
+        """clone_2_multiple"""
 #        %% clone2multiple
 #        % Returns a cloned unit cell N time repeated. Accordingly, all
 #        % physical properties are adapted, *despite of any specific function
@@ -210,7 +211,7 @@ class UnitCell:
 #            end%for
 #        end%function
         pass
-        
+
     def visualize(self, **kwargs):
         """visualize
 
