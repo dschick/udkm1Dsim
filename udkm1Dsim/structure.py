@@ -135,11 +135,15 @@ class Structure:
         Add a sub_structure of N unitCells or N structures to the
         structure.
 
+        Args:
+            sub_structure (UnitCell, Structure): unit cell or structure
+               to add as sub structure
+            N (int): number or repetitions
         """
 
         # check of the sub_structure is an instance of the unitCell of
         # structure class
-        if not isinstance(sub_structure, UnitCell, Structure):
+        if not isinstance(sub_structure, (UnitCell, Structure)):
             raise ValueError('Class '
                              + type(sub_structure).__name__
                              + ' is no possible sub structure.'
@@ -169,11 +173,13 @@ class Structure:
 
         Add a structure as static substrate to the structure
 
+        Args:
+            sub_structure (Structure): substrate structure
         """
         if not isinstance(sub_structure, Structure):
             raise ValueError('Class '
                              + type(sub_structure).__name__
-                             + ' is no possible substrate.'
+                             + ' is no possible substrate. '
                              + 'Only structure class is allowed!')
 
         self.substrate = sub_structure
@@ -290,6 +296,10 @@ class Structure:
         The list and order of the unique unitCells can be either handed
         as an input parameter or is requested at the beginning.
 
+        Args:
+            ucs (Optional[list]): list of unique unit cells including
+               ids and handles
+
         """
         indices = []
         uc_ids = []
@@ -340,7 +350,7 @@ class Structure:
     def get_all_positions_per_unique_unit_cell(self):
         """get_all_positions_per_unique_unit_cell
 
-        Returns a cell array with one vector of position indices for
+        Returns a list with one vector of position indices for
         each unique unitCell in the structure.
 
         """
@@ -360,44 +370,51 @@ class Structure:
         unit cell (dEnd) and from the center of each unit cell (dMid).
 
         """
-        c_axes = self.get_unit_cell_property_vector(types='c_axis')
+        c_axes = self.get_unit_cell_property_vector('_c_axis')
         d_end = np.cumsum(c_axes)
         d_start = np.hstack([[0], d_end[0:-1]])
         d_mid = (d_start + c_axes)/2
         return d_start, d_end, d_mid
 
-    def get_unit_cell_property_vector(self, **kwargs):
+    def get_unit_cell_property_vector(self, property_name):
         """get_unit_cell_property_vector
 
         Returns a vector for a property of all unitCells in the
         structure. The property is determined by the propertyName and
         returns a scalar value or a function handle.
 
-        """
-        types = kwargs.get('types')
+        Args:
+            property_name (str): type of property to return as vector
 
+        """
         # get the Handle to all unitCells in the Structure
         handles = self.get_unit_cell_vectors()[2]
 
-        if callable(getattr(handles[0], types)):
+        if callable(getattr(handles[0], property_name)):
+            # it's a function
+            print("it's a function")
             prop = np.zeros([self.get_number_of_unit_cells()])
             for i in range(self.get_number_of_unit_cells()):
-                prop[i] = getattr(handles[i], types)
-        elif type(getattr(handles[0], types)) is list:
-            # Prop = np.zeros([self.get_number_of_unit_cells(),len(getattr(Handles[0],types))])
-            # Prop[]
-            prop = {}
+                prop[i] = getattr(handles[i], property_name)
+        elif ((type(getattr(handles[0], property_name)) is list) or
+                (type(getattr(handles[0], property_name)) is str)):
+            # it's a list if functions or str
+            prop = []
             for i in range(self.get_number_of_unit_cells()):
                 # Prop = Prop + getattr(Handles[i],types)
-                prop[i] = getattr(handles[i], types)
+                prop.append(getattr(handles[i], property_name))
         else:
-            # ucs = self.getUniqueUnitCells()
-            prop = np.zeros([self.get_number_of_unit_cells()])
-
+            # its a number or array
+            ucs = self.get_unique_unit_cells()
+            temp = np.zeros([len(ucs[0]), 1])
+            for i, uc in enumerate(ucs[1]):
+                temp[i] = len(getattr(uc, property_name))
+            prop = np.zeros([self.get_number_of_unit_cells(), int(np.max(temp))])
+            del temp
             # traverse all unitCells
             for i in range(self.get_number_of_unit_cells()):
-                temp = getattr(handles[i], types)
-                prop[i] = temp
+                temp = getattr(handles[i], property_name)
+                prop[i, 0:len(temp)] = temp
 
         return prop
 
