@@ -129,6 +129,44 @@ class Structure:
 #        class_str += tabulate(atoms_str, headers=['atom', 'position', 'position function'],
 #                              tablefmt="rst")
 
+    def visualize(self):
+        """visualize"""
+#        % initialize input parser and define defaults and validators
+#            p = inputParser;
+#            p.addRequired('obj'      , @(x)isa(x,'structure'));
+#            p.addParamValue('handle', '', @ishandle);
+#            % parse the input
+#            p.parse(obj,varargin{:});
+#            % assign parser results to object properties 
+#            if isempty(p.Results.handle)
+#                h = figure;
+#            else
+#                h = p.Results.handle;
+#            end%if
+#            a = obj.getUniqueUnitCells();
+#            N = size(a,1);
+#            figure(h);
+#            distances = obj.getDistancesOfUnitCells/units.nm;
+#            stairs(distances,obj.getUnitCellVectors, 'LineWidth', 2);
+#            axis([min(distances) max(distances) 0.9 length(obj.getUniqueUnitCells)+0.1]);
+#            xlabel('Distance [nm]');
+#            title('Structure Visualization');
+#            set(gca,'YTick',1:N,'YTickLabel', a(:,1)); 
+        pass
+
+    def get_hash(self):
+        """hash"""
+#        UCs = obj.getUniqueUnitCells();
+#            param = cell(size(UCs,1),1);
+#            for i=1:size(UCs,1)
+#                param{i} = UCs{i,2}.getPropertyStruct(varargin{:});
+#            end%for           
+#            [~, IDs] = obj.getUnitCellVectors();
+#            param(end+1) = {IDs};
+#            % dataHash is an external function
+#            hash = dataHash(param);
+        pass
+
     def add_sub_structure(self, sub_structure, N):
         """add_sub_structure
 
@@ -139,8 +177,8 @@ class Structure:
             sub_structure (UnitCell, Structure): unit cell or structure
                to add as sub structure
             N (int): number or repetitions
-        """
 
+        """
         # check of the sub_structure is an instance of the unitCell of
         # structure class
         if not isinstance(sub_structure, (UnitCell, Structure)):
@@ -175,6 +213,7 @@ class Structure:
 
         Args:
             sub_structure (Structure): substrate structure
+
         """
         if not isinstance(sub_structure, Structure):
             raise ValueError('Class '
@@ -243,7 +282,6 @@ class Structure:
         instance.
 
         """
-
         uc_ids = []
         uc_handles = []
         # traverse the sub_structures

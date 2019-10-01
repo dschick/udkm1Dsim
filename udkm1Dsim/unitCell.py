@@ -163,6 +163,54 @@ class UnitCell:
                               tablefmt="rst")
         return class_str
 
+    def clone_2_multiple(self, N, *args):
+#        %% clone2multiple
+#        % Returns a cloned unit cell N time repeated. Accordingly, all
+#        % physical properties are adapted, *despite of any specific function
+#        % handle of the atomic position in the unit cell and higher orders
+#        % of spring constants!*
+#        % If no _ID_ or _name_ is given for the cloned unit cell, the name
+#        % of the current unit cell is taken plus $N$.
+#        function clone = clone2multiple(obj,N,varargin)
+#            % initialize input parser and define defaults and validators
+#            p = inputParser;
+#            p.addRequired('N'                                       , @isnumeric);
+#            p.addParamValue('ID'            , [obj.ID num2str(N)]   , @ischar);
+#            p.addParamValue('name'          , [obj.name num2str(N)] , @ischar);
+#            % parse the input
+#            p.parse(N,varargin{:});
+#            % assign parser results
+#            N       = p.Results.N;
+#            newID   = p.Results.ID;
+#            newName = p.Results.name;
+#            % initialize the cloned object with required inputs
+#            clone = unitCell(obj.ID,obj.name,obj.cAxis);
+#            % copy all properties from the current to the cloned object
+#            props = properties(obj);
+#            for i = 1:length(props)
+#                clone.(props{i}) = obj.(props{i});
+#            end%for
+#            % reset some _N_-dependent properties
+#            clone.ID = newID;
+#            clone.name = newName;
+#            clone.cAxis = N*obj.cAxis;
+#            clone.volume = N*obj.volume;
+#            % reset all atom-dependent properties
+#            clone.atoms = {};
+#            clone.mass = 0;
+#            clone.density = 0;
+#            clone.springConst = 0;
+#            clone.numAtoms = 0;
+#            % add all atoms to cloned unit cell, but the position handle is
+#            % transfered!
+#            for i = 0:N-1
+#               for j = 1:obj.numAtoms
+#                  clone.addAtom(obj.atoms{j,1},obj.atoms{j,2}(0)/N+i/N);
+#               end%for
+#            end%for
+#        end%function
+        pass
+        
     def visualize(self, **kwargs):
         """visualize
 
