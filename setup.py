@@ -33,7 +33,7 @@ setup(
     license='GPLv3',
     author='Daniel Schick, et. al.',
     author_email='schick.daniel@gmail.com',
-    description='A Simulation Toolkit for ' \
+    description='A Python Simulation Toolkit for ' \
                 '1D Ultrafast Dynamics in Condensed Matter',  # Required
     long_description=long_description,  # Optional
     long_description_content_type='text/markdown',  # Optional (see note above)
