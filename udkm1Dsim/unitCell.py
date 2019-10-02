@@ -33,9 +33,9 @@ from . import u, Q_
 class UnitCell:
     """UnitCell
 
-    The unitCell class hold different structural properties of real physical
-    unit cells and also an array of atoms at different postions in the unit
-    cell.
+    The unitCell class hold different structural properties of real
+    physical unit cells and also an array of atoms at different postions
+    in the unit cell.
 
     Args:
         id (str): id of the UnitCell
@@ -50,7 +50,8 @@ class UnitCell:
         phonon_damping (float): phonon damping
         opt_pen_depth (float): optical penetration depth
         opt_ref_index (float): refractive index
-        opt_ref_index_per_strain (float): change of refractive index per strain
+        opt_ref_index_per_strain (float): change of refractive index per
+           strain
         heat_capacity (float): heat capacity
         therm_cond (float): thermal conductivity
         lin_therm_exp (float): linear thermal expansion
@@ -59,28 +60,29 @@ class UnitCell:
     Attributes:
         id (str): id of the unit cell
         name (str): name of the unit cell
-        atoms (list[atom, @lambda]): list of atoms and funtion handle for
-           strain dependent displacement
+        atoms (list[atom, @lambda]): list of atoms and funtion handle
+           for strain dependent displacement
         num_atoms (int): number of atoms in unit cell
         deb_wal_fac (float): Debye Waller factor <u>² [m²]
-        spring_const (ndarray[float]): spring constant of the unit cell [kg/s²]
-           and higher orders
-        opt_ref_index (ndarray[float]): optical refractive index - real and imagenary
-           part :math:`n + i\kappa`
-        opt_ref_index_per_strain (ndarray[float]): optical refractive index change per
-           strain - real and imagenary part
+        spring_const (ndarray[float]): spring constant of the unit cell
+           [kg/s²] and higher orders
+        opt_ref_index (ndarray[float]): optical refractive index - real
+           and imagenary part :math:`n + i\kappa`
+        opt_ref_index_per_strain (ndarray[float]): optical refractive
+           index change per strain - real and imagenary part
            :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`
-        therm_cond (list[@lambda]): list of HANDLES T-dependent thermal conductivity [W/(m K)]
-        lin_therm_exp (list[@lambda]): list of HANDLES T-dependent linear thermal expansion
-           coefficient (relative)
-        int_lin_therm_exp (list[@lambda]): list of HANDLES T-dependent integrated linear
-           thermal expansion coefficient
-        heat_capacity (list[@lambda]): list of HANDLES T-dependent heat capacity
-           function [J/(kg K)]
-        int_heat_capacity (list[@lambda]): list of HANDLES T-dependent integrated
-           heat capacity function
-        sub_system_coupling (list[@lambda]): list of HANDLES of coupling functions
-           of different subsystems [W/m³]
+        therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
+           conductivity [W/(m K)]
+        lin_therm_exp (list[@lambda]): list of HANDLES T-dependent
+           linear thermal expansion coefficient (relative)
+        int_lin_therm_exp (list[@lambda]): list of HANDLES T-dependent
+           integrated linear thermal expansion coefficient
+        heat_capacity (list[@lambda]): list of HANDLES T-dependent heat
+           capacity function [J/(kg K)]
+        int_heat_capacity (list[@lambda]): list of HANDLES T-dependent
+           integrated heat capacity function
+        sub_system_coupling (list[@lambda]): list of HANDLES of coupling
+           functions of different subsystems [W/m³]
         num_sub_systems (int): number of subsystems for heat and phonons
            (electrons, lattice, spins, ...)
 
@@ -114,7 +116,7 @@ class UnitCell:
 
         if (len(self.heat_capacity) == len(self.therm_cond)
             and len(self.heat_capacity) == len(self.lin_therm_exp)
-            and len(self.heat_capacity) == len(self.sub_system_coupling)):
+                and len(self.heat_capacity) == len(self.sub_system_coupling)):
             self.num_sub_systems = len(self.heat_capacity)
         else:
             raise ValueError('Heat capacity, thermal conductivity, linear'
@@ -137,7 +139,7 @@ class UnitCell:
                   ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
                   ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
                   ['sound velocity', '{:.4~P}'.format(self.sound_vel.to('meter/s'))],
-                  ['spring constant', self.spring_const*u.kg/u.s**2],
+                  ['spring constant', self.spring_const * u.kg/u.s**2],
                   ['phonon damping', self.phonon_damping.to('kg/s')],
                   ['opt. pen. depth', self.opt_pen_depth.to('nm')],
                   ['opt. refractive index', self.opt_ref_index],
@@ -161,15 +163,65 @@ class UnitCell:
                               tablefmt="rst")
         return class_str
 
+    def clone_2_multiple(self, N, *args):
+        """clone_2_multiple"""
+#        %% clone2multiple
+#        % Returns a cloned unit cell N time repeated. Accordingly, all
+#        % physical properties are adapted, *despite of any specific function
+#        % handle of the atomic position in the unit cell and higher orders
+#        % of spring constants!*
+#        % If no _ID_ or _name_ is given for the cloned unit cell, the name
+#        % of the current unit cell is taken plus $N$.
+#        function clone = clone2multiple(obj,N,varargin)
+#            % initialize input parser and define defaults and validators
+#            p = inputParser;
+#            p.addRequired('N'                                       , @isnumeric);
+#            p.addParamValue('ID'            , [obj.ID num2str(N)]   , @ischar);
+#            p.addParamValue('name'          , [obj.name num2str(N)] , @ischar);
+#            % parse the input
+#            p.parse(N,varargin{:});
+#            % assign parser results
+#            N       = p.Results.N;
+#            newID   = p.Results.ID;
+#            newName = p.Results.name;
+#            % initialize the cloned object with required inputs
+#            clone = unitCell(obj.ID,obj.name,obj.cAxis);
+#            % copy all properties from the current to the cloned object
+#            props = properties(obj);
+#            for i = 1:length(props)
+#                clone.(props{i}) = obj.(props{i});
+#            end%for
+#            % reset some _N_-dependent properties
+#            clone.ID = newID;
+#            clone.name = newName;
+#            clone.cAxis = N*obj.cAxis;
+#            clone.volume = N*obj.volume;
+#            % reset all atom-dependent properties
+#            clone.atoms = {};
+#            clone.mass = 0;
+#            clone.density = 0;
+#            clone.springConst = 0;
+#            clone.numAtoms = 0;
+#            % add all atoms to cloned unit cell, but the position handle is
+#            % transfered!
+#            for i = 0:N-1
+#               for j = 1:obj.numAtoms
+#                  clone.addAtom(obj.atoms{j,1},obj.atoms{j,2}(0)/N+i/N);
+#               end%for
+#            end%for
+#        end%function
+        pass
+
     def visualize(self, **kwargs):
         """visualize
 
-        Allows for 3D presentation of unit cell by allow for a & b coordinate
-        of atoms.
+        Allows for 3D presentation of unit cell by allow for a & b
+        coordinate of atoms.
         Also add magnetization per atom.
 
         Todo: use the avogadro project as plugin
-        Todo: create unit cell from CIF file e.g. by xrayutilities plugin
+        Todo: create unit cell from CIF file e.g. by xrayutilities
+        plugin.
 
         """
         import matplotlib.pyplot as plt
@@ -288,8 +340,8 @@ class UnitCell:
         """get int_heat_capacity
 
         Returns the anti-derrivative of the temperature-dependent heat
-        :math:`c(T)` capacity function. If the _int_heat_capacity_ property is
-        not set, the symbolic integration is performed.
+        :math:`c(T)` capacity function. If the int_heat_capacity
+        property is not set, the symbolic integration is performed.
 
         """
         if hasattr(self, '_int_heat_capacity') and isinstance(self._int_heat_capacity, list):
@@ -318,7 +370,8 @@ class UnitCell:
     def int_heat_capacity(self, int_heat_capacity):
         """set int_heat_capacity
 
-        Set the integrated heat capacity manually when no sympy is installed.
+        Set the integrated heat capacity manually when no sympy is
+        installed.
 
         """
         self._int_heat_capacity, self.int_heat_capacity_str = self.check_cell_array_input(
@@ -328,9 +381,10 @@ class UnitCell:
     def int_lin_therm_exp(self):
         """get int_lin_therm_exp
 
-        Returns the anti-derrivative of theintegrated temperature-dependent
-        linear thermal expansion function. If the *int_lin_therm_exp*
-        property is not set, the symbolic integration is performed.
+        Returns the anti-derrivative of the integrated
+        temperature-dependent linear thermal expansion function. If the
+        int_lin_therm_exp property is not set, the symbolic integration
+        is performed.
 
         """
 
@@ -416,8 +470,8 @@ class UnitCell:
     def add_multiple_atoms(self, atom, position, Nb):
         """add_multiple_atoms
 
-        Adds multiple atomBase/atomMixed at a relative position of the unit
-        cell.
+        Adds multiple atomBase/atomMixed at a relative position of the
+        unit cell.
 
         """
         for i in range(Nb):
@@ -466,8 +520,8 @@ class UnitCell:
     def get_atom_positions(self, *args):
         """get_atom_positions
 
-        Returns a vector of all relative postion of the atoms in the unit
-        cell.
+        Returns a vector of all relative postion of the atoms in the
+        unit cell.
 
         """
         if args:
@@ -513,7 +567,7 @@ class UnitCell:
 
     @property
     def mass(self):
-        """float: mass of unit cell normalized to an area of 1 Å² [kg]"""
+        """float: mass of unit cell normalized to area of 1 Å² [kg]"""
         return Q_(self._mass, u.kg)
 
     @mass.setter

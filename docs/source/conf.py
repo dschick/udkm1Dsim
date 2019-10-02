@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath('../../'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'udkm1Dsimpy'
+project = 'udkm1Dsim'
 copyright = '2019, Daniel Schick, et.al.'
 author = 'Daniel Schick, et.al.'
 
@@ -42,6 +42,7 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
+    'sphinx.ext.todo',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -104,7 +105,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'udkm1Dsimpydoc'
+htmlhelp_basename = 'udkm1Dsimdoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -131,7 +132,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'udkm1Dsimpy.tex', 'udkm1Dsimpy Documentation',
+    (master_doc, 'udkm1Dsim.tex', 'udkm1Dsim Documentation',
      'Daniel Schick, et.al.', 'manual'),
 ]
 
@@ -141,7 +142,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'udkm1dsimpy', 'udkm1Dsimpy Documentation',
+    (master_doc, 'udkm1dsim', 'udkm1Dsim Documentation',
      [author], 1)
 ]
 
@@ -152,8 +153,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'udkm1Dsimpy', 'udkm1Dsimpy Documentation',
-     author, 'udkm1Dsimpy', 'One line description of project.',
+    (master_doc, 'udkm1Dsim', 'udkm1Dsim Documentation',
+     author, 'udkm1Dsim', 'One line description of project.',
      'Miscellaneous'),
 ]
 

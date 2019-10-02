@@ -31,45 +31,173 @@ from .unitCell import UnitCell
 
 class Structure:
     """Structure
-    The structure class can hold various sub_structures.
-    Each sub_structure can be either a layer of N unitCell objects or a structure by itself.
+
+    The structure class can hold various sub_structures. Each
+    sub_structure can be either a layer of N unitCell objects or a
+    structure by itself.
     Thus it is possible to recursively build up 1D structures.
+
+    Args:
+        name (str): name of the sample
+
+    Attributes:
+        name (str): name of sample
+        sub_structures (list): list of structures in sample
+        substrate (object): structure of the substrate
+        num_sub_systems (int): number of subsystems for heat and phonons
+           (electronic, lattice, spins, ...)
+
     """
 
     def __init__(self, name):
-        """
-        Properties (SetAccess=public,GetAccess=public)
-        name                % STRING name of sample
-        sub_structures = []; % CELL ARRAY of structures in sample
-        substrate           % OBJECT HANDLE structure of the substrate
-        num_sub_systems = 1;  % INTEGER number of subsystems for heat and phonons
-        (electronic, lattice, spins, ...)
-        """
         self.name = name
         self.num_sub_systems = 1
         self.sub_structures = []
         self.substrate = []
 
-    def addsub_structure(self, sub_structure, N):
-        """Add a sub_structure of N unitCells or N structures to the structure."""
+    def __str__(self):
+        """String representation of this class"""
+        return "hello world"
+#        % check for the numbers of tabs added at the beginning
+#            if nargin < 2
+#                tabs = 0;
+#            end%if
+#            tabstr = '';
+#            for i = 1:tabs
+#                tabstr = strcat(tabstr, '\t');
+#            end%for
+#            % plot the properties
+#            fprintf([tabstr 'Structure properties:\n']);
+#            fprintf([tabstr 'Name  : %s\n'], obj.name);
+#            fprintf([tabstr 'Length: %0.2f nm\n'], obj.getLength()/units.nm);
+#            fprintf([tabstr '----\n']);
+#            % traverse all substructures
+#            for i = 1:size(obj.substructures,1)
+#                if isa(obj.substructures{i,1},'unitCell')
+#                    % the substructure is an unitCell
+#                    fprintf([tabstr '%d times %s: %0.2f nm\n'], obj.substructures{i,2},...
+#                        obj.substructures{i,1}.name,
+#                        obj.substructures{i,2}*obj.substructures{i,1}.cAxis/units.nm);
+#                else
+#                    % the substructure is a structure instance by itself
+#                    % call the display() method recursively
+#                    fprintf([tabstr 'SubStructure %d times:\n'],...
+#                        obj.substructures{i,2});
+#                    obj.substructures{i,1}.displayTab(tabs+1);
+#                end%if
+#            end%for
+#            fprintf([tabstr '----\n']);
+#            % check for a substrate
+#            if isa(obj.substrate,'structure')
+#                fprintf([tabstr 'Substrate:\n']);
+#                fprintf([tabstr '----\n']);
+#                fprintf([tabstr '%d times %s: %0.2f nm\n'], obj.substrate.substructures{1,2},...
+#                    obj.substrate.substructures{1,1}.name, ...
+#                    obj.substrate.substructures{1,2}*obj.substrate.substructures{1,1}.cAxis/units.nm);
+#            end%if
+#        output = [['id', self.id],
+#                  ['name', self.name],
+#                  ['a-axis', '{:.4~P}'.format(self.a_axis)],
+#                  ['b-axis', '{:.4~P}'.format(self.b_axis)],
+#                  ['c-axis', '{:.4~P}'.format(self.c_axis)],
+#                  ['area', '{:.4~P}'.format(self.area.to('angstrom**2'))],
+#                  ['volume', '{:.4~P}'.format(self.volume.to('angstrom**3'))],
+#                  ['mass', '{:.4~P}'.format(self.mass)],
+#                  ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
+#                  ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
+#                  ['sound velocity', '{:.4~P}'.format(self.sound_vel.to('meter/s'))],
+#                  ['spring constant', self.spring_const * u.kg/u.s**2],
+#                  ['phonon damping', self.phonon_damping.to('kg/s')],
+#                  ['opt. pen. depth', self.opt_pen_depth.to('nm')],
+#                  ['opt. refractive index', self.opt_ref_index],
+#                  ['opt. ref. index/strain', self.opt_ref_index_per_strain],
+#                  ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
+#                  ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
+#                  ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
+#                  ['subsystem coupling', ' W/m³\n'.join(self.sub_system_coupling_str) + ' W/m³']]
+#
+#        class_str = 'Unit Cell with the following properties\n\n'
+#        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
+#                              colalign=('right',), floatfmt=('.2f', '.2f'))
+#        class_str += '\n\n' + str(self.num_atoms) + ' Constituents:\n'
+#
+#        atoms_str = []
+#        for i in range(self.num_atoms):
+#            atoms_str.append([self.atoms[i][0].name,
+#                              '{:0.2f}'.format(self.atoms[i][1](0)),
+#                              self.atoms[i][2]])
+#        class_str += tabulate(atoms_str, headers=['atom', 'position', 'position function'],
+#                              tablefmt="rst")
 
-        # check of the sub_structure is an instance of the unitCell of structure class
+    def visualize(self):
+        """visualize"""
+#        % initialize input parser and define defaults and validators
+#            p = inputParser;
+#            p.addRequired('obj'      , @(x)isa(x,'structure'));
+#            p.addParamValue('handle', '', @ishandle);
+#            % parse the input
+#            p.parse(obj,varargin{:});
+#            % assign parser results to object properties
+#            if isempty(p.Results.handle)
+#                h = figure;
+#            else
+#                h = p.Results.handle;
+#            end%if
+#            a = obj.getUniqueUnitCells();
+#            N = size(a,1);
+#            figure(h);
+#            distances = obj.getDistancesOfUnitCells/units.nm;
+#            stairs(distances,obj.getUnitCellVectors, 'LineWidth', 2);
+#            axis([min(distances) max(distances) 0.9 length(obj.getUniqueUnitCells)+0.1]);
+#            xlabel('Distance [nm]');
+#            title('Structure Visualization');
+#            set(gca,'YTick',1:N,'YTickLabel', a(:,1));
+        pass
 
-        if not isinstance(sub_structure, UnitCell, Structure):
+    def get_hash(self):
+        """hash"""
+#        UCs = obj.getUniqueUnitCells();
+#            param = cell(size(UCs,1),1);
+#            for i=1:size(UCs,1)
+#                param{i} = UCs{i,2}.getPropertyStruct(varargin{:});
+#            end%for
+#            [~, IDs] = obj.getUnitCellVectors();
+#            param(end+1) = {IDs};
+#            % dataHash is an external function
+#            hash = dataHash(param);
+        pass
+
+    def add_sub_structure(self, sub_structure, N):
+        """add_sub_structure
+
+        Add a sub_structure of N unitCells or N structures to the
+        structure.
+
+        Args:
+            sub_structure (UnitCell, Structure): unit cell or structure
+               to add as sub structure
+            N (int): number or repetitions
+
+        """
+        # check of the sub_structure is an instance of the unitCell of
+        # structure class
+        if not isinstance(sub_structure, (UnitCell, Structure)):
             raise ValueError('Class '
                              + type(sub_structure).__name__
-                             + ' is no possible sub structure. Only UnitCell and'
+                             + ' is no possible sub structure.'
+                             + 'Only UnitCell and'
                              + 'Structure classes are allowed!')
 
-        # if a structure is added as a sub_structure, the sub_structure can not have a substrate
+        # if a structure is added as a sub_structure, the sub_structure
+        # can not have a substrate
         if isinstance(sub_structure, Structure):
             if sub_structure.substrate:
                 raise ValueError('No substrate in sub_structure allowed!')
 
         # check the number of subsystems of the sub_structure
+        if ((self.num_sub_systems > 1)
+           and not (sub_structure.num_sub_systems == self.num_sub_systems)):
 
-        if ((self.num_sub_systems > 1) and not
-            (sub_structure.num_sub_systems == self.num_sub_systems)):
             raise ValueError('The number of subsystems in each sub_structure'
                              'must be the same!')
         else:
@@ -78,21 +206,31 @@ class Structure:
         # add a sub_structure of N repetitions to the structure with
         self.sub_structures.append([sub_structure, N])
 
-    def addSubstrate(self, sub_structure):
-        """Add a structure as static substrate to the structure"""
+    def add_substrate(self, sub_structure):
+        """add_substrate
 
+        Add a structure as static substrate to the structure
+
+        Args:
+            sub_structure (Structure): substrate structure
+
+        """
         if not isinstance(sub_structure, Structure):
             raise ValueError('Class '
                              + type(sub_structure).__name__
-                             + ' is no possible substrate. Only structure class is allowed!')
+                             + ' is no possible substrate. '
+                             + 'Only structure class is allowed!')
 
         self.substrate = sub_structure
 
-    def getNumberOfsub_structures(self):
-        """Returns the number of all sub structures.
-        This methods does not return the number of all unitCells in the structure,
-        see getNumberOfUnitCells()."""
+    def get_number_of_sub_structures(self):
+        """get_number_of_sub_structures
 
+        Returns the number of all sub structures.
+        This methods does not return the number of all unitCells in the
+        structure, see get_number_of_unit_cells().
+
+        """
         N = 0
         for i in range(len(self.sub_structures)):
             if isinstance(self.sub_structures[i][0], UnitCell):
@@ -101,8 +239,12 @@ class Structure:
                 N = N + self.sub_structures[i][0].getNumberOfsub_structures()
         return N
 
-    def getNumberOfUnitCells(self):
-        """Returns the number of all unitCells in the structure."""
+    def get_number_of_unit_cells(self):
+        """get_number_of_unit_cells
+
+        Returns the number of all unitCells in the structure.
+
+        """
         N = 0
         # traverse the substructres
         for i in range(len(self.sub_structures)):
@@ -114,22 +256,32 @@ class Structure:
 
         return N
 
-    def getNumberOfUniqueUnitCells(self):
-        """Returns the number of unique unitCells in the structure."""
+    def get_number_of_unique_unit_cells(self):
+        """get_number_of_unique_unit_cells
 
-        N = len(self.getUniqueUnitCells()[0])
+        Returns the number of unique unitCells in the structure.
+
+        """
+        N = len(self.get_unique_unit_cells()[0])
         return N
 
-    def getLength(self):
-        """Returns the length from surface to bottom of the structure"""
+    def get_length(self):
+        """get_length
 
+        Returns the length from surface to bottom of the structure
+
+        """
         pass
 
-    def getUniqueUnitCells(self):
-        """Returns a cell array of ids and handles of all unique UnitCell instances in the
-        structure.
-        The uniqueness is determined by the handle of each unitCell instance."""
+    def get_unique_unit_cells(self):
+        """get_unique_unit_cells
 
+        Returns a list of ids and handles of all unique UnitCell
+        instances in the structure.
+        The uniqueness is determined by the handle of each unitCell
+        instance.
+
+        """
         uc_ids = []
         uc_handles = []
         # traverse the sub_structures
@@ -155,14 +307,14 @@ class Structure:
                     # the cell array is empty at the beginning so call
                     # the method recursively and add the result to the
                     # ucs array
-                    uc_ids = self.sub_structures[i][0].getUniqueUnitCells()[0]
-                    uc_handles = self.sub_structures[i][0].getUniqueUnitCells()[1]
+                    uc_ids = self.sub_structures[i][0].get_unique_unit_cells()[0]
+                    uc_handles = self.sub_structures[i][0].get_unique_unit_cells()[1]
                 else:
                     # the cell array is not empty so check if the ids
                     # from the recursive call are already in the ucs id
                     # vector.
-                    temp1 = self.sub_structures[i][0].getUniqueUnitCells()[0]
-                    temp2 = self.sub_structures[i][0].getUniqueUnitCells()[1]
+                    temp1 = self.sub_structures[i][0].get_unique_unit_cells()[0]
+                    temp2 = self.sub_structures[i][0].get_unique_unit_cells()[1]
                     for j, temp in enumerate(temp1):
                         # check all ids from recursive call
                         if temp1[j] not in uc_ids:
@@ -172,19 +324,27 @@ class Structure:
 
         return uc_ids, uc_handles
 
-    def getUnitCellVectors(self, *args):
-        """Returns three vectors with the numeric index of all unit cells in a structure given by
-        the getUniqueUnitCells() method and addidionally vectors with the ids and Handles of the
-        corresponding unitCell instances.
-        The list and order of the unique unitCells can be either handed as an input parameter or
-        is requested at the beginning."""
+    def get_unit_cell_vectors(self, *args):
+        """get_unit_cell_vectors
 
+        Returns three lists with the numeric index of all unit cells
+        in a structure given by the get_unique_unit_cells() method and
+        addidionally vectors with the ids and Handles of the
+        corresponding unitCell instances.
+        The list and order of the unique unitCells can be either handed
+        as an input parameter or is requested at the beginning.
+
+        Args:
+            ucs (Optional[list]): list of unique unit cells including
+               ids and handles
+
+        """
         indices = []
         uc_ids = []
         uc_handles = []
         # if no ucs (UniqueUnitCells) are given, we have to get them
         if len(args) < 1:
-            ucs = self.getUniqueUnitCells()
+            ucs = self.get_unique_unit_cells()
         else:
             ucs = args[0]
         # traverse the substructres
@@ -203,13 +363,14 @@ class Structure:
                 uc_ids = uc_ids + list(temp1)
                 # create a cell array of N unitCell handles and add them to
                 # the Handles cell array
-                temp2 = list(itertools.repeat(self.sub_structures[i][0], self.sub_structures[i][1]))
+                temp2 = list(itertools.repeat(self.sub_structures[i][0],
+                                              self.sub_structures[i][1]))
                 uc_handles = uc_handles + list(temp2)
             else:
                 # its a structure
                 # make a recursive call and hand in the same unique
                 # unit cell vector as we used before
-                [temp1, temp2, temp3] = self.sub_structures[i][0].getUnitCellVectors(ucs)
+                [temp1, temp2, temp3] = self.sub_structures[i][0].get_unit_cell_vectors(ucs)
                 temp11 = []
                 temp22 = []
                 temp33 = []
@@ -224,64 +385,136 @@ class Structure:
                 uc_handles = uc_handles + list(temp33)
         return indices, uc_ids, uc_handles
 
-    def getAllPositionsPerUniqueUnitCell(self):
-        """Returns a cell array with one vector of position indices for each unique unitCell
-        in the structure."""
+    def get_all_positions_per_unique_unit_cell(self):
+        """get_all_positions_per_unique_unit_cell
 
-        ucs = self.getUniqueUnitCells()
-        indices = self.getUnitCellVectors()[0]
+        Returns a list with one vector of position indices for
+        each unique unitCell in the structure.
+
+        """
+        ucs = self.get_unique_unit_cells()
+        indices = self.get_unit_cell_vectors()[0]
         pos = {}  # Dictionary used instead of array
         for i, uc in enumerate(ucs[0]):
             pos[ucs[0][i]] = list(np.where(indices == i))
         # Each element accessible through Unit cell id
         return pos
 
-    def getDistancesOfUnitCells(self):
-        """Returns a vector of the distance from the surface for each unit cell starting at 0
-        (dStart) and starting at the end of the first UC (dEnd) and from the center of each UC
-        (dMid)."""
+    def get_distances_of_unit_cells(self):
+        """get_distances_of_unit_cells
 
-        c_axes = self.getUnitCellPropertyVector(types='cAxis')
+        Returns a vector of the distance from the surface for each unit
+        cell starting at 0 (dStart) and starting at the end of the first
+        unit cell (dEnd) and from the center of each unit cell (dMid).
+
+        """
+        c_axes = self.get_unit_cell_property_vector('_c_axis')
         d_end = np.cumsum(c_axes)
         d_start = np.hstack([[0], d_end[0:-1]])
         d_mid = (d_start + c_axes)/2
         return d_start, d_end, d_mid
 
-    def getUnitCellPropertyVector(self, **kwargs):
-        """Returns a vector for a property of all unitCells in the structure.
-        The property is determined by the propertyName and returns a scalar value or a function
-        handle."""
+        def get_distances_of_interfaces(self):
+            """get_distances_of_interfaces"""
+#            % Returns the distances from the surface of each interface of the
+#            % structure.
+#            function [distIntf Indices] = getDistancesOfInterfaces(obj)
+#                [dStart dEnd]   = obj.getDistancesOfUnitCells();
+#                Indices         = [1 diff(obj.getUnitCellVectors())'];
+#                distIntf        = [dStart(Indices ~= 0)' dEnd(end)]';
+#            end
+            pass
 
-        types = kwargs.get('types')
+        def interp_distance_at_interfaces(self):
+            """interp_distance_at_interfaces"""
+#            % Returns a distance Vector of the center of UCs interpolated by an
+#            % odd number N at the interface of sturctures.
+#            function [distInterp originalIndicies] = interpDistanceAtInterfaces(obj,N)
+#                [dStart,dEnd,dMid] = obj.getDistancesOfUnitCells();
+#                % these are the distances of the interfaces
+#                distIntf = obj.getDistancesOfInterfaces();
+#                % we start with the distances of the centers of the unit cells
+#                distInterp = dMid;
+#
+#                N = floor(N); % make N an integer
+#                if mod(N,2) == 0
+#                    % we want to have odd numbers
+#                    N = N+1;
+#                end%if
+#
+#                % traverse all distances
+#                for i=1:length(distIntf)
+#                    x = distIntf(i); % this is the distance of an interface
+#
+#                    inda = finderb(x,dStart); % this is the index of an UC after the interface
+#                    indb = inda-1; % this is the index of an UC before the interface
+#
+#                    % now interpolate linearly N new distances at the interface
+#                    if indb == 0 % this is the surface interface
+#                        distInterp = vertcat(distInterp,linspace(0,dMid(inda),2+(N-1)/2)');
+#                    elseif inda >= length(dMid) % this is the bottom interface
+#                        distInterp = vertcat(distInterp,
+#                       linspace(dMid(inda),dEnd(end),2+(N-1)/2)');
+#                    else % this is a surface inside the structure
+#                        distInterp = vertcat(distInterp,linspace(dMid(indb),dMid(inda),2+N)');
+#                    end%if
+#                end%for
+#
+#                distInterp = unique(sort(distInterp)); % sort and unify the distances
+#                % these are the indicies of the original distances in the interpolated new vector
+#                originalIndicies = finderb(dMid,distInterp);
+#            end%function
+            pass
 
+    def get_unit_cell_property_vector(self, property_name):
+        """get_unit_cell_property_vector
+
+        Returns a vector for a property of all unitCells in the
+        structure. The property is determined by the propertyName and
+        returns a scalar value or a function handle.
+
+        Args:
+            property_name (str): type of property to return as vector
+
+        """
         # get the Handle to all unitCells in the Structure
-        handles = self.getUnitCellVectors()[2]
+        handles = self.get_unit_cell_vectors()[2]
 
-        if callable(getattr(handles[0], types)):
-            prop = np.zeros([self.getNumberOfUnitCells()])
-            for i in range(self.getNumberOfUnitCells()):
-                prop[i] = getattr(handles[i], types)
-        elif type(getattr(handles[0], types)) is list:
-            # Prop = np.zeros([self.getNumberOfUnitCells(),len(getattr(Handles[0],types))])
-            # Prop[]
-            prop = {}
-            for i in range(self.getNumberOfUnitCells()):
+        if callable(getattr(handles[0], property_name)):
+            # it's a function
+            print("it's a function")
+            prop = np.zeros([self.get_number_of_unit_cells()])
+            for i in range(self.get_number_of_unit_cells()):
+                prop[i] = getattr(handles[i], property_name)
+        elif ((type(getattr(handles[0], property_name)) is list) or
+                (type(getattr(handles[0], property_name)) is str)):
+            # it's a list if functions or str
+            prop = []
+            for i in range(self.get_number_of_unit_cells()):
                 # Prop = Prop + getattr(Handles[i],types)
-                prop[i] = getattr(handles[i], types)
+                prop.append(getattr(handles[i], property_name))
         else:
-            # ucs = self.getUniqueUnitCells()
-            prop = np.zeros([self.getNumberOfUnitCells()])
-
+            # its a number or array
+            ucs = self.get_unique_unit_cells()
+            temp = np.zeros([len(ucs[0]), 1])
+            for i, uc in enumerate(ucs[1]):
+                temp[i] = len(getattr(uc, property_name))
+            prop = np.zeros([self.get_number_of_unit_cells(), int(np.max(temp))])
+            del temp
             # traverse all unitCells
-            for i in range(self.getNumberOfUnitCells()):
-                temp = getattr(handles[i], types)
-                prop[i] = temp
+            for i in range(self.get_number_of_unit_cells()):
+                temp = getattr(handles[i], property_name)
+                prop[i, 0:len(temp)] = temp
 
         return prop
 
-    def getUnitCellHandle(self, i):
-        """Returns the handle to the unitCell at position i in the structure."""
+    def get_unit_cell_handle(self, i):
+        """get_unit_cell_handle
 
-        handles = self.getUnitCellVectors()[2]
+        Returns the handle to the unitCell at position i in the
+        structure.
+
+        """
+        handles = self.get_unit_cell_vectors()[2]
         handle = handles[i]
         return handle

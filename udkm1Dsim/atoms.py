@@ -32,10 +32,10 @@ from . import u
 class Atom:
     """Atom
 
-    The atom class is the smallest structural unit of which one can build
-    larger structures. It holds real physical properties of atoms defined in
-    the attrubutes section and can return parameters and data necessary for
-    different simulation types.
+    The atom class is the smallest structural unit of which one can
+    build larger structures. It holds real physical properties of atoms
+    defined in the attrubutes section and can return parameters and data
+    necessary for different simulation types.
 
     Args:
         symbol (str): symbol of the atom
@@ -46,7 +46,8 @@ class Atom:
 
     Attributes:
         symbol (str): symbol of the element
-        id (str): identifier of the atom, may differ from symbol and/or name
+        id (str): identifier of the atom, may differ from symbol and/or
+           name
         name (str): name of the element (generic)
         atomic_number_z (int): Z atomic number
         mass_number_a (float): A atomic mass number
@@ -59,15 +60,19 @@ class Atom:
 
     References:
 
-        .. [1] D. T. Cromer & J. B. Mann (1968). X-ray scattering factors computed from
-           numerical Hartree–Fock wave functions. `Acta Crystallographica Section A,
-           24(2), 321–324. <http://www.doi.org/10.1107/S0567739468000550>`_
-        .. [2] J. Als-Nielson, & D. McMorrow (2001). `Elements of Modern X-Ray
-           Physics. New York: John Wiley & Sons, Ltd. <http://www.doi.org/10.1002/9781119998365>`_
-        .. [3] B. L. Henke, E. M. Gullikson & J. C. Davis (1993). _X-Ray Interactions:
-           Photoabsorption, Scattering, Transmission, and Reflection at
-           E = 50-30,000 eV, Z = 1-92. `Atomic Data and Nuclear Data Tables, 54(2),
-           181–342. <http://www.doi.org/10.1006/adnd.1993.1013>`_
+        .. [1] D. T. Cromer & J. B. Mann (1968). X-ray scattering
+           factors computed from numerical Hartree–Fock wave functions.
+           `Acta Crystallographica Section A, 24(2), 321–324.
+           <http://www.doi.org/10.1107/S0567739468000550>`_
+        .. [2] J. Als-Nielson, & D. McMorrow (2001).
+           `Elements of Modern X-Ray Physics. New York: John Wiley &
+           Sons, Ltd. <http://www.doi.org/10.1002/9781119998365>`_
+        .. [3] B. L. Henke, E. M. Gullikson & J. C. Davis (1993).
+           X-Ray Interactions: Photoabsorption, Scattering,
+           Transmission, and Reflection at E = 50-30,000 eV, Z = 1-92.
+           `Atomic Data and Nuclear Data Tables, 54(2), 181–342.
+           <http://www.doi.org/10.1006/adnd.1993.1013>`_
+
     """
 
     def __init__(self, symbol, **kwargs):
@@ -109,13 +114,13 @@ class Atom:
     def read_atomic_form_factor_coeff(self):
         """read_atomic_form_factor_coeff
 
-        The atomic form factor :math:`f` in dependence from
-        the energy :math:`E` is read from a parameter file
-        given by [3]_.
+        The atomic form factor :math:`f` in dependence from the energy
+        :math:`E` is read from a parameter file given by [3]_.
 
         """
         filename = os.path.join(os.path.dirname(__file__),
-                                'parameters/atomicFormFactors/{:s}.nff'.format(self.symbol.lower()))
+                                'parameters/atomicFormFactors/{:s}.nff'.format(
+                                        self.symbol.lower()))
         try:
             f = np.genfromtxt(filename, skip_header=1)
         except Exception as e:
@@ -148,8 +153,8 @@ class Atom:
     def read_cromer_mann_coeff(self):
         """read_cromer_mann_coeff
 
-        The Cromer-Mann coefficients (Ref. [1]_) are read from a parameter file and are returned in
-        the following order:
+        The Cromer-Mann coefficients (Ref. [1]_) are read from a
+        parameter file and are returned in the following order:
 
         .. math:: a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c
 
@@ -157,7 +162,8 @@ class Atom:
         filename = os.path.join(os.path.dirname(__file__),
                                 'parameters/atomicFormFactors/cromermann.txt')
         try:
-            cm = np.genfromtxt(filename, skip_header=1, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
+            cm = np.genfromtxt(filename, skip_header=1,
+                               usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
         except Exception as e:
             print('File {:s} not found!\nMake sure the path'
                   '/parameters/atomicFormFactors/ is in your search path!',
@@ -170,11 +176,11 @@ class Atom:
     def get_cm_atomic_form_factor(self, E, qz):
         """get_cm_atomic_form_factor
 
-        Returns the atomic form factor :math:`f` in dependence of the energy :math:`E` [J]
-        and the :math:`z`-component of the scattering vector
-        :math:`q_z` [Å :math:`^{-1}`] (Ref. [1]_).
-        Since the CM coefficients are fitted for
-        :math:`q_z` in [Å :math:`^{-1}`] we have to convert it before!
+        Returns the atomic form factor :math:`f` in dependence of the
+        energy :math:`E` [J] and the :math:`z`-component of the
+        scattering vector :math:`q_z` [Å :math:`^{-1}`] (Ref. [1]_).
+        Since the CM coefficients are fitted for :math:`q_z` in
+        [Å :math:`^{-1}`] we have to convert it before!
 
         See Ref. [2]_ (p. 235).
 
@@ -182,11 +188,15 @@ class Atom:
 
         :math:`f_{CM}(q_z)` is given in Ref. 1:
 
-        .. math:: f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c
+        .. math::
+
+            f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c
 
         :math:`\delta f_1(E)` is the dispersion correction:
 
-        .. math:: \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\\right)
+        .. math::
+
+            \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\\right)
 
         Thus:
 
@@ -209,10 +219,10 @@ class Atom:
 class AtomMixed(Atom):
     """AtomMixed
 
-    The AtomMixed class is sub class of Atom and enables mixed atoms
-    for certain alloys and stochiometric mixtures. All properties of
-    the included sub-atoms of class atomBase are averaged and
-    weighted with their stochiometric ratio
+    The AtomMixed class is sub class of Atom and enables mixed atoms for
+    certain alloys and stochiometric mixtures. All properties of the
+    included sub-atoms of class atomBase are averaged and weighted with
+    their stochiometric ratio
 
     Args:
         symbol (str): symbol of the atom
@@ -223,14 +233,15 @@ class AtomMixed(Atom):
 
     Attributes:
         symbol (str): symbol of the element
-        id (str): identifier of the atom, may differ from symbol and/or name
+        id (str): identifier of the atom, may differ from symbol and/or
+           name
         name (str): name of the element (generic)
         atomic_number_z (int): Z atomic number
         mass_number_a (float): A atomic mass number
         ionicity (int): ionicity of the atom
         mass (float): mass of the atom [kg]
-        atomic_form_factor_coeff (ndarray[float]): atomic form factor coefficients
-           for energy-dependent atomic form factor
+        atomic_form_factor_coeff (ndarray[float]): atomic form factor
+           coefficients for energy-dependent atomic form factor
         cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
            angular-dependent atomic form factor
 
@@ -265,8 +276,7 @@ class AtomMixed(Atom):
         """
         self.atoms.append([atom, fraction])
         self.num_atoms = self.num_atoms + 1
-        # calculate the mixed atomic properties of the atomMixed
-        # instance
+        # calculate the mixed atomic properties of the atomMixed instance
         self.atomic_number_z = self.atomic_number_z + fraction * atom.atomic_number_z
         self.mass_number_a = self.mass_number_a + fraction * atom.mass_number_a
         self.mass = self.mass + fraction * atom.mass
