@@ -1,0 +1,11 @@
+# Include the README
+include *.md
+
+# Include the license file
+include LICENSE
+exclude setup.cfg
+
+# Include the doc files
+graft docs
+
+global-exclude *.pyc .gitignore
