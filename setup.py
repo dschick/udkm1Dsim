@@ -24,7 +24,7 @@ setup(
         '': ['*.txt', '*.dat', '*.nff'],
     },
     url='https://github.com/dschick/udkm1Dsim',  # Optional
-    download_url = 'https://github.com/dschick/udkm1Dsim/archive/v0.1.tar.gz',
+    download_url='https://github.com/dschick/udkm1Dsim/archive/v0.1.tar.gz',
     install_requires=['numpy',
                       'pint',
                       'pytest',
