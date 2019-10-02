@@ -1,4 +1,14 @@
-# udkm1Dsim
+Welcome to udkm1Dsim documentation!
+=======================================
+
+.. toctree::
+    :hidden:
+   
+    Project Page <https://github.com/dschick/udkm1Dsim>
+    Download from PyPI <http://pypi.python.org/pypi/udkm1Dsim>
+    User Guide <user_guide>
+    Examples <examples>
+    API Documentation <api>
 
 The udkm1Dsim toolbox is a collection of Python classes and routines 
 to simulate the structural dynamics and the according X-ray 
@@ -22,28 +32,42 @@ in Condensed Matter group of Prof. Matias Bargheer at the
 University of Potsdam, Germany. 
 The toolbox is currently maintained by Daniel Schick.
 
-## Documentation
-The documentation can be found at [readthedocs.io](http://udkm1Dsim.readthedocs.io).
-
-## Citation
+Citation
+========
 
 Please cite the following article if you use the udkm1Dsim toolbox for your own publications:
 
 D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Bargheer,
 *udkm1Dsim - A Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter*,
-[Comput. Phys. Commun. 185, 651 (2014)](http://doi.org/10.1016/j.cpc.2013.10.009) [(preprint)](http://www.udkm.physik.uni-potsdam.de/medien/udkm1Dsim/udkm1DsimManuscriptPrePrint.pdf).
+`Comput. Phys. Commun. 185, 651 (2014) <http://doi.org/10.1016/j.cpc.2013.10.009>`_
+`(preprint) <http://www.udkm.physik.uni-potsdam.de/medien/udkm1Dsim/udkm1DsimManuscriptPrePrint.pdf>`_.
 
-## Installation
+
+Installation
+============
 
 You can clone udkm1Dsim from the main git repository:
+
+::
 
     git clone https://github.com/dschick/udkm1Dsim.git udkm1Dsim
 
 To work in editable mode (source is only linked 
 but not copied to the python site-packages), just do:
 
+::
+
     pip install -e ./udkm1Dsim
 
 Or to do a normal install with
 
+::
+
     pip install ./udkm1Dsim
+   
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
