@@ -1,16 +1,16 @@
-Welcome to udkm1Dsimpy documentation!
+Welcome to udkm1Dsim documentation!
 =======================================
 
 .. toctree::
     :hidden:
    
-    Project Page <https://github.com/dschick/udkm1Dsimpy>
-    Download from PyPI <http://pypi.python.org/pypi/udkm1Dsimpy>
+    Project Page <https://github.com/dschick/udkm1Dsim>
+    Download from PyPI <http://pypi.python.org/pypi/udkm1Dsim>
     User Guide <user_guide>
     Examples <examples>
     API Documentation <api>
 
-The udkm1Dsim toolbox is a collection of classes and routines 
+The udkm1Dsim toolbox is a collection of Python classes and routines 
 to simulate the structural dynamics and the according X-ray 
 diffraction response in one-dimensional sample structures after 
 ultrafast excitation. 
@@ -46,13 +46,11 @@ D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Barghee
 Installation
 ============
 
-You can clone udkm1Dsimpy from the main git repository:
+You can clone udkm1Dsim from the main git repository:
 
 ::
 
-    git clone https://github.com/dschick/udkm1Dsimpy.git udkm1Dsim
-
-Note that the repository and the package do not have the same name, yet!
+    git clone https://github.com/dschick/udkm1Dsim.git udkm1Dsim
 
 To work in editable mode (source is only linked 
 but not copied to the python site-packages), just do:
