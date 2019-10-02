@@ -23,14 +23,15 @@ setup(
         # If any package contains *.txt or *.rst files, include them:
         '': ['*.txt', '*.dat', '*.nff'],
     },
-    url='https://github.com/dschick/udkm1Dsimpy',  # Optional
+    url='https://github.com/dschick/udkm1Dsim',  # Optional
+    download_url = 'https://github.com/dschick/udkm1Dsim/archive/v0.1.tar.gz',
     install_requires=['numpy',
                       'pint',
                       'pytest',
                       'scipy',
                       'sympy',
                       'tabulate'],
-    license='GPLv3',
+    license='MIT',
     author='Daniel Schick, et. al.',
     author_email='schick.daniel@gmail.com',
     description='A Python Simulation Toolkit for ' \
