@@ -35,7 +35,12 @@ D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Barghee
 
 ## Installation
 
-You can clone udkm1Dsim from the main git repository:
+You can either install directly from pypi.org using the command
+
+    pip install udkm1Dsim
+
+or if you want to work on the latest develop release you can clone 
+udkm1Dsim from the main git repository:
 
     git clone https://github.com/dschick/udkm1Dsim.git udkm1Dsim
 
