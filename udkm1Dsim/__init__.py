@@ -6,5 +6,7 @@ from .atoms import Atom, AtomMixed
 from .unitCell import UnitCell
 from .structure import Structure
 from .simulation import Simulation
+from .xray import Xray
 
-__all__ = ['Atom', 'AtomMixed', 'UnitCell', 'Structure', 'Simulation', 'u']
+__all__ = ['Atom', 'AtomMixed', 'UnitCell', 'Structure', 'Simulation',
+           'Xray', 'u']
