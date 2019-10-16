@@ -26,7 +26,8 @@ __docformat__ = "restructuredtext"
 
 import numpy as np
 from .simulation import Simulation
-from . import u
+# from . import u
+from tabulate import tabulate
 
 
 class Xray(Simulation):
@@ -50,7 +51,7 @@ class Xray(Simulation):
     """
 
     def __init__(self, S, force_recalc, **kwargs):
-        super(S, force_recalc).__init__(**kwargs)
+        super(Xray, self).__init__(S, force_recalc, **kwargs)
         self.S = S
         self.force_recalc = force_recalc
         self.energy = np.array([])
@@ -62,7 +63,7 @@ class Xray(Simulation):
     def __str__(self):
         """String representation of this class"""
         output = [['force recalc', self.force_recalc],
-                  ['cache directory', self.cache_dir],]
+                  ['cache directory', self.cache_dir]]
 
         class_str = 'This is the current structure for the simulations:\n\n'
         class_str += self.S.__str__()
