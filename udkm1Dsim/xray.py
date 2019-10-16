@@ -26,7 +26,7 @@ __docformat__ = "restructuredtext"
 
 import numpy as np
 from .simulation import Simulation
-# from . import u
+from . import u, Q_
 from tabulate import tabulate
 
 
@@ -43,7 +43,8 @@ class Xray(Simulation):
         S (object): sample to do simulations with
         force_recalc (boolean): force recalculation of results
         energy (ndarray[float]): photon energy(s) [eV]
-        lambd (ndarray[float]): photon wavelength(s) [m]
+        wl (ndarray[float]): photon wavelength(s) [m]
+        k (ndarray[float]): wavevector(s) [1/m]
         theta (ndarray[float]): incoming xray angle(s) :math:`\theta` [deg]
         qz (ndarray[float]): scattering vector(s) :math:`q_z` [1/m]
         polarization (int): index of different polarization states
@@ -54,10 +55,11 @@ class Xray(Simulation):
         super(Xray, self).__init__(S, force_recalc, **kwargs)
         self.S = S
         self.force_recalc = force_recalc
-        self.energy = np.array([])
-        self.lambd = np.array([])
-        self.theta = np.array([])
-        self.qz = np.array([])
+        self.energy = np.array([])*u.eV
+        self.wl = np.array([])*u.angstrom
+        self.k = np.array([])/u.angstrom
+        self.theta = np.array([])*u.deg
+        self.qz = np.array([])/u.angstrom
         self.polarization = 0
 
     def __str__(self):
@@ -73,15 +75,24 @@ class Xray(Simulation):
         return class_str
 
     @property
-    def cache_dir(self):
-        """str: path to cached data"""
-        return self._cache_dir
+    def energy(self):
+        """ndarray[float]: photon energy(s) [eV]"""
+        return Q_(self._energy, u.kg*u.m**2/u.s**2).to('eV')
 
-    @cache_dir.setter
-    def cache_dir(self, cache_dir):
-        """set.cache_dir"""
-        import os.path as path
-        if path.exists(cache_dir):
-            self._cache_dir = cache_dir
-        else:
-            print('Cache dir does not exist.\nPlease create the path first.')
+    @energy.setter
+    def energy(self, energy):
+        """set.energy"""
+        import scipy.constants as constants
+        self._energy = energy.to_base_units().magnitude
+        self._wl = (constants.h*constants.c) / self._energy
+        self._k = 2*np.pi / self._wl
+
+    @property
+    def wl(self):
+        """ndarray[float]: photon wavelength(s) [nm]"""
+        return Q_(self._wl, u.m).to('nm')
+
+    @wl.setter
+    def wl(self, wl):
+        """set.wl"""
+        self._wl = wl.to_base_units().magnitude
