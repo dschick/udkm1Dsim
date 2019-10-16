@@ -407,6 +407,9 @@ class Structure:
         cell starting at 0 (dStart) and starting at the end of the first
         unit cell (dEnd) and from the center of each unit cell (dMid).
 
+        ToDo: add argument to return distances in according unit or only
+        numbers.
+
         """
         c_axes = self.get_unit_cell_property_vector('_c_axis')
         d_end = np.cumsum(c_axes)
@@ -414,19 +417,20 @@ class Structure:
         d_mid = (d_start + c_axes)/2
         return d_start, d_end, d_mid
 
-        def get_distances_of_interfaces(self):
-            """get_distances_of_interfaces"""
-#            % Returns the distances from the surface of each interface of the
-#            % structure.
-#            function [distIntf Indices] = getDistancesOfInterfaces(obj)
-#                [dStart dEnd]   = obj.getDistancesOfUnitCells();
-#                Indices         = [1 diff(obj.getUnitCellVectors())'];
-#                distIntf        = [dStart(Indices ~= 0)' dEnd(end)]';
-#            end
-            pass
+    def get_distances_of_interfaces(self):
+        """get_distances_of_interfaces
 
-        def interp_distance_at_interfaces(self):
-            """interp_distance_at_interfaces"""
+        Returns the distances from the surface of each interface of the
+        structure.
+
+        """
+
+        d_start, d_end, d_mid = self.get_distances_of_unit_cells()
+        indices = np.r_[1, np.diff(self.get_unit_cell_vectors()[0])]
+        return np.r_[d_start[np.nonzero(indices)], d_end[-1]]
+
+    def interp_distance_at_interfaces(self):
+        """interp_distance_at_interfaces"""
 #            % Returns a distance Vector of the center of UCs interpolated by an
 #            % odd number N at the interface of sturctures.
 #            function [distInterp originalIndicies] = interpDistanceAtInterfaces(obj,N)
@@ -464,7 +468,7 @@ class Structure:
 #                % these are the indicies of the original distances in the interpolated new vector
 #                originalIndicies = finderb(dMid,distInterp);
 #            end%function
-            pass
+        pass
 
     def get_unit_cell_property_vector(self, property_name):
         """get_unit_cell_property_vector
@@ -482,7 +486,6 @@ class Structure:
 
         if callable(getattr(handles[0], property_name)):
             # it's a function
-            print("it's a function")
             prop = np.zeros([self.get_number_of_unit_cells()])
             for i in range(self.get_number_of_unit_cells()):
                 prop[i] = getattr(handles[i], property_name)
@@ -498,13 +501,16 @@ class Structure:
             ucs = self.get_unique_unit_cells()
             temp = np.zeros([len(ucs[0]), 1])
             for i, uc in enumerate(ucs[1]):
-                temp[i] = len(getattr(uc, property_name))
+                try:
+                    temp[i] = len(getattr(uc, property_name))
+                except TypeError:
+                    temp[i] = 1
             prop = np.zeros([self.get_number_of_unit_cells(), int(np.max(temp))])
             del temp
             # traverse all unitCells
             for i in range(self.get_number_of_unit_cells()):
                 temp = getattr(handles[i], property_name)
-                prop[i, 0:len(temp)] = temp
+                prop[i, :] = temp
 
         return prop
 
