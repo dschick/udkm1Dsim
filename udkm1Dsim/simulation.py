@@ -49,7 +49,6 @@ class Simulation:
     Attributes:
         S (object): sample to do simulations with
         force_recalc (boolean): force recalculation of results
-        cache_dir (str): path to cached data
         disp_messages (boolean): is true to display messages from within
            the simulations
         disp_calc_time (boolean): is true to display the duration of
@@ -81,3 +80,17 @@ class Simulation:
         class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
+
+    @property
+    def cache_dir(self):
+        """str: path to cached data"""
+        return self._cache_dir
+
+    @cache_dir.setter
+    def cache_dir(self, cache_dir):
+        """set.cache_dir"""
+        import os.path as path
+        if path.exists(cache_dir):
+            self._cache_dir = cache_dir
+        else:
+            print('Cache dir does not exist.\nPlease create the path first.')

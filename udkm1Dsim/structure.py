@@ -87,7 +87,8 @@ class Structure:
             class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
                     self.substrate.sub_structures[0][1],
                     self.substrate.sub_structures[0][0].name,
-                    self.substrate.sub_structures[0][1]*self.substrate.sub_structures[0][0].c_axis.to('nm'))
+                    self.substrate.sub_structures[0][1]
+                    * self.substrate.sub_structures[0][0].c_axis.to('nm'))
         else:
             class_str += 'no substrate\n'
         return class_str
