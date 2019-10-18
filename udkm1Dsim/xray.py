@@ -75,6 +75,18 @@ class Xray(Simulation):
         Recalculate energy, wavelength, and wavevector as well as theta
         and the scattering vector in case any of these has changed.
 
+        .. math::
+
+            \lambda = \\frac {hc} {E}
+
+            E = \\frac {hc} {\lambda}
+
+            k = \\frac {2\pi} {\lambda}
+
+            \\vartheta = \\arcsin{ \\frac{\lambda q_z}{4\pi}}
+
+            q_z = 2k\\sin{\\vartheta}
+
         """
         from scipy import constants
         if caller != 'energy':

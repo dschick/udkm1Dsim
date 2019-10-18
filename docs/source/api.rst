@@ -24,3 +24,15 @@ Structure
 
 .. autoclass:: udkm1Dsim.Structure
     :members:
+
+Simulation
+^^^^^^^^^^
+
+.. autoclass:: udkm1Dsim.Simulation
+    :members:
+
+Xray
+^^^^
+
+.. autoclass:: udkm1Dsim.Xray
+    :members:
