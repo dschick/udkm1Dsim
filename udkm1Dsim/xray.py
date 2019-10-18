@@ -42,11 +42,6 @@ class Xray(Simulation):
     Attributes:
         S (object): sample to do simulations with
         force_recalc (boolean): force recalculation of results
-        energy (ndarray[float]): photon energy(s) [eV]
-        wl (ndarray[float]): photon wavelength(s) [m]
-        k (ndarray[float]): wavevector(s) [1/m]
-        theta (ndarray[float]): incoming xray angle(s) :math:`\theta` [deg]
-        qz (ndarray[float]): scattering vector(s) :math:`q_z` [1/m]
         polarization (int): index of different polarization states
 
     """
@@ -55,11 +50,11 @@ class Xray(Simulation):
         super(Xray, self).__init__(S, force_recalc, **kwargs)
         self.S = S
         self.force_recalc = force_recalc
-        self.energy = np.array([])*u.eV
-        self.wl = np.array([])*u.angstrom
-        self.k = np.array([])/u.angstrom
-        self.theta = np.array([])*u.deg
-        self.qz = np.array([])/u.angstrom
+        self._energy = np.array([])
+        self._wl = np.array([])
+        self._k = np.array([])
+        self._theta = np.array([])
+        self._qz = np.array([])
         self.polarization = 0
 
     def __str__(self):
@@ -74,18 +69,46 @@ class Xray(Simulation):
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
 
+    def update_experiment(self, caller):
+        """update experimental parameters
+
+        Recalculate energy, wavelength, and wavevector as well as theta
+        and the scattering vector in case any of these has changed.
+
+        """
+        from scipy import constants
+        if caller != 'energy':
+            if caller == 'wl':  # calc energy from wavelength
+                self._energy = Q_((constants.h*constants.c)/self._wl, 'J').to('eV').magnitude
+            elif caller == 'k':  # calc energy von wavevector
+                self._energy = \
+                    Q_((constants.h*constants.c)/(2*np.pi/self._k), 'J').to('eV').magnitude
+        if caller != 'wl':
+            if caller == 'energy':  # calc wavelength from energy
+                self._wl = (constants.h*constants.c)/self.energy.to('J').magnitude
+            elif caller == 'k':  # calc wavelength from wavevector
+                self._wl = 2*np.pi/self._k
+        if caller != 'k':
+            if caller == 'energy':  # calc wavevector from energy
+                self._k = 2*np.pi/self._wl
+            elif caller == 'wl':  # calc wavevector from wavelength
+                self._k = 2*np.pi/self._wl
+
+        if caller != 'theta':
+            self._theta = np.arcsin(np.outer(self._wl, self._qz)/np.pi/4)
+        if caller != 'qz':
+            self._qz = np.outer(2*self._k, np.sin(self._theta))
+
     @property
     def energy(self):
         """ndarray[float]: photon energy(s) [eV]"""
-        return Q_(self._energy, u.kg*u.m**2/u.s**2).to('eV')
+        return Q_(self._energy, u.eV)
 
     @energy.setter
     def energy(self, energy):
         """set.energy"""
-        import scipy.constants as constants
-        self._energy = energy.to_base_units().magnitude
-        self._wl = (constants.h*constants.c) / self._energy
-        self._k = 2*np.pi / self._wl
+        self._energy = np.array(energy.to('eV').magnitude)
+        self.update_experiment('energy')
 
     @property
     def wl(self):
@@ -95,4 +118,38 @@ class Xray(Simulation):
     @wl.setter
     def wl(self, wl):
         """set.wl"""
-        self._wl = wl.to_base_units().magnitude
+        self._wl = np.array(wl.to_base_units().magnitude)
+        self.update_experiment('wl')
+
+    @property
+    def k(self):
+        """ndarray[float]: photon wavevector(s) [1/nm]"""
+        return Q_(self._k, 1/u.m).to('1/nm')
+
+    @k.setter
+    def k(self, k):
+        """set.k"""
+        self._k = np.array(k.to_base_units().magnitude)
+        self.update_experiment('k')
+
+    @property
+    def theta(self):
+        """ndarray[float]: incoming xray angle(s) :math:`\theta` [deg]"""
+        return Q_(self._theta, u.rad).to('deg')
+
+    @theta.setter
+    def theta(self, theta):
+        """set.theta"""
+        self._theta = np.array(theta.to_base_units().magnitude)
+        self.update_experiment('theta')
+
+    @property
+    def qz(self):
+        """ndarray[float]: scattering vector(s) :math:`q_z` [1/nm]"""
+        return Q_(self._qz, 1/u.m).to('1/nm')
+
+    @qz.setter
+    def qz(self, qz):
+        """set.qz"""
+        self._qz = np.array(qz.to_base_units().magnitude)
+        self.update_experiment('qz')
