@@ -42,7 +42,7 @@ class Xray(Simulation):
     Attributes:
         S (object): sample to do simulations with
         force_recalc (boolean): force recalculation of results
-        polarization (int): index of different polarization states
+        polarization (float): polarization state
 
     """
 
@@ -68,6 +68,22 @@ class Xray(Simulation):
         class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
+
+    def get_polarization_factor(self):
+        """get_polarization_factor
+
+        Returns the polarization factor :math:`P(\\vartheta)` for a
+        given incident angle :math:`\\vartheta` for the case of
+        s-polarization (pol = 0), or p-polarization (pol = 1), or
+        unpolarized X-rays (pol = 0.5):
+
+        .. math::
+
+            P(\\vartheta) = \sqrt{(1-\mbox{pol}) + \mbox{pol} \cdot \cos(2\\vartheta)}
+
+        """
+
+        return np.sqrt((1-self.polarization) + self.polarization*np.cos(2*self._theta)**2)
 
     def update_experiment(self, caller):
         """update experimental parameters
