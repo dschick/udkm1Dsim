@@ -47,9 +47,7 @@ class Xray(Simulation):
     """
 
     def __init__(self, S, force_recalc, **kwargs):
-        super(Xray, self).__init__(S, force_recalc, **kwargs)
-        self.S = S
-        self.force_recalc = force_recalc
+        super().__init__(S, force_recalc, **kwargs)
         self._energy = np.array([])
         self._wl = np.array([])
         self._k = np.array([])

@@ -7,6 +7,7 @@ from .unitCell import UnitCell
 from .structure import Structure
 from .simulation import Simulation
 from .xray import Xray
+from .xrayKin import XrayKin
 
 __all__ = ['Atom', 'AtomMixed', 'UnitCell', 'Structure', 'Simulation',
-           'Xray', 'u']
+           'Xray', 'XrayKin', 'u', 'Q_']
