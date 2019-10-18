@@ -133,8 +133,8 @@ class UnitCell:
                   ['a-axis', '{:.4~P}'.format(self.a_axis)],
                   ['b-axis', '{:.4~P}'.format(self.b_axis)],
                   ['c-axis', '{:.4~P}'.format(self.c_axis)],
-                  ['area', '{:.4~P}'.format(self.area.to('angstrom**2'))],
-                  ['volume', '{:.4~P}'.format(self.volume.to('angstrom**3'))],
+                  ['area', '{:.4~P}'.format(self.area.to('nm**2'))],
+                  ['volume', '{:.4~P}'.format(self.volume.to('nm**3'))],
                   ['mass', '{:.4~P}'.format(self.mass)],
                   ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
                   ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
@@ -538,7 +538,7 @@ class UnitCell:
     @property
     def a_axis(self):
         """float: in-plane a-axis [m]"""
-        return Q_(self._a_axis, u.meter).to('angstrom')
+        return Q_(self._a_axis, u.meter).to('nm')
 
     @a_axis.setter
     def a_axis(self, a_axis):
@@ -548,7 +548,7 @@ class UnitCell:
     @property
     def b_axis(self):
         """float: in-plane b-axis [m]"""
-        return Q_(self._b_axis, u.meter).to('angstrom')
+        return Q_(self._b_axis, u.meter).to('nm')
 
     @b_axis.setter
     def b_axis(self, b_axis):
@@ -558,7 +558,7 @@ class UnitCell:
     @property
     def c_axis(self):
         """float: out-of-plane c-axis [m]"""
-        return Q_(self._c_axis, u.meter).to('angstrom')
+        return Q_(self._c_axis, u.meter).to('nm')
 
     @c_axis.setter
     def c_axis(self, c_axis):
