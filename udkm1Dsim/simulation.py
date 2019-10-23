@@ -81,6 +81,10 @@ class Simulation:
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
 
+    def disp_message(self, message):
+        if self.disp_messages:
+            print(message)
+
     @property
     def cache_dir(self):
         """str: path to cached data"""
