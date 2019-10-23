@@ -56,7 +56,7 @@ class XrayKin(Xray):
         class_str += super().__str__()
         return class_str
 
-    @u.wraps(None, (None, 'eV', 'nm**-1', None), strict=False)
+    @u.wraps(None, (None, 'eV', 'm**-1', None), strict=False)
     def get_uc_atomic_form_factors(self, energy, qz, uc):
         """ get_uc_atomic_form_factors
         Returns the energy- and angle-dependent atomic form factors
@@ -69,7 +69,7 @@ class XrayKin(Xray):
             f[i, :] = uc.atoms[i][0].get_cm_atomic_form_factor(energy, qz)
         return f
 
-    @u.wraps(None, (None, 'eV', 'nm**-1', None, None), strict=False)
+    @u.wraps(None, (None, 'eV', 'm**-1', None, None), strict=False)
     def get_uc_structure_factor(self, energy, qz, uc, strain=0):
         """get_uc_structure_factor
 
@@ -116,7 +116,6 @@ class XrayKin(Xray):
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
         return R, A
 
-        
     def homogeneous_reflected_field(self, S, energy, qz, theta, strains=0):
         """homogeneous_reflected_field
 
@@ -128,15 +127,15 @@ class XrayKin(Xray):
 
         .. math::
 
-            E_p = \\frac{i}{\varepsilon_0}\\frac{e^2}{m_e\, c_0^2}\,
-                  \\frac{P(\\vartheta) \, S(E,q_z,\epsilon)}{A\,q_z}
+            E_p = \\frac{i}{\\varepsilon_0}\\frac{e^2}{m_e c_0^2}
+                  \\frac{P(\\vartheta)  S(E,q_z,\\epsilon)}{A q_z}
 
         For the case of :math:`N` similar planes of unit cells one can
         write:
 
         .. math::
 
-            E_p^N = \sum_{n=0}^{N-1} E_p \exp(\i\, q_z\, z\, n )
+            E_p^N = \sum_{n=0}^{N-1} E_p \exp(i q_z z n )
 
         where :math:`z` is the distance between the planes (c-axis).
         The above equation can be simplified to
@@ -146,11 +145,11 @@ class XrayKin(Xray):
             E_p^N = E_p \psi(q_z,z,N)
 
         introducing the interference function
-        
+
         .. math::
 
-            \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(\i\, q_z \, z \, n) 
-           = \\frac{1- \exp(\i\, q_z \, z \, N)}{1- \exp(\i\, q_z \, z)}
+            \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(i q_z z n)
+           = \\frac{1- \exp(i q_z  z  N)}{1- \exp(i q_z z)}
 
         The total reflected wave field of all :math:`i = 1\ldots M`
         homogeneous layers (:math:`E_p^t`) is the phase-correct
@@ -158,14 +157,14 @@ class XrayKin(Xray):
 
         .. math::
 
-            E_p^t = \sum_{i=1}^M E_p^{N,i}\, \exp(\i\, q_z\, Z_i)
+            E_p^t = \sum_{i=1}^M E_p^{N,i} \exp(i q_z Z_i)
 
-        where :math:`Z_i = \sum_{j=1}^{i-1} N_j \, z_j`is the distance
+        where :math:`Z_i = \sum_{j=1}^{i-1} N_j z_j` is the distance
         of the i-th layer from the surface.
 
         """
         # if no strains are given we assume no strain (1)
-        if strains.all() == 0:
+        if np.isscalar(strains) and strains == 0:
             strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
 
         K = len(qz)  # nb of qz
@@ -185,32 +184,32 @@ class XrayKin(Xray):
             else:
                 # the substructure is a structure, so we do a recursive
                 # call of this method
+                d = sub_structures[0].get_number_of_sub_structures()
                 Ep, temp = self.homogeneous_reflected_field(
                         sub_structures[0], energy, qz, theta,
-                        strains[strainCounter:(strainCounter
-                                               + sub_structures[0].get_number_of_sub_structures())])
+                        strains[strainCounter:(strainCounter + d)])
                 z = sub_structures[0].get_length().magnitude
-                strainCounter = strainCounter+sub_structures[0].get_number_of_sub_structures()
+                strainCounter = strainCounter + d
                 A.append([temp, [sub_structures[0].name + ' substructures']])
                 A.append([Ep, '{:d}x {:s}'.format(1, sub_structures[0].name)])
 
             # calculate the interferece function for N repetitions of
             # the substructure with the length z
-            psi = self.get_interference_function(qz, z , sub_structures[1])
+            psi = self.get_interference_function(qz, z, sub_structures[1])
             # calculate the reflected field for N repetitions of
             # the substructure with the length z
             EpN = Ep * psi
-            # remember the result 
+            # remember the result
             A.append([EpN, '{:d}x {:s}'.format(sub_structures[1], sub_structures[0].name)])
-            # add the reflected field of the current substructre 
+            # add the reflected field of the current substructre
             # phase-correct to the already calculated substructures
-            Ept = Ept+(EpN*np.exp(1j*qz*Z));
+            Ept = Ept+(EpN*np.exp(1j*qz*Z))
             # update the total length $Z$ of the already calculated
             # substructures
             Z = Z + z*sub_structures[1]
 
         # add static substrate to kinXRD
-        if not S.substrate:
+        if S.substrate != []:
             temp,  temp2 = self.homogeneous_reflected_field(S.substrate, energy, qz, theta)
             A.append([temp2, 'static substrate'])
             Ept = Ept+(temp*np.exp(1j*qz*Z))
@@ -224,8 +223,8 @@ class XrayKin(Xray):
 
         .. math::
 
-            \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(\i\, q_z \, z \, n)
-             = \\frac{1- \exp(\i\, q_z \, z \, N)}{1- \exp(\i\, q_z \, z)}
+            \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(i q_z z n)
+             = \\frac{1- \exp(i q_z z N)}{1- \exp(i q_z z)}
 
         """
         psi = (1-np.exp(1j*qz*z*N)) / (1 - np.exp(1j*qz*z))
@@ -235,17 +234,17 @@ class XrayKin(Xray):
         """get_Ep
 
         Calculates the reflected field :math:`E_p` for one unit cell
-        with a given _strain_ :math:`\epsilon`:
+        with a given strain :math:`\epsilon`:
 
         .. math::
 
-            E_p = \\frac{\i}{\varepsilon_0}\frac{e^2}{m_e\, c_0^2}\,
-              \\frac{P \, S(E,q_z,\epsilon)}{A\,q_z}
+            E_p = \\frac{i}{\\varepsilon_0} \\frac{e^2}{m_e c_0^2}
+                  \\frac{P S(E,q_z,\epsilon)}{A q_z}
 
         with :math:`e` as electron charge, :math:`m_e` as electron
         mass, :math:`c_0` as vacuum light velocity,
-        :math:`$\varepsilon_0` as vacuum permittivity,
-        :math:`P` as polarization factor and :math:`S(E,q_z,\sigma):
+        :math:`\\varepsilon_0` as vacuum permittivity,
+        :math:`P` as polarization factor and :math:`S(E,q_z,\sigma)`
         as energy-, angle-, and strain-dependent unit cell structure
         factor.
 

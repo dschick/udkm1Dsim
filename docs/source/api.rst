@@ -36,3 +36,9 @@ Xray
 
 .. autoclass:: udkm1Dsim.Xray
     :members:
+
+XrayKin
+^^^^^^^
+
+.. autoclass:: udkm1Dsim.XrayKin
+    :members:

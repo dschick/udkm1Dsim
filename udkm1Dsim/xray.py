@@ -51,8 +51,8 @@ class Xray(Simulation):
         self._energy = np.array([])
         self._wl = np.array([])
         self._k = np.array([])
-        self._theta = np.array([])
-        self._qz = np.array([])
+        self._theta = np.zeros([1, 1])
+        self._qz = np.zeros([1, 1])
         self.polarization = 0
 
     def __str__(self):
@@ -121,9 +121,9 @@ class Xray(Simulation):
                 self._k = 2*np.pi/self._wl
 
         if caller != 'theta':
-            self._theta = np.arcsin(np.outer(self._wl, self._qz[0,:])/np.pi/4)
+            self._theta = np.arcsin(np.outer(self._wl, self._qz[0, :])/np.pi/4)
         if caller != 'qz':
-            self._qz = np.outer(2*self._k, np.sin(self._theta[0,:]))
+            self._qz = np.outer(2*self._k, np.sin(self._theta[0, :]))
 
     @property
     def energy(self):

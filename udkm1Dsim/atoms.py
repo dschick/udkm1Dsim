@@ -145,8 +145,10 @@ class Atom:
 
         """
         # interpolate the real and imaginary part in dependence of E
-        f1 = np.interp(E, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 1])
-        f2 = np.interp(E, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 2])
+        f1 = np.interp(E, self.atomic_form_factor_coeff[:, 0],
+                       self.atomic_form_factor_coeff[:, 1])
+        f2 = np.interp(E, self.atomic_form_factor_coeff[:, 0],
+                       self.atomic_form_factor_coeff[:, 2])
 
         return f1 - f2*1j
 
@@ -172,7 +174,7 @@ class Atom:
 
         return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
 
-    @u.wraps(None, (None, 'eV', 'nm**-1'), strict=False)
+    @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
     def get_cm_atomic_form_factor(self, E, qz):
         """get_cm_atomic_form_factor
 
@@ -208,14 +210,14 @@ class Atom:
 
         """
         # convert from 1/nm to 1/Å and to a real column vector
-        qz = qz/10
+        qz = qz*1e10
         # convert to a real column vector in case it's not a float
         if not isinstance(qz, float):
             qz = qz.reshape(-1, 1)
 
         f_cm = np.dot(self.cromer_mann_coeff[0:3],
                       np.exp(np.outer(-self.cromer_mann_coeff[4:7],
-                                    (qz/(4*np.pi))**2))) + self.cromer_mann_coeff[8]
+                                      (qz/(4*np.pi))**2))) + self.cromer_mann_coeff[8]
 
         return f_cm + self.get_atomic_form_factor(E) -\
             (np.sum(self.cromer_mann_coeff[0:3]) + self.cromer_mann_coeff[8])
