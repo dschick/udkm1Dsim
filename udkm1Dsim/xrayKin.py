@@ -26,8 +26,9 @@ __docformat__ = "restructuredtext"
 
 import numpy as np
 from .xray import Xray
-from . import u, Q_
-from tabulate import tabulate
+from .unitCell import UnitCell
+from . import u
+from time import time
 
 
 class XrayKin(Xray):
@@ -55,160 +56,203 @@ class XrayKin(Xray):
         class_str += super().__str__()
         return class_str
 
-#            %% getUCAtomicFormFactors
-#        % Returns the energy- and angle-dependent atomic form factors 
-#        % $f(q_z,E)$ of all atoms in the unit cell as a vector.
-#        function f = getUCAtomicFormFactors(obj,qz,UC)
-#            f = zeros(UC.numAtoms,length(qz));
-#            for j = 1:UC.numAtoms
-#                f(j,:) = UC.atoms{j,1}.getCMAtomicFormFactor(obj.E,qz);
-#            end
-#        end%function
-#        
-#        %% getUCStructureFactor
-#        % Returns the energy-, angle-, and strain-dependent structure 
-#        % factor $S(E,q_z,\epsilon)$ of the unit cell
-#        %
-#        % $$ S(E,q_z,\epsilon) = \sum_i^N f_i \, \exp(-\i q_z z_i(\epsilon) $$
-#        %
-#        function S = getUCStructureFactor(obj,UC,strain)
-#            if nargin < 3
-#                strain = 0;
-#            end
-#            S = sum(obj.getUCAtomicFormFactors(obj.qz,UC)...
-#                .* exp(1i * UC.cAxis * UC.getAtomPositions(strain) * obj.qz));
-#        end%function
-#        
-#        %% homogeneousReflectivity
-#        % Returns the reflectivity $R = E_p^t\,(E_p^t)^*$ of a homogeneous 
-#        % sample structure as well as the reflected field $E_p^N$ of all 
-#        % substructures.
-#        function [R A] = homogeneousReflectivity(obj,strains)
-#            % if no strains are given we assume no strain (1)
-#            if nargin < 2
-#                strains = zeros(obj.S.getNumberOfSubStructures(),1);
-#            end
-#            tic
-#            obj.dispMessage('Calculating _homogenousReflectivity_ ...');
-#            % get the reflected field of the structure
-#            [Ept A]= obj.homogeneousReflectedField(obj.S,strains);
-#            % calculate the real reflectivity from Ef
-#            R = Ept.*conj(Ept);
-#            obj.dispMessage('Elapsed time for _homogenousReflectivity_:',toc);
-#        end%functions
-#
-#        %% homogeneousReflectedField
-#        % Calculates the reflected field $E_p^t$ of the whole sample 
-#        % structure as well as for each sub structure ($E_p^N$). The 
-#        % reflected wave field $E_p$ from a single layer of unit cells at
-#        % the detector is calculated as follows:[Ref. 1]
-#        %
-#        % $$ E_p = \frac{\i}{\varepsilon_0}\frac{e^2}{m_e\, c_0^2}\,
-#        %          \frac{P(\theta) \, S(E,q_z,\epsilon)}{A\,q_z} $$
-#        %
-#        % For the case of $N$ similar planes of unit cells one can write:
-#        %
-#        % $$ E_p^N = \sum_{n=0}^{N-1} E_p \exp(\i\, q_z\, z\, n ) $$
-#        %
-#        % where $z$ is the distance between the planes ($c$-axis). The
-#        % above equation can be simplified to
-#        %
-#        % $$ E_p^N = E_p \psi(q_z,z,N)$$
-#        %
-#        % introducing the interference function
-#        %
-#        % $$ \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(\i\, q_z \, z \, n) 
-#        %   = \frac{1- \exp(\i\, q_z \, z \, N)}{1- \exp(\i\, q_z \, z)} $$
-#        %
-#        % The total reflected wave field of all $i = 1\ldots M$ homogeneous 
-#        % layers ($E_p^t$) is the phase-correct summation of all individual 
-#        % $E_p^{N,i}$:
-#        %
-#        % $$ E_p^t = \sum_{i=1}^M E_p^{N,i}\, \exp(\i\, q_z\, Z_i)$$
-#        %
-#        % where $Z_i = \sum_{j=1}^{i-1} N_j \, z_j$ is the distance of the
-#        % i-th layer from the surface.
-#        function [Ept A] = homogeneousReflectedField(obj,S,strains)
-#            % if no strains are given we assume no strain (1)
-#            if nargin < 3
-#                strains = zeros(S.getNumberOfSubStructures(),1);
-#            end
-#            % initialize
-#            K   = length(obj.qz); % nb of qz
-#            Ept = zeros(1,K); % total reflected field
-#            Z   = 0; % total length of the substructure from the surface           
-#            A   = cell(0,2); % cell matrix of reflected fields EpN of substructures
-#            strainCounter = 1; % the is the index of the strain vector if applied
-#            
-#            % traverse substructures
-#            for i = 1:size(S.substructures,1)
-#                if isa(S.substructures{i,1},'unitCell')
-#                    % the substructure is an unit cell and we can calculate
-#                    % Ep directly
-#                    Ep = obj.getEp(S.substructures{i,1},strains(strainCounter));
-#                    z = S.substructures{i,1}.cAxis;
-#                    strainCounter = strainCounter+1;
-#                else
-#                    % the substructure is a structure, so we do a recursive
-#                    % call of this method
-#                    [Ep temp] = obj.homogeneousReflectedField(S.substructures{i,1}...
-#                        ,strains(strainCounter:strainCounter+S.substructures{i,1}.getNumberOfSubStructures()-1));
-#                    z = S.substructures{i,1}.getLength;
-#                    strainCounter = strainCounter+S.substructures{i,1}.getNumberOfSubStructures();
-#                    A(end+1,1:2) = {temp, [S.substructures{i,1}.name ' substructures']};
-#                    A(end+1,1:2) = {Ep, sprintf('%dx %s', 1, S.substructures{i,1}.name)};
-#                end%if
-#                % calculate the interferece function for N repetitions of
-#                % the substructure with the length z
-#                psi = obj.getInterferenceFunction(z,S.substructures{i,2});
-#                % calculate the reflected field for N repetitions of
-#                % the substructure with the length z
-#                EpN = Ep .* psi;
-#                
-#                % remember the result 
-#                A(end+1,1:2) = {EpN, sprintf('%dx %s', S.substructures{i,2}, S.substructures{i,1}.name)};
-#                
-#                % add the reflected field of the current substructre 
-#                % phase-correct to the already calculated substructures
-#                Ept = Ept+(EpN.*exp(1i.*obj.qz*Z));
-#                % update the total length $Z$ of the already calculated
-#                % substructures
-#                Z = Z + z*S.substructures{i,2};
-#            end%for
-#                        
-#            % add static substrate to kinXRD
-#            if ~isempty(S.substrate)
-#                [temp  temp2] = obj.homogeneousReflectedField(S.substrate);
-#                A(end+1,1:2) = {temp2, 'static substrate'};
-#                Ept = Ept+(temp.*exp(1i.*obj.qz*Z));
-#            end%if  
-#        end%function
-#        
-#        %% getInterferenceFunction
-#        % Calculates the interferece function for $N$ repetitions of
-#        % the structure with the length $z$:
-#        %
-#        % $$ \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(\i\, q_z \, z \, n) 
-#        %   = \frac{1- \exp(\i\, q_z \, z \, N)}{1- \exp(\i\, q_z \, z)} $$
-#        %
-#        function psi = getInterferenceFunction(obj,z,N)
-#            psi = (1-exp(1i.*obj.qz.*z.*N)) ./ (1 - exp(1i.*obj.qz.*z));
-#        end%function
-#        
-#        %% getEp
-#        % Calculates the reflected field $E_p$ for one unit cell with a 
-#        % given _strain_ $\epsilon$:
-#        %
-#        % $$ E_p = \frac{\i}{\varepsilon_0}\frac{e^2}{m_e\, c_0^2}\,
-#        %          \frac{P \, S(E,q_z,\epsilon)}{A\,q_z} $$
-#        %
-#        % with $e$ as electron charge, $m_e$ as electron mass, $c_0$ as
-#        % vacuum light velocity, $\varepsilon_0$ as vacuum permittivity, 
-#        % $P$ as polarization factor and $S(E,q_z,\sigma)$ as energy-, 
-#        % angle-, and strain-dependent unit cell structure factor.
-#        function Ep = getEp(obj,UC,strain)
-#            c = constants;
-#            Ep = 1i/c.eps_0*c.e_0^2/c.m_0/c.c_0^2*...
-#                (obj.getPolarizationFactor().*obj.getUCStructureFactor(UC,strain)...
-#                ./UC.area)./obj.qz;
-#        end%function
+    @u.wraps(None, (None, 'eV', 'nm**-1', None), strict=False)
+    def get_uc_atomic_form_factors(self, energy, qz, uc):
+        """ get_uc_atomic_form_factors
+        Returns the energy- and angle-dependent atomic form factors
+        .. math: `f(q_z, E)` of all atoms in the unit cell as a vector.
+        """
+        if (not np.isscalar(energy)) and (not isinstance(energy, object)):
+            raise TypeError('Only scalars or pint quantities for the energy are allowd!')
+        f = np.zeros([uc.num_atoms, len(qz)], dtype=complex)
+        for i in range(uc.num_atoms):
+            f[i, :] = uc.atoms[i][0].get_cm_atomic_form_factor(energy, qz)
+        return f
+
+    @u.wraps(None, (None, 'eV', 'nm**-1', None, None), strict=False)
+    def get_uc_structure_factor(self, energy, qz, uc, strain=0):
+        """get_uc_structure_factor
+
+        Returns the energy-, angle-, and strain-dependent structure
+        factor .. math: `S(E,q_z,\epsilon)` of the unit cell
+
+        .. math::
+
+            S(E,q_z,\epsilon) = \sum_i^N f_i \, \exp(-i q_z z_i(\epsilon)
+
+        """
+        if (not np.isscalar(energy)) and (not isinstance(energy, object)):
+            raise TypeError('Only scalars or pint quantities for the energy are allowd!')
+
+        if np.isscalar(qz):
+            qz = np.array([qz])
+
+        S = np.sum(self.get_uc_atomic_form_factors(energy, qz, uc)
+                   * np.exp(1j * uc._c_axis
+                   * np.outer(uc.get_atom_positions(strain), qz)), 0)
+        return S
+
+    def homogeneous_reflectivity(self, strains=0):
+        """homogeneous_reflectivity
+
+        Returns the reflectivity .. math:`R = E_p^t\,(E_p^t)^*` of a
+        homogeneous sample structure as well as the reflected field
+        .. math:`E_p^N` of all substructures.
+
+        """
+        if strains == 0:
+            strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
+
+        t1 = time()
+        self.disp_message('Calculating _homogenous_reflectivity_ ...')
+        # get the reflected field of the structure for each energy
+        R = np.zeros_like(self._qz)
+        for i, energy in enumerate(self._energy):
+            qz = self._qz[i, :]
+            theta = self._theta[i, :]
+            Ept, A = self.homogeneous_reflected_field(self.S, energy, qz, theta, strains)
+            # calculate the real reflectivity from Ef
+            R[i, :] = np.real(Ept*np.conj(Ept))
+        self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
+        return R, A
+
+        
+    def homogeneous_reflected_field(self, S, energy, qz, theta, strains=0):
+        """homogeneous_reflected_field
+
+        Calculates the reflected field :math:`E_p^t` of the whole
+        sample structure as well as for each sub structure
+        (:math:`E_p^N`). The reflected wave field :math:`E_p` from a
+        single layer of unit cells at the detector is calculated as
+        follows:[Ref. 1]
+
+        .. math::
+
+            E_p = \\frac{i}{\varepsilon_0}\\frac{e^2}{m_e\, c_0^2}\,
+                  \\frac{P(\\vartheta) \, S(E,q_z,\epsilon)}{A\,q_z}
+
+        For the case of :math:`N` similar planes of unit cells one can
+        write:
+
+        .. math::
+
+            E_p^N = \sum_{n=0}^{N-1} E_p \exp(\i\, q_z\, z\, n )
+
+        where :math:`z` is the distance between the planes (c-axis).
+        The above equation can be simplified to
+
+        .. math::
+
+            E_p^N = E_p \psi(q_z,z,N)
+
+        introducing the interference function
+        
+        .. math::
+
+            \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(\i\, q_z \, z \, n) 
+           = \\frac{1- \exp(\i\, q_z \, z \, N)}{1- \exp(\i\, q_z \, z)}
+
+        The total reflected wave field of all :math:`i = 1\ldots M`
+        homogeneous layers (:math:`E_p^t`) is the phase-correct
+        summation of all individual :math:`E_p^{N,i}`:
+
+        .. math::
+
+            E_p^t = \sum_{i=1}^M E_p^{N,i}\, \exp(\i\, q_z\, Z_i)
+
+        where :math:`Z_i = \sum_{j=1}^{i-1} N_j \, z_j`is the distance
+        of the i-th layer from the surface.
+
+        """
+        # if no strains are given we assume no strain (1)
+        if strains.all() == 0:
+            strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
+
+        K = len(qz)  # nb of qz
+        Ept = np.zeros([1, K])  # total reflected field
+        Z = 0  # total length of the substructure from the surface
+        A = list([0, 2])  # cell matrix of reflected fields EpN of substructures
+        strainCounter = 0  # the is the index of the strain vector if applied
+
+        # traverse substructures
+        for i, sub_structures in enumerate(S.sub_structures):
+            if isinstance(sub_structures[0], UnitCell):
+                # the substructure is an unit cell and we can calculate
+                # Ep directly
+                Ep = self.get_Ep(energy, qz, theta, sub_structures[0], strains[strainCounter])
+                z = sub_structures[0]._c_axis
+                strainCounter = strainCounter+1
+            else:
+                # the substructure is a structure, so we do a recursive
+                # call of this method
+                Ep, temp = self.homogeneous_reflected_field(
+                        sub_structures[0], energy, qz, theta,
+                        strains[strainCounter:(strainCounter
+                                               + sub_structures[0].get_number_of_sub_structures())])
+                z = sub_structures[0].get_length().magnitude
+                strainCounter = strainCounter+sub_structures[0].get_number_of_sub_structures()
+                A.append([temp, [sub_structures[0].name + ' substructures']])
+                A.append([Ep, '{:d}x {:s}'.format(1, sub_structures[0].name)])
+
+            # calculate the interferece function for N repetitions of
+            # the substructure with the length z
+            psi = self.get_interference_function(qz, z , sub_structures[1])
+            # calculate the reflected field for N repetitions of
+            # the substructure with the length z
+            EpN = Ep * psi
+            # remember the result 
+            A.append([EpN, '{:d}x {:s}'.format(sub_structures[1], sub_structures[0].name)])
+            # add the reflected field of the current substructre 
+            # phase-correct to the already calculated substructures
+            Ept = Ept+(EpN*np.exp(1j*qz*Z));
+            # update the total length $Z$ of the already calculated
+            # substructures
+            Z = Z + z*sub_structures[1]
+
+        # add static substrate to kinXRD
+        if not S.substrate:
+            temp,  temp2 = self.homogeneous_reflected_field(S.substrate, energy, qz, theta)
+            A.append([temp2, 'static substrate'])
+            Ept = Ept+(temp*np.exp(1j*qz*Z))
+        return Ept, A
+
+    def get_interference_function(self, qz, z, N):
+        """get_interference_function
+
+        Calculates the interferece function for :math:`N`
+        repetitions of the structure with the length :math:`z`:
+
+        .. math::
+
+            \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(\i\, q_z \, z \, n)
+             = \\frac{1- \exp(\i\, q_z \, z \, N)}{1- \exp(\i\, q_z \, z)}
+
+        """
+        psi = (1-np.exp(1j*qz*z*N)) / (1 - np.exp(1j*qz*z))
+        return psi
+
+    def get_Ep(self, energy, qz, theta, uc, strain):
+        """get_Ep
+
+        Calculates the reflected field :math:`E_p` for one unit cell
+        with a given _strain_ :math:`\epsilon`:
+
+        .. math::
+
+            E_p = \\frac{\i}{\varepsilon_0}\frac{e^2}{m_e\, c_0^2}\,
+              \\frac{P \, S(E,q_z,\epsilon)}{A\,q_z}
+
+        with :math:`e` as electron charge, :math:`m_e` as electron
+        mass, :math:`c_0` as vacuum light velocity,
+        :math:`$\varepsilon_0` as vacuum permittivity,
+        :math:`P` as polarization factor and :math:`S(E,q_z,\sigma):
+        as energy-, angle-, and strain-dependent unit cell structure
+        factor.
+
+        """
+        import scipy.constants as c
+        Ep = 1j/c.epsilon_0*c.elementary_charge**2/c.electron_mass/c.c**2 \
+            * (self.get_polarization_factor(theta)
+                * self.get_uc_structure_factor(energy, qz, uc, strain)
+                / uc._area) / qz
+        return Ep

@@ -67,7 +67,7 @@ class Xray(Simulation):
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
 
-    def get_polarization_factor(self):
+    def get_polarization_factor(self, theta):
         """get_polarization_factor
 
         Returns the polarization factor :math:`P(\\vartheta)` for a
@@ -81,7 +81,7 @@ class Xray(Simulation):
 
         """
 
-        return np.sqrt((1-self.polarization) + self.polarization*np.cos(2*self._theta)**2)
+        return np.sqrt((1-self.polarization) + self.polarization*np.cos(2*theta)**2)
 
     def update_experiment(self, caller):
         """update experimental parameters
@@ -121,9 +121,9 @@ class Xray(Simulation):
                 self._k = 2*np.pi/self._wl
 
         if caller != 'theta':
-            self._theta = np.arcsin(np.outer(self._wl, self._qz)/np.pi/4)
+            self._theta = np.arcsin(np.outer(self._wl, self._qz[0,:])/np.pi/4)
         if caller != 'qz':
-            self._qz = np.outer(2*self._k, np.sin(self._theta))
+            self._qz = np.outer(2*self._k, np.sin(self._theta[0,:]))
 
     @property
     def energy(self):
@@ -133,7 +133,7 @@ class Xray(Simulation):
     @energy.setter
     def energy(self, energy):
         """set.energy"""
-        self._energy = np.array(energy.to('eV').magnitude)
+        self._energy = np.array(energy.to('eV').magnitude, ndmin=1)
         self.update_experiment('energy')
 
     @property
@@ -144,7 +144,7 @@ class Xray(Simulation):
     @wl.setter
     def wl(self, wl):
         """set.wl"""
-        self._wl = np.array(wl.to_base_units().magnitude)
+        self._wl = np.array(wl.to_base_units().magnitude, ndmin=1)
         self.update_experiment('wl')
 
     @property
@@ -155,7 +155,7 @@ class Xray(Simulation):
     @k.setter
     def k(self, k):
         """set.k"""
-        self._k = np.array(k.to_base_units().magnitude)
+        self._k = np.array(k.to_base_units().magnitude, ndmin=1)
         self.update_experiment('k')
 
     @property
@@ -166,7 +166,9 @@ class Xray(Simulation):
     @theta.setter
     def theta(self, theta):
         """set.theta"""
-        self._theta = np.array(theta.to_base_units().magnitude)
+        self._theta = np.array(theta.to_base_units().magnitude, ndmin=1)
+        if self._theta.ndim < 2:
+            self._theta = np.tile(self._theta, (len(self._energy), 1))
         self.update_experiment('theta')
 
     @property
@@ -177,5 +179,7 @@ class Xray(Simulation):
     @qz.setter
     def qz(self, qz):
         """set.qz"""
-        self._qz = np.array(qz.to_base_units().magnitude)
+        self._qz = np.array(qz.to_base_units().magnitude, ndmin=1)
+        if self._qz.ndim < 2:
+            self._qz = np.tile(self._qz, (len(self._energy), 1))
         self.update_experiment('qz')
