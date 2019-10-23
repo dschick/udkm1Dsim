@@ -116,6 +116,7 @@ class XrayKin(Xray):
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
         return R, A
 
+    @u.wraps((None, None), (None, None, 'eV', 'm**-1', 'rad', None), strict=False)
     def homogeneous_reflected_field(self, S, energy, qz, theta, strains=0):
         """homogeneous_reflected_field
 
@@ -215,6 +216,7 @@ class XrayKin(Xray):
             Ept = Ept+(temp*np.exp(1j*qz*Z))
         return Ept, A
 
+    @u.wraps(None, (None, 'm**-1', 'm', None), strict=False)
     def get_interference_function(self, qz, z, N):
         """get_interference_function
 
@@ -230,6 +232,7 @@ class XrayKin(Xray):
         psi = (1-np.exp(1j*qz*z*N)) / (1 - np.exp(1j*qz*z))
         return psi
 
+    @u.wraps(None, (None, 'eV', 'm**-1', 'rad', None, None), strict=False)
     def get_Ep(self, energy, qz, theta, uc, strain):
         """get_Ep
 
