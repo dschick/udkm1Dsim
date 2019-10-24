@@ -59,8 +59,10 @@ class XrayKin(Xray):
     @u.wraps(None, (None, 'eV', 'm**-1', None), strict=False)
     def get_uc_atomic_form_factors(self, energy, qz, uc):
         """ get_uc_atomic_form_factors
+
         Returns the energy- and angle-dependent atomic form factors
-        .. math: `f(q_z, E)` of all atoms in the unit cell as a vector.
+        :math: `f(q_z, E)` of all atoms in the unit cell as a vector.
+
         """
         if (not np.isscalar(energy)) and (not isinstance(energy, object)):
             raise TypeError('Only scalars or pint quantities for the energy are allowd!')
@@ -78,7 +80,7 @@ class XrayKin(Xray):
 
         .. math::
 
-            S(E,q_z,\epsilon) = \sum_i^N f_i \, \exp(-i q_z z_i(\epsilon)
+            S(E,q_z,\epsilon) = \sum_i^N f_i \, \exp(-i q_z z_i(\epsilon))
 
         """
         if (not np.isscalar(energy)) and (not isinstance(energy, object)):
@@ -95,9 +97,9 @@ class XrayKin(Xray):
     def homogeneous_reflectivity(self, strains=0):
         """homogeneous_reflectivity
 
-        Returns the reflectivity .. math:`R = E_p^t\,(E_p^t)^*` of a
+        Returns the reflectivity :math:`R = E_p^t\,(E_p^t)^*` of a
         homogeneous sample structure as well as the reflected field
-        .. math:`E_p^N` of all substructures.
+        :math:`E_p^N` of all substructures.
 
         """
         if strains == 0:
