@@ -27,6 +27,7 @@ __docformat__ = "restructuredtext"
 import itertools
 import numpy as np
 from .unitCell import UnitCell
+from . import u, Q_
 
 
 class Structure:
@@ -380,7 +381,7 @@ class Structure:
         d_end = np.cumsum(c_axes)
         d_start = np.hstack([[0], d_end[0:-1]])
         d_mid = (d_start + c_axes)/2
-        return d_start, d_end, d_mid
+        return d_start*u.m, d_end*u.m, d_mid*u.m
 
     def get_distances_of_interfaces(self):
         """get_distances_of_interfaces
@@ -392,7 +393,7 @@ class Structure:
 
         d_start, d_end, d_mid = self.get_distances_of_unit_cells()
         indices = np.r_[1, np.diff(self.get_unit_cell_vectors()[0])]
-        return np.r_[d_start[np.nonzero(indices)], d_end[-1]]
+        return np.append(d_start[np.nonzero(indices)].magnitude, d_end[-1].magnitude)*u.m
 
     def interp_distance_at_interfaces(self):
         """interp_distance_at_interfaces"""
@@ -456,11 +457,18 @@ class Structure:
                 prop[i] = getattr(handles[i], property_name)
         elif ((type(getattr(handles[0], property_name)) is list) or
                 (type(getattr(handles[0], property_name)) is str)):
-            # it's a list if functions or str
+            # it's a list of functions or str
             prop = []
             for i in range(self.get_number_of_unit_cells()):
                 # Prop = Prop + getattr(Handles[i],types)
                 prop.append(getattr(handles[i], property_name))
+        elif type(getattr(handles[0], property_name)) is Q_:
+            # its a pint quantity
+            unit = getattr(handles[0], property_name).units
+            prop = np.empty([self.get_number_of_unit_cells()])
+            for i in range(self.get_number_of_unit_cells()):
+                prop[i] = getattr(handles[i], property_name).magnitude
+            prop *= unit
         else:
             # its a number or array
             ucs = self.get_unique_unit_cells()
@@ -470,12 +478,19 @@ class Structure:
                     temp[i] = len(getattr(uc, property_name))
                 except TypeError:
                     temp[i] = 1
-            prop = np.zeros([self.get_number_of_unit_cells(), int(np.max(temp))])
+            max_dim = int(np.max(temp))
+            if max_dim > 1:
+                prop = np.empty([self.get_number_of_unit_cells(), max_dim])
+            else:
+                prop = np.empty([self.get_number_of_unit_cells()])
             del temp
             # traverse all unitCells
             for i in range(self.get_number_of_unit_cells()):
                 temp = getattr(handles[i], property_name)
-                prop[i, :] = temp
+                if max_dim > 1:
+                    prop[i, :] = temp
+                else:
+                    prop[i] = temp
 
         return prop
 
