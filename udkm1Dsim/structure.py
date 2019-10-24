@@ -27,6 +27,7 @@ __docformat__ = "restructuredtext"
 import itertools
 import numpy as np
 from .unitCell import UnitCell
+from . import u, Q_
 
 
 class Structure:
@@ -55,79 +56,43 @@ class Structure:
         self.sub_structures = []
         self.substrate = []
 
-    def __str__(self):
+    def __str__(self, tabs=0):
         """String representation of this class"""
-        return "hello world"
-#        % check for the numbers of tabs added at the beginning
-#            if nargin < 2
-#                tabs = 0;
-#            end%if
-#            tabstr = '';
-#            for i = 1:tabs
-#                tabstr = strcat(tabstr, '\t');
-#            end%for
-#            % plot the properties
-#            fprintf([tabstr 'Structure properties:\n']);
-#            fprintf([tabstr 'Name  : %s\n'], obj.name);
-#            fprintf([tabstr 'Length: %0.2f nm\n'], obj.getLength()/units.nm);
-#            fprintf([tabstr '----\n']);
-#            % traverse all substructures
-#            for i = 1:size(obj.substructures,1)
-#                if isa(obj.substructures{i,1},'unitCell')
-#                    % the substructure is an unitCell
-#                    fprintf([tabstr '%d times %s: %0.2f nm\n'], obj.substructures{i,2},...
-#                        obj.substructures{i,1}.name,
-#                        obj.substructures{i,2}*obj.substructures{i,1}.cAxis/units.nm);
-#                else
-#                    % the substructure is a structure instance by itself
-#                    % call the display() method recursively
-#                    fprintf([tabstr 'SubStructure %d times:\n'],...
-#                        obj.substructures{i,2});
-#                    obj.substructures{i,1}.displayTab(tabs+1);
-#                end%if
-#            end%for
-#            fprintf([tabstr '----\n']);
-#            % check for a substrate
-#            if isa(obj.substrate,'structure')
-#                fprintf([tabstr 'Substrate:\n']);
-#                fprintf([tabstr '----\n']);
-#                fprintf([tabstr '%d times %s: %0.2f nm\n'], obj.substrate.substructures{1,2},...
-#                    obj.substrate.substructures{1,1}.name, ...
-#                    obj.substrate.substructures{1,2}*obj.substrate.substructures{1,1}.cAxis/units.nm);
-#            end%if
-#        output = [['id', self.id],
-#                  ['name', self.name],
-#                  ['a-axis', '{:.4~P}'.format(self.a_axis)],
-#                  ['b-axis', '{:.4~P}'.format(self.b_axis)],
-#                  ['c-axis', '{:.4~P}'.format(self.c_axis)],
-#                  ['area', '{:.4~P}'.format(self.area.to('angstrom**2'))],
-#                  ['volume', '{:.4~P}'.format(self.volume.to('angstrom**3'))],
-#                  ['mass', '{:.4~P}'.format(self.mass)],
-#                  ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
-#                  ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
-#                  ['sound velocity', '{:.4~P}'.format(self.sound_vel.to('meter/s'))],
-#                  ['spring constant', self.spring_const * u.kg/u.s**2],
-#                  ['phonon damping', self.phonon_damping.to('kg/s')],
-#                  ['opt. pen. depth', self.opt_pen_depth.to('nm')],
-#                  ['opt. refractive index', self.opt_ref_index],
-#                  ['opt. ref. index/strain', self.opt_ref_index_per_strain],
-#                  ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
-#                  ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
-#                  ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
-#                  ['subsystem coupling', ' W/m³\n'.join(self.sub_system_coupling_str) + ' W/m³']]
-#
-#        class_str = 'Unit Cell with the following properties\n\n'
-#        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
-#                              colalign=('right',), floatfmt=('.2f', '.2f'))
-#        class_str += '\n\n' + str(self.num_atoms) + ' Constituents:\n'
-#
-#        atoms_str = []
-#        for i in range(self.num_atoms):
-#            atoms_str.append([self.atoms[i][0].name,
-#                              '{:0.2f}'.format(self.atoms[i][1](0)),
-#                              self.atoms[i][2]])
-#        class_str += tabulate(atoms_str, headers=['atom', 'position', 'position function'],
-#                              tablefmt="rst")
+        tab_str = ''
+        for i in range(tabs):
+            tab_str += '\t'
+
+        class_str = tab_str + 'Structure properties:\n\n'
+        class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
+        class_str += tab_str + 'Length : {:0.2f} nm\n'.format(self.get_length()/1e-9)
+        class_str += tab_str + '----\n'
+        # traverse all substructures
+        for i, sub_structure in enumerate(self.sub_structures):
+            if isinstance(sub_structure[0], UnitCell):
+                # the substructure is an unitCell
+                class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
+                        sub_structure[1],
+                        sub_structure[0].name,
+                        sub_structure[1]*sub_structure[0].c_axis.to('nm'))
+            else:
+                # the substructure is a structure instance by itself
+                # call the display() method recursively
+                class_str += tab_str + 'sub-structure {:d} times:\n'.format(
+                       sub_structure[1])
+                sub_structure[0].__str__(tabs+1)
+        class_str += tab_str + '----\n'
+        # check for a substrate
+        if isinstance(self.substrate, Structure):
+            class_str += tab_str + 'Substrate:\n'
+            class_str += tab_str + '----\n'
+            class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
+                    self.substrate.sub_structures[0][1],
+                    self.substrate.sub_structures[0][0].name,
+                    self.substrate.sub_structures[0][1]
+                    * self.substrate.sub_structures[0][0].c_axis.to('nm'))
+        else:
+            class_str += 'no substrate\n'
+        return class_str
 
     def visualize(self):
         """visualize"""
@@ -271,7 +236,8 @@ class Structure:
         Returns the length from surface to bottom of the structure
 
         """
-        pass
+        _, d_end, _ = self.get_distances_of_unit_cells()
+        return d_end[-1]
 
     def get_unique_unit_cells(self):
         """get_unique_unit_cells
@@ -407,26 +373,30 @@ class Structure:
         cell starting at 0 (dStart) and starting at the end of the first
         unit cell (dEnd) and from the center of each unit cell (dMid).
 
+        ToDo: add argument to return distances in according unit or only
+        numbers.
+
         """
         c_axes = self.get_unit_cell_property_vector('_c_axis')
         d_end = np.cumsum(c_axes)
         d_start = np.hstack([[0], d_end[0:-1]])
         d_mid = (d_start + c_axes)/2
-        return d_start, d_end, d_mid
+        return d_start*u.m, d_end*u.m, d_mid*u.m
 
-        def get_distances_of_interfaces(self):
-            """get_distances_of_interfaces"""
-#            % Returns the distances from the surface of each interface of the
-#            % structure.
-#            function [distIntf Indices] = getDistancesOfInterfaces(obj)
-#                [dStart dEnd]   = obj.getDistancesOfUnitCells();
-#                Indices         = [1 diff(obj.getUnitCellVectors())'];
-#                distIntf        = [dStart(Indices ~= 0)' dEnd(end)]';
-#            end
-            pass
+    def get_distances_of_interfaces(self):
+        """get_distances_of_interfaces
 
-        def interp_distance_at_interfaces(self):
-            """interp_distance_at_interfaces"""
+        Returns the distances from the surface of each interface of the
+        structure.
+
+        """
+
+        d_start, d_end, d_mid = self.get_distances_of_unit_cells()
+        indices = np.r_[1, np.diff(self.get_unit_cell_vectors()[0])]
+        return np.append(d_start[np.nonzero(indices)].magnitude, d_end[-1].magnitude)*u.m
+
+    def interp_distance_at_interfaces(self):
+        """interp_distance_at_interfaces"""
 #            % Returns a distance Vector of the center of UCs interpolated by an
 #            % odd number N at the interface of sturctures.
 #            function [distInterp originalIndicies] = interpDistanceAtInterfaces(obj,N)
@@ -464,7 +434,7 @@ class Structure:
 #                % these are the indicies of the original distances in the interpolated new vector
 #                originalIndicies = finderb(dMid,distInterp);
 #            end%function
-            pass
+        pass
 
     def get_unit_cell_property_vector(self, property_name):
         """get_unit_cell_property_vector
@@ -482,29 +452,45 @@ class Structure:
 
         if callable(getattr(handles[0], property_name)):
             # it's a function
-            print("it's a function")
             prop = np.zeros([self.get_number_of_unit_cells()])
             for i in range(self.get_number_of_unit_cells()):
                 prop[i] = getattr(handles[i], property_name)
         elif ((type(getattr(handles[0], property_name)) is list) or
                 (type(getattr(handles[0], property_name)) is str)):
-            # it's a list if functions or str
+            # it's a list of functions or str
             prop = []
             for i in range(self.get_number_of_unit_cells()):
                 # Prop = Prop + getattr(Handles[i],types)
                 prop.append(getattr(handles[i], property_name))
+        elif type(getattr(handles[0], property_name)) is Q_:
+            # its a pint quantity
+            unit = getattr(handles[0], property_name).units
+            prop = np.empty([self.get_number_of_unit_cells()])
+            for i in range(self.get_number_of_unit_cells()):
+                prop[i] = getattr(handles[i], property_name).magnitude
+            prop *= unit
         else:
             # its a number or array
             ucs = self.get_unique_unit_cells()
             temp = np.zeros([len(ucs[0]), 1])
             for i, uc in enumerate(ucs[1]):
-                temp[i] = len(getattr(uc, property_name))
-            prop = np.zeros([self.get_number_of_unit_cells(), int(np.max(temp))])
+                try:
+                    temp[i] = len(getattr(uc, property_name))
+                except TypeError:
+                    temp[i] = 1
+            max_dim = int(np.max(temp))
+            if max_dim > 1:
+                prop = np.empty([self.get_number_of_unit_cells(), max_dim])
+            else:
+                prop = np.empty([self.get_number_of_unit_cells()])
             del temp
             # traverse all unitCells
             for i in range(self.get_number_of_unit_cells()):
                 temp = getattr(handles[i], property_name)
-                prop[i, 0:len(temp)] = temp
+                if max_dim > 1:
+                    prop[i, :] = temp
+                else:
+                    prop[i] = temp
 
         return prop
 

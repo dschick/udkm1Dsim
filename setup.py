@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='udkm1Dsim',
-    version='0.1.1.dev2',
+    version='0.1.2',
     packages=find_packages(),
     package_data={
         '': ['*.txt', '*.dat', '*.nff'],
@@ -20,6 +20,6 @@ setup(
     description='A Python Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    python_requires='>=3.6',
+    python_requires='>=3.4',
     keywords='ultrafast dynamics condensed matter 1D',
 )
