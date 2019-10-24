@@ -25,6 +25,7 @@ __all__ = ["Simulation"]
 __docformat__ = "restructuredtext"
 
 from tabulate import tabulate
+import numpy as np
 
 
 class Simulation:
@@ -84,6 +85,26 @@ class Simulation:
     def disp_message(self, message):
         if self.disp_messages:
             print(message)
+
+    def conv_with_function(self, y, x, handle):
+        """conv_with_function
+
+        Convolutes the array :math;`y(x)` with a function given by the
+        handle on the argument vector :math:`x`.
+
+        """
+        dx = np.min(np.diff(x))
+        x_lin = np.r_[np.min(x):np.max(x):dx]
+        y_lin = np.interp(x_lin, x, y)
+        x0 = np.mean(x_lin)
+        y_handle = handle(x_lin-x0)
+
+        temp = np.convolve(y_lin, y_handle/y_handle.sum(), mode="same")
+
+        y_conv = np.interp(x, x_lin, temp)
+        # finaly remove NaN entries due to the interpolation
+        y_conv[np.isnan(y_conv)] = 0
+        return y_conv
 
     @property
     def cache_dir(self):
