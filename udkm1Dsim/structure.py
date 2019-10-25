@@ -28,6 +28,7 @@ import itertools
 import numpy as np
 from .unitCell import UnitCell
 from . import u, Q_
+from .helpers import make_hash_sha256
 
 
 class Structure:
@@ -121,16 +122,14 @@ class Structure:
 
     def get_hash(self):
         """hash"""
-#        UCs = obj.getUniqueUnitCells();
-#            param = cell(size(UCs,1),1);
-#            for i=1:size(UCs,1)
-#                param{i} = UCs{i,2}.getPropertyStruct(varargin{:});
-#            end%for
-#            [~, IDs] = obj.getUnitCellVectors();
-#            param(end+1) = {IDs};
-#            % dataHash is an external function
-#            hash = dataHash(param);
-        pass
+        param = []
+        ucs = self.get_unique_unit_cells()
+        for uc in ucs[1]:
+            param.append(uc.get_property_dict())
+
+        _, IDs, _ = self.get_unit_cell_vectors()
+        param.append(IDs)
+        return make_hash_sha256(param)
 
     def add_sub_structure(self, sub_structure, N):
         """add_sub_structure
