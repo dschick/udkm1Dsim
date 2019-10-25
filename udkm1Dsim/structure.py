@@ -149,8 +149,8 @@ class Structure:
         if not isinstance(sub_structure, (UnitCell, Structure)):
             raise ValueError('Class '
                              + type(sub_structure).__name__
-                             + ' is no possible sub structure.'
-                             + 'Only UnitCell and'
+                             + ' is no possible sub structure. '
+                             + 'Only UnitCell and '
                              + 'Structure classes are allowed!')
 
         # if a structure is added as a sub_structure, the sub_structure
