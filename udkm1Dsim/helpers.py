@@ -20,18 +20,19 @@
 
 """A :mod:`helpers` module """
 
-__all__ = ['make_hash_sha256', 'make_hashable']
+__all__ = ['make_hash_md5', 'make_hashable', 'm_power_x',
+           'm_times_n']
 
 __docformat__ = "restructuredtext"
 
 import hashlib
-import base64
+import numpy as np
 
 
-def make_hash_sha256(o):
-    hasher = hashlib.sha256()
+def make_hash_md5(o):
+    hasher = hashlib.md5()
     hasher.update(repr(make_hashable(o)).encode())
-    return base64.b64encode(hasher.digest()).decode()
+    return hasher.hexdigest()
 
 
 def make_hashable(o):
@@ -45,3 +46,15 @@ def make_hashable(o):
         return tuple(sorted(make_hashable(e) for e in o))
 
     return o
+
+
+def m_power_x(m, x):
+    # apply exponent to each matrix in a numpy array
+    if x > 1:
+        for i in range(np.size(m, 2)):
+            m[:, :, i] = np.linalg.matrix_power(m[:, :, i], x)
+    return m
+
+
+def m_times_n(m, x):
+    return np.einsum("ijl,jkl->ikl", m, x)
