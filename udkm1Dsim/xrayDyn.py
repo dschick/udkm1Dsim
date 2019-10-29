@@ -29,7 +29,10 @@ import scipy.constants as constants
 from .xray import Xray
 from .unitCell import UnitCell
 from time import time
-from .helpers import make_hash_md5, m_power_x, m_times_n
+from os import path
+from auto_tqdm import tqdm
+import itertools
+from .helpers import make_hash_md5, m_power_x, m_times_n, finderb
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -54,7 +57,9 @@ class XrayDyn(Xray):
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-        self.last_atom_ref_trans_matrices = []
+        self.last_atom_ref_trans_matrices = {'atom_ids': [],
+                                             'hashes': [],
+                                             'H': []}
 
     def __str__(self):
         """String representation of this class"""
@@ -135,8 +140,7 @@ class XrayDyn(Xray):
         else:
             strains = args[0]
         # initialize
-        N = len(qz)
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, N))  # ref_trans_matrix
+        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len(qz)))  # ref_trans_matrix
         A = []  # list of ref_trans_matrices of substructures
         strainCounter = 0
 
@@ -172,9 +176,276 @@ class XrayDyn(Xray):
         if S.substrate != []:
             temp, temp2 = self.homogeneous_ref_trans_matrix(S.substrate)
             A.append([temp2, 'static substrate'])
-            RT = m_times_x(RT, temp)
+            RT = m_times_n(RT, temp)
 
         return RT, A
+
+    """
+    Inhomogenous Sample Structure
+    All unit cells in the sample are inhomogeneously
+    strained. This is generally the case when calculating the
+    transient rocking curves for coherent phonon dynamics in the
+    sample structure.
+    """
+
+    def inhomogeneous_reflectivity(self, strain_map, strain_vectors, **kwargs):
+        """inhomogeneous_reflectivity
+
+        Returns the reflectivity of an inhomogenously strained sample
+        structure for a given _strainMap_ in position and time, as well 
+        as for a given set of possible strains for each unit cell in the
+        sample structure (``strain_vectors``).
+        If no reflectivity is saved in the cache it is caluclated.
+        Providing the _type_ (parallel [default], sequential,
+        distributed) for the calculation the corresponding subroutines
+        for the reflectivity computation are called:
+        
+        * ``parallel`` parallelization over the time steps utilizing 
+          Pythons Multicore parallel computing
+        * ``distributed`` not implemented in Python, yet
+        * ``sequential`` no parallelization at all
+
+        """
+        # create a hash of all simulation parameters
+        filename = 'inhomogeneous_reflectivity_dyn_' + self.get_hash(strain_vectors, strain_map) + '.npy'
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        # check if we find some corresponding data in the cache dir
+        if path.exists(full_filename) and not self.force_recalc:
+            # found something so load it
+            R = np.load(full_filename)
+            self.disp_message('_inhomogeneous_reflectivity_ loaded from file ' + full_filename)
+        else:
+            t1 = time()
+            self.disp_message('Calculating _inhomogenousReflectivity_ ...')
+            # parse the input arguments
+            if not isinstance(strain_map, np.ndarray):
+                raise TypeError('strain_map must be a numpy ndarray!')
+            if not isinstance(strain_vectors, list):
+                raise TypeError('strain_vectors must be a list!')
+
+            calc_type = kwargs.get('calc_type', 'sequential')
+            if not calc_type in ['parallel', 'sequential', 'distributed']:
+                raise TypeError('calc_type must be either _parallel_, _sequential_, or _distributed_!')
+            job = kwargs.get('job')
+            num_workers = kwargs.get('num_workers', 1)
+            
+            # select the type of computation
+            if calc_type == 'parallel':
+                R = self.parallel_inhomogeneous_reflectivity(strain_map, strain_vectors)
+            elif calc_type == 'distributed':
+                R = self.distributed_inhomogeneous_reflectivity(strain_map, strain_vectors, job, num_workers)
+            else:  # sequential
+                R = self.sequential_inhomogeneous_reflectivity(strain_map, strain_vectors)
+
+            self.disp_message('Elapsed time for _inhomogenous_reflectivity_: {:f} s'.format(time()-t1))
+            np.save(full_filename, R)
+            self.disp_message('_inhomogeneousReflectivity_ saved to file ' + full_filename)
+
+        return R
+#            
+#        %% parallelInhomogeneousReflectivity
+#        % Returns the reflectivity of an inhomogenously strained sample
+#        % structure for a given _strainMap_ in position and time, as well 
+#        % as for a given set of possible strains for each unit cell in the
+#        % sample structure (_strainVectors_).
+#        % The function tries to parallize the calculation over the time
+#        % steps (_parallel = true_, since the results do not depent on each 
+#        % other. The routine checks whether the MATLAB pool is open - if 
+#        % not it opens the matlab pool with the default configuration.
+#        function R = parallelInhomogeneousReflectivity(obj,strainMap,strainVectors,RTM)
+#            %initialize
+#            N = size(strainMap,1); % time steps
+#            R = zeros(N,length(obj.qz));            
+#            
+#            if verLessThan('matlab', '8.5') % this is everything before MATLAB 2015a
+#                s = matlabpool('size'); % get the size of the matlabpool
+#                if s == 0 % no matlabpool open
+#                    obj.dispMessage(['No matlab pool was opened in advance, so lets do it now with the default configuration!']);
+#                    matlabpool open;
+#                end%if
+#            else % this is for everthing starting with MATLAB 2015a
+#                if isempty(gcp('nocreate')) %s == 0 % no matlabpool open
+#                    obj.dispMessage(['No matlab pool was opened in advance, so lets do it now with the default configuration!']);
+#                    parpool;
+#                end%if
+#            end%if
+#
+#            % check for path of ParforProgMon class to add it to
+#            % javapath
+#            p = fileparts(which('ParforProgMon.m'));
+#            str = ['javaaddpath ' p];
+#            feval(@pctRunOnAll,str);
+#
+#            % make progresspar with the external parforProgressMonitor
+#            % package
+#            ppm = ParforProgMon('Please wait... ',N);
+#            parfor i = 1:N
+#                ppm.increment();
+#                % get the inhomogenous reflectivity of the sample
+#                % structure for each time step of the strain map
+#                R(i,:) = obj.calcInhomogeneousReflectivity(strainMap(i,:),strainVectors,RTM);
+#            end%parfor
+#        end%function
+
+    def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors):
+        """sequential_inhomogeneous_reflectivity
+
+        Returns the reflectivity of an inhomogenously strained sample
+        structure for a given ``strain_map`` in position and time, as
+        well as for a given set of possible strains for each unit cell
+        in the sample structure (``strain_vectors``).
+        The function calculates the results sequentially without
+        parallelization.
+
+        """
+        # initialize
+        N = np.size(strain_map, 0)  # delay steps
+        M = len(self._energy)  # energy steps
+        last_k = -1
+        R = np.zeros([N, M, np.size(self._qz, 1)])
+        for k, i in tqdm(list(itertools.product(range(M), range(np.size(strain_map, 0)))), desc='sequential inhom. reflectivity'):
+            energy = self._energy[k]
+            qz = self._qz[k, :]
+            theta = self._theta[k, :]
+            # All ref-trans matrices for all unique unitCells and for all
+            # possible strains, given by strainVectors, are calculated in
+            # advance.
+            if last_k != k:
+                RTM = self.get_all_ref_trans_matrices(energy, qz, theta, strain_vectors)
+           
+            # get the inhomogenous reflectivity of the sample
+            # structure for each time step of the strain map
+            R[i, k, :] = self.calc_inhomogeneous_reflectivity(energy, qz, theta,
+                                                                  strain_map[i, :],
+                                                                  strain_vectors, RTM)
+            last_k = k
+            # print the progress to console
+            # obj.progressBar(i/N*100)
+        # obj.progressBar('')   
+        return R
+
+        def distributed_inhomogeneous_reflectivity(self, job, num_worker, strain_map, strain_vectors):
+            """distributed_inhomogeneous_reflectivity
+
+            This is a stub. Not yet implemented in python.
+
+            """
+            return            
+
+    def calc_inhomogeneous_reflectivity(self, energy, qz, theta, strains, strain_vectors, *args):
+        """calc_inhomogeneous_reflectivity
+
+        Calculates the reflectivity of a inhomogenous sample structure
+        for a given strain vector for a single time step. Similar to the
+        homogeneous sample structure, the reflectivity of an unit cell
+        is calculated from the reflection-transmission matrices
+        :math:`H_i` of each atom and the phase matrices between the
+        atoms :math:`L_i`:
+
+        .. math: M_{RT} = \prod_i H_i \ L_i
+
+        Since all layers are generally inhomogeneously strained we have
+        to traverse all individual unit cells (:math:`j = 1\ldots M`) in
+        the sample to calculate the total reflection-transmission matrix
+        :math:`M_{RT}^t`:
+
+        .. math: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
+
+        The reflectivity of the :math:`2\times 2` matrices for each
+        :math:`q_z` is calculates as follow:
+
+        .. math: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
+
+        """
+        # if no all-ref-trans matrices are given, we have to calculate
+        # them first.
+        if len(args) < 1:
+            RTM = self.get_all_ref_trans_matrices(energy, qz, theta, strain_vectors)
+        else:
+            RTM = args[0]
+        # initialize
+        uc_indicies, _, _ = self.S.get_unit_cell_vectors()
+        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len(qz)))  # ref_trans_matrix
+        # traverse all unitCells in the sample structure
+        for i, uc_index in enumerate(uc_indicies):
+            # Find the ref-trans matrix in the RTM cell array for the
+            # current unit_cell ID and applied strain. Use the
+            # ``knnsearch`` funtion to find the nearest strain value.
+            strain_index = finderb(strains[i], strain_vectors[uc_index])[0]
+            temp = RTM[uc_index][strain_index]
+            if temp is not []:
+                RT = m_times_n(RT, temp)
+            else:
+                raise(ValueError, 'RTM not found')
+        # if a substrate is included add it at the end
+        if self.S.substrate != []:
+            RT = m_times_n(RT, self.homogeneous_ref_trans_matrix(self.S.substrate))
+        # calculate reflectivity from ref-trans matrix
+        R = self.get_reflectivity_from_matrix(RT)
+        return R
+
+    def get_all_ref_trans_matrices(self, energy, qz, theta, strain_vectors):
+        """get_all_ref_trans_matrices
+
+        Returns a list of all reflection-transmission matrices for
+        each unique unit cell in the sample structure for a given set of
+        applied strains for each unique unit cell given by the
+        ``strain_vectors`` input. If this data was saved on disk before,
+        it is loaded, otherwise it is calculated.
+
+        """
+        # create a hash of all simulation parameters
+        filename = 'all_ref_trans_matrices_dyn_' \
+            + self.get_hash(energy, qz, strain_vectors) + '.npy'
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        # check if we find some corresponding data in the cache dir
+        if path.exists(full_filename) and not self.force_recalc:
+            # found something so load it
+            RTM = np.load(full_filename)
+            self.disp_message('_all_ref_trans_matrices_dyn_ loaded from file ' + full_filename)
+        else:
+            # nothing found so calculate it and save it
+            RTM = self.calc_all_ref_trans_matrices(energy, qz, theta, strain_vectors)
+            np.save(full_filename, RTM)
+            self.disp_message('_all_ref_trans_matrices_dyn_ saved to file ' + full_filename)
+        return RTM
+
+    def calc_all_ref_trans_matrices(self, energy, qz, theta, *args):
+        """calc_all_ref_trans_matrices
+
+        Calculates a list of all reflection-transmission matrices 
+        for each unique unit cell in the sample structure for a given
+        set of applied strains to each unique unit cell given by the
+        ``strainVectors`` input.
+
+        """
+        t1 = time()
+        self.disp_message('Calculate all _ref_trans_matricies_ ...')
+        #initalize
+        uc_ids, uc_handles = self.S.get_unique_unit_cells()
+        # if no strain_vecorts are given we just do it for no strain (1)
+        if len(args) < 1:
+           strain_vectors = [np.array([1])]*len(uc_ids)
+        else:
+            strain_vectors = args[0]
+        # check if there are strains for each unique unitCell
+        if len(strain_vectors) is not len(uc_ids):
+            raise TypeError('The strain vecotr has not the same size '
+                             + 'as number of unique unit cells')
+        
+        # initialize refTransMatrices
+        RTM = []
+        
+        # traverse all unique unitCells
+        for i, uc in enumerate(uc_handles):
+            # traverse all strains in the strain_vector for this unique
+            # unit_cell
+            temp = []
+            for strain in strain_vectors[i]:
+                temp.append(self.get_uc_ref_trans_matrix(uc, energy, qz, theta, strain))
+            RTM.append(temp)
+        self.disp_message('Elapsed time for _ref_trans_matricies_: {:f} s'.format(time()-t1))
+        return RTM
 
     def get_uc_ref_trans_matrix(self, uc, energy, qz, theta, *args):
         """get_uc_ref_trans_matrix
@@ -228,7 +499,7 @@ class XrayDyn(Xray):
         """get_atom_ref_trans_matrix
 
         Returns the reflection-transmission matrix of an atom from
-        dynamicla xray theory:
+        dynamical xray theory:
 
         .. math::
 
@@ -239,29 +510,36 @@ class XrayDyn(Xray):
 
         """
         # check for already calculated data
-#        _hash = make_hash_md5([energy, qz, self.polarization, area, dbf])
-#        index = find(strcmp(self.last_atom_ref_trans_matrices, atom.ID))
-#        if not index and strcmp(_hash, self.last_atom_ref_trans_matrices[index][1]):
-#            # These are the same X-ray parameters as last time so we
-#            # can use the same matrix again for this atom
-#            H = self.last_atom_ref_trans_matrices[index][2]
-#        else:
-        # These are new parameters so we have to calculate.
-        # Get the reflection-transmission-factors
-        rho = self.get_atom_reflection_factor(energy, qz, theta, atom, area, deb_wal_fac)
-        tau = self.get_atom_transmission_factor(energy, qz, atom, area, deb_wal_fac)
-        # calculate the reflection-transmission matrix
-        H = np.ones([2, 2, len(qz)], dtype=complex)
-        H[0, 0, :] = (1/tau)*(tau**2-rho**2)
-        H[0, 1, :] = (1/tau)*(rho)
-        H[1, 0, :] = (1/tau)*(-rho)
-        H[1, 1, :] = (1/tau)
-        # remember this matrix for next use with the same
-        # parameters for this atom
-#            if not index:
-#                self.last_atom_ref_trans_matrices[index] = [atom.ID, _hash, H]
-#            else:
-#                self.last_atom_ref_trans_matrices.append([atom.ID, _hash, H])
+        _hash = make_hash_md5([energy, qz, self.polarization, area, deb_wal_fac])
+        try:
+            index = self.last_atom_ref_trans_matrices['atom_ids'].index(atom.id)
+        except ValueError:
+            index = []
+        if index and (_hash == self.last_atom_ref_trans_matrices['hashes'][index]):
+            # These are the same X-ray parameters as last time so we
+            # can use the same matrix again for this atom
+            H = self.last_atom_ref_trans_matrices['H'][index]
+        else:
+            # These are new parameters so we have to calculate.
+            # Get the reflection-transmission-factors
+            rho = self.get_atom_reflection_factor(energy, qz, theta, atom, area, deb_wal_fac)
+            tau = self.get_atom_transmission_factor(energy, qz, atom, area, deb_wal_fac)
+            # calculate the reflection-transmission matrix
+            H = np.ones([2, 2, len(qz)], dtype=complex)
+            H[0, 0, :] = (1/tau)*(tau**2-rho**2)
+            H[0, 1, :] = (1/tau)*(rho)
+            H[1, 0, :] = (1/tau)*(-rho)
+            H[1, 1, :] = (1/tau)
+            # remember this matrix for next use with the same
+            # parameters for this atom
+            if index:
+                self.last_atom_ref_trans_matrices['atom_ids'][index] = atom.id
+                self.last_atom_ref_trans_matrices['hashes'][index] = _hash
+                self.last_atom_ref_trans_matrices['H'][index] = H
+            else:
+                self.last_atom_ref_trans_matrices['atom_ids'].append(atom.id)
+                self.last_atom_ref_trans_matrices['hashes'].append(_hash)
+                self.last_atom_ref_trans_matrices['H'].append(H)
         return H
 
     def get_atom_reflection_factor(self, energy, qz, theta, atom, area, deb_wal_fac):
