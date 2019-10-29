@@ -353,7 +353,7 @@ class Structure:
                 indices = np.append(indices, temp11)
                 uc_ids = uc_ids + list(temp22)
                 uc_handles = uc_handles + list(temp33)
-        return indices, uc_ids, uc_handles
+        return list(map(int, indices)), uc_ids, uc_handles
 
     def get_all_positions_per_unique_unit_cell(self):
         """get_all_positions_per_unique_unit_cell
