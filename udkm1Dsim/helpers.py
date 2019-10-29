@@ -21,7 +21,7 @@
 """A :mod:`helpers` module """
 
 __all__ = ['make_hash_md5', 'make_hashable', 'm_power_x',
-           'm_times_n']
+           'm_times_n', 'finderb']
 
 __docformat__ = "restructuredtext"
 
@@ -58,3 +58,50 @@ def m_power_x(m, x):
 
 def m_times_n(m, x):
     return np.einsum("ijl,jkl->ikl", m, x)
+
+
+def finderb(key, vector):
+    """finderb
+
+    Binary search algorithm for sorted vector. Searches for the first
+    index ``i`` of vector where ``key`` >= ``vector[i]``.
+    ``key`` can be a scalar or a np.ndarray of keys.
+    ``vector`` must be a sorted np.ndarray
+
+    author: André Bojahr
+    licence: BSD
+
+    """
+    n = np.size(key)
+    i = np.zeros([n], dtype=int)
+    key = np.array(key, ndmin=1)
+
+    for m in range(n):
+        i[m] = finderb_nest(key[m], vector)
+    return i
+
+
+def finderb_nest(key, vector):
+    """finderb_nest
+
+    nested sub-function of finderb
+
+    """
+    a = 0  # start of intervall
+    b = len(vector)  # end of intervall
+
+    # if the key is smaller than the first element of the
+    # vector we return 1
+    if key < vector[0]:
+        return 1
+
+    while (b-a) > 1:  # loop until the intervall is larger than 1
+        c = int(np.floor((a+b)/2))  # center of intervall
+        if key < vector[c]:
+            # the key is in the left half-intervall
+            b = c
+        else:
+            # the key is in the right half-intervall
+            a = c
+
+    return a
