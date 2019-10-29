@@ -213,7 +213,7 @@ class XrayDyn(Xray):
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
             R = np.load(full_filename)
-            self.disp_message('_inhomogeneous_reflectivity_ loaded from file ' + full_filename)
+            self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
         else:
             t1 = time()
             self.disp_message('Calculating _inhomogenousReflectivity_ ...')
@@ -229,17 +229,22 @@ class XrayDyn(Xray):
             job = kwargs.get('job')
             num_workers = kwargs.get('num_workers', 1)
             
+            # All ref-trans matrices for all unique unitCells and for all
+            # possible strains, given by strainVectors, are calculated in
+            # advance.
+            RTM = self.get_all_ref_trans_matrices(strain_vectors)
+            
             # select the type of computation
             if calc_type == 'parallel':
-                R = self.parallel_inhomogeneous_reflectivity(strain_map, strain_vectors)
+                R = self.parallel_inhomogeneous_reflectivity(strain_map, strain_vectors, RTM)
             elif calc_type == 'distributed':
-                R = self.distributed_inhomogeneous_reflectivity(strain_map, strain_vectors, job, num_workers)
+                R = self.distributed_inhomogeneous_reflectivity(strain_map, strain_vectors, job, num_workers, RTM)
             else:  # sequential
-                R = self.sequential_inhomogeneous_reflectivity(strain_map, strain_vectors)
+                R = self.sequential_inhomogeneous_reflectivity(strain_map, strain_vectors, RTM)
 
             self.disp_message('Elapsed time for _inhomogenous_reflectivity_: {:f} s'.format(time()-t1))
             np.save(full_filename, R)
-            self.disp_message('_inhomogeneousReflectivity_ saved to file ' + full_filename)
+            self.disp_message('_inhomogeneousReflectivity_ saved to file:\n\t' + filename)
 
         return R
 #            
@@ -287,7 +292,7 @@ class XrayDyn(Xray):
 #            end%parfor
 #        end%function
 
-    def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors):
+    def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM):
         """sequential_inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained sample
@@ -301,30 +306,14 @@ class XrayDyn(Xray):
         # initialize
         N = np.size(strain_map, 0)  # delay steps
         M = len(self._energy)  # energy steps
-        last_k = -1
         R = np.zeros([N, M, np.size(self._qz, 1)])
-        for k, i in tqdm(list(itertools.product(range(M), range(np.size(strain_map, 0)))), desc='sequential inhom. reflectivity'):
-            energy = self._energy[k]
-            qz = self._qz[k, :]
-            theta = self._theta[k, :]
-            # All ref-trans matrices for all unique unitCells and for all
-            # possible strains, given by strainVectors, are calculated in
-            # advance.
-            if last_k != k:
-                RTM = self.get_all_ref_trans_matrices(energy, qz, theta, strain_vectors)
-           
+        for k, i in tqdm(list(itertools.product(range(M), range(np.size(strain_map, 0)))), desc='Progress'):
             # get the inhomogenous reflectivity of the sample
             # structure for each time step of the strain map
-            R[i, k, :] = self.calc_inhomogeneous_reflectivity(energy, qz, theta,
-                                                                  strain_map[i, :],
-                                                                  strain_vectors, RTM)
-            last_k = k
-            # print the progress to console
-            # obj.progressBar(i/N*100)
-        # obj.progressBar('')   
+            R[i, k, :] = self.calc_inhomogeneous_reflectivity(strain_map[i, :], strain_vectors, RTM[k])
         return R
 
-        def distributed_inhomogeneous_reflectivity(self, job, num_worker, strain_map, strain_vectors):
+        def distributed_inhomogeneous_reflectivity(self, job, num_worker, strain_map, strain_vectors, RTM):
             """distributed_inhomogeneous_reflectivity
 
             This is a stub. Not yet implemented in python.
@@ -332,7 +321,7 @@ class XrayDyn(Xray):
             """
             return            
 
-    def calc_inhomogeneous_reflectivity(self, energy, qz, theta, strains, strain_vectors, *args):
+    def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM):
         """calc_inhomogeneous_reflectivity
 
         Calculates the reflectivity of a inhomogenous sample structure
@@ -357,16 +346,10 @@ class XrayDyn(Xray):
         .. math: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
 
         """
-        # if no all-ref-trans matrices are given, we have to calculate
-        # them first.
-        if len(args) < 1:
-            RTM = self.get_all_ref_trans_matrices(energy, qz, theta, strain_vectors)
-        else:
-            RTM = args[0]
         # initialize
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len(qz)))  # ref_trans_matrix
-        # traverse all unitCells in the sample structure
+        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, np.size(self._qz, 1)))  # ref_trans_matrix
+        # traverse all unit cells in the sample structure
         for i, uc_index in enumerate(uc_indicies):
             # Find the ref-trans matrix in the RTM cell array for the
             # current unit_cell ID and applied strain. Use the
@@ -384,7 +367,7 @@ class XrayDyn(Xray):
         R = self.get_reflectivity_from_matrix(RT)
         return R
 
-    def get_all_ref_trans_matrices(self, energy, qz, theta, strain_vectors):
+    def get_all_ref_trans_matrices(self, strain_vectors):
         """get_all_ref_trans_matrices
 
         Returns a list of all reflection-transmission matrices for
@@ -394,20 +377,25 @@ class XrayDyn(Xray):
         it is loaded, otherwise it is calculated.
 
         """
-        # create a hash of all simulation parameters
-        filename = 'all_ref_trans_matrices_dyn_' \
-            + self.get_hash(energy, qz, strain_vectors) + '.npy'
-        full_filename = path.abspath(path.join(self.cache_dir, filename))
-        # check if we find some corresponding data in the cache dir
-        if path.exists(full_filename) and not self.force_recalc:
-            # found something so load it
-            RTM = np.load(full_filename)
-            self.disp_message('_all_ref_trans_matrices_dyn_ loaded from file ' + full_filename)
-        else:
-            # nothing found so calculate it and save it
-            RTM = self.calc_all_ref_trans_matrices(energy, qz, theta, strain_vectors)
-            np.save(full_filename, RTM)
-            self.disp_message('_all_ref_trans_matrices_dyn_ saved to file ' + full_filename)
+        RTM = []
+        for i, energy in enumerate(self._energy):
+            qz = self._qz[i, :]
+            theta = self._theta[i, :]
+            # create a hash of all simulation parameters
+            filename = 'all_ref_trans_matrices_dyn_' \
+                + self.get_hash(energy, qz, strain_vectors) + '.npy'
+            full_filename = path.abspath(path.join(self.cache_dir, filename))
+            # check if we find some corresponding data in the cache dir
+            if path.exists(full_filename) and not self.force_recalc:
+                # found something so load it
+                temp = np.load(full_filename)
+                self.disp_message('_all_ref_trans_matrices_dyn_ loaded from file:\n\t' + filename)
+            else:
+                # nothing found so calculate it and save it
+                temp = self.calc_all_ref_trans_matrices(energy, qz, theta, strain_vectors)
+                np.save(full_filename, temp)
+                self.disp_message('_all_ref_trans_matrices_dyn_ saved to file:\n\t' + filename)
+            RTM.append(temp)
         return RTM
 
     def calc_all_ref_trans_matrices(self, energy, qz, theta, *args):
