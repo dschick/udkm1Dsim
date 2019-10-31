@@ -72,9 +72,9 @@ def finderb(key, vector):
     licence: BSD
 
     """
-    n = np.size(key)
-    i = np.zeros([n], dtype=int)
     key = np.array(key, ndmin=1)
+    n = len(key)
+    i = np.zeros([n], dtype=int)
 
     for m in range(n):
         i[m] = finderb_nest(key[m], vector)
