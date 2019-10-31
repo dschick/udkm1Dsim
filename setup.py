@@ -2,13 +2,13 @@ from setuptools import setup, find_packages
 
 setup(
     name='udkm1Dsim',
-    version='0.1.2',
+    version='0.1.3.dev1',
     packages=find_packages(),
     package_data={
         '': ['*.txt', '*.dat', '*.nff'],
     },
     url='https://github.com/dschick/udkm1Dsim',
-    install_requires=['auto_tqdm',
+    install_requires=['tqdm',
                       'base64',
                       'hashlib',
                       'numpy',
@@ -17,6 +17,9 @@ setup(
                       'scipy',
                       'sympy',
                       'tabulate'],
+    extras_require={
+        'parallel':  ['dask'],
+    },
     license='MIT',
     author='Daniel Schick, et. al.',
     author_email='schick.daniel@gmail.com',
