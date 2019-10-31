@@ -25,7 +25,6 @@ __all__ = ["XrayDyn"]
 __docformat__ = "restructuredtext"
 
 import numpy as np
-from numba import jit
 import scipy.constants as constants
 from .xray import Xray
 from .unitCell import UnitCell
@@ -200,22 +199,24 @@ class XrayDyn(Xray):
         """inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained sample
-        structure for a given _strainMap_ in position and time, as well 
+        structure for a given _strainMap_ in position and time, as well
         as for a given set of possible strains for each unit cell in the
         sample structure (``strain_vectors``).
         If no reflectivity is saved in the cache it is caluclated.
         Providing the _type_ (parallel [default], sequential,
         distributed) for the calculation the corresponding subroutines
         for the reflectivity computation are called:
-        
-        * ``parallel`` parallelization over the time steps utilizing 
+
+        * ``parallel`` parallelization over the time steps utilizing
           Pythons Multicore parallel computing
         * ``distributed`` not implemented in Python, yet
         * ``sequential`` no parallelization at all
 
         """
         # create a hash of all simulation parameters
-        filename = 'inhomogeneous_reflectivity_dyn_' + self.get_hash(strain_vectors, strain_map=strain_map) + '.npy'
+        filename = 'inhomogeneous_reflectivity_dyn_' \
+                   + self.get_hash(strain_vectors, strain_map=strain_map) \
+                   + '.npy'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
@@ -233,27 +234,39 @@ class XrayDyn(Xray):
 
             dask_client = kwargs.get('dask_client', [])
             calc_type = kwargs.get('calc_type', 'sequential')
-            if not calc_type in ['parallel', 'sequential', 'distributed']:
-                raise TypeError('calc_type must be either _parallel_, _sequential_, or _distributed_!')
+            if calc_type not in ['parallel', 'sequential', 'distributed']:
+                raise TypeError('calc_type must be either _parallel_, '
+                                '_sequential_, or _distributed_!')
             job = kwargs.get('job')
             num_workers = kwargs.get('num_workers', 1)
-            
+
             # All ref-trans matrices for all unique unitCells and for all
             # possible strains, given by strainVectors, are calculated in
             # advance.
             RTM = self.get_all_ref_trans_matrices(strain_vectors)
-            
+
             # select the type of computation
             if calc_type == 'parallel':
-                R = self.parallel_inhomogeneous_reflectivity(strain_map, strain_vectors, RTM, dask_client)
+                R = self.parallel_inhomogeneous_reflectivity(strain_map,
+                                                             strain_vectors,
+                                                             RTM,
+                                                             dask_client)
             elif calc_type == 'distributed':
-                R = self.distributed_inhomogeneous_reflectivity(strain_map, strain_vectors, job, num_workers, RTM)
+                R = self.distributed_inhomogeneous_reflectivity(strain_map,
+                                                                strain_vectors,
+                                                                job,
+                                                                num_workers,
+                                                                RTM)
             else:  # sequential
-                R = self.sequential_inhomogeneous_reflectivity(strain_map, strain_vectors, RTM)
+                R = self.sequential_inhomogeneous_reflectivity(strain_map,
+                                                               strain_vectors,
+                                                               RTM)
 
-            self.disp_message('Elapsed time for _inhomogenous_reflectivity_: {:f} s'.format(time()-t1))
+            self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
+                              '{:f} s'.format(time()-t1))
             np.save(full_filename, R)
-            self.disp_message('_inhomogeneousReflectivity_ saved to file:\n\t' + filename)
+            self.disp_message('_inhomogeneousReflectivity_ saved to file:'
+                              '\n\t' + filename)
 
         return R
 
@@ -278,10 +291,16 @@ class XrayDyn(Xray):
             theta = self._theta[k, :]
             # get the inhomogenous reflectivity of the sample
             # structure for each time step of the strain map
-            R[i, k, :] = self.calc_inhomogeneous_reflectivity(energy, qz, theta, strain_map[i, :], strain_vectors, RTM[k])
+            R[i, k, :] = self.calc_inhomogeneous_reflectivity(energy,
+                                                              qz,
+                                                              theta,
+                                                              strain_map[i, :],
+                                                              strain_vectors,
+                                                              RTM[k])
         return R
 
-    def parallel_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM, dask_client):
+    def parallel_inhomogeneous_reflectivity(self, strain_map, strain_vectors,
+                                            RTM, dask_client):
         """parallel_inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained sample
@@ -304,23 +323,29 @@ class XrayDyn(Xray):
         R = np.zeros([N, M, np.size(self._qz, 1)])
         len_qz = np.size(self._qz, 1)
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
-        
+
         # make RTM available for all works
         remote_RTM = dask_client.scatter(RTM)
-        
+
         # precalculate the substrate ref_trans_matrix if present
         substrate_ref_trans_matrices = []
         if self.S.substrate != []:
             for k, energy in enumerate(self._energy):
                 qz = self._qz[k, :]
                 theta = self._theta[k, :]
-                substrate_ref_trans_matrices.append(self.homogeneous_ref_trans_matrix(self.S.substrate, energy, qz, theta))
+                substrate_ref_trans_matrices.append(
+                        self.homogeneous_ref_trans_matrix(self.S.substrate,
+                                                          energy,
+                                                          qz,
+                                                          theta))
         else:
-            substrate_ref_trans_matrices = [np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len_qz))]*M
+            substrate_ref_trans_matrices = [np.tile(np.eye(2, 2)[:, :, np.newaxis],
+                                                    (1, 1, len_qz))]*M
 
         # create dask.delayed tasks for all energies and delay steps
         for k, i in product(range(M), range(N)):
-            RT = delayed(XrayDyn.calc_inhomogeneous_ref_trans_matrix)(uc_indicies, len_qz, strain_map[i, :], strain_vectors, remote_RTM, k)
+            RT = delayed(XrayDyn.calc_inhomogeneous_ref_trans_matrix)(
+                    uc_indicies, len_qz, strain_map[i, :], strain_vectors, remote_RTM, k)
             RTS = delayed(m_times_n)(RT, substrate_ref_trans_matrices[k])
             Rki = delayed(XrayDyn.get_reflectivity_from_matrix)(RTS)
             res.append(Rki)
@@ -334,7 +359,8 @@ class XrayDyn(Xray):
 
         return R
 
-    def distributed_inhomogeneous_reflectivity(self, job, num_worker, strain_map, strain_vectors, RTM):
+    def distributed_inhomogeneous_reflectivity(self, job, num_worker,
+                                               strain_map, strain_vectors, RTM):
         """distributed_inhomogeneous_reflectivity
 
         This is a stub. Not yet implemented in python.
@@ -342,7 +368,8 @@ class XrayDyn(Xray):
         """
         return
 
-    def calc_inhomogeneous_reflectivity(self, energy, qz, theta, strains, strain_vectors, RTM, *args):
+    def calc_inhomogeneous_reflectivity(self, energy, qz, theta, strains,
+                                        strain_vectors, RTM, *args):
         """calc_inhomogeneous_reflectivity
 
         Calculates the reflectivity of a inhomogenous sample structure
@@ -385,16 +412,18 @@ class XrayDyn(Xray):
                 RT = m_times_n(RT, temp)
             else:
                 raise(ValueError, 'RTM not found')
-        
+
             # if a substrate is included add it at the end
             if self.S.substrate != []:
-                RT = m_times_n(RT, self.homogeneous_ref_trans_matrix(self.S.substrate, energy, qz, theta))
+                RT = m_times_n(RT, self.homogeneous_ref_trans_matrix(
+                        self.S.substrate, energy, qz, theta))
         # calculate reflectivity from ref-trans matrix
         R = self.get_reflectivity_from_matrix(RT)
         return R
 
     @staticmethod
-    def calc_inhomogeneous_ref_trans_matrix(uc_indicies, len_qz, strains, strain_vectors, RTM, *args):
+    def calc_inhomogeneous_ref_trans_matrix(uc_indicies, len_qz, strains,
+                                            strain_vectors, RTM, *args):
         """calc_inhomogeneous_ref_trans_matrix
 
         Calculates the reflectivity of a inhomogenous sample structure
@@ -472,7 +501,7 @@ class XrayDyn(Xray):
     def calc_all_ref_trans_matrices(self, energy, qz, theta, *args):
         """calc_all_ref_trans_matrices
 
-        Calculates a list of all reflection-transmission matrices 
+        Calculates a list of all reflection-transmission matrices
         for each unique unit cell in the sample structure for a given
         set of applied strains to each unique unit cell given by the
         ``strainVectors`` input.
@@ -480,21 +509,21 @@ class XrayDyn(Xray):
         """
         t1 = time()
         self.disp_message('Calculate all _ref_trans_matricies_ ...')
-        #initalize
+        # initalize
         uc_ids, uc_handles = self.S.get_unique_unit_cells()
         # if no strain_vecorts are given we just do it for no strain (1)
         if len(args) < 1:
-           strain_vectors = [np.array([1])]*len(uc_ids)
+            strain_vectors = [np.array([1])]*len(uc_ids)
         else:
             strain_vectors = args[0]
         # check if there are strains for each unique unitCell
         if len(strain_vectors) is not len(uc_ids):
             raise TypeError('The strain vecotr has not the same size '
-                             + 'as number of unique unit cells')
-        
+                            'as number of unique unit cells')
+
         # initialize refTransMatrices
         RTM = []
-        
+
         # traverse all unique unitCells
         for i, uc in enumerate(uc_handles):
             # traverse all strains in the strain_vector for this unique
