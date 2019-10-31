@@ -31,7 +31,7 @@ from .xray import Xray
 from .unitCell import UnitCell
 from time import time
 from os import path
-from auto_tqdm import tqdm
+from tqdm import tqdm
 from itertools import product
 from .helpers import make_hash_md5, m_power_x, m_times_n, finderb
 
@@ -182,7 +182,7 @@ class XrayDyn(Xray):
 
         # if a substrate is included add it at the end
         if S.substrate != []:
-            temp, temp2 = self.homogeneous_ref_trans_matrix(S.substrate)
+            temp, temp2 = self.homogeneous_ref_trans_matrix(S.substrate, energy, qz, theta)
             A.append([temp2, 'static substrate'])
             RT = m_times_n(RT, temp)
 
@@ -273,9 +273,12 @@ class XrayDyn(Xray):
         M = len(self._energy)  # energy steps
         R = np.zeros([N, M, np.size(self._qz, 1)])
         for k, i in tqdm(list(product(range(M), range(N))), desc='Progress', leave=True):
+            energy = self._energy[k]
+            qz = self._qz[k, :]
+            theta = self._theta[k, :]
             # get the inhomogenous reflectivity of the sample
             # structure for each time step of the strain map
-            R[i, k, :] = self.calc_inhomogeneous_reflectivity(strain_map[i, :], strain_vectors, RTM[k])
+            R[i, k, :] = self.calc_inhomogeneous_reflectivity(energy, qz, theta, strain_map[i, :], strain_vectors, RTM[k])
         return R
 
     def parallel_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM, dask_client):
@@ -292,46 +295,44 @@ class XrayDyn(Xray):
         """
         if not dask_client:
             raise ValueError('no dask client set')
-        #from dask import delayed, compute  # to allow parallel computation
+        from dask import delayed  # to allow parallel computation
 
         # initialize
-        results = []
+        res = []
         N = np.size(strain_map, 0)  # delay steps
         M = len(self._energy)  # energy steps
         R = np.zeros([N, M, np.size(self._qz, 1)])
         len_qz = np.size(self._qz, 1)
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
-        remote_RTM = dask_client.scatter(RTM)
-        for k, i in product(range(M), range(np.size(strain_map, 0))):
-#            x = XrayDyn.calc_inhomogeneous_reflectivity(uc_indicies, len_qz, strain_map[i, :], strain_vectors, RTM[k])
-            
-            x = dask_client.submit(XrayDyn.calc_inhomogeneous_reflectivity, uc_indicies, len_qz, strain_map[i, :], strain_vectors, remote_RTM, k)
-            # if a substrate is included add it at the end
-#            if self.S.substrate != []:
-#                RT = m_times_n(RT, self.homogeneous_ref_trans_matrix(self.S.substrate))
-#            # calculate reflectivity from ref-trans matrix
-#            R = self.get_reflectivity_from_matrix(RT)
-            results.append(x)
-        results = dask_client.gather(x)
-#        scatter_RTM = dask_client.scatter(RTM)
-#        delayed_strain_vectors = delayed(strain_vectors)
-
-#        for k, i in product(range(M), range(np.size(strain_map, 0))):
-#            x = delayed(self.calc_inhomogeneous_reflectivity)(strain_map[i, :], strain_vectors, RTM[k])
-#            results.append(x)
         
-#        for k in range(M):
-#            client_RTM = dask_client.scatter(RTM[k])
-#            for i in range(N):
-#                x = delayed(self.calc_inhomogeneous_reflectivity)(strain_map[i, :], strain_vectors, client_RTM)
-#                results.append(x)
+        # make RTM available for all works
+        remote_RTM = dask_client.scatter(RTM)
+        
+        # precalculate the substrate ref_trans_matrix if present
+        substrate_ref_trans_matrices = []
+        if self.S.substrate != []:
+            for k, energy in enumerate(self._energy):
+                qz = self._qz[k, :]
+                theta = self._theta[k, :]
+                substrate_ref_trans_matrices.append(self.homogeneous_ref_trans_matrix(self.S.substrate, energy, qz, theta))
+        else:
+            substrate_ref_trans_matrices = [np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len_qz))]*M
 
-#        temp = compute(results)
-#
-#        for ind, (k, i) in enumerate(product(range(M), range(N))):
-#                R[i, k, :] = temp[0][ind]
+        # create dask.delayed tasks for all energies and delay steps
+        for k, i in product(range(M), range(N)):
+            RT = delayed(XrayDyn.calc_inhomogeneous_ref_trans_matrix)(uc_indicies, len_qz, strain_map[i, :], strain_vectors, remote_RTM, k)
+            RTS = delayed(m_times_n)(RT, substrate_ref_trans_matrices[k])
+            Rki = delayed(XrayDyn.get_reflectivity_from_matrix)(RTS)
+            res.append(Rki)
 
-        return results
+        # compute results
+        res = dask_client.compute(res, sync=True)
+
+        # reorder results to reflectivity matrix
+        for ind, (k, i) in enumerate(product(range(M), range(N))):
+                R[i, k, :] = res[ind]
+
+        return R
 
     def distributed_inhomogeneous_reflectivity(self, job, num_worker, strain_map, strain_vectors, RTM):
         """distributed_inhomogeneous_reflectivity
@@ -341,8 +342,7 @@ class XrayDyn(Xray):
         """
         return
 
-    @staticmethod 
-    def calc_inhomogeneous_reflectivity(uc_indicies, len_qz, strains, strain_vectors, RTM, *args):
+    def calc_inhomogeneous_reflectivity(self, energy, qz, theta, strains, strain_vectors, RTM, *args):
         """calc_inhomogeneous_reflectivity
 
         Calculates the reflectivity of a inhomogenous sample structure
@@ -370,8 +370,10 @@ class XrayDyn(Xray):
         if len(args) > 0:
             RTM = RTM[args[0]]
 
-        # initialize
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len_qz))  # ref_trans_matrix
+        # initialize ref_trans_matrix
+        len_qz = np.size(self._qz, 1)
+        uc_indicies, _, _ = self.S.get_unit_cell_vectors()
+        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len_qz))
         # traverse all unit cells in the sample structure
         for i, uc_index in enumerate(uc_indicies):
             # Find the ref-trans matrix in the RTM cell array for the
@@ -384,6 +386,56 @@ class XrayDyn(Xray):
             else:
                 raise(ValueError, 'RTM not found')
         
+            # if a substrate is included add it at the end
+            if self.S.substrate != []:
+                RT = m_times_n(RT, self.homogeneous_ref_trans_matrix(self.S.substrate, energy, qz, theta))
+        # calculate reflectivity from ref-trans matrix
+        R = self.get_reflectivity_from_matrix(RT)
+        return R
+
+    @staticmethod
+    def calc_inhomogeneous_ref_trans_matrix(uc_indicies, len_qz, strains, strain_vectors, RTM, *args):
+        """calc_inhomogeneous_ref_trans_matrix
+
+        Calculates the reflectivity of a inhomogenous sample structure
+        for a given strain vector for a single time step. Similar to the
+        homogeneous sample structure, the reflectivity of an unit cell
+        is calculated from the reflection-transmission matrices
+        :math:`H_i` of each atom and the phase matrices between the
+        atoms :math:`L_i`:
+
+        .. math: M_{RT} = \prod_i H_i \ L_i
+
+        Since all layers are generally inhomogeneously strained we have
+        to traverse all individual unit cells (:math:`j = 1\ldots M`) in
+        the sample to calculate the total reflection-transmission matrix
+        :math:`M_{RT}^t`:
+
+        .. math: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
+
+        The reflectivity of the :math:`2\times 2` matrices for each
+        :math:`q_z` is calculates as follow:
+
+        .. math: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
+
+        """
+        if len(args) > 0:
+            RTM = RTM[args[0]]
+
+        # initialize ref_trans_matrix
+        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len_qz))
+        # traverse all unit cells in the sample structure
+        for i, uc_index in enumerate(uc_indicies):
+            # Find the ref-trans matrix in the RTM cell array for the
+            # current unit_cell ID and applied strain. Use the
+            # ``knnsearch`` funtion to find the nearest strain value.
+            strain_index = finderb(strains[i], strain_vectors[uc_index])[0]
+            temp = RTM[uc_index][strain_index]
+            if temp is not []:
+                RT = m_times_n(RT, temp)
+            else:
+                raise(ValueError, 'RTM not found')
+
         return RT
 
     def get_all_ref_trans_matrices(self, strain_vectors):
