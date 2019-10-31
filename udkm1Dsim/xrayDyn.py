@@ -263,7 +263,7 @@ class XrayDyn(Xray):
                                                                RTM)
 
             self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
-                              '{:f} s'.format(time()-t1))
+                              ' {:f} s'.format(time()-t1))
             np.save(full_filename, R)
             self.disp_message('_inhomogeneousReflectivity_ saved to file:'
                               '\n\t' + filename)
@@ -333,11 +333,11 @@ class XrayDyn(Xray):
             for k, energy in enumerate(self._energy):
                 qz = self._qz[k, :]
                 theta = self._theta[k, :]
-                substrate_ref_trans_matrices.append(
-                        self.homogeneous_ref_trans_matrix(self.S.substrate,
-                                                          energy,
-                                                          qz,
-                                                          theta))
+                RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate,
+                                                           energy,
+                                                           qz,
+                                                           theta)
+                substrate_ref_trans_matrices.append(RTS)
         else:
             substrate_ref_trans_matrices = [np.tile(np.eye(2, 2)[:, :, np.newaxis],
                                                     (1, 1, len_qz))]*M
@@ -413,10 +413,11 @@ class XrayDyn(Xray):
             else:
                 raise(ValueError, 'RTM not found')
 
-            # if a substrate is included add it at the end
-            if self.S.substrate != []:
-                RT = m_times_n(RT, self.homogeneous_ref_trans_matrix(
-                        self.S.substrate, energy, qz, theta))
+        # if a substrate is included add it at the end
+        if self.S.substrate != []:
+            RTS, _ = self.homogeneous_ref_trans_matrix(
+                    self.S.substrate, energy, qz, theta)
+            RT = m_times_n(RT, RTS)
         # calculate reflectivity from ref-trans matrix
         R = self.get_reflectivity_from_matrix(RT)
         return R

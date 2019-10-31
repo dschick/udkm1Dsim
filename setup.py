@@ -21,7 +21,8 @@ setup(
     license='MIT',
     author='Daniel Schick, et. al.',
     author_email='schick.daniel@gmail.com',
-    description='A Python Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter',
+    description='A Python Simulation Toolkit for 1D Ultrafast Dynamics '
+                + 'in Condensed Matter',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     python_requires='>=3.4',
