@@ -28,6 +28,7 @@ import itertools
 import numpy as np
 from .unitCell import UnitCell
 from . import u, Q_
+from .helpers import make_hash_md5
 
 
 class Structure:
@@ -119,18 +120,21 @@ class Structure:
 #            set(gca,'YTick',1:N,'YTickLabel', a(:,1));
         pass
 
-    def get_hash(self):
-        """hash"""
-#        UCs = obj.getUniqueUnitCells();
-#            param = cell(size(UCs,1),1);
-#            for i=1:size(UCs,1)
-#                param{i} = UCs{i,2}.getPropertyStruct(varargin{:});
-#            end%for
-#            [~, IDs] = obj.getUnitCellVectors();
-#            param(end+1) = {IDs};
-#            % dataHash is an external function
-#            hash = dataHash(param);
-        pass
+    def get_hash(self, **kwargs):
+        """hash
+
+        Returns a unique hash from all unitCell IDs in the correct order
+        in the structure.
+
+        """
+        param = []
+        ucs = self.get_unique_unit_cells()
+        for uc in ucs[1]:
+            param.append(uc.get_property_dict(**kwargs))
+
+        _, IDs, _ = self.get_unit_cell_vectors()
+        param.append(IDs)
+        return make_hash_md5(param)
 
     def add_sub_structure(self, sub_structure, N):
         """add_sub_structure
@@ -149,8 +153,8 @@ class Structure:
         if not isinstance(sub_structure, (UnitCell, Structure)):
             raise ValueError('Class '
                              + type(sub_structure).__name__
-                             + ' is no possible sub structure.'
-                             + 'Only UnitCell and'
+                             + ' is no possible sub structure. '
+                             + 'Only UnitCell and '
                              + 'Structure classes are allowed!')
 
         # if a structure is added as a sub_structure, the sub_structure
@@ -349,7 +353,7 @@ class Structure:
                 indices = np.append(indices, temp11)
                 uc_ids = uc_ids + list(temp22)
                 uc_handles = uc_handles + list(temp33)
-        return indices, uc_ids, uc_handles
+        return list(map(int, indices)), uc_ids, uc_handles
 
     def get_all_positions_per_unique_unit_cell(self):
         """get_all_positions_per_unique_unit_cell
@@ -397,43 +401,43 @@ class Structure:
 
     def interp_distance_at_interfaces(self):
         """interp_distance_at_interfaces"""
-#            % Returns a distance Vector of the center of UCs interpolated by an
-#            % odd number N at the interface of sturctures.
-#            function [distInterp originalIndicies] = interpDistanceAtInterfaces(obj,N)
-#                [dStart,dEnd,dMid] = obj.getDistancesOfUnitCells();
-#                % these are the distances of the interfaces
-#                distIntf = obj.getDistancesOfInterfaces();
-#                % we start with the distances of the centers of the unit cells
-#                distInterp = dMid;
+#        % Returns a distance Vector of the center of UCs interpolated by an
+#        % odd number N at the interface of sturctures.
+#        function [distInterp originalIndicies] = interpDistanceAtInterfaces(obj,N)
+#            [dStart,dEnd,dMid] = obj.getDistancesOfUnitCells();
+#            % these are the distances of the interfaces
+#            distIntf = obj.getDistancesOfInterfaces();
+#            % we start with the distances of the centers of the unit cells
+#            distInterp = dMid;
 #
-#                N = floor(N); % make N an integer
-#                if mod(N,2) == 0
-#                    % we want to have odd numbers
-#                    N = N+1;
+#            N = floor(N); % make N an integer
+#            if mod(N,2) == 0
+#                % we want to have odd numbers
+#                N = N+1;
+#            end%if
+#
+#            % traverse all distances
+#            for i=1:length(distIntf)
+#                x = distIntf(i); % this is the distance of an interface
+#
+#                inda = finderb(x,dStart); % this is the index of an UC after the interface
+#                indb = inda-1; % this is the index of an UC before the interface
+#
+#                % now interpolate linearly N new distances at the interface
+#                if indb == 0 % this is the surface interface
+#                    distInterp = vertcat(distInterp,linspace(0,dMid(inda),2+(N-1)/2)');
+#                elseif inda >= length(dMid) % this is the bottom interface
+#                    distInterp = vertcat(distInterp,
+#                   linspace(dMid(inda),dEnd(end),2+(N-1)/2)');
+#                else % this is a surface inside the structure
+#                    distInterp = vertcat(distInterp,linspace(dMid(indb),dMid(inda),2+N)');
 #                end%if
+#            end%for
 #
-#                % traverse all distances
-#                for i=1:length(distIntf)
-#                    x = distIntf(i); % this is the distance of an interface
-#
-#                    inda = finderb(x,dStart); % this is the index of an UC after the interface
-#                    indb = inda-1; % this is the index of an UC before the interface
-#
-#                    % now interpolate linearly N new distances at the interface
-#                    if indb == 0 % this is the surface interface
-#                        distInterp = vertcat(distInterp,linspace(0,dMid(inda),2+(N-1)/2)');
-#                    elseif inda >= length(dMid) % this is the bottom interface
-#                        distInterp = vertcat(distInterp,
-#                       linspace(dMid(inda),dEnd(end),2+(N-1)/2)');
-#                    else % this is a surface inside the structure
-#                        distInterp = vertcat(distInterp,linspace(dMid(indb),dMid(inda),2+N)');
-#                    end%if
-#                end%for
-#
-#                distInterp = unique(sort(distInterp)); % sort and unify the distances
-#                % these are the indicies of the original distances in the interpolated new vector
-#                originalIndicies = finderb(dMid,distInterp);
-#            end%function
+#            distInterp = unique(sort(distInterp)); % sort and unify the distances
+#            % these are the indicies of the original distances in the interpolated new vector
+#            originalIndicies = finderb(dMid,distInterp);
+#        end%function
         pass
 
     def get_unit_cell_property_vector(self, property_name):

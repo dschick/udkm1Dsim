@@ -63,7 +63,6 @@ class UnitCell:
         atoms (list[atom, @lambda]): list of atoms and funtion handle
            for strain dependent displacement
         num_atoms (int): number of atoms in unit cell
-        deb_wal_fac (float): Debye Waller factor <u>² [m²]
         spring_const (ndarray[float]): spring constant of the unit cell
            [kg/s²] and higher orders
         opt_ref_index (ndarray[float]): optical refractive index - real
@@ -272,14 +271,14 @@ class UnitCell:
 
         """
         # initialize input parser and define defaults and validators
-        types = ['all', 'heat', 'phonon', 'XRD', 'optical']
+        types = ['all', 'heat', 'phonon', 'xray', 'optical']
         properties_by_types = {'heat': ['_c_axis', '_area', '_volume', '_opt_pen_depth',
                                         'therm_cond_str', 'heat_capacity_str',
                                         'int_heat_capacity_str', 'sub_system_coupling_str',
                                         'num_sub_systems'],
                                'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_c_axis',
                                           '_mass', '_spring_const', '_phonon_damping'],
-                               'XRD': ['num_atoms', 'atoms', '_area', '_deb_wal_fac', '_c_axis'],
+                               'xray': ['num_atoms', '_area', '_deb_wal_fac', '_c_axis'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
                                }
@@ -608,6 +607,16 @@ class UnitCell:
     def volume(self, volume):
         """set.volume"""
         self._volume = volume.to_base_units().magnitude
+
+    @property
+    def deb_wal_fac(self):
+        """float: Debye-Waller factor [m²]"""
+        return Q_(self._deb_wal_fac, u.m**2)
+
+    @deb_wal_fac.setter
+    def deb_wal_fac(self, deb_wal_fac):
+        """set.deb_wal_fac"""
+        self._deb_wal_fac = deb_wal_fac.to_base_units().magnitude
 
     @property
     def sound_vel(self):
