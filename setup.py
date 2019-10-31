@@ -9,7 +9,6 @@ setup(
     },
     url='https://github.com/dschick/udkm1Dsim',
     install_requires=['tqdm',
-                      'base64',
                       'hashlib',
                       'numpy',
                       'pint',
