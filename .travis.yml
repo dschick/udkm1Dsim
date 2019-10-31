@@ -10,13 +10,13 @@ python:
 before_install:
   # install flake8 to perform python code style check in the script part
   # install it using pip in order to get the newest version
-  - sudo apt-get update -qq
-  - sudo apt-get install -qq python-pip
-
+  #- sudo apt-get update -qq
+  #- sudo apt-get install -qq python-pip
+  - pip install -U pip
+  - pip install -U flake8
+  - pip install -U pytest
 install:
-  - pip install flake8
-  - pip install pytest
-  - pip install udkm1Dsim[parallel]
+  - pip install ".[parallel]" .
 
 script:
   - flake8 .
