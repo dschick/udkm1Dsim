@@ -208,7 +208,7 @@ class XrayDyn(Xray):
         for the reflectivity computation are called:
 
         * ``parallel`` parallelization over the time steps utilizing
-          Pythons Multicore parallel computing
+          Dask
         * ``distributed`` not implemented in Python, yet
         * ``sequential`` no parallelization at all
 
@@ -308,8 +308,7 @@ class XrayDyn(Xray):
         well as for a given set of possible strains for each unit cell
         in the sample structure (``strain_vectors``).
         The function tries to parallize the calculation over the time
-        steps (``parallel = True``, since the results do not depent on
-        each other.
+        steps, since the results do not depent on each other.
 
         """
         if not dask_client:
@@ -388,7 +387,7 @@ class XrayDyn(Xray):
 
         .. math: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
 
-        The reflectivity of the :math:`2\times 2` matrices for each
+        The reflectivity of the :math:`2\\times 2` matrices for each
         :math:`q_z` is calculates as follow:
 
         .. math: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
@@ -400,18 +399,12 @@ class XrayDyn(Xray):
         # initialize ref_trans_matrix
         len_qz = np.size(self._qz, 1)
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len_qz))
-        # traverse all unit cells in the sample structure
-        for i, uc_index in enumerate(uc_indicies):
-            # Find the ref-trans matrix in the RTM cell array for the
-            # current unit_cell ID and applied strain. Use the
-            # ``knnsearch`` funtion to find the nearest strain value.
-            strain_index = finderb(strains[i], strain_vectors[uc_index])[0]
-            temp = RTM[uc_index][strain_index]
-            if temp is not []:
-                RT = m_times_n(RT, temp)
-            else:
-                raise(ValueError, 'RTM not found')
+
+        RT = XrayDyn.calc_inhomogeneous_ref_trans_matrix(uc_indicies,
+                                                         len_qz,
+                                                         strains,
+                                                         strain_vectors,
+                                                         RTM)
 
         # if a substrate is included add it at the end
         if self.S.substrate != []:
@@ -427,26 +420,11 @@ class XrayDyn(Xray):
                                             strain_vectors, RTM, *args):
         """calc_inhomogeneous_ref_trans_matrix
 
-        Calculates the reflectivity of a inhomogenous sample structure
-        for a given strain vector for a single time step. Similar to the
-        homogeneous sample structure, the reflectivity of an unit cell
-        is calculated from the reflection-transmission matrices
-        :math:`H_i` of each atom and the phase matrices between the
-        atoms :math:`L_i`:
-
-        .. math: M_{RT} = \prod_i H_i \ L_i
-
-        Since all layers are generally inhomogeneously strained we have
-        to traverse all individual unit cells (:math:`j = 1\ldots M`) in
-        the sample to calculate the total reflection-transmission matrix
-        :math:`M_{RT}^t`:
+        Sub-function of ``calc_inhomogeneous_reflectivity`` and for
+        parallel computing (needs to be static) only for calculating the
+        total reflection-transmission matrix :math:`M_{RT}^t`:
 
         .. math: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
-
-        The reflectivity of the :math:`2\times 2` matrices for each
-        :math:`q_z` is calculates as follow:
-
-        .. math: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
 
         """
         if len(args) > 0:
