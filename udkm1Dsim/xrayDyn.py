@@ -31,7 +31,7 @@ from .unitCell import UnitCell
 from time import time
 from os import path
 from auto_tqdm import tqdm
-import itertools
+from itertools import product
 from .helpers import make_hash_md5, m_power_x, m_times_n, finderb
 
 r_0 = constants.physical_constants['classical electron radius'][0]
@@ -67,7 +67,7 @@ class XrayDyn(Xray):
         class_str += super().__str__()
         return class_str
 
-    def get_hash(self, strain_vectors, *args):
+    def get_hash(self, strain_vectors, **kwargs):
         """get_hash
 
         Returns a unique hash given by the energy :math:`E`,
@@ -75,10 +75,17 @@ class XrayDyn(Xray):
         well as the sample structure hash for relevant xray parameters.
 
         """
-        param = [self.energy, self.qz, self.polarization, strain_vectors]
-        if args:
-            strain_map = args[0]
-            # reduce size of strainMap when it has more than 1e6 elements
+        param = [self.polarization, strain_vectors]
+        if 'energy' in kwargs:
+            param.append(kwargs.get('energy'))
+        else:
+            param.append(self._energy)
+        if 'qz' in kwargs:
+            param.append(kwargs.get('qz'))
+        else:
+            param.append(self._qz)
+        if 'strain_map' in kwargs:
+            strain_map = kwargs.get('strain_map')
             if np.size(strain_map) > 1e6:
                 strain_map = strain_map.flatten()[0:1000000]
             param.append(strain_map)
@@ -207,7 +214,7 @@ class XrayDyn(Xray):
 
         """
         # create a hash of all simulation parameters
-        filename = 'inhomogeneous_reflectivity_dyn_' + self.get_hash(strain_vectors, strain_map) + '.npy'
+        filename = 'inhomogeneous_reflectivity_dyn_' + self.get_hash(strain_vectors, strain_map=strain_map) + '.npy'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
@@ -223,6 +230,7 @@ class XrayDyn(Xray):
             if not isinstance(strain_vectors, list):
                 raise TypeError('strain_vectors must be a list!')
 
+            dask_client = kwargs.get('dask_client', [])
             calc_type = kwargs.get('calc_type', 'sequential')
             if not calc_type in ['parallel', 'sequential', 'distributed']:
                 raise TypeError('calc_type must be either _parallel_, _sequential_, or _distributed_!')
@@ -236,7 +244,7 @@ class XrayDyn(Xray):
             
             # select the type of computation
             if calc_type == 'parallel':
-                R = self.parallel_inhomogeneous_reflectivity(strain_map, strain_vectors, RTM)
+                R = self.parallel_inhomogeneous_reflectivity(strain_map, strain_vectors, RTM, dask_client)
             elif calc_type == 'distributed':
                 R = self.distributed_inhomogeneous_reflectivity(strain_map, strain_vectors, job, num_workers, RTM)
             else:  # sequential
@@ -247,50 +255,6 @@ class XrayDyn(Xray):
             self.disp_message('_inhomogeneousReflectivity_ saved to file:\n\t' + filename)
 
         return R
-#            
-#        %% parallelInhomogeneousReflectivity
-#        % Returns the reflectivity of an inhomogenously strained sample
-#        % structure for a given _strainMap_ in position and time, as well 
-#        % as for a given set of possible strains for each unit cell in the
-#        % sample structure (_strainVectors_).
-#        % The function tries to parallize the calculation over the time
-#        % steps (_parallel = true_, since the results do not depent on each 
-#        % other. The routine checks whether the MATLAB pool is open - if 
-#        % not it opens the matlab pool with the default configuration.
-#        function R = parallelInhomogeneousReflectivity(obj,strainMap,strainVectors,RTM)
-#            %initialize
-#            N = size(strainMap,1); % time steps
-#            R = zeros(N,length(obj.qz));            
-#            
-#            if verLessThan('matlab', '8.5') % this is everything before MATLAB 2015a
-#                s = matlabpool('size'); % get the size of the matlabpool
-#                if s == 0 % no matlabpool open
-#                    obj.dispMessage(['No matlab pool was opened in advance, so lets do it now with the default configuration!']);
-#                    matlabpool open;
-#                end%if
-#            else % this is for everthing starting with MATLAB 2015a
-#                if isempty(gcp('nocreate')) %s == 0 % no matlabpool open
-#                    obj.dispMessage(['No matlab pool was opened in advance, so lets do it now with the default configuration!']);
-#                    parpool;
-#                end%if
-#            end%if
-#
-#            % check for path of ParforProgMon class to add it to
-#            % javapath
-#            p = fileparts(which('ParforProgMon.m'));
-#            str = ['javaaddpath ' p];
-#            feval(@pctRunOnAll,str);
-#
-#            % make progresspar with the external parforProgressMonitor
-#            % package
-#            ppm = ParforProgMon('Please wait... ',N);
-#            parfor i = 1:N
-#                ppm.increment();
-#                % get the inhomogenous reflectivity of the sample
-#                % structure for each time step of the strain map
-#                R(i,:) = obj.calcInhomogeneousReflectivity(strainMap(i,:),strainVectors,RTM);
-#            end%parfor
-#        end%function
 
     def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM):
         """sequential_inhomogeneous_reflectivity
@@ -307,21 +271,63 @@ class XrayDyn(Xray):
         N = np.size(strain_map, 0)  # delay steps
         M = len(self._energy)  # energy steps
         R = np.zeros([N, M, np.size(self._qz, 1)])
-        for k, i in tqdm(list(itertools.product(range(M), range(np.size(strain_map, 0)))), desc='Progress'):
+        for k, i in tqdm(list(product(range(M), range(N))), desc='Progress', leave=True):
             # get the inhomogenous reflectivity of the sample
             # structure for each time step of the strain map
             R[i, k, :] = self.calc_inhomogeneous_reflectivity(strain_map[i, :], strain_vectors, RTM[k])
         return R
 
-        def distributed_inhomogeneous_reflectivity(self, job, num_worker, strain_map, strain_vectors, RTM):
-            """distributed_inhomogeneous_reflectivity
+    def parallel_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM, dask_client):
+        """parallel_inhomogeneous_reflectivity
 
-            This is a stub. Not yet implemented in python.
+        Returns the reflectivity of an inhomogenously strained sample
+        structure for a given ``strain_map`` in position and time, as
+        well as for a given set of possible strains for each unit cell
+        in the sample structure (``strain_vectors``).
+        The function tries to parallize the calculation over the time
+        steps (``parallel = True``, since the results do not depent on
+        each other.
 
-            """
-            return            
+        """
+        if not dask_client:
+            raise ValueError('no dask client set')
+        from dask import delayed, compute  # to allow parallel computation
 
-    def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM):
+        # initialize
+        results = []
+        N = np.size(strain_map, 0)  # delay steps
+        M = len(self._energy)  # energy steps
+        R = np.zeros([N, M, np.size(self._qz, 1)])
+        
+#        scatter_RTM = dask_client.scatter(RTM)
+#        delayed_strain_vectors = delayed(strain_vectors)
+
+        for k, i in product(range(M), range(np.size(strain_map, 0))):
+            x = delayed(self.calc_inhomogeneous_reflectivity)(strain_map[i, :], strain_vectors, RTM[k])
+            results.append(x)
+        
+#        for k in range(M):
+#            client_RTM = dask_client.scatter(RTM[k])
+#            for i in range(N):
+#                x = delayed(self.calc_inhomogeneous_reflectivity)(strain_map[i, :], strain_vectors, client_RTM)
+#                results.append(x)
+
+        temp = compute(results)
+
+        for ind, (k, i) in enumerate(product(range(M), range(N))):
+                R[i, k, :] = temp[0][ind]
+
+        return R
+
+    def distributed_inhomogeneous_reflectivity(self, job, num_worker, strain_map, strain_vectors, RTM):
+        """distributed_inhomogeneous_reflectivity
+
+        This is a stub. Not yet implemented in python.
+
+        """
+        return
+
+    def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM, *args):
         """calc_inhomogeneous_reflectivity
 
         Calculates the reflectivity of a inhomogenous sample structure
@@ -346,6 +352,9 @@ class XrayDyn(Xray):
         .. math: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
 
         """
+        if len(args) > 0:
+            RTM = RTM[args[0]]
+
         # initialize
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
         RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, np.size(self._qz, 1)))  # ref_trans_matrix
@@ -383,7 +392,7 @@ class XrayDyn(Xray):
             theta = self._theta[i, :]
             # create a hash of all simulation parameters
             filename = 'all_ref_trans_matrices_dyn_' \
-                + self.get_hash(energy, qz, strain_vectors) + '.npy'
+                + self.get_hash(strain_vectors, energy=energy, qz=qz) + '.npy'
             full_filename = path.abspath(path.join(self.cache_dir, filename))
             # check if we find some corresponding data in the cache dir
             if path.exists(full_filename) and not self.force_recalc:
