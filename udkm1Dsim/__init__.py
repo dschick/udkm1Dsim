@@ -8,6 +8,7 @@ from .structure import Structure
 from .simulation import Simulation
 from .xray import Xray
 from .xrayKin import XrayKin
+from .xrayDyn import XrayDyn
 
 __all__ = ['Atom', 'AtomMixed', 'UnitCell', 'Structure', 'Simulation',
-           'Xray', 'XrayKin', 'u', 'Q_']
+           'Xray', 'XrayKin', 'XrayDyn', 'u', 'Q_']
