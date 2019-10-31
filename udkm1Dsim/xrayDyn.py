@@ -355,7 +355,7 @@ class XrayDyn(Xray):
 
         # reorder results to reflectivity matrix
         for ind, (k, i) in enumerate(product(range(M), range(N))):
-                R[i, k, :] = res[ind]
+            R[i, k, :] = res[ind]
 
         return R
 
