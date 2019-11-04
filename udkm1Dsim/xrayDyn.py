@@ -314,7 +314,7 @@ class XrayDyn(Xray):
         R = np.zeros([M, N, K])
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
         # init unity matrix for matrix multiplication
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, N, K))
+        RTU = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, N, K))
         # make RTM available for all works
         remote_RTM = dask_client.scatter(RTM)
         remote_uc_indicies = dask_client.scatter(uc_indicies)
@@ -326,18 +326,18 @@ class XrayDyn(Xray):
                                                        self._qz,
                                                        self._theta)
         else:
-            RTS = RT
+            RTS = RTU
 
         # create dask.delayed tasks for all delay steps
         for i in range(M):
             RT = delayed(XrayDyn.calc_inhomogeneous_ref_trans_matrix)(
                     remote_uc_indicies,
-                    RT,
+                    RTU,
                     strain_map[i, :],
                     strain_vectors,
-                    RTM)
-            RTS = delayed(m_times_n)(RT, RTS)
-            Ri = delayed(XrayDyn.get_reflectivity_from_matrix)(RTS)
+                    remote_RTM)
+            RT = delayed(m_times_n)(RT, RTS)
+            Ri = delayed(XrayDyn.get_reflectivity_from_matrix)(RT)
             res.append(Ri)
 
         # compute results
@@ -390,10 +390,10 @@ class XrayDyn(Xray):
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
 
         # initialize ref_trans_matrix
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
+        RTU = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
 
         RT = XrayDyn.calc_inhomogeneous_ref_trans_matrix(uc_indicies,
-                                                         RT,
+                                                         RTU,
                                                          strains,
                                                          strain_vectors,
                                                          RTM)
