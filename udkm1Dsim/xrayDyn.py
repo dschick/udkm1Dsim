@@ -30,8 +30,7 @@ from .xray import Xray
 from .unitCell import UnitCell
 from time import time
 from os import path
-from tqdm import tqdm, trange
-from itertools import product
+from tqdm import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n, finderb
 
 r_0 = constants.physical_constants['classical electron radius'][0]
@@ -112,7 +111,9 @@ class XrayDyn(Xray):
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
         R = np.zeros_like(self._qz)
         # get the reflectivity-transmisson matrix of the structure
-        RT, A = self.homogeneous_ref_trans_matrix(self.S, self._energy, self._qz, self._theta, strains)
+        RT, A = self.homogeneous_ref_trans_matrix(self.S, self._energy,
+                                                  self._qz, self._theta,
+                                                  strains)
         # calculate the real reflectivity from the RT matrix
         R = self.get_reflectivity_from_matrix(RT)
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
@@ -144,7 +145,8 @@ class XrayDyn(Xray):
         else:
             strains = args[0]
         # initialize
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, np.size(qz, 0), np.size(qz, 1)))  # ref_trans_matrix
+        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis],
+                     (1, 1, np.size(qz, 0), np.size(qz, 1)))  # ref_trans_matrix
         A = []  # list of ref_trans_matrices of substructures
         strainCounter = 0
 
@@ -317,7 +319,9 @@ class XrayDyn(Xray):
         RTU = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, N, K))
         # make RTM available for all works
         remote_RTM = dask_client.scatter(RTM)
+        remote_RTU = dask_client.scatter(RTU)
         remote_uc_indicies = dask_client.scatter(uc_indicies)
+        remote_strain_vectors = dask_client.scatter(strain_vectors)
 
         # precalculate the substrate ref_trans_matrix if present
         if self.S.substrate != []:
@@ -332,9 +336,9 @@ class XrayDyn(Xray):
         for i in range(M):
             RT = delayed(XrayDyn.calc_inhomogeneous_ref_trans_matrix)(
                     remote_uc_indicies,
-                    RTU,
+                    remote_RTU,
                     strain_map[i, :],
-                    strain_vectors,
+                    remote_strain_vectors,
                     remote_RTM)
             RT = delayed(m_times_n)(RT, RTS)
             Ri = delayed(XrayDyn.get_reflectivity_from_matrix)(RT)
@@ -458,7 +462,8 @@ class XrayDyn(Xray):
             self.disp_message('_all_ref_trans_matrices_dyn_ loaded from file:\n\t' + filename)
         else:
             # nothing found so calculate it and save it
-            RTM = self.calc_all_ref_trans_matrices(self._energy, self._qz, self._theta, strain_vectors)
+            RTM = self.calc_all_ref_trans_matrices(self._energy, self._qz,
+                                                   self._theta, strain_vectors)
             self.save(full_filename, RTM, '_all_ref_trans_matrices_dyn_')
         return RTM
 

@@ -89,13 +89,12 @@ class Simulation:
 
     def save(self, full_filename, data, *args):
         if len(args) == 1:
-            var_name= args[0]
+            var_name = args[0]
         else:
             var_name = '_data_'
         if self.save_data:
             np.save(full_filename, data)
             self.disp_message('{:s} saved to file:\n\t {:s}'.format(var_name, full_filename))
-            
 
     def conv_with_function(self, y, x, handle):
         """conv_with_function
