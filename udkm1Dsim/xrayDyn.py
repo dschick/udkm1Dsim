@@ -97,10 +97,10 @@ class XrayDyn(Xray):
 
         Returns the reflectivity :math:`R` of the whole sample structure
         and the reflectivity-transmission matrices :math:`M_{RT}` for
-        each substructure. The reflectivity of the :math:`2\times 2`
+        each substructure. The reflectivity of the :math:`2\\times 2`
         matrices for each :math:`q_z` is calculates as follow:
 
-        .. math:: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
+        .. math:: R = \left|M_{RT}^t(0,1)/M_{RT}^t(1,1)\\right|^2
 
         """
         # if no strains are given we assume no strain
@@ -652,7 +652,7 @@ class XrayDyn(Xray):
 
         """
         tau = 1 - (4j*np.pi*r_0
-                   * atom.get_atomic_form_factor(energy)
+                   * atom.get_cm_atomic_form_factor(energy)
                    * np.exp(-0.5*(dbf*qz)**2))/(qz*area)
         return tau
 
