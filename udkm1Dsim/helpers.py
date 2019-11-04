@@ -52,12 +52,13 @@ def m_power_x(m, x):
     # apply exponent to each matrix in a numpy array
     if x > 1:
         for i in range(np.size(m, 2)):
-            m[:, :, i] = np.linalg.matrix_power(m[:, :, i], x)
+            for j in range(np.size(m, 3)):
+                m[:, :, i, j] = np.linalg.matrix_power(m[:, :, i, j], x)
     return m
 
 
-def m_times_n(m, x):
-    return np.einsum("ijl,jkl->ikl", m, x)
+def m_times_n(m, n):
+    return np.einsum("ijlm,jklm->iklm", m, n)
 
 
 def finderb(key, vector):

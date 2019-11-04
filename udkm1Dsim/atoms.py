@@ -174,7 +174,7 @@ class Atom:
 
         return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
 
-#    @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
+    @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
