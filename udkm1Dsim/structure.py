@@ -221,7 +221,8 @@ class Structure:
                 N = N + self.sub_structures[i][1]
             else:
                 # its a sturcture, so call the method recursively
-                N = N + self.sub_structures[i][0].getNumberOfUnitCells()*self.sub_structures[i][1]
+                N = N + self.sub_structures[i][0].get_number_of_unit_cells() \
+                    * self.sub_structures[i][1]
 
         return N
 
