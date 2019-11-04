@@ -132,7 +132,7 @@ class Atom:
         return f
 
     @u.wraps(None, (None, 'eV'), strict=False)
-    def get_atomic_form_factor(self, E):
+    def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
         Returns the complex atomic form factor
@@ -145,9 +145,9 @@ class Atom:
 
         """
         # interpolate the real and imaginary part in dependence of E
-        f1 = np.interp(E, self.atomic_form_factor_coeff[:, 0],
+        f1 = np.interp(energy, self.atomic_form_factor_coeff[:, 0],
                        self.atomic_form_factor_coeff[:, 1])
-        f2 = np.interp(E, self.atomic_form_factor_coeff[:, 0],
+        f2 = np.interp(energy, self.atomic_form_factor_coeff[:, 0],
                        self.atomic_form_factor_coeff[:, 2])
 
         return f1 - f2*1j
@@ -174,8 +174,8 @@ class Atom:
 
         return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
 
-    @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
-    def get_cm_atomic_form_factor(self, E, qz):
+#    @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
+    def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
         Returns the atomic form factor :math:`f` in dependence of the
@@ -202,25 +202,30 @@ class Atom:
 
         Thus:
 
-        .. math:: f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
+        .. math:: f(q_z,E) = \sum(a_i \, \exp(-b_i \, q_z/2\pi))
            + c + f_1(E)-i f_2(E) - \left(\sum(a_i) + c\\right)
 
-        .. math:: f(q_z,E) = \sum(a_i \, \exp(b_i \, q_z/2\pi))
+        .. math:: f(q_z,E) = \sum(a_i \, \exp(-b_i \, q_z/2\pi))
            + f_1(E) -i f_2(E) - \sum(a_i)
 
         """
         # convert from 1/nm to 1/Å and to a real column vector
-        qz = qz*1e10
-        # convert to a real column vector in case it's not a float
-        if not isinstance(qz, float):
-            qz = qz.reshape(-1, 1)
+        qz = np.array(qz*1e10, ndmin=2)
+        energy = np.array(energy, ndmin=1)
+        if np.size(qz, 0) != len(energy):
+            raise TypeError('qz need to have as many rows as energies!')
 
-        f_cm = np.dot(self.cromer_mann_coeff[0:3],
-                      np.exp(np.outer(-self.cromer_mann_coeff[4:7],
-                                      (qz/(4*np.pi))**2))) + self.cromer_mann_coeff[8]
+        f = np.zeros_like(qz, dtype=complex)
 
-        return f_cm + self.get_atomic_form_factor(E) -\
-            (np.sum(self.cromer_mann_coeff[0:3]) + self.cromer_mann_coeff[8])
+        for i, en in enumerate(energy):
+            _qz = qz[i, :].reshape(-1, 1)
+
+            f_cm = np.dot(self.cromer_mann_coeff[0:3],
+                          np.exp(np.outer(-self.cromer_mann_coeff[4:7],
+                                          (_qz/(4*np.pi))**2)))
+            f[i, :] = f_cm + self.get_atomic_form_factor(en) -\
+                np.sum(self.cromer_mann_coeff[0:3])
+        return f
 
 
 class AtomMixed(Atom):
@@ -289,24 +294,24 @@ class AtomMixed(Atom):
         self.mass = self.mass + fraction * atom.mass
         self.ionicity = self.ionicity + fraction * atom.ionicity
 
-    def get_atomic_form_factor(self, E):
+    def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
         Returns the mixed energy dependent atomic form factor.
         """
         f = 0
         for i in range(self.num_atoms):
-            f += self.atoms[i][0].get_atomic_form_factor(E) * self.atoms[i][1]
+            f += self.atoms[i][0].get_atomic_form_factor(energy) * self.atoms[i][1]
 
         return f
 
-    def get_cm_atomic_form_factor(self, E, qz):
+    def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
         Returns the mixed energy and angle dependent atomic form factor.
         """
         f = 0
         for i in range(self.num_atoms):
-            f += self.atoms[i][0].get_cm_atomic_form_factor(E, qz) * self.atoms[i][1]
+            f += self.atoms[i][0].get_cm_atomic_form_factor(energy, qz) * self.atoms[i][1]
 
         return f
