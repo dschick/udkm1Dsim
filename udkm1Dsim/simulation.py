@@ -26,6 +26,7 @@ __docformat__ = "restructuredtext"
 
 from tabulate import tabulate
 import numpy as np
+import os
 
 
 class Simulation:
@@ -94,7 +95,8 @@ class Simulation:
             var_name = '_data_'
         if self.save_data:
             np.save(full_filename, data)
-            self.disp_message('{:s} saved to file:\n\t {:s}'.format(var_name, full_filename))
+            filename = os.path.basename(full_filename)
+            self.disp_message('{:s} saved to file:\n\t {:s}'.format(var_name, filename))
 
     def conv_with_function(self, y, x, handle):
         """conv_with_function
