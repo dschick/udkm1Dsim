@@ -572,8 +572,9 @@ class XrayDyn(Xray):
         try:
             index = self.last_atom_ref_trans_matrices['atom_ids'].index(atom.id)
         except ValueError:
-            index = []
-        if index and (_hash == self.last_atom_ref_trans_matrices['hashes'][index]):
+            index = -1
+
+        if (index >= 0) and (_hash == self.last_atom_ref_trans_matrices['hashes'][index]):
             # These are the same X-ray parameters as last time so we
             # can use the same matrix again for this atom
             H = self.last_atom_ref_trans_matrices['H'][index]
@@ -590,7 +591,7 @@ class XrayDyn(Xray):
             H[1, 1, :, :] = (1/tau)
             # remember this matrix for next use with the same
             # parameters for this atom
-            if index:
+            if index >= 0:
                 self.last_atom_ref_trans_matrices['atom_ids'][index] = atom.id
                 self.last_atom_ref_trans_matrices['hashes'][index] = _hash
                 self.last_atom_ref_trans_matrices['H'][index] = H
