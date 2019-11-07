@@ -26,6 +26,7 @@ __docformat__ = "restructuredtext"
 
 from tabulate import tabulate
 import numpy as np
+import os
 
 
 class Simulation:
@@ -63,8 +64,8 @@ class Simulation:
         self.S = S
         self.force_recalc = force_recalc
         self.cache_dir = kwargs.get('cache_dir', './')
-        self.disp_messages = kwargs.get('disp_messages', False)
-        self.disp_calc_time = kwargs.get('disp_calc_time', False)
+        self.disp_messages = kwargs.get('disp_messages', True)
+        self.save_data = kwargs.get('save_data', True)
         self.progress_bar_type = kwargs.get('progress_bar_type', 'none')
 
     def __str__(self):
@@ -72,7 +73,7 @@ class Simulation:
         output = [['force recalc', self.force_recalc],
                   ['cache directory', self.cache_dir],
                   ['display messages', self.disp_messages],
-                  ['display calculation time', self.disp_calc_time],
+                  ['save data', self.save_data],
                   ['progress bar type', self.progress_bar_type]]
 
         class_str = 'This is the current structure for the simulations:\n\n'
@@ -83,8 +84,19 @@ class Simulation:
         return class_str
 
     def disp_message(self, message):
+        """wrapper to display messages for that class"""
         if self.disp_messages:
             print(message)
+
+    def save(self, full_filename, data, *args):
+        if len(args) == 1:
+            var_name = args[0]
+        else:
+            var_name = '_data_'
+        if self.save_data:
+            np.save(full_filename, data)
+            filename = os.path.basename(full_filename)
+            self.disp_message('{:s} saved to file:\n\t {:s}'.format(var_name, filename))
 
     def conv_with_function(self, y, x, handle):
         """conv_with_function

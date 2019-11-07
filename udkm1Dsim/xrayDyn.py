@@ -30,8 +30,7 @@ from .xray import Xray
 from .unitCell import UnitCell
 from time import time
 from os import path
-from tqdm import tqdm
-from itertools import product
+from tqdm import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n, finderb
 
 r_0 = constants.physical_constants['classical electron radius'][0]
@@ -111,13 +110,12 @@ class XrayDyn(Xray):
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
         R = np.zeros_like(self._qz)
-        for i, energy in enumerate(self._energy):
-            qz = self._qz[i, :]
-            theta = self._theta[i, :]
-            # get the reflectivity-transmisson matrix of the structure
-            RT, A = self.homogeneous_ref_trans_matrix(self.S, energy, qz, theta, strains)
-            # calculate the real reflectivity from the RT matrix
-            R[i, :] = self.get_reflectivity_from_matrix(RT)
+        # get the reflectivity-transmisson matrix of the structure
+        RT, A = self.homogeneous_ref_trans_matrix(self.S, self._energy,
+                                                  self._qz, self._theta,
+                                                  strains)
+        # calculate the real reflectivity from the RT matrix
+        R = self.get_reflectivity_from_matrix(RT)
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
         return R, A
 
@@ -147,7 +145,8 @@ class XrayDyn(Xray):
         else:
             strains = args[0]
         # initialize
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len(qz)))  # ref_trans_matrix
+        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis],
+                     (1, 1, np.size(qz, 0), np.size(qz, 1)))  # ref_trans_matrix
         A = []  # list of ref_trans_matrices of substructures
         strainCounter = 0
 
@@ -264,10 +263,7 @@ class XrayDyn(Xray):
 
             self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
-            np.save(full_filename, R)
-            self.disp_message('_inhomogeneousReflectivity_ saved to file:'
-                              '\n\t' + filename)
-
+            self.save(full_filename, R, '_inhomogeneous_reflectivity_')
         return R
 
     def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM):
@@ -283,20 +279,16 @@ class XrayDyn(Xray):
         """
         # initialize
         N = np.size(strain_map, 0)  # delay steps
-        M = len(self._energy)  # energy steps
-        R = np.zeros([N, M, np.size(self._qz, 1)])
-        for k, i in tqdm(list(product(range(M), range(N))), desc='Progress', leave=True):
-            energy = self._energy[k]
-            qz = self._qz[k, :]
-            theta = self._theta[k, :]
+        R = np.zeros([N, np.size(self._qz, 0), np.size(self._qz, 1)])
+        for i in trange(N, desc='Progress', leave=True):
             # get the inhomogenous reflectivity of the sample
             # structure for each time step of the strain map
-            R[i, k, :] = self.calc_inhomogeneous_reflectivity(energy,
-                                                              qz,
-                                                              theta,
+            R[i, :, :] = self.calc_inhomogeneous_reflectivity(self._energy,
+                                                              self._qz,
+                                                              self._theta,
                                                               strain_map[i, :],
                                                               strain_vectors,
-                                                              RTM[k])
+                                                              RTM)
         return R
 
     def parallel_inhomogeneous_reflectivity(self, strain_map, strain_vectors,
@@ -317,44 +309,47 @@ class XrayDyn(Xray):
 
         # initialize
         res = []
-        N = np.size(strain_map, 0)  # delay steps
-        M = len(self._energy)  # energy steps
-        R = np.zeros([N, M, np.size(self._qz, 1)])
-        len_qz = np.size(self._qz, 1)
-        uc_indicies, _, _ = self.S.get_unit_cell_vectors()
+        M = np.size(strain_map, 0)  # delay steps
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
 
+        R = np.zeros([M, N, K])
+        uc_indicies, _, _ = self.S.get_unit_cell_vectors()
+        # init unity matrix for matrix multiplication
+        RTU = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, N, K))
         # make RTM available for all works
         remote_RTM = dask_client.scatter(RTM)
+        remote_RTU = dask_client.scatter(RTU)
+        remote_uc_indicies = dask_client.scatter(uc_indicies)
+        remote_strain_vectors = dask_client.scatter(strain_vectors)
 
         # precalculate the substrate ref_trans_matrix if present
-        substrate_ref_trans_matrices = []
         if self.S.substrate != []:
-            for k, energy in enumerate(self._energy):
-                qz = self._qz[k, :]
-                theta = self._theta[k, :]
-                RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate,
-                                                           energy,
-                                                           qz,
-                                                           theta)
-                substrate_ref_trans_matrices.append(RTS)
+            RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate,
+                                                       self._energy,
+                                                       self._qz,
+                                                       self._theta)
         else:
-            substrate_ref_trans_matrices = [np.tile(np.eye(2, 2)[:, :, np.newaxis],
-                                                    (1, 1, len_qz))]*M
+            RTS = RTU
 
-        # create dask.delayed tasks for all energies and delay steps
-        for k, i in product(range(M), range(N)):
+        # create dask.delayed tasks for all delay steps
+        for i in range(M):
             RT = delayed(XrayDyn.calc_inhomogeneous_ref_trans_matrix)(
-                    uc_indicies, len_qz, strain_map[i, :], strain_vectors, remote_RTM, k)
-            RTS = delayed(m_times_n)(RT, substrate_ref_trans_matrices[k])
-            Rki = delayed(XrayDyn.get_reflectivity_from_matrix)(RTS)
-            res.append(Rki)
+                    remote_uc_indicies,
+                    remote_RTU,
+                    strain_map[i, :],
+                    remote_strain_vectors,
+                    remote_RTM)
+            RT = delayed(m_times_n)(RT, RTS)
+            Ri = delayed(XrayDyn.get_reflectivity_from_matrix)(RT)
+            res.append(Ri)
 
         # compute results
         res = dask_client.compute(res, sync=True)
 
         # reorder results to reflectivity matrix
-        for ind, (k, i) in enumerate(product(range(M), range(N))):
-            R[i, k, :] = res[ind]
+        for i in range(M):
+            R[i, :, :] = res[i]
 
         return R
 
@@ -368,7 +363,7 @@ class XrayDyn(Xray):
         return
 
     def calc_inhomogeneous_reflectivity(self, energy, qz, theta, strains,
-                                        strain_vectors, RTM, *args):
+                                        strain_vectors, RTM):
         """calc_inhomogeneous_reflectivity
 
         Calculates the reflectivity of a inhomogenous sample structure
@@ -393,15 +388,16 @@ class XrayDyn(Xray):
         .. math: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
 
         """
-        if len(args) > 0:
-            RTM = RTM[args[0]]
-
         # initialize ref_trans_matrix
-        len_qz = np.size(self._qz, 1)
+        N = np.shape(qz)[1]  # number of q_z
+        M = np.shape(qz)[0]  # number of energies
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
 
+        # initialize ref_trans_matrix
+        RTU = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
+
         RT = XrayDyn.calc_inhomogeneous_ref_trans_matrix(uc_indicies,
-                                                         len_qz,
+                                                         RTU,
                                                          strains,
                                                          strain_vectors,
                                                          RTM)
@@ -416,8 +412,8 @@ class XrayDyn(Xray):
         return R
 
     @staticmethod
-    def calc_inhomogeneous_ref_trans_matrix(uc_indicies, len_qz, strains,
-                                            strain_vectors, RTM, *args):
+    def calc_inhomogeneous_ref_trans_matrix(uc_indicies, RT, strains,
+                                            strain_vectors, RTM):
         """calc_inhomogeneous_ref_trans_matrix
 
         Sub-function of ``calc_inhomogeneous_reflectivity`` and for
@@ -427,11 +423,6 @@ class XrayDyn(Xray):
         .. math: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
 
         """
-        if len(args) > 0:
-            RTM = RTM[args[0]]
-
-        # initialize ref_trans_matrix
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, len_qz))
         # traverse all unit cells in the sample structure
         for i, uc_index in enumerate(uc_indicies):
             # Find the ref-trans matrix in the RTM cell array for the
@@ -446,7 +437,7 @@ class XrayDyn(Xray):
 
         return RT
 
-    def get_all_ref_trans_matrices(self, strain_vectors):
+    def get_all_ref_trans_matrices(self, *args):
         """get_all_ref_trans_matrices
 
         Returns a list of all reflection-transmission matrices for
@@ -456,25 +447,24 @@ class XrayDyn(Xray):
         it is loaded, otherwise it is calculated.
 
         """
-        RTM = []
-        for i, energy in enumerate(self._energy):
-            qz = self._qz[i, :]
-            theta = self._theta[i, :]
-            # create a hash of all simulation parameters
-            filename = 'all_ref_trans_matrices_dyn_' \
-                + self.get_hash(strain_vectors, energy=energy, qz=qz) + '.npy'
-            full_filename = path.abspath(path.join(self.cache_dir, filename))
-            # check if we find some corresponding data in the cache dir
-            if path.exists(full_filename) and not self.force_recalc:
-                # found something so load it
-                temp = np.load(full_filename)
-                self.disp_message('_all_ref_trans_matrices_dyn_ loaded from file:\n\t' + filename)
-            else:
-                # nothing found so calculate it and save it
-                temp = self.calc_all_ref_trans_matrices(energy, qz, theta, strain_vectors)
-                np.save(full_filename, temp)
-                self.disp_message('_all_ref_trans_matrices_dyn_ saved to file:\n\t' + filename)
-            RTM.append(temp)
+        if len(args) == 0:
+            strain_vectors = [np.array([1])]*self.S.get_number_of_unique_unit_cells()
+        else:
+            strain_vectors = args[0]
+        # create a hash of all simulation parameters
+        filename = 'all_ref_trans_matrices_dyn_' \
+            + self.get_hash(strain_vectors, energy=self._energy, qz=self._qz) + '.npy'
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        # check if we find some corresponding data in the cache dir
+        if path.exists(full_filename) and not self.force_recalc:
+            # found something so load it
+            RTM = np.load(full_filename)
+            self.disp_message('_all_ref_trans_matrices_dyn_ loaded from file:\n\t' + filename)
+        else:
+            # nothing found so calculate it and save it
+            RTM = self.calc_all_ref_trans_matrices(self._energy, self._qz,
+                                                   self._theta, strain_vectors)
+            self.save(full_filename, RTM, '_all_ref_trans_matrices_dyn_')
         return RTM
 
     def calc_all_ref_trans_matrices(self, energy, qz, theta, *args):
@@ -491,7 +481,7 @@ class XrayDyn(Xray):
         # initalize
         uc_ids, uc_handles = self.S.get_unique_unit_cells()
         # if no strain_vecorts are given we just do it for no strain (1)
-        if len(args) < 1:
+        if len(args) == 0:
             strain_vectors = [np.array([1])]*len(uc_ids)
         else:
             strain_vectors = args[0]
@@ -531,18 +521,19 @@ class XrayDyn(Xray):
         else:
             strain = args[0]
 
-        N = len(qz)  # number of q_z
-        M = uc.num_atoms  # number of atoms
+        N = np.shape(qz)[1]  # number of q_z
+        M = len(energy)  # number of energies
+        K = uc.num_atoms  # number of atoms
         # initialize matrices
-        RTM = np.tile(np.eye(2, 2)[:, :, np.newaxis], (1, 1, N))
+        RTM = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
         # traverse all atoms of the unit cell
-        for i in range(M):
+        for i in range(K):
             # Calculate the relative distance between the atoms.
             # The raltive position is calculated by the function handle
             # stored in the atoms list as 3rd element. This
             # function returns a relative postion dependent on the
             # applied strain.
-            if i == (M-1):  # its the last atom
+            if i == (K-1):  # its the last atom
                 del_dist = (strain+1)-uc.atoms[i][1](strain)
             else:
                 del_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
@@ -581,8 +572,9 @@ class XrayDyn(Xray):
         try:
             index = self.last_atom_ref_trans_matrices['atom_ids'].index(atom.id)
         except ValueError:
-            index = []
-        if index and (_hash == self.last_atom_ref_trans_matrices['hashes'][index]):
+            index = -1
+
+        if (index >= 0) and (_hash == self.last_atom_ref_trans_matrices['hashes'][index]):
             # These are the same X-ray parameters as last time so we
             # can use the same matrix again for this atom
             H = self.last_atom_ref_trans_matrices['H'][index]
@@ -592,14 +584,14 @@ class XrayDyn(Xray):
             rho = self.get_atom_reflection_factor(energy, qz, theta, atom, area, deb_wal_fac)
             tau = self.get_atom_transmission_factor(energy, qz, atom, area, deb_wal_fac)
             # calculate the reflection-transmission matrix
-            H = np.ones([2, 2, len(qz)], dtype=complex)
-            H[0, 0, :] = (1/tau)*(tau**2-rho**2)
-            H[0, 1, :] = (1/tau)*(rho)
-            H[1, 0, :] = (1/tau)*(-rho)
-            H[1, 1, :] = (1/tau)
+            H = np.zeros([2, 2, np.shape(qz)[0], np.shape(qz)[1]], dtype=np.cfloat)
+            H[0, 0, :, :] = (1/tau)*(tau**2-rho**2)
+            H[0, 1, :, :] = (1/tau)*(rho)
+            H[1, 0, :, :] = (1/tau)*(-rho)
+            H[1, 1, :, :] = (1/tau)
             # remember this matrix for next use with the same
             # parameters for this atom
-            if index:
+            if index >= 0:
                 self.last_atom_ref_trans_matrices['atom_ids'][index] = atom.id
                 self.last_atom_ref_trans_matrices['hashes'][index] = _hash
                 self.last_atom_ref_trans_matrices['H'][index] = H
@@ -652,7 +644,7 @@ class XrayDyn(Xray):
 
         """
         tau = 1 - (4j*np.pi*r_0
-                   * atom.get_cm_atomic_form_factor(energy)
+                   * atom.get_atomic_form_factor(energy)
                    * np.exp(-0.5*(dbf*qz)**2))/(qz*area)
         return tau
 
@@ -670,9 +662,9 @@ class XrayDyn(Xray):
 
         """
         phi = self.get_atom_phase_factor(qz, distance)
-        L = np.zeros([2, 2, len(qz)], dtype=complex)
-        L[0, 0, :] = np.exp(1j*phi)
-        L[1, 1, :] = np.exp(-1j*phi)
+        L = np.zeros([2, 2, np.shape(qz)[0], np.shape(qz)[1]], dtype=np.cfloat)
+        L[0, 0, :, :] = np.exp(1j*phi)
+        L[1, 1, :, :] = np.exp(-1j*phi)
         return L
 
     def get_atom_phase_factor(self, qz, distance):
@@ -697,4 +689,4 @@ class XrayDyn(Xray):
         .. math:: R = \\left|M(0,1)/M(1,1)\\right|^2
 
         """
-        return np.abs(M[0, 1, :]/M[1, 1, :])**2
+        return np.abs(M[0, 1, :, :]/M[1, 1, :, :])**2
