@@ -584,7 +584,7 @@ class XrayDyn(Xray):
             rho = self.get_atom_reflection_factor(energy, qz, theta, atom, area, deb_wal_fac)
             tau = self.get_atom_transmission_factor(energy, qz, atom, area, deb_wal_fac)
             # calculate the reflection-transmission matrix
-            H = np.zeros([2, 2, np.shape(qz)[0], np.shape(qz)[1]], dtype=complex)
+            H = np.zeros([2, 2, np.shape(qz)[0], np.shape(qz)[1]], dtype=np.cfloat)
             H[0, 0, :, :] = (1/tau)*(tau**2-rho**2)
             H[0, 1, :, :] = (1/tau)*(rho)
             H[1, 0, :, :] = (1/tau)*(-rho)
@@ -644,7 +644,7 @@ class XrayDyn(Xray):
 
         """
         tau = 1 - (4j*np.pi*r_0
-                   * atom.get_cm_atomic_form_factor(energy, qz)
+                   * atom.get_atomic_form_factor(energy)
                    * np.exp(-0.5*(dbf*qz)**2))/(qz*area)
         return tau
 
@@ -662,7 +662,7 @@ class XrayDyn(Xray):
 
         """
         phi = self.get_atom_phase_factor(qz, distance)
-        L = np.zeros([2, 2, np.shape(qz)[0], np.shape(qz)[1]], dtype=complex)
+        L = np.zeros([2, 2, np.shape(qz)[0], np.shape(qz)[1]], dtype=np.cfloat)
         L[0, 0, :, :] = np.exp(1j*phi)
         L[1, 1, :, :] = np.exp(-1j*phi)
         return L
