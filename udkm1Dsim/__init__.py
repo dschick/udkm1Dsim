@@ -9,6 +9,7 @@ from .simulation import Simulation
 from .xray import Xray
 from .xrayKin import XrayKin
 from .xrayDyn import XrayDyn
+from .xrayDynMag import XrayDynMag
 
 __all__ = ['Atom', 'AtomMixed', 'UnitCell', 'Structure', 'Simulation',
-           'Xray', 'XrayKin', 'XrayDyn', 'u', 'Q_']
+           'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
