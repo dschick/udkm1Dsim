@@ -111,15 +111,13 @@ class XrayDyn(Xray):
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
         R = np.zeros_like(self._qz)
         # get the reflectivity-transmisson matrix of the structure
-        RT, A = self.homogeneous_ref_trans_matrix(self.S, self._energy,
-                                                  self._qz, self._theta,
-                                                  strains)
+        RT, A = self.homogeneous_ref_trans_matrix(self.S, strains)
         # calculate the real reflectivity from the RT matrix
         R = self.get_reflectivity_from_matrix(RT)
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
         return R, A
 
-    def homogeneous_ref_trans_matrix(self, S, energy, qz, theta, *args):
+    def homogeneous_ref_trans_matrix(self, S, *args):
         """homogeneous_ref_trans_matrix
 
         Returns the reflectivity-transmission matrices :math:`M_{RT}` of
@@ -146,7 +144,7 @@ class XrayDyn(Xray):
             strains = args[0]
         # initialize
         RT = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis],
-                     (1, 1, np.size(qz, 0), np.size(qz, 1)))  # ref_trans_matrix
+                     (1, 1, np.size(self._qz, 0), np.size(self._qz, 1)))  # ref_trans_matrix
         A = []  # list of ref_trans_matrices of substructures
         strainCounter = 0
 
@@ -156,7 +154,7 @@ class XrayDyn(Xray):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
                 temp = m_power_x(self.get_uc_ref_trans_matrix(
-                        sub_structure[0], energy, qz, theta, strains[strainCounter]),
+                        sub_structure[0], strains[strainCounter]),
                         sub_structure[1])
                 strainCounter += 1
                 # remember the result
@@ -180,7 +178,7 @@ class XrayDyn(Xray):
 
         # if a substrate is included add it at the end
         if S.substrate != []:
-            temp, temp2 = self.homogeneous_ref_trans_matrix(S.substrate, energy, qz, theta)
+            temp, temp2 = self.homogeneous_ref_trans_matrix(S.substrate)
             A.append([temp2, 'static substrate'])
             RT = m_times_n(RT, temp)
 
@@ -283,10 +281,7 @@ class XrayDyn(Xray):
         for i in trange(N, desc='Progress', leave=True):
             # get the inhomogenous reflectivity of the sample
             # structure for each time step of the strain map
-            R[i, :, :] = self.calc_inhomogeneous_reflectivity(self._energy,
-                                                              self._qz,
-                                                              self._theta,
-                                                              strain_map[i, :],
+            R[i, :, :] = self.calc_inhomogeneous_reflectivity(strain_map[i, :],
                                                               strain_vectors,
                                                               RTM)
         return R
@@ -325,10 +320,7 @@ class XrayDyn(Xray):
 
         # precalculate the substrate ref_trans_matrix if present
         if self.S.substrate != []:
-            RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate,
-                                                       self._energy,
-                                                       self._qz,
-                                                       self._theta)
+            RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
         else:
             RTS = RTU
 
@@ -362,8 +354,7 @@ class XrayDyn(Xray):
         """
         return
 
-    def calc_inhomogeneous_reflectivity(self, energy, qz, theta, strains,
-                                        strain_vectors, RTM):
+    def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM):
         """calc_inhomogeneous_reflectivity
 
         Calculates the reflectivity of a inhomogenous sample structure
@@ -389,8 +380,8 @@ class XrayDyn(Xray):
 
         """
         # initialize ref_trans_matrix
-        N = np.shape(qz)[1]  # number of q_z
-        M = np.shape(qz)[0]  # number of energies
+        N = np.shape(self._qz)[1]  # number of q_z
+        M = np.shape(self._qz)[0]  # number of energies
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
 
         # initialize ref_trans_matrix
@@ -404,8 +395,7 @@ class XrayDyn(Xray):
 
         # if a substrate is included add it at the end
         if self.S.substrate != []:
-            RTS, _ = self.homogeneous_ref_trans_matrix(
-                    self.S.substrate, energy, qz, theta)
+            RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
             RT = m_times_n(RT, RTS)
         # calculate reflectivity from ref-trans matrix
         R = self.get_reflectivity_from_matrix(RT)
@@ -462,12 +452,11 @@ class XrayDyn(Xray):
             self.disp_message('_all_ref_trans_matrices_dyn_ loaded from file:\n\t' + filename)
         else:
             # nothing found so calculate it and save it
-            RTM = self.calc_all_ref_trans_matrices(self._energy, self._qz,
-                                                   self._theta, strain_vectors)
+            RTM = self.calc_all_ref_trans_matrices(strain_vectors)
             self.save(full_filename, RTM, '_all_ref_trans_matrices_dyn_')
         return RTM
 
-    def calc_all_ref_trans_matrices(self, energy, qz, theta, *args):
+    def calc_all_ref_trans_matrices(self, *args):
         """calc_all_ref_trans_matrices
 
         Calculates a list of all reflection-transmission matrices
@@ -499,12 +488,12 @@ class XrayDyn(Xray):
             # unit_cell
             temp = []
             for strain in strain_vectors[i]:
-                temp.append(self.get_uc_ref_trans_matrix(uc, energy, qz, theta, strain))
+                temp.append(self.get_uc_ref_trans_matrix(uc, strain))
             RTM.append(temp)
         self.disp_message('Elapsed time for _ref_trans_matricies_: {:f} s'.format(time()-t1))
         return RTM
 
-    def get_uc_ref_trans_matrix(self, uc, energy, qz, theta, *args):
+    def get_uc_ref_trans_matrix(self, uc, *args):
         """get_uc_ref_trans_matrix
 
         Returns the reflection-transmission matrix of a unit cell:
@@ -521,8 +510,8 @@ class XrayDyn(Xray):
         else:
             strain = args[0]
 
-        N = np.shape(qz)[1]  # number of q_z
-        M = len(energy)  # number of energies
+        M = len(self._energy)  # number of energies
+        N = np.shape(self._qz)[1]  # number of q_z
         K = uc.num_atoms  # number of atoms
         # initialize matrices
         RTM = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
@@ -543,17 +532,13 @@ class XrayDyn(Xray):
             # together
             RTM = m_times_n(RTM,
                             self.get_atom_ref_trans_matrix(uc.atoms[i][0],
-                                                           energy,
-                                                           qz,
-                                                           theta,
                                                            uc._area,
                                                            uc._deb_wal_fac))
             RTM = m_times_n(RTM,
-                            self.get_atom_phase_matrix(qz,
-                                                       del_dist*uc._c_axis))
+                            self.get_atom_phase_matrix(del_dist*uc._c_axis))
         return RTM
 
-    def get_atom_ref_trans_matrix(self, atom, energy, qz, theta, area, deb_wal_fac):
+    def get_atom_ref_trans_matrix(self, atom, area, deb_wal_fac):
         """get_atom_ref_trans_matrix
 
         Returns the reflection-transmission matrix of an atom from
@@ -568,7 +553,7 @@ class XrayDyn(Xray):
 
         """
         # check for already calculated data
-        _hash = make_hash_md5([energy, qz, self.polarization, area, deb_wal_fac])
+        _hash = make_hash_md5([self._energy, self._qz, self.polarization, area, deb_wal_fac])
         try:
             index = self.last_atom_ref_trans_matrices['atom_ids'].index(atom.id)
         except ValueError:
@@ -581,10 +566,10 @@ class XrayDyn(Xray):
         else:
             # These are new parameters so we have to calculate.
             # Get the reflection-transmission-factors
-            rho = self.get_atom_reflection_factor(energy, qz, theta, atom, area, deb_wal_fac)
-            tau = self.get_atom_transmission_factor(energy, qz, atom, area, deb_wal_fac)
+            rho = self.get_atom_reflection_factor(atom, area, deb_wal_fac)
+            tau = self.get_atom_transmission_factor(atom, area, deb_wal_fac)
             # calculate the reflection-transmission matrix
-            H = np.zeros([2, 2, np.shape(qz)[0], np.shape(qz)[1]], dtype=np.cfloat)
+            H = np.zeros([2, 2, np.shape(self._qz)[0], np.shape(self._qz)[1]], dtype=np.cfloat)
             H[0, 0, :, :] = (1/tau)*(tau**2-rho**2)
             H[0, 1, :, :] = (1/tau)*(rho)
             H[1, 0, :, :] = (1/tau)*(-rho)
@@ -601,7 +586,7 @@ class XrayDyn(Xray):
                 self.last_atom_ref_trans_matrices['H'].append(H)
         return H
 
-    def get_atom_reflection_factor(self, energy, qz, theta, atom, area, deb_wal_fac):
+    def get_atom_reflection_factor(self, atom, area, deb_wal_fac):
         """get_atom_reflection_factor
 
         Returns the reflection factor from dynamical xray theory:
@@ -621,12 +606,12 @@ class XrayDyn(Xray):
 
         """
         rho = (-4j*np.pi*r_0
-               * atom.get_cm_atomic_form_factor(energy, qz)
-               * self.get_polarization_factor(theta)
-               * np.exp(-0.5*(deb_wal_fac*qz)**2))/(qz*area)
+               * atom.get_cm_atomic_form_factor(self._energy, self._qz)
+               * self.get_polarization_factor(self._theta)
+               * np.exp(-0.5*(deb_wal_fac*self._qz)**2))/(self._qz*area)
         return rho
 
-    def get_atom_transmission_factor(self, energy, qz, atom, area, dbf):
+    def get_atom_transmission_factor(self, atom, area, deb_wal_fac):
         """get_atom_transmission_factor
 
         Returns the transmission factor from dynamical xray theory:
@@ -644,11 +629,11 @@ class XrayDyn(Xray):
 
         """
         tau = 1 - (4j*np.pi*r_0
-                   * atom.get_atomic_form_factor(energy)
-                   * np.exp(-0.5*(dbf*qz)**2))/(qz*area)
+                   * atom.get_cm_atomic_form_factor(self._energy, np.zeros_like(self._qz))
+                   * np.exp(-0.5*(deb_wal_fac*self._qz)**2))/(self._qz*area)
         return tau
 
-    def get_atom_phase_matrix(self, qz, distance):
+    def get_atom_phase_matrix(self, distance):
         """get_atom_phase_matrix
 
         Returns the phase matrix from dynamical xray theory:
@@ -661,13 +646,13 @@ class XrayDyn(Xray):
             \end{bmatrix}
 
         """
-        phi = self.get_atom_phase_factor(qz, distance)
-        L = np.zeros([2, 2, np.shape(qz)[0], np.shape(qz)[1]], dtype=np.cfloat)
+        phi = self.get_atom_phase_factor(distance)
+        L = np.zeros([2, 2, np.shape(self._qz)[0], np.shape(self._qz)[1]], dtype=np.cfloat)
         L[0, 0, :, :] = np.exp(1j*phi)
         L[1, 1, :, :] = np.exp(-1j*phi)
         return L
 
-    def get_atom_phase_factor(self, qz, distance):
+    def get_atom_phase_factor(self, distance):
         """get_atom_phase_factor
 
         Returns the phase factor :math:`\phi` for a distance :math:`d`
@@ -676,7 +661,7 @@ class XrayDyn(Xray):
         .. math:: \phi = \\frac{d \ q_z}{2}
 
         """
-        phi = distance * qz/2
+        phi = distance * self._qz/2
         return phi
 
     @staticmethod
