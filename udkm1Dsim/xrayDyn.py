@@ -509,7 +509,7 @@ class XrayDyn(Xray):
             strain = 0  # set the defalut strain to 0
         else:
             strain = args[0]
-    
+
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
         K = uc.num_atoms  # number of atoms
@@ -629,7 +629,7 @@ class XrayDyn(Xray):
 
         """
         tau = 1 - (4j*np.pi*r_0
-                   * atom.get_atomic_form_factor(self._energy)
+                   * atom.get_cm_atomic_form_factor(self._energy, np.zeros_like(self._qz))
                    * np.exp(-0.5*(deb_wal_fac*self._qz)**2))/(self._qz*area)
         return tau
 
