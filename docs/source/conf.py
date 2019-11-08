@@ -24,9 +24,9 @@ copyright = '2019, Daniel Schick, et.al.'
 author = 'Daniel Schick, et.al.'
 
 # The short X.Y version
-version = '0.1'
+version = '0.1.3'
 # The full version, including alpha/beta/rc tags
-release = '0.1-beta'
+release = '0.1.3'
 
 
 # -- General configuration ---------------------------------------------------
@@ -43,6 +43,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
+    'nbsphinx',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -67,7 +68,7 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path .
-exclude_patterns = []
+exclude_patterns = ['_build', '**.ipynb_checkpoints']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
@@ -160,3 +161,5 @@ texinfo_documents = [
 
 
 # -- Extension configuration -------------------------------------------------
+# increase timeout of nbsphinx from 30 to 300s
+nbsphinx_timeout = 300
