@@ -130,11 +130,11 @@ class XrayDynMag(Xray):
              np.sin(mag_phi) * np.sin(mag_gamma),
              np.cos(mag_phi)]
 
-        eps = np.zeros([3, 3, M], dtype=np.cfloat)
+        eps = np.zeros([M, 3, 3], dtype=np.cfloat)
         k_z = np.zeros([M, N], dtype=np.cfloat)
 
-        A = np.zeros([4, 4, M, N], dtype=np.cfloat)
-        P = np.zeros([4, 4, M, N], dtype=np.cfloat)
+        A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
+        P = np.zeros([M, N, 4, 4], dtype=np.cfloat)
         factor = 1.38E-7
         for k in range(M):
             energy = self._energy[k]
@@ -145,29 +145,29 @@ class XrayDynMag(Xray):
             mag = 0 * factor * mag_amplitude * 0.01 * atom.get_atomic_form_factor(energy)
 
             eps0 = 1 - factor*atom.get_atomic_form_factor(energy)
-            eps[0, 0, k] = eps0
-            eps[0, 1, k] = -1j * u[2] * mag
-            eps[0, 2, k] = 1j * u[1] * mag
-            eps[1, 0, k] = -eps[0, 1, k]
-            eps[1, 1, k] = eps0
-            eps[1, 2, k] = -1j * u[0] * mag
-            eps[2, 0, k] = -eps[0, 2, k]
-            eps[2, 1, k] = -eps[1, 2, k]
-            eps[2, 2, k] = eps0
+            eps[k, 0, 0] = eps0
+            eps[k, 0, 1] = -1j * u[2] * mag
+            eps[k, 0, 2] = 1j * u[1] * mag
+            eps[k, 1, 0] = -eps[k, 0, 1]
+            eps[k, 1, 1] = eps0
+            eps[k, 1, 2] = -1j * u[0] * mag
+            eps[k, 2, 0] = -eps[k, 0, 2]
+            eps[k, 2, 1] = -eps[k, 1, 2]
+            eps[k, 2, 2] = eps0
 
-            alpha_y = np.cos(theta) / np.sqrt(eps[0, 0, k])
+            alpha_y = np.cos(theta) / np.sqrt(eps[k, 0, 0])
             alpha_z = np.sqrt(1 - alpha_y**2)
 
-            k_z[k, :] = self._k[k] * np.sqrt(eps[0, 0, k]) * alpha_z
+            k_z[k, :] = self._k[k] * np.sqrt(eps[k, 0, 0]) * alpha_z
 
-            n_right_down = np.sqrt(eps[0, 0, k] - 1j * eps[0, 2, k] * alpha_y
-                                   - 1j * eps[0, 1, k] * alpha_z)
-            n_left_down = np.sqrt(eps[0, 0, k] + 1j * eps[0, 2, k] * alpha_y
-                                  + 1j * eps[0, 1, k] * alpha_z)
-            n_right_up = np.sqrt(eps[0, 0, k] - 1j * eps[0, 2, k] * alpha_y
-                                 + 1j * eps[0, 1, k] * alpha_z)
-            n_left_up = np.sqrt(eps[0, 0, k] + 1j * eps[0, 2, k] * alpha_y
-                                - 1j * eps[0, 1, k] * alpha_z)
+            n_right_down = np.sqrt(eps[k, 0, 0] - 1j * eps[k, 0, 2] * alpha_y
+                                   - 1j * eps[k, 0, 1] * alpha_z)
+            n_left_down = np.sqrt(eps[k, 0, 0] + 1j * eps[k, 0, 2] * alpha_y
+                                  + 1j * eps[k, 0, 1] * alpha_z)
+            n_right_up = np.sqrt(eps[k, 0, 0] - 1j * eps[k, 0, 2] * alpha_y
+                                 + 1j * eps[k, 0, 1] * alpha_z)
+            n_left_up = np.sqrt(eps[k, 0, 0] + 1j * eps[k, 0, 2] * alpha_y
+                                - 1j * eps[k, 0, 1] * alpha_z)
 
             alpha_y_right_down = np.cos(theta)/n_right_down
             alpha_z_right_down = np.sqrt(1-alpha_y_right_down**2)
@@ -178,42 +178,42 @@ class XrayDynMag(Xray):
             alpha_y_left_up = np.cos(theta)/n_left_up
             alpha_z_left_up = np.sqrt(1-alpha_y_left_up**2)
 
-            A[0, 0, k, :] = -1 - 1j * eps[0, 1, k] * alpha_z_right_down
-            - 1j * eps[0, 2, k] * alpha_y_right_down
-            A[0, 1, k, :] = 1 - 1j * eps[0, 1, k] * alpha_z_left_down
-            - 1j * eps[0, 2, k] * alpha_y_left_down
-            A[0, 2, k, :] = -1 + 1j * eps[0, 1, k] * alpha_z_right_up
-            - 1j * eps[0, 2, k] * alpha_y_right_up
-            A[0, 3, k, :] = 1 + 1j * eps[0, 1, k] * alpha_z_left_up
-            - 1j * eps[0, 2, k] * alpha_y_left_up
+            A[k, :, 0, 0] = -1 - 1j * eps[k, 0, 1] * alpha_z_right_down
+            - 1j * eps[k, 0, 2] * alpha_y_right_down
+            A[k, :, 0, 1] = 1 - 1j * eps[k, 0, 1] * alpha_z_left_down
+            - 1j * eps[k, 0, 2] * alpha_y_left_down
+            A[k, :, 0, 2] = -1 + 1j * eps[k, 0, 1] * alpha_z_right_up
+            - 1j * eps[k, 0, 2] * alpha_y_right_up
+            A[k, :, 0, 3] = 1 + 1j * eps[k, 0, 1] * alpha_z_left_up
+            - 1j * eps[k, 0, 2] * alpha_y_left_up
 
-            A[1, 0, k, :] = 1j * alpha_z_right_down - eps[0, 1, k]
-            - 1j * eps[1, 2, k] * alpha_y_right_down
-            A[1, 1, k, :] = 1j * alpha_z_left_down + eps[0, 1, k]
-            - 1j * eps[1, 2, k] * alpha_y_left_down
-            A[1, 2, k, :] = -1j * alpha_z_right_up - eps[0, 1, k]
-            - 1j * eps[1, 2, k] * alpha_y_right_up
-            A[1, 3, k, :] = -1j * alpha_z_left_up + eps[0, 1, k]
-            - 1j * eps[1, 2, k] * alpha_y_left_up
+            A[k, :, 1, 0] = 1j * alpha_z_right_down - eps[k, 0, 1]
+            - 1j * eps[k, 1, 2] * alpha_y_right_down
+            A[k, :, 1, 1] = 1j * alpha_z_left_down + eps[k, 0, 1]
+            - 1j * eps[k, 1, 2] * alpha_y_left_down
+            A[k, :, 1, 2] = -1j * alpha_z_right_up - eps[k, 0, 1]
+            - 1j * eps[k, 1, 2] * alpha_y_right_up
+            A[k, :, 1, 3] = -1j * alpha_z_left_up + eps[k, 0, 1]
+            - 1j * eps[k, 1, 2] * alpha_y_left_up
 
-            A[2, 0, k, :] = -1j * n_right_down * A[0, 0, k, :]
-            A[2, 1, k, :] = 1j * n_left_down * A[0, 1, k, :]
-            A[2, 2, k, :] = -1j * n_right_up * A[0, 2, k, :]
-            A[2, 3, k, :] = 1j * n_left_up * A[0, 3, k, :]
+            A[k, :, 2, 0] = -1j * n_right_down * A[k, :, 0, 0]
+            A[k, :, 2, 1] = 1j * n_left_down * A[k, :, 0, 1]
+            A[k, :, 2, 2] = -1j * n_right_up * A[k, :, 0, 2]
+            A[k, :, 2, 3] = 1j * n_left_up * A[k, :, 0, 3]
 
-            A[3, 0, k, :] = - alpha_z_right_down * n_right_down * A[0, 0, k, :]
-            A[3, 1, k, :] = - alpha_z_left_down * n_left_down * A[0, 1, k, :]
-            A[3, 2, k, :] = alpha_z_right_up * n_right_up * A[0, 2, k, :]
-            A[3, 3, k, :] = alpha_z_left_up * n_left_up * A[0, 3, k, :]
+            A[k, :, 3, 0] = - alpha_z_right_down * n_right_down * A[k, :, 0, 0]
+            A[k, :, 3, 1] = - alpha_z_left_down * n_left_down * A[k, :, 0, 1]
+            A[k, :, 3, 2] = alpha_z_right_up * n_right_up * A[k, :, 0, 2]
+            A[k, :, 3, 3] = alpha_z_left_up * n_left_up * A[k, :, 0, 3]
 
-            A[:, :, k, :] = A[:, :, k, :] / (np.sqrt(2) * eps[0, 0, k])
+            A[k, :, :, :] = A[k, :, :, :] / (np.sqrt(2) * eps[k, 0, 0])
 
             phase = self._k[k] * distance
 
-            P[0, 0, k, :] = np.exp(1j * phase * n_right_down * alpha_z_right_down)
-            P[1, 1, k, :] = np.exp(1j * phase * n_left_down * alpha_z_left_down)
-            P[2, 2, k, :] = np.exp(-1j * phase * n_right_up * alpha_z_right_up)
-            P[3, 3, k, :] = np.exp(-1j * phase * n_left_up * alpha_z_left_up)
+            P[k, :, 0, 0] = np.exp(1j * phase * n_right_down * alpha_z_right_down)
+            P[k, :, 1, 1] = np.exp(1j * phase * n_left_down * alpha_z_left_down)
+            P[k, :, 2, 2] = np.exp(-1j * phase * n_right_up * alpha_z_right_up)
+            P[k, :, 3, 3] = np.exp(-1j * phase * n_left_up * alpha_z_left_up)
 
             return A, P
 
@@ -224,9 +224,9 @@ class XrayDynMag(Xray):
         N = np.shape(self._qz)[1]  # number of q_z
         _, _, uc_handles = self.S.get_unit_cell_vectors()
 
-        S = np.tile(np.eye(4, 4, dtype=np.cfloat)[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
+        S = np.tile(np.eye(4, 4, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
         F = np.zeros_like(S)
-        Ref = np.tile(np.eye(2, 2, dtype=np.cfloat)[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
+        Ref = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
         
         # traverse all unit cells in the sample structure
         index = 0
@@ -238,21 +238,20 @@ class XrayDynMag(Xray):
                 if index > 0:
                     for k, energy in enumerate(self._energy):
                         for j in range(N):
-                            F[:, :, k, j] = np.matmul(np.linalg.inv(A[:, :, k, j]), last_A[:, :, k, j])                            
+                            F[k, j, :, :] = np.matmul(np.linalg.inv(A[k, j, :, :]), last_A[k, j, :, :])                            
                             # skip roughness for now
                             # how about debye waller?
-                            S[:, :, k, j] = np.matmul(P[:, :, k, j], np.matmul(F[:, :, k, j], S[:, :, k, j]))
+                            S[k, j, :, :] = np.matmul(P[k, j, :, :], np.matmul(F[k, j, :, :], S[k, j, :, :]))
 
                 index += 1
                 last_A = A
-        temp = np.divide(1, S[3, 3, :, :] * S[2, 2, :, :] - S[3, 2, :, :] * S[2, 3, :, :])
+        d = np.divide(1, S[:, :, 3, 3] * S[:, :, 2, 2] - S[:, :, 3, 2] * S[:, :, 2, 3])
 
-        Ref[0, 0, :, :] = (-S[3, 3, :, :] * S[2, 0, :, :] + S[2, 3, :, :] * S[3, 0, :, :]) * temp
-        Ref[0, 1, :, :] = (-S[3, 3, :, :] * S[2, 1, :, :] + S[2, 3, :, :] * S[3, 1, :, :]) * temp
-        Ref[1, 0, :, :] = ( S[3, 2, :, :] * S[2, 0, :, :] - S[2, 2, :, :] * S[3, 0, :, :]) * temp
-        Ref[1, 1, :, :] = ( S[3, 2, :, :] * S[2, 1, :, :] - S[2, 2, :, :] * S[3, 1, :, :]) * temp
+        Ref[:, :, 0, 0] = (-S[:, :, 3, 3] * S[:, :, 2, 0] + S[:, :, 2, 3] * S[:, :, 3, 0]) * d
+        Ref[:, :, 0, 1] = (-S[:, :, 3, 3] * S[:, :, 2, 1] + S[:, :, 2, 3] * S[:, :, 3, 1]) * d
+        Ref[:, :, 1, 0] = ( S[:, :, 3, 2] * S[:, :, 2, 0] - S[:, :, 2, 2] * S[:, :, 3, 0]) * d
+        Ref[:, :, 1, 1] = ( S[:, :, 3, 2] * S[:, :, 2, 1] - S[:, :, 2, 2] * S[:, :, 3, 1]) * d
         
-        temp = np.tile(np.array([[-1, 1], [-1j, -1j]])[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
-        #Ref = np.matmul(np.matmul(np.array([[-1, 1], [-1j, -1j]]), Ref), np.array([[-1, 1j], [1, 1j]]) * 0.5)   
-        Ref = np.einsum("ijlm,jklm->iklm", np.einsum("ijlm,jklm->iklm", temp, Ref), temp/2)
+        temp = np.tile(np.array([[-1, 1], [-1j, -1j]])[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
+        Ref = np.einsum("lmij,lmjk->lmik", np.einsum("lmij,lmjk->lmik", temp, Ref), temp/2)
         return Ref
