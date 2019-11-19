@@ -101,7 +101,7 @@ class XrayDynMag(Xray):
 
         """
         # check for already calculated data
-        _hash = make_hash_md5([self._energy, self._qz, self.polarization, area, args])
+        _hash = make_hash_md5([self._energy, self._qz, self.polarization, area, distance, args])
         try:
             index = self.last_atom_ref_trans_matrices['atom_ids'].index(atom.id)
         except ValueError:
@@ -285,8 +285,6 @@ class XrayDynMag(Xray):
         F = np.zeros_like(S)
         Ref = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
 
-        # traverse all unit cells in the sample structure
-        index = 0
         # vacuum
         A, P = self.get_atom_boundary_phase_matrix([], 0, 0)
         last_A = A
@@ -298,7 +296,6 @@ class XrayDynMag(Xray):
                     del_dist = (strain+1)-uc.atoms[j][1](strain)
                 else:
                     del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
-
                 A, P = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
                                                            uc._area,
                                                            del_dist*uc._c_axis)
@@ -310,8 +307,6 @@ class XrayDynMag(Xray):
                     S = np.einsum("lmij,lmjk->lmik", F, S)
                 else:
                     S = np.einsum("lmij,lmjk->lmik", P, np.einsum("lmij,lmjk->lmik", F, S))
-
-                index += 1
                 last_A = A
 
         d = np.divide(1, S[:, :, 3, 3] * S[:, :, 2, 2] - S[:, :, 3, 2] * S[:, :, 2, 3])
