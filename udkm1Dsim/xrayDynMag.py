@@ -30,7 +30,7 @@ from .xray import Xray
 # from .unitCell import UnitCell
 # from time import time
 # from os import path
-# from tqdm import trange
+from tqdm import trange
 # from .helpers import make_hash_md5, m_power_x, m_times_n, finderb
 
 r_0 = constants.physical_constants['classical electron radius'][0]
@@ -131,20 +131,33 @@ class XrayDynMag(Xray):
              np.cos(mag_phi)]
 
         eps = np.zeros([M, 3, 3], dtype=np.cfloat)
-        k_z = np.zeros([M, N], dtype=np.cfloat)
+#        k_z = np.zeros([M, N], dtype=np.cfloat)
 
         A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
         P = np.zeros([M, N, 4, 4], dtype=np.cfloat)
-        factor = 1.38E-7
+
         for k in range(M):
             energy = self._energy[k]
+            factor = 830.94/energy**2
+            try:
+                if atom.id == 'Fe':
+                    density = 0.142
+                elif atom.id == 'Cr':
+                    density = 0.1348
+                else:
+                    density = 0.069
+            except AttributeError:
+                density = 0
 #            qz = self._qz[k, :]
             theta = self._theta[k, :]
-
+            try:
+                cf = atom.get_atomic_form_factor(energy)
+            except AttributeError:
+                cf = 0
 #            mag = mag_amplitude * atom.get_magnetic_scattering_factor(energy)
-            mag = 0 * factor * mag_amplitude * 0.01 * atom.get_atomic_form_factor(energy)
+            mag = 0 * factor * mag_amplitude * 0.01 * cf
 
-            eps0 = 1 - factor*atom.get_atomic_form_factor(energy)
+            eps0 = 1 - factor*density*cf
             eps[k, 0, 0] = eps0
             eps[k, 0, 1] = -1j * u[2] * mag
             eps[k, 0, 2] = 1j * u[1] * mag
@@ -158,7 +171,7 @@ class XrayDynMag(Xray):
             alpha_y = np.cos(theta) / np.sqrt(eps[k, 0, 0])
             alpha_z = np.sqrt(1 - alpha_y**2)
 
-            k_z[k, :] = self._k[k] * np.sqrt(eps[k, 0, 0]) * alpha_z
+            # k_z[k, :] = self._k[k] * np.sqrt(eps[k, 0, 0]) * alpha_z
 
             n_right_down = np.sqrt(eps[k, 0, 0] - 1j * eps[k, 0, 2] * alpha_y
                                    - 1j * eps[k, 0, 1] * alpha_z)
@@ -215,11 +228,11 @@ class XrayDynMag(Xray):
             P[k, :, 2, 2] = np.exp(-1j * phase * n_right_up * alpha_z_right_up)
             P[k, :, 3, 3] = np.exp(-1j * phase * n_left_up * alpha_z_left_up)
 
-            return A, P
+        return A, P
 
     def calc_reflectivity(self):
         """calc_reflectivity"""
-        
+        strain = 0
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
         _, _, uc_handles = self.S.get_unit_cell_vectors()
@@ -230,28 +243,44 @@ class XrayDynMag(Xray):
         
         # traverse all unit cells in the sample structure
         index = 0
-        last_A = []
-        for i, uc in enumerate(uc_handles):
-            for atom, _, _ in uc.atoms:
-                A, P = self.get_atom_ref_trans_matrix(atom, uc._area, 1e-10)
-                
-                if index > 0:
-                    for k, energy in enumerate(self._energy):
-                        for j in range(N):
-                            F[k, j, :, :] = np.matmul(np.linalg.inv(A[k, j, :, :]), last_A[k, j, :, :])                            
-                            # skip roughness for now
-                            # how about debye waller?
-                            S[k, j, :, :] = np.matmul(P[k, j, :, :], np.matmul(F[k, j, :, :], S[k, j, :, :]))
+        # vacuum
+        A, P = self.get_atom_ref_trans_matrix([], 0, 0)
+        last_A = A
+        
+        for i in trange(self.S.get_number_of_unit_cells()):
+            uc = uc_handles[i]
+            K = uc.num_atoms  # number of atoms
+            for j in range(K):
+                if j == (K-1):  # its the last atom
+                    del_dist = (strain+1)-uc.atoms[j][1](strain)
+                else:
+                    del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
+
+                A, P = self.get_atom_ref_trans_matrix(uc.atoms[j][0], uc._area, del_dist*uc._c_axis)
+                F = np.einsum("lmij,lmjk->lmik", np.linalg.inv(A), last_A)
+                # skip roughness for now
+                # how about debye waller?
+                S = np.einsum("lmij,lmjk->lmik", P, np.einsum("lmij,lmjk->lmik", F, S))
 
                 index += 1
                 last_A = A
-        d = np.divide(1, S[:, :, 3, 3] * S[:, :, 2, 2] - S[:, :, 3, 2] * S[:, :, 2, 3])
 
+        d = np.divide(1, S[:, :, 3, 3] * S[:, :, 2, 2] - S[:, :, 3, 2] * S[:, :, 2, 3])
         Ref[:, :, 0, 0] = (-S[:, :, 3, 3] * S[:, :, 2, 0] + S[:, :, 2, 3] * S[:, :, 3, 0]) * d
         Ref[:, :, 0, 1] = (-S[:, :, 3, 3] * S[:, :, 2, 1] + S[:, :, 2, 3] * S[:, :, 3, 1]) * d
         Ref[:, :, 1, 0] = ( S[:, :, 3, 2] * S[:, :, 2, 0] - S[:, :, 2, 2] * S[:, :, 3, 0]) * d
         Ref[:, :, 1, 1] = ( S[:, :, 3, 2] * S[:, :, 2, 1] - S[:, :, 2, 2] * S[:, :, 3, 1]) * d
         
-        temp = np.tile(np.array([[-1, 1], [-1j, -1j]])[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
-        Ref = np.einsum("lmij,lmjk->lmik", np.einsum("lmij,lmjk->lmik", temp, Ref), temp/2)
+#        temp = np.tile(np.array([[-1, 1], [-1j, -1j]])[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
+        temp = np.array([[-1, 1], [-1j, -1j]])
+        Ref = np.matmul(np.matmul(temp, Ref), temp/2)
         return Ref
+
+    def get_reflectivity(self):
+        Ref = self.calc_reflectivity()
+        Pol_in  = np.array([1+0.j, 0.j], dtype=complex) # to put "sigma" so as to update experimental panel easily.
+        Pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
+        
+        X = np.matmul(Ref, Pol_in)
+        R = np.real(np.matmul(np.square(np.absolute(X)),Pol_out))
+        return R
