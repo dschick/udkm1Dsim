@@ -99,7 +99,7 @@ class UnitCell:
         self.density = 0*u.kg/u.m**2
         self.spring_const = np.array([0])
         self.deb_wal_fac = kwargs.get('deb_wal_fac', 0*u.m**2)
-        self.sound_vel = kwargs.get('sound_vel', 0)
+        self.sound_vel = kwargs.get('sound_vel', 0*u.m/u.s)
         self.phonon_damping = kwargs.get('phonon_damping', 0*u.kg/u.s)
         self.opt_pen_depth = kwargs.get('opt_pen_depth', 0*u.nm)
         self.opt_ref_index = kwargs.get('opt_ref_index', 0)
