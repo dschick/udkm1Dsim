@@ -27,11 +27,8 @@ __docformat__ = "restructuredtext"
 import numpy as np
 import scipy.constants as constants
 from .xray import Xray
-# from .unitCell import UnitCell
-# from time import time
-# from os import path
 from tqdm import trange
-# from .helpers import make_hash_md5, m_power_x, m_times_n, finderb
+from .helpers import make_hash_md5
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -84,6 +81,10 @@ class XrayDynMag(Xray):
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
+        self.last_atom_ref_trans_matrices = {'atom_ids': [],
+                                             'hashes': [],
+                                             'A': [],
+                                             'P': []}
 
     def __str__(self):
         """String representation of this class"""
@@ -92,10 +93,51 @@ class XrayDynMag(Xray):
         class_str += super().__str__()
         return class_str
 
-    def get_atom_ref_trans_matrix(self, atom, area, distance, *args):
-        """get_atom_ref_trans_matrix
+    def get_atom_boundary_phase_matrix(self, atom, area, distance, *args):
+        """get_atom_boundary_phase_matrix
 
         Returns the reflection-transmission matrix of an atom from
+        Elzo formalism:
+
+        """
+        # check for already calculated data
+        _hash = make_hash_md5([self._energy, self._qz, self.polarization, area, args])
+        try:
+            index = self.last_atom_ref_trans_matrices['atom_ids'].index(atom.id)
+        except ValueError:
+            index = -1
+        except AttributeError:
+            # its vacuum
+            A, P = self.calc_atom_boundary_phase_matrix(atom, area, distance, args)
+            return A, P
+
+        if (index >= 0) and (_hash == self.last_atom_ref_trans_matrices['hashes'][index]):
+            # These are the same X-ray parameters as last time so we
+            # can use the same matrix again for this atom
+            A = self.last_atom_ref_trans_matrices['A'][index]            
+            P = self.last_atom_ref_trans_matrices['P'][index]
+        else:
+            # These are new parameters so we have to calculate.
+            # Get the reflection-transmission-factors
+            A, P = self.calc_atom_boundary_phase_matrix(atom, area, distance, args)
+            # remember this matrix for next use with the same
+            # parameters for this atom
+            if index >= 0:
+                self.last_atom_ref_trans_matrices['atom_ids'][index] = atom.id
+                self.last_atom_ref_trans_matrices['hashes'][index] = _hash
+                self.last_atom_ref_trans_matrices['A'][index] = A
+                self.last_atom_ref_trans_matrices['P'][index] = P
+            else:
+                self.last_atom_ref_trans_matrices['atom_ids'].append(atom.id)
+                self.last_atom_ref_trans_matrices['hashes'].append(_hash)
+                self.last_atom_ref_trans_matrices['A'].append(A)
+                self.last_atom_ref_trans_matrices['P'].append(P)
+        return A, P
+
+    def calc_atom_boundary_phase_matrix(self, atom, area, distance, *args):
+        """calc_atom_boundary_phase_matrix
+
+        Calculates the reflection-transmission matrix of an atom from
         Elzo formalism:
 
         """
@@ -131,8 +173,6 @@ class XrayDynMag(Xray):
              np.cos(mag_phi)]
 
         eps = np.zeros([M, N, 3, 3], dtype=np.cfloat)
-#        k_z = np.zeros([M, N], dtype=np.cfloat)
-
         A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
         P = np.zeros([M, N, 4, 4], dtype=np.cfloat)
 
@@ -153,9 +193,9 @@ class XrayDynMag(Xray):
         try:
             cf = atom.get_atomic_form_factor(energy)
         except AttributeError:
-            cf = 0
+            cf = np.zeros_like(energy)
 #            mag = mag_amplitude * atom.get_magnetic_scattering_factor(energy)
-        mag = 0 * factor * mag_amplitude * 0.01 * cf
+        mag = np.zeros_like(energy)# * factor * mag_amplitude * 0.01 * cf
         mag = np.tile(mag[:, np.newaxis], [1, N])
 
         eps0 = 1 - factor*density*cf
@@ -247,7 +287,7 @@ class XrayDynMag(Xray):
         # traverse all unit cells in the sample structure
         index = 0
         # vacuum
-        A, P = self.get_atom_ref_trans_matrix([], 0, 0)
+        A, P = self.get_atom_boundary_phase_matrix([], 0, 0)
         last_A = A
 
         for i in trange(self.S.get_number_of_unit_cells()):
@@ -259,9 +299,9 @@ class XrayDynMag(Xray):
                 else:
                     del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
 
-                A, P = self.get_atom_ref_trans_matrix(uc.atoms[j][0],
-                                                      uc._area,
-                                                      del_dist*uc._c_axis)
+                A, P = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
+                                                           uc._area,
+                                                           del_dist*uc._c_axis)
                 F = np.einsum("lmij,lmjk->lmik", np.linalg.inv(A), last_A)
                 # skip roughness for now
                 # how about debye waller?
