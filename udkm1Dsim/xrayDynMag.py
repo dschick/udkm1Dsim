@@ -278,6 +278,7 @@ class XrayDynMag(Xray):
         strain = 0
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
+        L = self.S.get_number_of_unit_cells()  # number of unit cells
         _, _, uc_handles = self.S.get_unit_cell_vectors()
 
         S = np.tile(np.eye(4, 4, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
@@ -289,8 +290,7 @@ class XrayDynMag(Xray):
         # vacuum
         A, P = self.get_atom_boundary_phase_matrix([], 0, 0)
         last_A = A
-
-        for i in trange(self.S.get_number_of_unit_cells()):
+        for i in trange(L):
             uc = uc_handles[i]
             K = uc.num_atoms  # number of atoms
             for j in range(K):
@@ -305,7 +305,11 @@ class XrayDynMag(Xray):
                 F = np.einsum("lmij,lmjk->lmik", np.linalg.inv(A), last_A)
                 # skip roughness for now
                 # how about debye waller?
-                S = np.einsum("lmij,lmjk->lmik", P, np.einsum("lmij,lmjk->lmik", F, S))
+                if (i == L-1) and (j == K-1):
+                    # last infinite layer without propagation
+                    S = np.einsum("lmij,lmjk->lmik", F, S)
+                else:
+                    S = np.einsum("lmij,lmjk->lmik", P, np.einsum("lmij,lmjk->lmik", F, S))
 
                 index += 1
                 last_A = A
