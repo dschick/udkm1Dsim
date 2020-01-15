@@ -94,7 +94,8 @@ class Atom:
         self.name = element[0]
         self.atomic_number_z = element[1]
         self.mass_number_a = element[2]
-        self.mass = self.mass_number_a*constants.atomic_mass*u.kg
+        self._mass = self.mass_number_a*constants.atomic_mass
+        self.mass = self._mass*u.kg
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff()
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
