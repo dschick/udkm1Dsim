@@ -113,7 +113,7 @@ class XrayDyn(Xray):
         # get the reflectivity-transmisson matrix of the structure
         RT, A = self.homogeneous_ref_trans_matrix(self.S, strains)
         # calculate the real reflectivity from the RT matrix
-        R = self.get_reflectivity_from_matrix(RT)
+        R = self.calc_reflectivity_from_matrix(RT)
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
         return R, A
 
@@ -333,7 +333,7 @@ class XrayDyn(Xray):
                     remote_strain_vectors,
                     remote_RTM)
             RT = delayed(m_times_n)(RT, RTS)
-            Ri = delayed(XrayDyn.get_reflectivity_from_matrix)(RT)
+            Ri = delayed(XrayDyn.calc_reflectivity_from_matrix)(RT)
             res.append(Ri)
 
         # compute results
@@ -398,7 +398,7 @@ class XrayDyn(Xray):
             RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
             RT = m_times_n(RT, RTS)
         # calculate reflectivity from ref-trans matrix
-        R = self.get_reflectivity_from_matrix(RT)
+        R = self.calc_reflectivity_from_matrix(RT)
         return R
 
     @staticmethod
@@ -665,8 +665,8 @@ class XrayDyn(Xray):
         return phi
 
     @staticmethod
-    def get_reflectivity_from_matrix(M):
-        """get_reflectivity_from_matrix
+    def calc_reflectivity_from_matrix(M):
+        """calc_reflectivity_from_matrix
 
         Returns the physical reflectivity from an 2x2 matrix of
         transmission and reflectifity factors:
