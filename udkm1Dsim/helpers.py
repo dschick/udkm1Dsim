@@ -57,6 +57,15 @@ def m_power_x(m, x):
     return m
 
 
+def m_power_x2(m, x):
+    # apply exponent to each matrix in a numpy array
+    if x > 1:
+        for i in range(np.size(m, 0)):
+            for j in range(np.size(m, 1)):
+                m[i, j, :, :] = np.linalg.matrix_power(m[i, j, :, :], x)
+    return m
+
+
 def m_times_n(m, n):
     return np.einsum("ijlm,jklm->iklm", m, n)
 
