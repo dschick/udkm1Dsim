@@ -205,7 +205,7 @@ class Structure:
             if isinstance(self.sub_structures[i][0], UnitCell):
                 N = N + 1
             else:
-                N = N + self.sub_structures[i][0].getNumberOfsub_structures()
+                N = N + self.sub_structures[i][0].get_number_of_sub_structures()
         return N
 
     def get_number_of_unit_cells(self):
