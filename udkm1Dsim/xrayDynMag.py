@@ -94,6 +94,113 @@ class XrayDynMag(Xray):
         class_str += super().__str__()
         return class_str
 
+    def inhomogeneous_reflectivity(self, *args):
+        """inhomogeneous_reflectivity"""
+        RT, A_inv = self.calc_inhomogeneous_matrix()
+        # vacuum
+        A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
+        # multiply vacuum and last layer
+        RT = np.einsum("lmij,lmjk->lmik", A_inv, np.einsum("lmij,lmjk->lmik", RT, A0))
+
+        Ref = XrayDynMag.calc_reflectivity_from_matrix(RT)
+        Pol_in = np.array([1+0.j, 0.j], dtype=complex)
+        Pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
+
+        X = np.matmul(Ref, Pol_in)
+        R = np.real(np.matmul(np.square(np.absolute(X)), Pol_out))
+        return R
+
+    def calc_inhomogeneous_matrix(self):
+        """calc_inhomogeneous_matrix"""
+        strain = 0
+        L = self.S.get_number_of_unit_cells()  # number of unit cells
+        _, _, uc_handles = self.S.get_unit_cell_vectors()
+
+        for i in trange(L):
+            uc = uc_handles[i]
+            RT_uc, A_inv = self.calc_uc_boundary_phase_matrix(uc, strain)
+
+            if i == 0:
+                RT = RT_uc
+            else:
+                RT = np.einsum("lmij,lmjk->lmik", RT_uc, RT)
+
+        return RT, A_inv
+
+    def homogeneous_reflectivity(self, *args):
+        """homogeneous_reflectivity"""
+
+        RT, A_inv = self.calc_homogeneous_matrix(self.S)
+
+        A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
+        RT = np.einsum("lmij,lmjk->lmik", A_inv, np.einsum("lmij,lmjk->lmik", RT, A0))
+
+        Ref = self.calc_reflectivity_from_matrix(RT)
+        Pol_in = np.array([1+0.j, 0.j], dtype=complex)
+        Pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
+
+        X = np.matmul(Ref, Pol_in)
+        R = np.real(np.matmul(np.square(np.absolute(X)), Pol_out))
+        return R
+
+    def calc_homogeneous_matrix(self, S, *args):
+        """calc_homogeneous_matrix"""
+        # if no strains are given we assume no strain (1)
+        if len(args) == 0:
+            strains = np.zeros([S.get_number_of_sub_structures(), 1])
+        else:
+            strains = args[0]
+
+        strainCounter = 0
+
+        # traverse substructures
+        for i, sub_structure in enumerate(S.sub_structures):
+            if isinstance(sub_structure[0], UnitCell):
+                # the sub_structure is an unitCell
+                # calculate the ref-trans matrices for N unitCells
+                RT_uc, A_inv = self.calc_uc_boundary_phase_matrix(sub_structure[0],
+                                                                  strains[strainCounter])
+                temp = m_power_x2(RT_uc, sub_structure[1])
+                strainCounter += 1
+            else:
+                # its a structure
+                # make a recursive call
+                temp, A_inv = self.calc_homogeneous_matrix(
+                        sub_structure[0],
+                        strains[strainCounter:(strainCounter
+                                               + sub_structure[0].get_number_of_sub_structures())])
+                strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
+                # calculate the ref-trans matrices for N sub structures
+                temp = m_power_x2(temp, sub_structure[1])
+
+            # multiply it to the output
+            if i == 0:
+                RT = temp
+            else:
+                RT = np.einsum("lmij,lmjk->lmik", temp, RT)
+
+        return RT, A_inv
+
+    def calc_uc_boundary_phase_matrix(self, uc, strain):
+        K = uc.num_atoms  # number of atoms
+        for j in range(K):
+            if j == (K-1):  # its the last atom
+                del_dist = (strain+1)-uc.atoms[j][1](strain)
+            else:
+                del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
+
+            A, P = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
+                                                       uc._area,
+                                                       del_dist*uc._c_axis)
+            A_inv = np.linalg.inv(A)
+            if j == 0:
+                RT = np.einsum("lmij,lmjk->lmik", A, np.einsum("lmij,lmjk->lmik", P, A_inv))
+            else:
+                RT = np.einsum("lmij,lmjk->lmik", A,
+                               np.einsum("lmij,lmjk->lmik", P,
+                                         np.einsum("lmij,lmjk->lmik", A_inv, RT)))
+        return RT, A_inv
+
     def get_atom_boundary_phase_matrix(self, atom, area, distance, *args):
         """get_atom_boundary_phase_matrix
 
@@ -269,116 +376,6 @@ class XrayDynMag(Xray):
         P[:, :, 3, 3] = np.exp(-1j * phase * n_left_up * alpha_z_left_up)
 
         return A, P
-
-    def calc_uc_boundary_phase_matrix(self, uc, strain):
-        K = uc.num_atoms  # number of atoms
-        for j in range(K):
-            if j == (K-1):  # its the last atom
-                del_dist = (strain+1)-uc.atoms[j][1](strain)
-            else:
-                del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
-
-            A, P = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
-                                                       uc._area,
-                                                       del_dist*uc._c_axis)
-            A_inv = np.linalg.inv(A)
-            if j == 0:
-                RT = np.einsum("lmij,lmjk->lmik", A, np.einsum("lmij,lmjk->lmik", P, A_inv))
-            else:
-                RT = np.einsum("lmij,lmjk->lmik", A,
-                               np.einsum("lmij,lmjk->lmik", P,
-                                         np.einsum("lmij,lmjk->lmik", A_inv, RT)))
-        return RT, A_inv
-
-    def inhomogeneous_reflectivity(self, *args):
-        """inhomogeneous_reflectivity"""
-        RT = self.calc_inhomogeneous_matrix()
-        Ref = XrayDynMag.calc_reflectivity_from_matrix(RT)
-        Pol_in = np.array([1+0.j, 0.j], dtype=complex)
-        Pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
-
-        X = np.matmul(Ref, Pol_in)
-        R = np.real(np.matmul(np.square(np.absolute(X)), Pol_out))
-        return R
-
-    def calc_inhomogeneous_matrix(self):
-        """calc_inhomogeneous_matrix"""
-        strain = 0
-        L = self.S.get_number_of_unit_cells()  # number of unit cells
-        _, _, uc_handles = self.S.get_unit_cell_vectors()
-
-        for i in trange(L):
-            uc = uc_handles[i]
-            RT_uc, A_inv = self.calc_uc_boundary_phase_matrix(uc, strain)
-
-            if i == 0:
-                RT = RT_uc
-            else:
-                RT = np.einsum("lmij,lmjk->lmik", RT_uc, RT)
-
-        # vacuum
-        A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
-        # multiply vacuum and last layer
-        RT = np.einsum("lmij,lmjk->lmik", A_inv, np.einsum("lmij,lmjk->lmik", RT, A0))
-
-        return RT
-
-    def homogeneous_reflectivity(self, *args):
-        """homogeneous_reflectivity"""
-
-        RT, A_inv = self.calc_homogeneous_matrix(self.S)
-
-        A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
-        RT = np.einsum("lmij,lmjk->lmik", A_inv, np.einsum("lmij,lmjk->lmik", RT, A0))
-
-        Ref = self.calc_reflectivity_from_matrix(RT)
-        Pol_in = np.array([1+0.j, 0.j], dtype=complex)
-        Pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
-
-        X = np.matmul(Ref, Pol_in)
-        R = np.real(np.matmul(np.square(np.absolute(X)), Pol_out))
-        return R
-
-    def calc_homogeneous_matrix(self, S, *args):
-        """calc_homogeneous_matrix"""
-        # if no strains are given we assume no strain (1)
-        if len(args) == 0:
-            strains = np.zeros([S.get_number_of_sub_structures(), 1])
-        else:
-            strains = args[0]
-
-        strainCounter = 0
-
-        # traverse substructures
-        for i, sub_structure in enumerate(S.sub_structures):
-            if isinstance(sub_structure[0], UnitCell):
-                # the sub_structure is an unitCell
-                # calculate the ref-trans matrices for N unitCells
-                RT_uc, A_inv = self.calc_uc_boundary_phase_matrix(sub_structure[0],
-                                                                  strains[strainCounter])
-                
-                temp = m_power_x2(RT_uc, sub_structure[1])
-                strainCounter += 1
-            else:
-                # its a structure
-                # make a recursive call
-                temp, A_inv = self.calc_homogeneous_matrix(
-                        sub_structure[0],
-                        strains[strainCounter:(strainCounter
-                                                + sub_structure[0].get_number_of_sub_structures())])
-                strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
-                # calculate the ref-trans matrices for N sub structures
-                temp = m_power_x2(temp, sub_structure[1])
-
-            # multiply it to the output
-            if i == 0:
-                RT = temp
-            else:
-                RT = np.einsum("lmij,lmjk->lmik", temp, RT)
-        
-
-        return RT, A_inv
-
     @staticmethod
     def calc_reflectivity_from_matrix(RT):
         """calc_reflectivity_from_matrix"""
