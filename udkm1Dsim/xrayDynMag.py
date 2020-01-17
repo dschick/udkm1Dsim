@@ -102,12 +102,7 @@ class XrayDynMag(Xray):
         # multiply vacuum and last layer
         RT = np.einsum("lmij,lmjk->lmik", A_inv, np.einsum("lmij,lmjk->lmik", RT, A0))
 
-        Ref = XrayDynMag.calc_reflectivity_from_matrix(RT)
-        Pol_in = np.array([1+0.j, 0.j], dtype=complex)
-        Pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
-
-        X = np.matmul(Ref, Pol_in)
-        R = np.real(np.matmul(np.square(np.absolute(X)), Pol_out))
+        R = XrayDynMag.calc_reflectivity_from_matrix(RT)
         return R
 
     def calc_inhomogeneous_matrix(self):
@@ -135,12 +130,8 @@ class XrayDynMag(Xray):
         A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
         RT = np.einsum("lmij,lmjk->lmik", A_inv, np.einsum("lmij,lmjk->lmik", RT, A0))
 
-        Ref = self.calc_reflectivity_from_matrix(RT)
-        Pol_in = np.array([1+0.j, 0.j], dtype=complex)
-        Pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
-
-        X = np.matmul(Ref, Pol_in)
-        R = np.real(np.matmul(np.square(np.absolute(X)), Pol_out))
+        R = self.calc_reflectivity_from_matrix(RT)
+        
         return R
 
     def calc_homogeneous_matrix(self, S, *args):
@@ -376,6 +367,7 @@ class XrayDynMag(Xray):
         P[:, :, 3, 3] = np.exp(-1j * phase * n_left_up * alpha_z_left_up)
 
         return A, P
+
     @staticmethod
     def calc_reflectivity_from_matrix(RT):
         """calc_reflectivity_from_matrix"""
@@ -389,4 +381,11 @@ class XrayDynMag(Xray):
 
         temp = np.array([[-1, 1], [-1j, -1j]])
         Ref = np.matmul(np.matmul(temp, Ref), temp/2)
-        return Ref
+        
+        Pol_in = np.array([1+0.j, 0.j], dtype=complex)
+        Pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
+
+        X = np.matmul(Ref, Pol_in)
+        R = np.real(np.matmul(np.square(np.absolute(X)), Pol_out))
+        
+        return R
