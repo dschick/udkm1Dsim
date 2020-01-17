@@ -29,7 +29,7 @@ import scipy.constants as constants
 from .xray import Xray
 from .unitCell import UnitCell
 from tqdm import trange
-from .helpers import make_hash_md5, m_power_x2
+from .helpers import make_hash_md5, m_power_x, m_times_n
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -100,7 +100,7 @@ class XrayDynMag(Xray):
         # vacuum
         A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
         # multiply vacuum and last layer
-        RT = np.einsum("lmij,lmjk->lmik", A_inv, np.einsum("lmij,lmjk->lmik", RT, A0))
+        RT = m_times_n(A_inv, m_times_n(RT, A0))
 
         R = XrayDynMag.calc_reflectivity_from_matrix(RT)
         return R
@@ -118,7 +118,7 @@ class XrayDynMag(Xray):
             if i == 0:
                 RT = RT_uc
             else:
-                RT = np.einsum("lmij,lmjk->lmik", RT_uc, RT)
+                RT = m_times_n(RT_uc, RT)
 
         return RT, A_inv
 
@@ -128,7 +128,7 @@ class XrayDynMag(Xray):
         RT, A_inv = self.calc_homogeneous_matrix(self.S)
 
         A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
-        RT = np.einsum("lmij,lmjk->lmik", A_inv, np.einsum("lmij,lmjk->lmik", RT, A0))
+        RT = m_times_n(A_inv, m_times_n(RT, A0))
 
         R = self.calc_reflectivity_from_matrix(RT)
         
@@ -151,7 +151,7 @@ class XrayDynMag(Xray):
                 # calculate the ref-trans matrices for N unitCells
                 RT_uc, A_inv = self.calc_uc_boundary_phase_matrix(sub_structure[0],
                                                                   strains[strainCounter])
-                temp = m_power_x2(RT_uc, sub_structure[1])
+                temp = m_power_x(RT_uc, sub_structure[1])
                 strainCounter += 1
             else:
                 # its a structure
@@ -162,13 +162,13 @@ class XrayDynMag(Xray):
                                                + sub_structure[0].get_number_of_sub_structures())])
                 strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
                 # calculate the ref-trans matrices for N sub structures
-                temp = m_power_x2(temp, sub_structure[1])
+                temp = m_power_x(temp, sub_structure[1])
 
             # multiply it to the output
             if i == 0:
                 RT = temp
             else:
-                RT = np.einsum("lmij,lmjk->lmik", temp, RT)
+                RT = m_times_n(temp, RT)
 
         return RT, A_inv
 
@@ -185,11 +185,11 @@ class XrayDynMag(Xray):
                                                        del_dist*uc._c_axis)
             A_inv = np.linalg.inv(A)
             if j == 0:
-                RT = np.einsum("lmij,lmjk->lmik", A, np.einsum("lmij,lmjk->lmik", P, A_inv))
+                RT = m_times_n(A, m_times_n(P, A_inv))
             else:
-                RT = np.einsum("lmij,lmjk->lmik", A,
-                               np.einsum("lmij,lmjk->lmik", P,
-                                         np.einsum("lmij,lmjk->lmik", A_inv, RT)))
+                RT = m_times_n(A,
+                               m_times_n(P,
+                                         m_times_n(A_inv, RT)))
         return RT, A_inv
 
     def get_atom_boundary_phase_matrix(self, atom, area, distance, *args):
@@ -277,8 +277,11 @@ class XrayDynMag(Xray):
 
         try:
             # calculate molar density
-            mass_density = atom._mass/(area*distance)/1000  # in g/cm³
-            density = mass_density/atom.mass_number_a
+            if distance == 0:
+                density = 0
+            else:
+                mass_density = atom._mass/(area*distance)/1000  # in g/cm³
+                density = mass_density/atom.mass_number_a
         except AttributeError:
             density = 0
         energy = self._energy
