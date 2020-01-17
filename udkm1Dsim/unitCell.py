@@ -426,6 +426,8 @@ class UnitCell:
         Adds an atomBase/atomMixed at a relative position of the unit
         cell.
 
+        Sort the list of atoms by the position at zero strain.
+
         Update the mass, density and spring constant of the unit cell
         automatically:
 
@@ -454,6 +456,8 @@ class UnitCell:
 
         # add the atom at the end of the array
         self.atoms.append([atom, position, position_str])
+        # sort list of atoms by position at zero strain
+        self.atoms.sort(key = lambda x: x[1](0))
         # increase the number of atoms
         self.num_atoms = self.num_atoms + 1
 
