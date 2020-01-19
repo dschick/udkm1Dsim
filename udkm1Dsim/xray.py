@@ -28,6 +28,7 @@ import numpy as np
 from .simulation import Simulation
 from . import u, Q_
 from tabulate import tabulate
+from .helpers import make_hash_md5
 
 
 class Xray(Simulation):
@@ -66,6 +67,31 @@ class Xray(Simulation):
         class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
+
+    def get_hash(self, strain_vectors, **kwargs):
+        """get_hash
+
+        Returns a unique hash given by the energy :math:`E`,
+        :math:`q_z` range, polarization factor and the strain vectors as
+        well as the sample structure hash for relevant xray parameters.
+
+        """
+        param = [self.polarization, strain_vectors]
+        if 'energy' in kwargs:
+            param.append(kwargs.get('energy'))
+        else:
+            param.append(self._energy)
+        if 'qz' in kwargs:
+            param.append(kwargs.get('qz'))
+        else:
+            param.append(self._qz)
+        if 'strain_map' in kwargs:
+            strain_map = kwargs.get('strain_map')
+            if np.size(strain_map) > 1e6:
+                strain_map = strain_map.flatten()[0:1000000]
+            param.append(strain_map)
+
+        return self.S.get_hash(types='xray') + '_' + make_hash_md5(param)
 
     def get_polarization_factor(self, theta):
         """get_polarization_factor

@@ -66,31 +66,6 @@ class XrayDyn(Xray):
         class_str += super().__str__()
         return class_str
 
-    def get_hash(self, strain_vectors, **kwargs):
-        """get_hash
-
-        Returns a unique hash given by the energy :math:`E`,
-        :math:`q_z` range, polarization factor and the strain vectors as
-        well as the sample structure hash for relevant xray parameters.
-
-        """
-        param = [self.polarization, strain_vectors]
-        if 'energy' in kwargs:
-            param.append(kwargs.get('energy'))
-        else:
-            param.append(self._energy)
-        if 'qz' in kwargs:
-            param.append(kwargs.get('qz'))
-        else:
-            param.append(self._qz)
-        if 'strain_map' in kwargs:
-            strain_map = kwargs.get('strain_map')
-            if np.size(strain_map) > 1e6:
-                strain_map = strain_map.flatten()[0:1000000]
-            param.append(strain_map)
-
-        return self.S.get_hash(types='xray') + '_' + make_hash_md5(param)
-
     def homogeneous_reflectivity(self, *args):
         """homogeneous_reflectivity
 
@@ -211,7 +186,10 @@ class XrayDyn(Xray):
         """
         # create a hash of all simulation parameters
         filename = 'inhomogeneous_reflectivity_dyn_' \
-                   + self.get_hash(strain_vectors, strain_map=strain_map) \
+                   + self.get_hash(strain_vectors,
+                                   qz=self.qz,
+                                   energy=self.energy,
+                                   strain_map=strain_map) \
                    + '.npy'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir

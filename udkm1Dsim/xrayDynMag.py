@@ -27,6 +27,7 @@ __docformat__ = "restructuredtext"
 import numpy as np
 import scipy.constants as constants
 from time import time
+from os import path
 from .xray import Xray
 from .unitCell import UnitCell
 from tqdm import trange
@@ -109,6 +110,10 @@ class XrayDynMag(Xray):
         RT, A_inv = self.calc_homogeneous_matrix(self.S, strains)
         # vacuum boundary
         A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
+        # if a substrate is included add it at the end
+        if self.S.substrate != []:
+            RT_sub, A_inv = self.calc_homogeneous_matrix(self.S.substrate)
+            RT = m_times_n(RT_sub, RT)
         # multiply the result of the structure with the boundary matrix
         # of vacuum (initial layer) and the final layer
         RT = m_times_n(A_inv, m_times_n(RT, A0))
@@ -155,26 +160,77 @@ class XrayDynMag(Xray):
 
         return RT, A_inv
 
-    def inhomogeneous_reflectivity(self, *args):
+    def inhomogeneous_reflectivity(self, strain_map, strain_vectors=[]):
         """inhomogeneous_reflectivity"""
-        RT, A_inv = self.calc_inhomogeneous_matrix()
-        # vacuum
-        A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
-        # multiply vacuum and last layer
-        RT = m_times_n(A_inv, m_times_n(RT, A0))
+        # create a hash of all simulation parameters
+        filename = 'inhomogeneous_reflectivity_dynMag_' \
+                   + self.get_hash(strain_vectors,
+                                   qz=self.qz,
+                                   energy=self.energy,
+                                   strain_map=strain_map) \
+                   + '.npy'
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        # check if we find some corresponding data in the cache dir
+        if path.exists(full_filename) and not self.force_recalc:
+            # found something so load it
+            R = np.load(full_filename)
+            self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
+        else:
+            t1 = time()
+            self.disp_message('Calculating _inhomogenousReflectivity_ ...')
+            # parse the input arguments
+            if not isinstance(strain_map, np.ndarray):
+                raise TypeError('strain_map must be a numpy ndarray!')
+            if not isinstance(strain_vectors, list):
+                raise TypeError('strain_vectors must be a list!')
 
-        R = XrayDynMag.calc_reflectivity_from_matrix(RT)
+            R = self.sequential_inhomogeneous_reflectivity(strain_map)
+
+            self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
+                              ' {:f} s'.format(time()-t1))
+            self.save(full_filename, R, '_inhomogeneous_reflectivity_')
         return R
 
-    def calc_inhomogeneous_matrix(self):
+    def sequential_inhomogeneous_reflectivity(self, strain_map):
+        """sequential_inhomogeneous_reflectivity
+
+        Returns the reflectivity of an inhomogenously strained sample
+        structure for a given ``strain_map`` in position and time, as
+        well as for a given set of possible strains for each unit cell
+        in the sample structure (``strain_vectors``).
+        The function calculates the results sequentially without
+        parallelization.
+
+        """
+        # initialize
+        N = np.size(strain_map, 0)  # delay steps
+        R = np.zeros([N, np.size(self._qz, 0), np.size(self._qz, 1)])
+        for i in trange(N, desc='Progress', leave=True):
+            # get the inhomogenous reflectivity of the sample
+            # structure for each time step of the strain map
+
+            RT, A_inv = self.calc_inhomogeneous_matrix(strain_map[i, :])
+            # vacuum
+            A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
+            # if a substrate is included add it at the end
+            if self.S.substrate != []:
+                RT_sub, A_inv = self.calc_homogeneous_matrix(self.S.substrate)
+                RT = m_times_n(RT_sub, RT)
+            # multiply vacuum and last layer
+            RT = m_times_n(A_inv, m_times_n(RT, A0))
+
+            R[i, :, :] = XrayDynMag.calc_reflectivity_from_matrix(RT)
+
+        return R
+
+    def calc_inhomogeneous_matrix(self, strains):
         """calc_inhomogeneous_matrix"""
-        strain = 0
         L = self.S.get_number_of_unit_cells()  # number of unit cells
         _, _, uc_handles = self.S.get_unit_cell_vectors()
 
-        for i in trange(L):
+        for i in range(L):
             uc = uc_handles[i]
-            RT_uc, A_inv = self.calc_uc_boundary_phase_matrix(uc, strain)
+            RT_uc, A_inv = self.calc_uc_boundary_phase_matrix(uc, strains[i])
 
             if i == 0:
                 RT = RT_uc
