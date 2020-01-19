@@ -97,6 +97,7 @@ class Atom:
         self._mass = self.mass_number_a*constants.atomic_mass
         self.mass = self._mass*u.kg
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff()
+        self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff()
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
     def __str__(self):
@@ -227,6 +228,47 @@ class Atom:
             f[i, :] = f_cm + self.get_atomic_form_factor(en) -\
                 np.sum(self.cromer_mann_coeff[0:3])
         return f
+
+    def read_magnetic_form_factor_coeff(self):
+        """read_magnetic_form_factor_coeff
+
+        The magnetic form factor :math:`m` in dependence from the energy
+        :math:`E` is read from a parameter file.
+
+        """
+        filename = os.path.join(os.path.dirname(__file__),
+                                'parameters/magneticFormFactors/{:s}.mf'.format(
+                                        self.symbol.lower()))
+        try:
+            f = np.genfromtxt(filename, skip_header=1)
+        except Exception as e:
+            print('File {:s} not found!\nMake sure the path /parameters/magneticFormFactors/ is in'
+                  'your search path!',
+                  filename)
+            print(e)
+
+        return f
+
+    @u.wraps(None, (None, 'eV'), strict=False)
+    def get_magnetic_form_factor(self, energy):
+        """get_magnetic_form_factor
+
+        Returns the complex magnetic form factor
+
+        .. math:: m(E)=m_1-i m_2
+
+        for the energy :math:`E` [eV].
+
+        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`
+
+        """
+        # interpolate the real and imaginary part in dependence of E
+        m1 = np.interp(energy, self.magnetic_form_factor_coeff[:, 0],
+                       self.magnetic_form_factor_coeff[:, 1])
+        m2 = np.interp(energy, self.magnetic_form_factor_coeff[:, 0],
+                       self.magnetic_form_factor_coeff[:, 2])
+
+        return m1 + m2*1j
 
 
 class AtomMixed(Atom):
