@@ -26,7 +26,7 @@ import os
 import numpy as np
 import scipy.constants as constants
 from tabulate import tabulate
-from . import u
+from . import u, Q_
 
 
 class Atom:
@@ -57,6 +57,9 @@ class Atom:
            coefficients for energy-dependent atomic form factor
         cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
            angular-dependent atomic form factor
+        mag_amplitude (float): magnetization amplitude 0 .. 1
+        mag_phi (float): phi angle of the magnetization [deg]
+        mag_gamma (float): gamma angle of the magnetization [deg]
 
     References:
 
@@ -79,6 +82,9 @@ class Atom:
         self.symbol = symbol
         self.id = kwargs.get('id', symbol)
         self.ionicity = kwargs.get('ionicity', 0)
+        self.mag_amplitude = kwargs.get('mag_amplitude', 0)
+        self.mag_phi = kwargs.get('mag_phi', 0*u.deg)
+        self.mag_gamma = kwargs.get('mag_gamma', 0*u.deg)
 
         try:
             filename = os.path.join(os.path.dirname(__file__),
@@ -269,6 +275,26 @@ class Atom:
                        self.magnetic_form_factor_coeff[:, 2])
 
         return m1 + m2*1j
+
+    @property
+    def mag_phi(self):
+        """float: phi angle of magnetization [deg]"""
+        return Q_(self._mag_phi, u.rad).to('deg')
+
+    @mag_phi.setter
+    def mag_phi(self, mag_phi):
+        """set.mag_phi"""
+        self._mag_phi = mag_phi.to_base_units().magnitude
+
+    @property
+    def mag_gamma(self):
+        """float: gamma angle of magnetization [deg]"""
+        return Q_(self._mag_gamma, u.rad).to('deg')
+
+    @mag_gamma.setter
+    def mag_gamma(self, mag_gamma):
+        """set.mag_gamma"""
+        self._mag_gamma = mag_gamma.to_base_units().magnitude
 
 
 class AtomMixed(Atom):
