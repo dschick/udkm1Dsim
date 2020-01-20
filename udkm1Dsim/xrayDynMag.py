@@ -32,6 +32,7 @@ from .xray import Xray
 from .unitCell import UnitCell
 from tqdm import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n
+from . import u
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -72,6 +73,8 @@ class XrayDynMag(Xray):
         polarization (float): polarization state
         last_atom_ref_trans_matrices (list): remember last result of
            atom ref_trans_matrices to speed up calculation
+        pol_in (ndarray[complex]): incoming polarization vector
+        pol_out (ndarray[complex]): analyzer polarization vector
 
     References:
 
@@ -88,6 +91,11 @@ class XrayDynMag(Xray):
                                              'hashes': [],
                                              'A': [],
                                              'P': []}
+        self.pol_in = np.array([1+0.j, 0.j], dtype=complex)
+        self.pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
+        pol_in = 3  # sigma
+        pol_out = 0  # no-analyzer
+        self.set_polarization(pol_in, pol_out)
 
     def __str__(self):
         """String representation of this class"""
@@ -95,6 +103,41 @@ class XrayDynMag(Xray):
                     'properties:\n\n'
         class_str += super().__str__()
         return class_str
+
+    def set_polarization(self, pol_in, pol_out):
+        # incoming polarization
+        if (pol_in == 1):
+            self.pol_in = np.array([-np.sqrt(.5)+0.j, -1j*np.sqrt(.5)], dtype=complex)
+            print('incoming polarizations set to: circ +')
+        elif (pol_in == 2):
+            self.pol_in = np.array([np.sqrt(.5)+0.j, -1j*np.sqrt(.5)], dtype=complex)
+            print('incoming polarizations set to: circ -')
+        elif (pol_in == 3):
+            self.pol_in = np.array([1+0.j, 0.j], dtype=complex)
+            print('incoming polarizations set to: sigma')
+        elif (pol_in == 4):
+            self.pol_in = np.array([0.j, 1+0.j], dtype=complex)
+            print('incoming polarizations set to: pi')
+        else:  # pol_in == 0
+            self.pol_in = np.array([np.sqrt(.5)+0.j, np.sqrt(.5)+0.j], dtype=complex)
+            print('incoming polarizations set to: unpolarized')
+
+        # analyzer polarization
+        if (pol_out == 1):
+            self.pol_out = np.array([-np.sqrt(.5)+0.j, 1j*np.sqrt(.5)], dtype=complex)
+            print('analyzer polarizations set to: circ +')
+        elif (pol_out == 2):
+            self.pol_out = np.array([np.sqrt(.5)+0.j, 1j*np.sqrt(.5)], dtype=complex)
+            print('analyzer polarizations set to: circ -')
+        elif (pol_out == 3):
+            self.pol_out = np.array([1+0.j, 0.j], dtype=complex)
+            print('analyzer polarizations set to: sigma')
+        elif (pol_out == 4):
+            self.pol_out = np.array([0.j, 1+0.j], dtype=complex)
+            print('analyzer polarizations set to: pi')
+        else:  # no analyzer
+            self.pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
+            print('analyzer polarizations set to: unpolarized')
 
     def homogeneous_reflectivity(self, *args):
         """homogeneous_reflectivity"""
@@ -219,7 +262,7 @@ class XrayDynMag(Xray):
             # multiply vacuum and last layer
             RT = m_times_n(A_inv, m_times_n(RT, A0))
 
-            R[i, :, :] = XrayDynMag.calc_reflectivity_from_matrix(RT)
+            R[i, :, :] = self.calc_reflectivity_from_matrix(RT)
 
         return R
 
@@ -266,16 +309,21 @@ class XrayDynMag(Xray):
         Elzo formalism:
 
         """
-        # check for already calculated data
-        _hash = make_hash_md5([self._energy, self._qz, self.polarization, area, distance, args])
         try:
             index = self.last_atom_ref_trans_matrices['atom_ids'].index(atom.id)
         except ValueError:
             index = -1
         except AttributeError:
             # its vacuum
-            A, P = self.calc_atom_boundary_phase_matrix(atom, area, distance, args)
+            A, P = self.calc_atom_boundary_phase_matrix(atom, area, distance, *args)
             return A, P
+
+        # check for already calculated data
+        _hash = make_hash_md5([self._energy, self._qz, self.pol_in, self.pol_out, area, distance,
+                               atom.mag_amplitude,
+                               atom.mag_gamma,
+                               atom.mag_phi,
+                               *args])
 
         if (index >= 0) and (_hash == self.last_atom_ref_trans_matrices['hashes'][index]):
             # These are the same X-ray parameters as last time so we
@@ -285,7 +333,7 @@ class XrayDynMag(Xray):
         else:
             # These are new parameters so we have to calculate.
             # Get the reflection-transmission-factors
-            A, P = self.calc_atom_boundary_phase_matrix(atom, area, distance, args)
+            A, P = self.calc_atom_boundary_phase_matrix(atom, area, distance, *args)
             # remember this matrix for next use with the same
             # parameters for this atom
             if index >= 0:
@@ -311,7 +359,7 @@ class XrayDynMag(Xray):
             mag_amplitude = args[0]
         else:
             try:
-                mag_amplitude = atom.magnetization
+                mag_amplitude = atom.mag_amplitude
             except AttributeError:
                 mag_amplitude = 0
 
@@ -321,7 +369,7 @@ class XrayDynMag(Xray):
             try:
                 mag_phi = atom.mag_phi
             except AttributeError:
-                mag_phi = 0
+                mag_phi = 0*u.deg
 
         if len(args) > 2:
             mag_gamma = args[2]
@@ -329,14 +377,14 @@ class XrayDynMag(Xray):
             try:
                 mag_gamma = atom.mag_gamma
             except AttributeError:
-                mag_gamma = 0
+                mag_gamma = 0*u.deg
 
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
 
-        u = [np.sin(mag_phi) * np.cos(mag_gamma),
-             np.sin(mag_phi) * np.sin(mag_gamma),
-             np.cos(mag_phi)]
+        U = [np.sin(mag_phi.magnitude) * np.cos(mag_gamma.magnitude),
+             np.sin(mag_phi.magnitude) * np.sin(mag_gamma.magnitude),
+             np.cos(mag_phi.magnitude)]
 
         eps = np.zeros([M, N, 3, 3], dtype=np.cfloat)
         A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
@@ -359,19 +407,22 @@ class XrayDynMag(Xray):
             cf = atom.get_atomic_form_factor(energy)
         except AttributeError:
             cf = np.zeros_like(energy)
-#            mag = mag_amplitude * atom.get_magnetic_scattering_factor(energy)
-        mag = np.zeros_like(energy)  # * factor * mag_amplitude * 0.01 * cf
-        mag = np.tile(mag[:, np.newaxis], [1, N])
+        try:
+            mf = atom.get_magnetic_form_factor(energy)
+        except AttributeError:
+            mf = np.zeros_like(energy)
 
+        mag = factor*density*mag_amplitude*mf
+        mag = np.tile(mag[:, np.newaxis], [1, N])
         eps0 = 1 - factor*density*cf
         eps0 = np.tile(eps0[:, np.newaxis], [1, N])
 
         eps[:, :, 0, 0] = eps0
-        eps[:, :, 0, 1] = -1j * u[2] * mag
-        eps[:, :, 0, 2] = 1j * u[1] * mag
+        eps[:, :, 0, 1] = -1j * U[2] * mag
+        eps[:, :, 0, 2] = 1j * U[1] * mag
         eps[:, :, 1, 0] = -eps[:, :, 0, 1]
         eps[:, :, 1, 1] = eps0
-        eps[:, :, 1, 2] = -1j * u[0] * mag
+        eps[:, :, 1, 2] = -1j * U[0] * mag
         eps[:, :, 2, 0] = -eps[:, :, 0, 2]
         eps[:, :, 2, 1] = -eps[:, :, 1, 2]
         eps[:, :, 2, 2] = eps0
@@ -438,8 +489,7 @@ class XrayDynMag(Xray):
 
         return A, P
 
-    @staticmethod
-    def calc_reflectivity_from_matrix(RT):
+    def calc_reflectivity_from_matrix(self, RT):
         """calc_reflectivity_from_matrix"""
         Ref = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :],
                       (np.size(RT, 0), np.size(RT, 1), 1, 1))
@@ -451,11 +501,8 @@ class XrayDynMag(Xray):
 
         temp = np.array([[-1, 1], [-1j, -1j]])
         Ref = np.matmul(np.matmul(temp, Ref), temp/2)
-        
-        Pol_in = np.array([1+0.j, 0.j], dtype=complex)
-        Pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
 
-        X = np.matmul(Ref, Pol_in)
-        R = np.real(np.matmul(np.square(np.absolute(X)), Pol_out))
-        
+        X = np.matmul(Ref, self.pol_in)
+        R = np.real(np.matmul(np.square(np.absolute(X)), self.pol_out))
+
         return R
