@@ -91,8 +91,6 @@ class XrayDynMag(Xray):
                                              'hashes': [],
                                              'A': [],
                                              'P': []}
-        self.pol_in = np.array([1+0.j, 0.j], dtype=complex)
-        self.pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
         pol_in = 3  # sigma
         pol_out = 0  # no-analyzer
         self.set_polarization(pol_in, pol_out)
@@ -493,17 +491,18 @@ class XrayDynMag(Xray):
         """calc_reflectivity_from_matrix"""
         Ref = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :],
                       (np.size(RT, 0), np.size(RT, 1), 1, 1))
+
         d = np.divide(1, RT[:, :, 3, 3] * RT[:, :, 2, 2] - RT[:, :, 3, 2] * RT[:, :, 2, 3])
         Ref[:, :, 0, 0] = (-RT[:, :, 3, 3] * RT[:, :, 2, 0] + RT[:, :, 2, 3] * RT[:, :, 3, 0]) * d
         Ref[:, :, 0, 1] = (-RT[:, :, 3, 3] * RT[:, :, 2, 1] + RT[:, :, 2, 3] * RT[:, :, 3, 1]) * d
         Ref[:, :, 1, 0] = (RT[:, :, 3, 2] * RT[:, :, 2, 0] - RT[:, :, 2, 2] * RT[:, :, 3, 0]) * d
         Ref[:, :, 1, 1] = (RT[:, :, 3, 2] * RT[:, :, 2, 1] - RT[:, :, 2, 2] * RT[:, :, 3, 1]) * d
 
-        Ref = np.matmul(np.matmul(np.array([[-1, 1], [-1j, -1j]]), Ref), np.array([[-1, 1j], [1, 1j]])*0.5)
+        Ref = np.matmul(np.matmul(np.array([[-1, 1], [-1j, -1j]]), Ref),
+                        np.array([[-1, 1j], [1, 1j]])*0.5)
 
         if self.pol_out.size == 0:
             # no analyzer polarization
-            print('here')
             X = np.matmul(Ref, self.pol_in)
             R = np.real(np.matmul(np.square(np.absolute(X)), np.array([1, 1], dtype=complex)))
         else:
