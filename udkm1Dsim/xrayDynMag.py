@@ -107,36 +107,36 @@ class XrayDynMag(Xray):
     def set_polarization(self, pol_in, pol_out):
         # incoming polarization
         if (pol_in == 1):
-            self.pol_in = np.array([-np.sqrt(.5)+0.j, -1j*np.sqrt(.5)], dtype=complex)
+            self.pol_in = np.array([-np.sqrt(.5), -1j*np.sqrt(.5)], dtype=complex)
             print('incoming polarizations set to: circ +')
         elif (pol_in == 2):
-            self.pol_in = np.array([np.sqrt(.5)+0.j, -1j*np.sqrt(.5)], dtype=complex)
+            self.pol_in = np.array([np.sqrt(.5), -1j*np.sqrt(.5)], dtype=complex)
             print('incoming polarizations set to: circ -')
         elif (pol_in == 3):
-            self.pol_in = np.array([1+0.j, 0.j], dtype=complex)
+            self.pol_in = np.array([1, 0], dtype=complex)
             print('incoming polarizations set to: sigma')
         elif (pol_in == 4):
-            self.pol_in = np.array([0.j, 1+0.j], dtype=complex)
+            self.pol_in = np.array([0, 1], dtype=complex)
             print('incoming polarizations set to: pi')
         else:  # pol_in == 0
-            self.pol_in = np.array([np.sqrt(.5)+0.j, np.sqrt(.5)+0.j], dtype=complex)
+            self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=complex)
             print('incoming polarizations set to: unpolarized')
 
         # analyzer polarization
         if (pol_out == 1):
-            self.pol_out = np.array([-np.sqrt(.5)+0.j, 1j*np.sqrt(.5)], dtype=complex)
+            self.pol_out = np.array([-np.sqrt(.5), 1j*np.sqrt(.5)], dtype=complex)
             print('analyzer polarizations set to: circ +')
         elif (pol_out == 2):
-            self.pol_out = np.array([np.sqrt(.5)+0.j, 1j*np.sqrt(.5)], dtype=complex)
+            self.pol_out = np.array([np.sqrt(.5), 1j*np.sqrt(.5)], dtype=complex)
             print('analyzer polarizations set to: circ -')
         elif (pol_out == 3):
-            self.pol_out = np.array([1+0.j, 0.j], dtype=complex)
+            self.pol_out = np.array([1, 0], dtype=complex)
             print('analyzer polarizations set to: sigma')
         elif (pol_out == 4):
-            self.pol_out = np.array([0.j, 1+0.j], dtype=complex)
+            self.pol_out = np.array([0, 1], dtype=complex)
             print('analyzer polarizations set to: pi')
         else:  # no analyzer
-            self.pol_out = np.array([1+0.j, 1+0.j], dtype=complex)
+            self.pol_out = np.array([], dtype=complex)
             print('analyzer polarizations set to: unpolarized')
 
     def homogeneous_reflectivity(self, *args):
@@ -499,10 +499,15 @@ class XrayDynMag(Xray):
         Ref[:, :, 1, 0] = (RT[:, :, 3, 2] * RT[:, :, 2, 0] - RT[:, :, 2, 2] * RT[:, :, 3, 0]) * d
         Ref[:, :, 1, 1] = (RT[:, :, 3, 2] * RT[:, :, 2, 1] - RT[:, :, 2, 2] * RT[:, :, 3, 1]) * d
 
-        temp = np.array([[-1, 1], [-1j, -1j]])
-        Ref = np.matmul(np.matmul(temp, Ref), temp/2)
+        Ref = np.matmul(np.matmul(np.array([[-1, 1], [-1j, -1j]]), Ref), np.array([[-1, 1j], [1, 1j]])*0.5)
 
-        X = np.matmul(Ref, self.pol_in)
-        R = np.real(np.matmul(np.square(np.absolute(X)), self.pol_out))
+        if self.pol_out.size == 0:
+            # no analyzer polarization
+            print('here')
+            X = np.matmul(Ref, self.pol_in)
+            R = np.real(np.matmul(np.square(np.absolute(X)), np.array([1, 1], dtype=complex)))
+        else:
+            X = np.matmul(np.matmul(Ref, self.pol_in), self.pol_out)
+            R = np.real(np.square(np.absolute(X)))
 
         return R
