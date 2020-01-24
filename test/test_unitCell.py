@@ -29,10 +29,3 @@ def test_unit_cell():
     assert uc.therm_cond[0](300) == 1
     assert uc.opt_pen_depth == 11*u.nm
     assert uc.sound_vel == 5*(u.nm/u.ps)
-    assert uc.get_property_dict(types='phonon') == {'_c_axis': 2.86e-10,
-                                                    '_mass': 2.2674165653283783e-26,
-                                                    '_phonon_damping': 0.0,
-                                                    'int_lin_therm_exp_str':
-                                                        ['lambda T : 1.0e-6*T'],
-                                                    'spring_const': array([6]),
-                                                    'num_sub_systems': 1}
