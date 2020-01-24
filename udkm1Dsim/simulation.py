@@ -68,13 +68,13 @@ class Simulation:
         self.save_data = kwargs.get('save_data', True)
         self.progress_bar_type = kwargs.get('progress_bar_type', 'none')
 
-    def __str__(self):
+    def __str__(self, output=[]):
         """String representation of this class"""
         output = [['force recalc', self.force_recalc],
                   ['cache directory', self.cache_dir],
                   ['display messages', self.disp_messages],
                   ['save data', self.save_data],
-                  ['progress bar type', self.progress_bar_type]]
+                  ['progress bar type', self.progress_bar_type]] + output
 
         class_str = 'This is the current structure for the simulations:\n\n'
         class_str += self.S.__str__()

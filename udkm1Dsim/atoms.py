@@ -26,7 +26,7 @@ import os
 import numpy as np
 import scipy.constants as constants
 from tabulate import tabulate
-from . import u
+from . import u, Q_
 
 
 class Atom:
@@ -57,6 +57,9 @@ class Atom:
            coefficients for energy-dependent atomic form factor
         cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
            angular-dependent atomic form factor
+        mag_amplitude (float): magnetization amplitude 0 .. 1
+        mag_phi (float): phi angle of the magnetization [deg]
+        mag_gamma (float): gamma angle of the magnetization [deg]
 
     References:
 
@@ -79,6 +82,9 @@ class Atom:
         self.symbol = symbol
         self.id = kwargs.get('id', symbol)
         self.ionicity = kwargs.get('ionicity', 0)
+        self.mag_amplitude = kwargs.get('mag_amplitude', 0)
+        self.mag_phi = kwargs.get('mag_phi', 0*u.deg)
+        self.mag_gamma = kwargs.get('mag_gamma', 0*u.deg)
 
         try:
             filename = os.path.join(os.path.dirname(__file__),
@@ -94,19 +100,23 @@ class Atom:
         self.name = element[0]
         self.atomic_number_z = element[1]
         self.mass_number_a = element[2]
-        self.mass = self.mass_number_a*constants.atomic_mass*u.kg
+        self._mass = self.mass_number_a*constants.atomic_mass
+        self.mass = self._mass*u.kg
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff()
+        self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff()
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
     def __str__(self):
         """String representation of this class"""
         output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
-                                'ionicity', 'Cromer Mann coeff', '', ''],
+                                'ionicity', 'Cromer Mann coeff', '', '',
+                                'magn. amplitude', 'magn. phi', 'magn. gamma'],
                   'value': [self.id, self.symbol, self.name, self.atomic_number_z,
                             self.mass_number_a, '{:.4~P}'.format(self.mass), self.ionicity,
                             np.array_str(self.cromer_mann_coeff[0:4]),
                             np.array_str(self.cromer_mann_coeff[4:8]),
-                            np.array_str(self.cromer_mann_coeff[8:])]}
+                            np.array_str(self.cromer_mann_coeff[8:]),
+                            self.mag_amplitude, self.mag_phi, self.mag_gamma]}
 
         return 'Atom with the following properties\n' + \
                tabulate(output, colalign=('right',), tablefmt="rst", floatfmt=('.2f', '.2f'))
@@ -226,6 +236,67 @@ class Atom:
             f[i, :] = f_cm + self.get_atomic_form_factor(en) -\
                 np.sum(self.cromer_mann_coeff[0:3])
         return f
+
+    def read_magnetic_form_factor_coeff(self):
+        """read_magnetic_form_factor_coeff
+
+        The magnetic form factor :math:`m` in dependence from the energy
+        :math:`E` is read from a parameter file.
+
+        """
+        filename = os.path.join(os.path.dirname(__file__),
+                                'parameters/magneticFormFactors/{:s}.mf'.format(
+                                        self.symbol.lower()))
+        try:
+            f = np.genfromtxt(filename, skip_header=1)
+        except Exception as e:
+            print('File {:s} not found!\nMake sure the path /parameters/magneticFormFactors/ is in'
+                  'your search path!',
+                  filename)
+            print(e)
+
+        return f
+
+    @u.wraps(None, (None, 'eV'), strict=False)
+    def get_magnetic_form_factor(self, energy):
+        """get_magnetic_form_factor
+
+        Returns the complex magnetic form factor
+
+        .. math:: m(E)=m_1-i m_2
+
+        for the energy :math:`E` [eV].
+
+        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`
+
+        """
+        # interpolate the real and imaginary part in dependence of E
+        m1 = np.interp(energy, self.magnetic_form_factor_coeff[:, 0],
+                       self.magnetic_form_factor_coeff[:, 1])
+        m2 = np.interp(energy, self.magnetic_form_factor_coeff[:, 0],
+                       self.magnetic_form_factor_coeff[:, 2])
+
+        return m1 + m2*1j
+
+    @property
+    def mag_phi(self):
+        """float: phi angle of magnetization [deg]"""
+        return Q_(self._mag_phi, u.rad).to('deg')
+
+    @mag_phi.setter
+    def mag_phi(self, mag_phi):
+        """set.mag_phi"""
+        self._mag_phi = mag_phi.to_base_units().magnitude
+
+    @property
+    def mag_gamma(self):
+        """float: gamma angle of magnetization [deg]"""
+        return Q_(self._mag_gamma, u.rad).to('deg')
+
+    @mag_gamma.setter
+    def mag_gamma(self, mag_gamma):
+        """set.mag_gamma"""
+        self._mag_gamma = mag_gamma.to_base_units().magnitude
 
 
 class AtomMixed(Atom):

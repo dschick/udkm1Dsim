@@ -48,3 +48,9 @@ XrayDyn
 
 .. autoclass:: udkm1Dsim.XrayDyn
     :members:
+
+XrayDynMag
+^^^^^^^^^^
+
+.. autoclass:: udkm1Dsim.XrayDynMag
+    :members:

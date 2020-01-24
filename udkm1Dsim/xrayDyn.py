@@ -46,9 +46,6 @@ class XrayDyn(Xray):
         force_recalc (boolean): force recalculation of results
 
     Attributes:
-        S (object): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
-        polarization (float): polarization state
         last_atom_ref_trans_matrices (list): remember last result of
            atom ref_trans_matrices to speed up calculation
 
@@ -66,30 +63,50 @@ class XrayDyn(Xray):
         class_str += super().__str__()
         return class_str
 
-    def get_hash(self, strain_vectors, **kwargs):
-        """get_hash
+    def set_incoming_polarization(self, pol_in_state):
+        """set_incoming_polarization
 
-        Returns a unique hash given by the energy :math:`E`,
-        :math:`q_z` range, polarization factor and the strain vectors as
-        well as the sample structure hash for relevant xray parameters.
+        Sets the incoming polarization factor for sigma, pi, and unpolarized
+        polarization.
 
         """
-        param = [self.polarization, strain_vectors]
-        if 'energy' in kwargs:
-            param.append(kwargs.get('energy'))
-        else:
-            param.append(self._energy)
-        if 'qz' in kwargs:
-            param.append(kwargs.get('qz'))
-        else:
-            param.append(self._qz)
-        if 'strain_map' in kwargs:
-            strain_map = kwargs.get('strain_map')
-            if np.size(strain_map) > 1e6:
-                strain_map = strain_map.flatten()[0:1000000]
-            param.append(strain_map)
 
-        return self.S.get_hash(types='xray') + '_' + make_hash_md5(param)
+        self.pol_in_state = pol_in_state
+        if (self.pol_in_state == 1):  # circ +
+            self.disp_message('incoming polarizations {:s} not implemented'.format(
+                self.polarizations[self.pol_in_state]))
+            self.set_incoming_polarization(3)
+            return
+        elif (self.pol_in_state == 2):  # circ-
+            self.disp_message('incoming polarizations {:s} not implemented'.format(
+                self.polarizations[self.pol_in_state]))
+            self.set_incoming_polarization(3)
+            return
+        elif (self.pol_in_state == 3):  # sigma
+            self.pol_in = 0
+        elif (self.pol_in_state == 4):  # pi
+            self.pol_in = 1
+        else:  # unpolarized
+            self.pol_in_state = 0
+            self.pol_in = 0.5
+
+        self.disp_message('incoming polarizations set to: {:s}'.format(
+            self.polarizations[self.pol_in_state]))
+
+    def set_outgoing_polarization(self, pol_out_state):
+        """set_outgoing_polarization
+
+        For dynamical X-ray simulation only "no analyzer polarization" is allowed.
+
+        """
+
+        self.pol_out_state = pol_out_state
+        if self.pol_out_state == 0:
+            self.disp_message('analyzer polarizations set to: {:s}'.format(
+                self.polarizations[self.pol_out_state]))
+        else:
+            self.disp_message('XrayDyn does only allow for NO analyzer polarizations')
+            self.set_outgoing_polarization(0)
 
     def homogeneous_reflectivity(self, *args):
         """homogeneous_reflectivity
@@ -109,11 +126,10 @@ class XrayDyn(Xray):
             strains = args[0]
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
-        R = np.zeros_like(self._qz)
         # get the reflectivity-transmisson matrix of the structure
         RT, A = self.homogeneous_ref_trans_matrix(self.S, strains)
         # calculate the real reflectivity from the RT matrix
-        R = self.get_reflectivity_from_matrix(RT)
+        R = self.calc_reflectivity_from_matrix(RT)
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
         return R, A
 
@@ -143,8 +159,8 @@ class XrayDyn(Xray):
         else:
             strains = args[0]
         # initialize
-        RT = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis],
-                     (1, 1, np.size(self._qz, 0), np.size(self._qz, 1)))  # ref_trans_matrix
+        RT = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :],
+                     (np.size(self._qz, 0), np.size(self._qz, 1), 1, 1))  # ref_trans_matrix
         A = []  # list of ref_trans_matrices of substructures
         strainCounter = 0
 
@@ -196,7 +212,7 @@ class XrayDyn(Xray):
         """inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained sample
-        structure for a given _strainMap_ in position and time, as well
+        structure for a given _strain_map_ in position and time, as well
         as for a given set of possible strains for each unit cell in the
         sample structure (``strain_vectors``).
         If no reflectivity is saved in the cache it is caluclated.
@@ -311,7 +327,7 @@ class XrayDyn(Xray):
         R = np.zeros([M, N, K])
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
         # init unity matrix for matrix multiplication
-        RTU = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, N, K))
+        RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (N, K, 1, 1))
         # make RTM available for all works
         remote_RTM = dask_client.scatter(RTM)
         remote_RTU = dask_client.scatter(RTU)
@@ -333,7 +349,7 @@ class XrayDyn(Xray):
                     remote_strain_vectors,
                     remote_RTM)
             RT = delayed(m_times_n)(RT, RTS)
-            Ri = delayed(XrayDyn.get_reflectivity_from_matrix)(RT)
+            Ri = delayed(XrayDyn.calc_reflectivity_from_matrix)(RT)
             res.append(Ri)
 
         # compute results
@@ -385,7 +401,7 @@ class XrayDyn(Xray):
         uc_indicies, _, _ = self.S.get_unit_cell_vectors()
 
         # initialize ref_trans_matrix
-        RTU = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
+        RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
 
         RT = XrayDyn.calc_inhomogeneous_ref_trans_matrix(uc_indicies,
                                                          RTU,
@@ -398,7 +414,7 @@ class XrayDyn(Xray):
             RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
             RT = m_times_n(RT, RTS)
         # calculate reflectivity from ref-trans matrix
-        R = self.get_reflectivity_from_matrix(RT)
+        R = self.calc_reflectivity_from_matrix(RT)
         return R
 
     @staticmethod
@@ -443,7 +459,7 @@ class XrayDyn(Xray):
             strain_vectors = args[0]
         # create a hash of all simulation parameters
         filename = 'all_ref_trans_matrices_dyn_' \
-            + self.get_hash(strain_vectors, energy=self._energy, qz=self._qz) + '.npy'
+            + self.get_hash(strain_vectors) + '.npy'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
@@ -514,7 +530,7 @@ class XrayDyn(Xray):
         N = np.shape(self._qz)[1]  # number of q_z
         K = uc.num_atoms  # number of atoms
         # initialize matrices
-        RTM = np.tile(np.eye(2, 2)[:, :, np.newaxis, np.newaxis], (1, 1, M, N))
+        RTM = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
         # traverse all atoms of the unit cell
         for i in range(K):
             # Calculate the relative distance between the atoms.
@@ -553,7 +569,8 @@ class XrayDyn(Xray):
 
         """
         # check for already calculated data
-        _hash = make_hash_md5([self._energy, self._qz, self.polarization, area, deb_wal_fac])
+        _hash = make_hash_md5([self._energy, self._qz, self.pol_in_state, self.pol_out_state,
+                               area, deb_wal_fac])
         try:
             index = self.last_atom_ref_trans_matrices['atom_ids'].index(atom.id)
         except ValueError:
@@ -569,11 +586,11 @@ class XrayDyn(Xray):
             rho = self.get_atom_reflection_factor(atom, area, deb_wal_fac)
             tau = self.get_atom_transmission_factor(atom, area, deb_wal_fac)
             # calculate the reflection-transmission matrix
-            H = np.zeros([2, 2, np.shape(self._qz)[0], np.shape(self._qz)[1]], dtype=np.cfloat)
-            H[0, 0, :, :] = (1/tau)*(tau**2-rho**2)
-            H[0, 1, :, :] = (1/tau)*(rho)
-            H[1, 0, :, :] = (1/tau)*(-rho)
-            H[1, 1, :, :] = (1/tau)
+            H = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.cfloat)
+            H[:, :, 0, 0] = (1/tau)*(tau**2-rho**2)
+            H[:, :, 0, 1] = (1/tau)*(rho)
+            H[:, :, 1, 0] = (1/tau)*(-rho)
+            H[:, :, 1, 1] = (1/tau)
             # remember this matrix for next use with the same
             # parameters for this atom
             if index >= 0:
@@ -647,9 +664,9 @@ class XrayDyn(Xray):
 
         """
         phi = self.get_atom_phase_factor(distance)
-        L = np.zeros([2, 2, np.shape(self._qz)[0], np.shape(self._qz)[1]], dtype=np.cfloat)
-        L[0, 0, :, :] = np.exp(1j*phi)
-        L[1, 1, :, :] = np.exp(-1j*phi)
+        L = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.cfloat)
+        L[:, :, 0, 0] = np.exp(1j*phi)
+        L[:, :, 1, 1] = np.exp(-1j*phi)
         return L
 
     def get_atom_phase_factor(self, distance):
@@ -665,8 +682,8 @@ class XrayDyn(Xray):
         return phi
 
     @staticmethod
-    def get_reflectivity_from_matrix(M):
-        """get_reflectivity_from_matrix
+    def calc_reflectivity_from_matrix(M):
+        """calc_reflectivity_from_matrix
 
         Returns the physical reflectivity from an 2x2 matrix of
         transmission and reflectifity factors:
@@ -674,4 +691,4 @@ class XrayDyn(Xray):
         .. math:: R = \\left|M(0,1)/M(1,1)\\right|^2
 
         """
-        return np.abs(M[0, 1, :, :]/M[1, 1, :, :])**2
+        return np.abs(M[:, :, 0, 1]/M[:, :, 1, 1])**2

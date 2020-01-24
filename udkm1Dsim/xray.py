@@ -27,7 +27,7 @@ __docformat__ = "restructuredtext"
 import numpy as np
 from .simulation import Simulation
 from . import u, Q_
-from tabulate import tabulate
+from .helpers import make_hash_md5
 
 
 class Xray(Simulation):
@@ -40,9 +40,16 @@ class Xray(Simulation):
         force_recalc (boolean): force recalculation of results
 
     Attributes:
-        S (object): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
-        polarization (float): polarization state
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): incidence angles :math:`\theta` of scattering light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
+        polarizations (dict): polarization states and according names
+        pol_in_state (int): incoming polarization state as defined in polarizations dict
+        pol_out_state (int): outgoing polarization state as defined in polarizations dict
+        pol_in (float): incoming polarization factor (can be a complex ndarray)
+        pol_out (float): outgoing polarization factor (can be a complex ndarray)
 
     """
 
@@ -53,19 +60,63 @@ class Xray(Simulation):
         self._k = np.array([])
         self._theta = np.zeros([1, 1])
         self._qz = np.zeros([1, 1])
-        self.polarization = 0
 
-    def __str__(self):
+        self.polarizations = {0: 'unpolarized',
+                              1: 'circ +',
+                              2: 'circ -',
+                              3: 'sigma',
+                              4: 'pi'}
+
+        self.pol_in_state = 3  # sigma
+        self.pol_out_state = 0  # no-analyzer
+        self.pol_in = None
+        self.pol_out = None
+        self.set_polarization(self.pol_in_state, self.pol_out_state)
+
+    def __str__(self, output=[]):
         """String representation of this class"""
-        output = [['force recalc', self.force_recalc],
-                  ['cache directory', self.cache_dir]]
+        output = [['energy', self.energy[0] if np.size(self.energy) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.energy), np.max(self.energy))],
+                  ['wavelength', self.wl[0] if np.size(self.wl) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.wl), np.max(self.wl))],
+                  ['wavenumber', self.k[0] if np.size(self.k) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.k), np.max(self.k))],
+                  ['theta', self.theta[0] if np.size(self.theta) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.theta), np.max(self.theta))],
+                  ['q_z', self.qz[0] if np.size(self.qz) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.qz), np.max(self.qz))],
+                  ['incoming polarization', self.polarizations[self.pol_in_state]],
+                  ['analyzer polarization', self.polarizations[self.pol_out_state]],
+                  ] + output
+        return super().__str__(output)
 
-        class_str = 'This is the current structure for the simulations:\n\n'
-        class_str += self.S.__str__()
-        class_str += '\n\nDisplay properties:\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
-                              colalign=('right',), floatfmt=('.2f', '.2f'))
-        return class_str
+    def set_polarization(self, pol_in_state, pol_out_state):
+        """set_polarization
+
+        Sets the incoming and analyzer (outgoing) polarization
+
+        """
+        self.set_incoming_polarization(pol_in_state)
+        self.set_outgoing_polarization(pol_out_state)
+
+    def get_hash(self, strain_vectors, **kwargs):
+        """get_hash
+
+        Returns a unique hash given by the energy :math:`E`,
+        :math:`q_z` range, polarization states and the strain vectors as
+        well as the sample structure hash for relevant xray parameters.
+        Optionally, part of the strain_map is used.
+
+        """
+        param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy, strain_vectors]
+
+        if 'strain_map' in kwargs:
+            strain_map = kwargs.get('strain_map')
+            if np.size(strain_map) > 1e6:
+                strain_map = strain_map.flatten()[0:1000000]
+            param.append(strain_map)
+
+        return self.S.get_hash(types='xray') + '_' + make_hash_md5(param)
 
     def get_polarization_factor(self, theta):
         """get_polarization_factor
@@ -81,7 +132,7 @@ class Xray(Simulation):
 
         """
 
-        return np.sqrt((1-self.polarization) + self.polarization*np.cos(2*theta)**2)
+        return np.sqrt((1-self.pol_in) + self.pol_in*np.cos(2*theta)**2)
 
     def update_experiment(self, caller):
         """update experimental parameters

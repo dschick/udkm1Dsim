@@ -63,6 +63,8 @@ class UnitCell:
         atoms (list[atom, @lambda]): list of atoms and funtion handle
            for strain dependent displacement
         num_atoms (int): number of atoms in unit cell
+        magnetizations (list[foat]): magnetization amplitutes, phi, and
+           gamma angle of each atom in the unit cell
         spring_const (ndarray[float]): spring constant of the unit cell
            [kg/s²] and higher orders
         opt_ref_index (ndarray[float]): optical refractive index - real
@@ -95,11 +97,12 @@ class UnitCell:
         self.b_axis = kwargs.get('b_axis', self.a_axis)
         self.atoms = []
         self.num_atoms = 0
+        self.magnetizations = []
         self.mass = 0*u.kg
         self.density = 0*u.kg/u.m**2
         self.spring_const = np.array([0])
         self.deb_wal_fac = kwargs.get('deb_wal_fac', 0*u.m**2)
-        self.sound_vel = kwargs.get('sound_vel', 0)
+        self.sound_vel = kwargs.get('sound_vel', 0*u.m/u.s)
         self.phonon_damping = kwargs.get('phonon_damping', 0*u.kg/u.s)
         self.opt_pen_depth = kwargs.get('opt_pen_depth', 0*u.nm)
         self.opt_ref_index = kwargs.get('opt_ref_index', 0)
@@ -149,7 +152,7 @@ class UnitCell:
                   ['subsystem coupling', ' W/m³\n'.join(self.sub_system_coupling_str) + ' W/m³']]
 
         class_str = 'Unit Cell with the following properties\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
+        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt='rst',
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         class_str += '\n\n' + str(self.num_atoms) + ' Constituents:\n'
 
@@ -157,9 +160,15 @@ class UnitCell:
         for i in range(self.num_atoms):
             atoms_str.append([self.atoms[i][0].name,
                               '{:0.2f}'.format(self.atoms[i][1](0)),
-                              self.atoms[i][2]])
-        class_str += tabulate(atoms_str, headers=['atom', 'position', 'position function'],
-                              tablefmt="rst")
+                              self.atoms[i][2],
+                              '',
+                              self.atoms[i][0].mag_amplitude,
+                              self.atoms[i][0].mag_phi.magnitude,
+                              self.atoms[i][0].mag_gamma.magnitude,
+                              ])
+        class_str += tabulate(atoms_str, headers=['atom', 'position', 'position function',
+                                                  'magn.', 'amplitude', 'phi [°]', 'gamma [°]'],
+                              tablefmt='rst')
         return class_str
 
     def clone_2_multiple(self, N, *args):
@@ -271,7 +280,6 @@ class UnitCell:
 
         """
         # initialize input parser and define defaults and validators
-        types = ['all', 'heat', 'phonon', 'xray', 'optical']
         properties_by_types = {'heat': ['_c_axis', '_area', '_volume', '_opt_pen_depth',
                                         'therm_cond_str', 'heat_capacity_str',
                                         'int_heat_capacity_str', 'sub_system_coupling_str',
@@ -281,18 +289,24 @@ class UnitCell:
                                'xray': ['num_atoms', '_area', '_deb_wal_fac', '_c_axis'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
+                               'magnetic': ['magnetizations'],
                                }
 
-        types = kwargs.get('types', 'all')
+        types = (kwargs.get('types', 'all'))
+        if not type(types) is list:
+            types = [types]
         attrs = vars(self)
-        # define the property names by the given type
-        if types == 'all':
-            S = attrs
-        else:
-            S = dict((key, value) for key, value in attrs.items()
-                     if key in properties_by_types[types])
+        R = {}
+        for t in types:
+            # define the property names by the given type
+            if t == 'all':
+                return attrs
+            else:
+                S = dict((key, value) for key, value in attrs.items()
+                         if key in properties_by_types[t])
+                R.update(S)
 
-        return S
+        return R
 
     def check_cell_array_input(self, inputs):
         """ check_cell_array_input
@@ -426,6 +440,8 @@ class UnitCell:
         Adds an atomBase/atomMixed at a relative position of the unit
         cell.
 
+        Sort the list of atoms by the position at zero strain.
+
         Update the mass, density and spring constant of the unit cell
         automatically:
 
@@ -454,8 +470,12 @@ class UnitCell:
 
         # add the atom at the end of the array
         self.atoms.append([atom, position, position_str])
+        # sort list of atoms by position at zero strain
+        self.atoms.sort(key=lambda x: x[1](0))
         # increase the number of atoms
         self.num_atoms = self.num_atoms + 1
+
+        self.magnetizations.append([atom.mag_amplitude, atom._mag_phi, atom._mag_gamma])
 
         self.mass = 0*u.kg
         for i in range(self.num_atoms):
