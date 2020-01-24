@@ -54,7 +54,23 @@ class Xray(Simulation):
         self._k = np.array([])
         self._theta = np.zeros([1, 1])
         self._qz = np.zeros([1, 1])
-        self.polarization = 0
+
+        self.polarizations = {0: 'unpolarized',
+                              1: 'circ +',
+                              2: 'circ -',
+                              3: 'sigma',
+                              4: 'pi'}
+
+        self.pol_in_state = 3  # sigma
+        self.pol_out_state = 0  # no-analyzer
+        self.pol_in = None
+        self.pol_out = None
+        self.set_polarization(self.pol_in_state, self.pol_out_state)
+
+    def set_polarization(self, pol_in_state, pol_out_state):
+        """set_polarization"""
+        self.set_incoming_polarization(pol_in_state)
+        self.set_outgoing_polarization(pol_out_state)
 
     def __str__(self):
         """String representation of this class"""
@@ -76,7 +92,7 @@ class Xray(Simulation):
         well as the sample structure hash for relevant xray parameters.
 
         """
-        param = [self.polarization, strain_vectors]
+        param = [self.pol_in_state, self.pol_out_state, strain_vectors]
         if 'energy' in kwargs:
             param.append(kwargs.get('energy'))
         else:
@@ -107,7 +123,7 @@ class Xray(Simulation):
 
         """
 
-        return np.sqrt((1-self.polarization) + self.polarization*np.cos(2*theta)**2)
+        return np.sqrt((1-self.pol_in) + self.pol_in*np.cos(2*theta)**2)
 
     def update_experiment(self, caller):
         """update experimental parameters

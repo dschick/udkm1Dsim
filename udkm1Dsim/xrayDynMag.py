@@ -33,6 +33,7 @@ from .unitCell import UnitCell
 from tqdm import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n
 from . import u
+from tabulate import tabulate
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -91,51 +92,55 @@ class XrayDynMag(Xray):
                                              'hashes': [],
                                              'A': [],
                                              'P': []}
-        pol_in = 3  # sigma
-        pol_out = 0  # no-analyzer
-        self.set_polarization(pol_in, pol_out)
 
     def __str__(self):
         """String representation of this class"""
         class_str = 'Dynamical magnetic X-Ray Diffraction simulation ' \
                     'properties:\n\n'
         class_str += super().__str__()
+        output = [['incoming polarization', self.polarizations[self.pol_in_state]],
+                  ['analyzer polarization', self.polarizations[self.pol_in_state]]]
+        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
+                              colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
 
-    def set_polarization(self, pol_in, pol_out):
-        # incoming polarization
-        if (pol_in == 1):
-            self.pol_in = np.array([-np.sqrt(.5), -1j*np.sqrt(.5)], dtype=complex)
-            print('incoming polarizations set to: circ +')
-        elif (pol_in == 2):
-            self.pol_in = np.array([np.sqrt(.5), -1j*np.sqrt(.5)], dtype=complex)
-            print('incoming polarizations set to: circ -')
-        elif (pol_in == 3):
-            self.pol_in = np.array([1, 0], dtype=complex)
-            print('incoming polarizations set to: sigma')
-        elif (pol_in == 4):
-            self.pol_in = np.array([0, 1], dtype=complex)
-            print('incoming polarizations set to: pi')
-        else:  # pol_in == 0
-            self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=complex)
-            print('incoming polarizations set to: unpolarized')
+    def set_incoming_polarization(self, pol_in_state):
+        """set_incoming_polarization"""
 
-        # analyzer polarization
-        if (pol_out == 1):
+        self.pol_in_state = pol_in_state
+        if (self.pol_in_state == 1):  # circ +
+            self.pol_in = np.array([-np.sqrt(.5), -1j*np.sqrt(.5)], dtype=complex)
+        elif (self.pol_in_state == 2):  # circ -
+            self.pol_in = np.array([np.sqrt(.5), -1j*np.sqrt(.5)], dtype=complex)
+        elif (self.pol_in_state == 3):  # sigma
+            self.pol_in = np.array([1, 0], dtype=complex)
+        elif (self.pol_in_state == 4):  # pi
+            self.pol_in = np.array([0, 1], dtype=complex)
+        else:  # unpolarized
+            self.pol_in_state = 0  # catch any number and set state to 0
+            self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=complex)
+
+        self.disp_message('incoming polarizations set to: {:s}'.format(
+            self.polarizations[self.pol_in_state]))
+
+    def set_outgoing_polarization(self, pol_out_state):
+        """set_outgoing_polarization"""
+
+        self.pol_out_state = pol_out_state
+        if (self.pol_out_state == 1):  # circ +
             self.pol_out = np.array([-np.sqrt(.5), 1j*np.sqrt(.5)], dtype=complex)
-            print('analyzer polarizations set to: circ +')
-        elif (pol_out == 2):
+        elif (self.pol_out_state == 2):  # circ -
             self.pol_out = np.array([np.sqrt(.5), 1j*np.sqrt(.5)], dtype=complex)
-            print('analyzer polarizations set to: circ -')
-        elif (pol_out == 3):
+        elif (self.pol_out_state == 3):  # sigma
             self.pol_out = np.array([1, 0], dtype=complex)
-            print('analyzer polarizations set to: sigma')
-        elif (pol_out == 4):
+        elif (self.pol_out_state == 4):  # pi
             self.pol_out = np.array([0, 1], dtype=complex)
-            print('analyzer polarizations set to: pi')
         else:  # no analyzer
+            self.pol_out_state = 0  # catch any number and set state to 0
             self.pol_out = np.array([], dtype=complex)
-            print('analyzer polarizations set to: unpolarized')
+
+        self.disp_message('analyzer polarizations set to: {:s}'.format(
+            self.polarizations[self.pol_out_state]))
 
     def homogeneous_reflectivity(self, *args):
         """homogeneous_reflectivity"""

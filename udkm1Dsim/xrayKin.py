@@ -56,6 +56,41 @@ class XrayKin(Xray):
         class_str += super().__str__()
         return class_str
 
+    def set_incoming_polarization(self, pol_in_state):
+        """set_incoming_polarization"""
+
+        self.pol_in_state = pol_in_state
+        if (self.pol_in_state == 1):  # circ +
+            self.disp_message('incoming polarizations {:s} not implemented'.format(
+                self.polarizations[self.pol_in_state]))
+            self.set_incoming_polarization(3)
+            return
+        elif (self.pol_in_state == 2):  # circ-
+            self.disp_message('incoming polarizations {:s} not implemented'.format(
+                self.polarizations[self.pol_in_state]))
+            self.set_incoming_polarization(3)
+            return
+        elif (self.pol_in_state == 3):  # sigma
+            self.pol_in = 0
+        elif (self.pol_in_state == 4):  # pi
+            self.pol_in = 1
+        else:  # unpolarized
+            self.pol_in_state = 0
+            self.pol_in = 0.5
+
+        self.disp_message('incoming polarizations set to: {:s}'.format(
+            self.polarizations[self.pol_in_state]))
+
+    def set_outgoing_polarization(self, pol_out_state):
+        """set_outgoing_polarization"""
+        self.pol_out_state = pol_out_state
+        if self.pol_out_state == 0:
+            self.disp_message('analyzer polarizations set to: {:s}'.format(
+                self.polarizations[self.pol_out_state]))
+        else:
+            self.disp_message('XrayDyn does only allow for NO analyzer polarizations')
+            self.set_outgoing_polarization(0)
+
     @u.wraps(None, (None, 'eV', 'm**-1', None), strict=False)
     def get_uc_atomic_form_factors(self, energy, qz, uc):
         """ get_uc_atomic_form_factors
