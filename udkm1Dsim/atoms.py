@@ -246,7 +246,7 @@ class Atom:
         """
         filename = os.path.join(os.path.dirname(__file__),
                                 'parameters/magneticFormFactors/{:s}.mf'.format(
-                                        self.symbol.lower()))
+                                        self.symbol))
         try:
             f = np.genfromtxt(filename, skip_header=1)
         except Exception as e:
