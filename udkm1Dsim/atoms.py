@@ -109,12 +109,14 @@ class Atom:
     def __str__(self):
         """String representation of this class"""
         output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
-                                'ionicity', 'Cromer Mann coeff', '', ''],
+                                'ionicity', 'Cromer Mann coeff', '', '',
+                                'magn. amplitude', 'magn. phi', 'magn. gamma'],
                   'value': [self.id, self.symbol, self.name, self.atomic_number_z,
                             self.mass_number_a, '{:.4~P}'.format(self.mass), self.ionicity,
                             np.array_str(self.cromer_mann_coeff[0:4]),
                             np.array_str(self.cromer_mann_coeff[4:8]),
-                            np.array_str(self.cromer_mann_coeff[8:])]}
+                            np.array_str(self.cromer_mann_coeff[8:]),
+                            self.mag_amplitude, self.mag_phi, self.mag_gamma]}
 
         return 'Atom with the following properties\n' + \
                tabulate(output, colalign=('right',), tablefmt="rst", floatfmt=('.2f', '.2f'))
