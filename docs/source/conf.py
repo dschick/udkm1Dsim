@@ -161,5 +161,5 @@ texinfo_documents = [
 
 
 # -- Extension configuration -------------------------------------------------
-# increase timeout of nbsphinx from 30 to 300s
-nbsphinx_timeout = 300
+# increase timeout of nbsphinx from 30 to 3000s
+nbsphinx_timeout = 3000
