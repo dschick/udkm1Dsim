@@ -69,13 +69,8 @@ class XrayDynMag(Xray):
         force_recalc (boolean): force recalculation of results
 
     Attributes:
-        S (object): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
-        polarization (float): polarization state
         last_atom_ref_trans_matrices (list): remember last result of
            atom ref_trans_matrices to speed up calculation
-        pol_in (ndarray[complex]): incoming polarization vector
-        pol_out (ndarray[complex]): analyzer polarization vector
 
     References:
 
@@ -95,13 +90,8 @@ class XrayDynMag(Xray):
 
     def __str__(self):
         """String representation of this class"""
-        class_str = 'Dynamical magnetic X-Ray Diffraction simulation ' \
-                    'properties:\n\n'
+        class_str = 'Dynamical Magnetic X-Ray Diffraction simulation properties:\n\n'
         class_str += super().__str__()
-        output = [['incoming polarization', self.polarizations[self.pol_in_state]],
-                  ['analyzer polarization', self.polarizations[self.pol_in_state]]]
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
-                              colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
 
     def get_hash(self, strain_vectors, **kwargs):
@@ -130,7 +120,12 @@ class XrayDynMag(Xray):
         return self.S.get_hash(types=['xray', 'magnetic']) + '_' + make_hash_md5(param)
 
     def set_incoming_polarization(self, pol_in_state):
-        """set_incoming_polarization"""
+        """set_incoming_polarization
+
+        Sets the incoming polarization factor for circular +, circular -, sigma, pi,
+        and unpolarized polarization.
+
+        """
 
         self.pol_in_state = pol_in_state
         if (self.pol_in_state == 1):  # circ +
@@ -149,7 +144,12 @@ class XrayDynMag(Xray):
             self.polarizations[self.pol_in_state]))
 
     def set_outgoing_polarization(self, pol_out_state):
-        """set_outgoing_polarization"""
+        """set_outgoing_polarization
+
+        Sets the outgoing polarization factor for circular +, circular -, sigma, pi,
+        and unpolarized polarization.
+
+        """
 
         self.pol_out_state = pol_out_state
         if (self.pol_out_state == 1):  # circ +

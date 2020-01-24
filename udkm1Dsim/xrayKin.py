@@ -41,9 +41,6 @@ class XrayKin(Xray):
         force_recalc (boolean): force recalculation of results
 
     Attributes:
-        S (object): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
-        polarization (float): polarization state
 
     """
 
@@ -57,7 +54,12 @@ class XrayKin(Xray):
         return class_str
 
     def set_incoming_polarization(self, pol_in_state):
-        """set_incoming_polarization"""
+        """set_incoming_polarization
+
+        Sets the incoming polarization factor for sigma, pi, and unpolarized
+        polarization.
+
+        """
 
         self.pol_in_state = pol_in_state
         if (self.pol_in_state == 1):  # circ +
@@ -82,7 +84,12 @@ class XrayKin(Xray):
             self.polarizations[self.pol_in_state]))
 
     def set_outgoing_polarization(self, pol_out_state):
-        """set_outgoing_polarization"""
+        """set_outgoing_polarization
+
+        For kinematical X-ray simulation only "no analyzer polarization" is allowed.
+
+        """
+
         self.pol_out_state = pol_out_state
         if self.pol_out_state == 0:
             self.disp_message('analyzer polarizations set to: {:s}'.format(

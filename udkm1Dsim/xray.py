@@ -41,9 +41,16 @@ class Xray(Simulation):
         force_recalc (boolean): force recalculation of results
 
     Attributes:
-        S (object): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
-        polarization (float): polarization state
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): incidence angles :math:`\theta` of scattering light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
+        polarizations (dict): polarization states and according names
+        pol_in_state (int): incoming polarization state as defined in polarizations dict
+        pol_out_state (int): outgoing polarization state as defined in polarizations dict
+        pol_in (float): incoming polarization factor (can be a complex ndarray)
+        pol_out (float): outgoing polarization factor (can be a complex ndarray)
 
     """
 
@@ -67,22 +74,31 @@ class Xray(Simulation):
         self.pol_out = None
         self.set_polarization(self.pol_in_state, self.pol_out_state)
 
+    def __str__(self, output=[]):
+        """String representation of this class"""
+        output = [['energy', self.energy[0] if np.size(self.energy) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.energy), np.max(self.energy))],
+                  ['wavelength', self.wl[0] if np.size(self.wl) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.wl), np.max(self.wl))],
+                  ['wavenumber', self.k[0] if np.size(self.k) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.k), np.max(self.k))],
+                  ['theta', self.theta[0] if np.size(self.theta) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.theta), np.max(self.theta))],
+                  ['q_z', self.qz[0] if np.size(self.qz) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.qz), np.max(self.qz))],
+                  ['incoming polarization', self.polarizations[self.pol_in_state]],
+                  ['analyzer polarization', self.polarizations[self.pol_out_state]],
+                  ] + output
+        return super().__str__(output)
+
     def set_polarization(self, pol_in_state, pol_out_state):
-        """set_polarization"""
+        """set_polarization
+
+        Sets the incoming and analyzer (outgoing) polarization
+
+        """
         self.set_incoming_polarization(pol_in_state)
         self.set_outgoing_polarization(pol_out_state)
-
-    def __str__(self):
-        """String representation of this class"""
-        output = [['force recalc', self.force_recalc],
-                  ['cache directory', self.cache_dir]]
-
-        class_str = 'This is the current structure for the simulations:\n\n'
-        class_str += self.S.__str__()
-        class_str += '\n\nDisplay properties:\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
-                              colalign=('right',), floatfmt=('.2f', '.2f'))
-        return class_str
 
     def get_hash(self, strain_vectors, **kwargs):
         """get_hash
