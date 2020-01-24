@@ -33,7 +33,6 @@ from .unitCell import UnitCell
 from tqdm import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n
 from . import u
-from tabulate import tabulate
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -43,7 +42,7 @@ class XrayDynMag(Xray):
 
     Dynamical magnetic Xray simulations adapted from Elzo et.al. [4]_.
     Initially realized in `Project Dyna
-    <http://neel.cnrs.fr/spip.php?rubrique1008>`_
+    <http://neel.cnrs.fr/spip.php?rubrique1008>`_.
 
     Original copyright notice:
 
@@ -168,7 +167,20 @@ class XrayDynMag(Xray):
             self.polarizations[self.pol_out_state]))
 
     def homogeneous_reflectivity(self, *args):
-        """homogeneous_reflectivity"""
+        """homogeneous_reflectivity
+
+        Returns the reflectivity :math:`R` of the whole sample structure
+        allowing only no or homogeneous strain and magnetization.
+
+        The reflection-transmission matrices
+
+        .. math:: RT = A_f^{-1} \\prod_m \\left( A_m P_m A_m^{-1} \\right) A_0
+
+        are calculated for every substructure :math:`m` before post-processing
+        the incoming and analyzer polarizations and calculating the actual
+        reflectivities as function of energy and :math:`q_z`.
+
+        """
         # if no strains are given we assume no strain
         if len(args) == 0:
             strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
@@ -194,7 +206,19 @@ class XrayDynMag(Xray):
         return R
 
     def calc_homogeneous_matrix(self, S, *args):
-        """calc_homogeneous_matrix"""
+        """calc_homogeneous_matrix
+
+        Calculates the product of all reflection-transmission matrices of the
+        sample structure
+
+        .. math:: RT = \\prod_m \\left( A_m P_m A_m^{-1} \\right)
+
+        If the sub-structure :math:`m` consists of :math:`N` unit cells
+        the matrix exponential rule is applied:
+
+        .. math:: RT_m = \\left( A_{UC} P_{UC} A_{UC}^{-1} \\right)^N
+
+        """
         # if no strains are given we assume no strain (1)
         if len(args) == 0:
             strains = np.zeros([S.get_number_of_sub_structures(), 1])
@@ -231,8 +255,32 @@ class XrayDynMag(Xray):
 
         return RT, A_inv
 
+    """
+    Inhomogenous Sample Structure
+    All unit cells in the sample are inhomogeneously
+    strained. This is generally the case when calculating the
+    transient rocking curves for coherent phonon dynamics in the
+    sample structure.
+    """
+
     def inhomogeneous_reflectivity(self, strain_map, strain_vectors=[]):
-        """inhomogeneous_reflectivity"""
+        """inhomogeneous_reflectivity
+
+        Returns the reflectivity of an inhomogenously strained and
+        magnetized sample structure for a given _strain_map_ and
+        __spin_map__ in position and time, as well as for a given set
+        of possible strains for each unit cell in the sample structure
+        (``strain_vectors``).
+        If no reflectivity is saved in the cache it is caluclated.
+        Providing the _type_ (parallel [default], sequential,
+        distributed) for the calculation the corresponding subroutines
+        for the reflectivity computation are called:
+
+        * ``parallel`` not implemented, yet
+        * ``distributed`` not implemented in Python, yet
+        * ``sequential`` no parallelization at all
+
+        """
         # create a hash of all simulation parameters
         filename = 'inhomogeneous_reflectivity_dynMag_' \
                    + self.get_hash(strain_vectors, strain_map=strain_map) \
@@ -267,7 +315,7 @@ class XrayDynMag(Xray):
         well as for a given set of possible strains for each unit cell
         in the sample structure (``strain_vectors``).
         The function calculates the results sequentially without
-        parallelization.
+        parallelization for every atomic layer.
 
         """
         # initialize
@@ -292,7 +340,14 @@ class XrayDynMag(Xray):
         return R
 
     def calc_inhomogeneous_matrix(self, strains):
-        """calc_inhomogeneous_matrix"""
+        """calc_inhomogeneous_matrix
+
+        Calculates the product of all reflection-transmission matrices of the
+        sample structure for every atomic layer.
+
+        .. math:: RT = \\prod_m \\left( A_m P_m A_m^{-1} \\right)
+
+        """
         L = self.S.get_number_of_unit_cells()  # number of unit cells
         _, _, uc_handles = self.S.get_unit_cell_vectors()
 
@@ -308,6 +363,16 @@ class XrayDynMag(Xray):
         return RT, A_inv
 
     def calc_uc_boundary_phase_matrix(self, uc, strain):
+        """calc_uc_boundary_phase_matrix
+
+        Calculates the product of all reflection-transmission matrices of
+        a single unit cell for a given strain:
+
+        .. math:: RT = \\prod_m \\left( A_m P_m A_m^{-1} \\right)
+
+        and returns also the last inverted boundary matrix :math:`A^{-1}`.
+
+        """
         K = uc.num_atoms  # number of atoms
         for j in range(K):
             if j == (K-1):  # its the last atom
@@ -330,8 +395,9 @@ class XrayDynMag(Xray):
     def get_atom_boundary_phase_matrix(self, atom, area, distance, *args):
         """get_atom_boundary_phase_matrix
 
-        Returns the reflection-transmission matrix of an atom from
-        Elzo formalism:
+        Returns the boundary and phase matrices of an atom from
+        Elzo formalism. The results for a given atom, energy, :math:`q_z`,
+        polarization, and magnetization are stored to RAM to avoid recalculation.
 
         """
         try:
@@ -376,10 +442,11 @@ class XrayDynMag(Xray):
     def calc_atom_boundary_phase_matrix(self, atom, area, distance, *args):
         """calc_atom_boundary_phase_matrix
 
-        Calculates the reflection-transmission matrix of an atom from
-        Elzo formalism:
+        Calculates the boundary and phase matrices of an atom from
+        Elzo formalism.
 
         """
+
         if len(args) > 0:
             mag_amplitude = args[0]
         else:
@@ -515,7 +582,13 @@ class XrayDynMag(Xray):
         return A, P
 
     def calc_reflectivity_from_matrix(self, RT):
-        """calc_reflectivity_from_matrix"""
+        """calc_reflectivity_from_matrix
+
+        Calculates the actual reflectivity from the reflectivity-transmission
+        matrix for a given incoming and analyzer polarization.
+
+        """
+
         Ref = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :],
                       (np.size(RT, 0), np.size(RT, 1), 1, 1))
 

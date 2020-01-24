@@ -212,7 +212,7 @@ class XrayDyn(Xray):
         """inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained sample
-        structure for a given _strainMap_ in position and time, as well
+        structure for a given _strain_map_ in position and time, as well
         as for a given set of possible strains for each unit cell in the
         sample structure (``strain_vectors``).
         If no reflectivity is saved in the cache it is caluclated.

@@ -27,7 +27,6 @@ __docformat__ = "restructuredtext"
 import numpy as np
 from .simulation import Simulation
 from . import u, Q_
-from tabulate import tabulate
 from .helpers import make_hash_md5
 
 

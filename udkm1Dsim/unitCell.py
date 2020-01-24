@@ -280,7 +280,6 @@ class UnitCell:
 
         """
         # initialize input parser and define defaults and validators
-        #types = ['all', 'heat', 'phonon', 'xray', 'optical']
         properties_by_types = {'heat': ['_c_axis', '_area', '_volume', '_opt_pen_depth',
                                         'therm_cond_str', 'heat_capacity_str',
                                         'int_heat_capacity_str', 'sub_system_coupling_str',
