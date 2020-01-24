@@ -80,7 +80,7 @@ class Structure:
                 # call the display() method recursively
                 class_str += tab_str + 'sub-structure {:d} times:\n'.format(
                        sub_structure[1])
-                sub_structure[0].__str__(tabs+1)
+                class_str += sub_structure[0].__str__(tabs+1)
         class_str += tab_str + '----\n'
         # check for a substrate
         if isinstance(self.substrate, Structure):
@@ -92,7 +92,7 @@ class Structure:
                     self.substrate.sub_structures[0][1]
                     * self.substrate.sub_structures[0][0].c_axis.to('nm'))
         else:
-            class_str += 'no substrate\n'
+            class_str += tab_str + 'no substrate\n'
         return class_str
 
     def visualize(self):
