@@ -3,9 +3,9 @@ language: python
 sudo: required
 
 python:
-  - "3.4"
   - "3.5"
   - "3.6"
+  - "3.7"
 
 before_install:
   # install flake8 to perform python code style check in the script part
