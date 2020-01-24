@@ -24,9 +24,9 @@ copyright = '2019, Daniel Schick, et.al.'
 author = 'Daniel Schick, et.al.'
 
 # The short X.Y version
-version = '0.1.3'
+version = '0.1.4'
 # The full version, including alpha/beta/rc tags
-release = '0.1.3'
+release = '0.1.4'
 
 
 # -- General configuration ---------------------------------------------------
@@ -143,7 +143,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'udkm1dsim', 'udkm1Dsim Documentation',
+    (master_doc, 'udkm1Dsim', 'udkm1Dsim Documentation',
      [author], 1)
 ]
 

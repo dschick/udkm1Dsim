@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='udkm1Dsim',
-    version='0.1.3',
+    version='0.1.4',
     packages=find_packages(),
     package_data={
         '': ['*.txt', '*.dat', '*.nff', '*.mf'],
@@ -25,6 +25,6 @@ setup(
                 + 'in Condensed Matter',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    python_requires='>=3.4',
+    python_requires='>=3.5',
     keywords='ultrafast dynamics condensed matter 1D',
 )
