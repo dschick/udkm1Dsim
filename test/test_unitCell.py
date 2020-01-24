@@ -6,7 +6,6 @@ from udkm1Dsim.unitCell import UnitCell
 from pint import UnitRegistry
 u = UnitRegistry()
 u.default_format = '~P'
-from numpy import array
 
 
 def test_unit_cell():
