@@ -5,7 +5,7 @@ setup(
     version='0.1.3',
     packages=find_packages(),
     package_data={
-        '': ['*.txt', '*.dat', '*.nff'],
+        '': ['*.txt', '*.dat', '*.nff', '*.mf'],
     },
     url='https://github.com/dschick/udkm1Dsim',
     install_requires=['tqdm',
