@@ -254,6 +254,8 @@ class Atom:
                   'your search path!',
                   filename)
             print(e)
+            # return zero array
+            f = np.zeros([1, 3])
 
         return f
 
