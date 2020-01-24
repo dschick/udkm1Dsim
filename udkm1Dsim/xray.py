@@ -88,19 +88,13 @@ class Xray(Simulation):
         """get_hash
 
         Returns a unique hash given by the energy :math:`E`,
-        :math:`q_z` range, polarization factor and the strain vectors as
+        :math:`q_z` range, polarization states and the strain vectors as
         well as the sample structure hash for relevant xray parameters.
+        Optionally, part of the strain_map is used.
 
         """
-        param = [self.pol_in_state, self.pol_out_state, strain_vectors]
-        if 'energy' in kwargs:
-            param.append(kwargs.get('energy'))
-        else:
-            param.append(self._energy)
-        if 'qz' in kwargs:
-            param.append(kwargs.get('qz'))
-        else:
-            param.append(self._qz)
+        param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy, strain_vectors]
+
         if 'strain_map' in kwargs:
             strain_map = kwargs.get('strain_map')
             if np.size(strain_map) > 1e6:

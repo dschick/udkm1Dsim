@@ -221,10 +221,7 @@ class XrayDyn(Xray):
         """
         # create a hash of all simulation parameters
         filename = 'inhomogeneous_reflectivity_dyn_' \
-                   + self.get_hash(strain_vectors,
-                                   qz=self.qz,
-                                   energy=self.energy,
-                                   strain_map=strain_map) \
+                   + self.get_hash(strain_vectors, strain_map=strain_map) \
                    + '.npy'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
@@ -455,7 +452,7 @@ class XrayDyn(Xray):
             strain_vectors = args[0]
         # create a hash of all simulation parameters
         filename = 'all_ref_trans_matrices_dyn_' \
-            + self.get_hash(strain_vectors, energy=self._energy, qz=self._qz) + '.npy'
+            + self.get_hash(strain_vectors) + '.npy'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
