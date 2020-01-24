@@ -107,12 +107,10 @@ class UnitCell:
         self.opt_pen_depth = kwargs.get('opt_pen_depth', 0*u.nm)
         self.opt_ref_index = kwargs.get('opt_ref_index', 0)
         self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0)
-        self.heat_capacity, self.heat_capacity_str = self.check_cell_array_input(
-                kwargs.get('heat_capacity', 0))
+        self.heat_capacity = kwargs.get('heat_capacity', 0)
         self.therm_cond, self.therm_cond_str = self.check_cell_array_input(
                 kwargs.get('therm_cond', 0))
-        self.lin_therm_exp, self.lin_therm_exp_str = self.check_cell_array_input(
-                kwargs.get('lin_therm_exp', 0))
+        self.lin_therm_exp = kwargs.get('lin_therm_exp', 0)
         self.sub_system_coupling, self.sub_system_coupling_str = self.check_cell_array_input(
                 kwargs.get('sub_system_coupling', 0))
 
@@ -285,7 +283,7 @@ class UnitCell:
                                         'int_heat_capacity_str', 'sub_system_coupling_str',
                                         'num_sub_systems'],
                                'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_c_axis',
-                                          '_mass', '_spring_const', '_phonon_damping'],
+                                          '_mass', 'spring_const', '_phonon_damping'],
                                'xray': ['num_atoms', '_area', '_deb_wal_fac', '_c_axis'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
@@ -349,6 +347,28 @@ class UnitCell:
         return(output, outputStrs)
 
     @property
+    def heat_capacity(self):
+        """get heat_capacity
+
+        Returns the temperature-dependent heat capactity function.
+
+        """
+
+        return self._heat_capacity
+
+    @heat_capacity.setter
+    def heat_capacity(self, heat_capacity):
+        """set heat_capacity
+
+        Set the heat_capacity (and its string representation)
+        and calls setting its anti-derivative.
+
+        """
+
+        self._heat_capacity, self.heat_capacity_str = self.check_cell_array_input(heat_capacity)
+        self.int_heat_capacity  # recalculate the anti-derivative
+
+    @property
     def int_heat_capacity(self):
         """get int_heat_capacity
 
@@ -391,6 +411,28 @@ class UnitCell:
                 int_heat_capacity)
 
     @property
+    def lin_therm_exp(self):
+        """get lin_therm_exp
+
+        Returns the temperature-dependent linear thermal expansion function.
+
+        """
+
+        return self._lin_therm_exp
+
+    @lin_therm_exp.setter
+    def lin_therm_exp(self, lin_therm_exp):
+        """set lin_therm_exp
+
+        Set the linear thermal expansion coefficient (and string representation)
+        and calls setting its anti-derivative.
+
+        """
+
+        self._lin_therm_exp, self.lin_therm_exp_str = self.check_cell_array_input(lin_therm_exp)
+        self.int_lin_therm_exp  # recalculate the anti-derivative
+
+    @property
     def int_lin_therm_exp(self):
         """get int_lin_therm_exp
 
@@ -401,25 +443,22 @@ class UnitCell:
 
         """
 
-        if hasattr(self, '_int_lin_therm_exp') and isinstance(self._int_lin_therm_exp, list):
-            return self._int_lin_therm_exp
-        else:
-            self._int_lin_therm_exp = []
-            self.int_lin_therm_exp_str = []
-            try:
-                T = Symbol('T')
-                for i, ltes in enumerate(self.lin_therm_exp_str):
-                    integral = integrate(ltes.split(':')[1], T)
-                    self._int_lin_therm_exp.append(lambdify(T, integral))
-                    self.int_lin_therm_exp_str.append('lambda T : ' + str(integral))
+        self._int_lin_therm_exp = []
+        self.int_lin_therm_exp_str = []
+        try:
+            T = Symbol('T')
+            for i, ltes in enumerate(self.lin_therm_exp_str):
+                integral = integrate(ltes.split(':')[1], T)
+                self._int_lin_therm_exp.append(lambdify(T, integral))
+                self.int_lin_therm_exp_str.append('lambda T : ' + str(integral))
 
-            except Exception as e:
-                print('The sympy integration did not work. You can set the'
-                      'the analytical anti-derivative of the heat capacity'
-                      'of your unit cells as lambda function of the temperature'
-                      'T by typing UC.int_heat_capacity = lambda T: c(T)'
-                      'where UC is the name of the unit cell object.')
-                print(e)
+        except Exception as e:
+            print('The sympy integration did not work. You can set the '
+                  'analytical anti-derivative of the linear thermal expansion '
+                  'of your unit cells as lambda function of the temperature '
+                  'T by typing UC.int_lin_therm_exp = lambda T: c(T) '
+                  'where UC is the name of the unit cell object.')
+            print(e)
 
         return self._int_lin_therm_exp
 
