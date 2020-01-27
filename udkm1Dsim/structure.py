@@ -35,8 +35,8 @@ class Structure:
     """Structure
 
     The structure class can hold various sub_structures. Each
-    sub_structure can be either a layer of N unitCell objects or a
-    structure by itself.
+    sub_structure can be either a layer of N UnitCell or AmorphousLayer
+    objects or a structure by itself.
     Thus it is possible to recursively build up 1D structures.
 
     Args:
@@ -71,13 +71,7 @@ class Structure:
         class_str += tab_str + '----\n'
         # traverse all substructures
         for i, sub_structure in enumerate(self.sub_structures):
-            if isinstance(sub_structure[0], UnitCell):
-                # the substructure is an unitCell
-                class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
-                        sub_structure[1],
-                        sub_structure[0].name,
-                        sub_structure[1]*sub_structure[0].c_axis.to('nm'))
-            elif isinstance(sub_structure[0], AmorphousLayer):
+            if isinstance(sub_structure[0], (AmorphousLayer, UnitCell)):
                 # the substructure is an unitCell
                 class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
                         sub_structure[1],
@@ -98,7 +92,7 @@ class Structure:
                     self.substrate.sub_structures[0][1],
                     self.substrate.sub_structures[0][0].name,
                     self.substrate.sub_structures[0][1]
-                    * self.substrate.sub_structures[0][0].c_axis.to('nm'))
+                    * self.substrate.sub_structures[0][0].thickness.to('nm'))
         else:
             class_str += tab_str + 'no substrate\n'
         return class_str
@@ -106,27 +100,28 @@ class Structure:
     def get_hash(self, **kwargs):
         """hash
 
-        Returns a unique hash from all unitCell IDs in the correct order
+        Returns a unique hash from all layer IDs in the correct order
         in the structure.
 
         """
         param = []
-        ucs = self.get_unique_unit_cells()
-        for uc in ucs[1]:
-            param.append(uc.get_property_dict(**kwargs))
+        layers = self.get_unique_layers()
+        for layer in layers[1]:
+            param.append(layer.get_property_dict(**kwargs))
 
-        _, IDs, _ = self.get_unit_cell_vectors()
+        _, IDs, _ = self.get_layer_vectors()
         param.append(IDs)
         return make_hash_md5(param)
 
     def add_sub_structure(self, sub_structure, N):
         """add_sub_structure
 
-        Add a sub_structure of N unitCells or N structures to the
+        Add a sub_structure of N layers or N structures to the
         structure.
 
         Args:
-            sub_structure (UnitCell, Structure): unit cell or structure
+            sub_structure (AmorphousLayer, UnitCell, Structure):
+               amorphous layer, unit cell, or structure
                to add as sub structure
             N (int): number or repetitions
 
@@ -179,8 +174,8 @@ class Structure:
         """get_number_of_sub_structures
 
         Returns the number of all sub structures.
-        This methods does not return the number of all unitCells in the
-        structure, see get_number_of_unit_cells().
+        This methods does not return the number of all layers in the
+        structure, see get_number_of_layers().
 
         """
         N = 0
@@ -191,31 +186,31 @@ class Structure:
                 N = N + self.sub_structures[i][0].get_number_of_sub_structures()
         return N
 
-    def get_number_of_unit_cells(self):
-        """get_number_of_unit_cells
+    def get_number_of_layers(self):
+        """get_number_of_layers
 
-        Returns the number of all unitCells in the structure.
+        Returns the number of all layers in the structure.
 
         """
         N = 0
         # traverse the substructres
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], UnitCell):
+            if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
                 N = N + self.sub_structures[i][1]
             else:
                 # its a sturcture, so call the method recursively
-                N = N + self.sub_structures[i][0].get_number_of_unit_cells() \
+                N = N + self.sub_structures[i][0].get_number_of_layers() \
                     * self.sub_structures[i][1]
 
         return N
 
-    def get_number_of_unique_unit_cells(self):
-        """get_number_of_unique_unit_cells
+    def get_number_of_unique_layers(self):
+        """get_number_of_unique_layers
 
-        Returns the number of unique unitCells in the structure.
+        Returns the number of unique layers in the structure.
 
         """
-        N = len(self.get_unique_unit_cells()[0])
+        N = len(self.get_unique_layers()[0])
         return N
 
     def get_thickness(self):
@@ -224,107 +219,107 @@ class Structure:
         Returns the thickness from surface to bottom of the structure
 
         """
-        _, d_end, _ = self.get_distances_of_unit_cells()
+        _, d_end, _ = self.get_distances_of_layers()
         return d_end[-1]
 
-    def get_unique_unit_cells(self):
-        """get_unique_unit_cells
+    def get_unique_layers(self):
+        """get_unique_layers
 
-        Returns a list of ids and handles of all unique UnitCell
+        Returns a list of ids and handles of all unique layers
         instances in the structure.
-        The uniqueness is determined by the handle of each unitCell
+        The uniqueness is determined by the handle of each layer
         instance.
 
         """
-        uc_ids = []
-        uc_handles = []
+        layer_ids = []
+        layer_handles = []
         # traverse the sub_structures
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], UnitCell):
-                # its a UnitCell
-                uc_id = self.sub_structures[i][0].id
-                if not uc_ids:
+            if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
+                # its a AmorphousLayer or UnitCell
+                layer_id = self.sub_structures[i][0].id
+                if not layer_ids:
                     # the cell array is empty at the beginning so add
-                    # the first unitCell
-                    uc_ids = uc_ids + [uc_id]
-                    uc_handles = uc_handles + [self.sub_structures[i][0]]
+                    # the first layer
+                    layer_ids = layer_ids + [layer_id]
+                    layer_handles = layer_handles + [self.sub_structures[i][0]]
                 else:
                     # the cell array is not empty so check if the id is
-                    # already in the ucs id vector
-                    if uc_id not in uc_ids:
+                    # already in the layers id vector
+                    if layer_id not in layer_ids:
                         # if id not in list, so add it
-                        uc_ids = uc_ids + [uc_id]
-                        uc_handles = uc_handles + [self.sub_structures[i][0]]
+                        layer_ids = layer_ids + [layer_id]
+                        layer_handles = layer_handles + [self.sub_structures[i][0]]
             else:
                 # its a sub_structure
-                if not uc_ids:
+                if not layer_ids:
                     # the cell array is empty at the beginning so call
                     # the method recursively and add the result to the
-                    # ucs array
-                    uc_ids = self.sub_structures[i][0].get_unique_unit_cells()[0]
-                    uc_handles = self.sub_structures[i][0].get_unique_unit_cells()[1]
+                    # layers array
+                    layer_ids = self.sub_structures[i][0].get_unique_layers()[0]
+                    layer_handles = self.sub_structures[i][0].get_unique_layers()[1]
                 else:
                     # the cell array is not empty so check if the ids
-                    # from the recursive call are already in the ucs id
+                    # from the recursive call are already in the layers id
                     # vector.
-                    temp1 = self.sub_structures[i][0].get_unique_unit_cells()[0]
-                    temp2 = self.sub_structures[i][0].get_unique_unit_cells()[1]
+                    temp1 = self.sub_structures[i][0].get_unique_layers()[0]
+                    temp2 = self.sub_structures[i][0].get_unique_layers()[1]
                     for j, temp in enumerate(temp1):
                         # check all ids from recursive call
-                        if temp1[j] not in uc_ids:
+                        if temp1[j] not in layer_ids:
                             # ids not in list, so add them
-                            uc_ids = uc_ids + [temp1[j]]
-                            uc_handles = uc_handles + [temp2[j]]
+                            layer_ids = layer_ids + [temp1[j]]
+                            layer_handles = layer_handles + [temp2[j]]
 
-        return uc_ids, uc_handles
+        return layer_ids, layer_handles
 
-    def get_unit_cell_vectors(self, *args):
-        """get_unit_cell_vectors
+    def get_layer_vectors(self, *args):
+        """get_layer_vectors
 
-        Returns three lists with the numeric index of all unit cells
-        in a structure given by the get_unique_unit_cells() method and
+        Returns three lists with the numeric index of all layers
+        in a structure given by the get_unique_layers() method and
         addidionally vectors with the ids and Handles of the
-        corresponding unitCell instances.
-        The list and order of the unique unitCells can be either handed
+        corresponding layer instances.
+        The list and order of the unique layers can be either handed
         as an input parameter or is requested at the beginning.
 
         Args:
-            ucs (Optional[list]): list of unique unit cells including
+            layers (Optional[list]): list of unique layers including
                ids and handles
 
         """
         indices = []
-        uc_ids = []
-        uc_handles = []
-        # if no ucs (UniqueUnitCells) are given, we have to get them
+        layer_ids = []
+        layer_handles = []
+        # if no layers (unique layers) are given, we have to get them
         if len(args) < 1:
-            ucs = self.get_unique_unit_cells()
+            layers = self.get_unique_layers()
         else:
-            ucs = args[0]
+            layers = args[0]
         # traverse the substructres
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], UnitCell):
-                # its a UnitCell
-                # find the index of the current UC id in the unique
-                # unitCell vector
-                Index = ucs[0].index(self.sub_structures[i][0].id)
+            if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
+                # its a AmorphousLayer or UnitCell
+                # find the index of the current layer id in the unique
+                # layer vector
+                Index = layers[0].index(self.sub_structures[i][0].id)
                 # add the index N times to the indices vector
                 indices = np.append(indices, Index*np.ones(self.sub_structures[i][1]))
-                # create a cell array of N unitCell ids and add them to
+                # create a cell array of N layer ids and add them to
                 # the ids cell array
                 temp1 = list(itertools.repeat(self.sub_structures[i][0].id,
                                               self.sub_structures[i][1]))
-                uc_ids = uc_ids + list(temp1)
-                # create a cell array of N unitCell handles and add them to
+                layer_ids = layer_ids + list(temp1)
+                # create a cell array of N layer handles and add them to
                 # the Handles cell array
                 temp2 = list(itertools.repeat(self.sub_structures[i][0],
                                               self.sub_structures[i][1]))
-                uc_handles = uc_handles + list(temp2)
+                layer_handles = layer_handles + list(temp2)
             else:
                 # its a structure
                 # make a recursive call and hand in the same unique
-                # unit cell vector as we used before
-                [temp1, temp2, temp3] = self.sub_structures[i][0].get_unit_cell_vectors(ucs)
+                # layer vector as we used before
+                [temp1, temp2, temp3] = self.sub_structures[i][0].get_layer_vectors(layers)
                 temp11 = []
                 temp22 = []
                 temp33 = []
@@ -335,40 +330,40 @@ class Structure:
                     temp33 = temp33 + list(temp3)
                 # add the temporary arrays to the outputs
                 indices = np.append(indices, temp11)
-                uc_ids = uc_ids + list(temp22)
-                uc_handles = uc_handles + list(temp33)
-        return list(map(int, indices)), uc_ids, uc_handles
+                layer_ids = layer_ids + list(temp22)
+                layer_handles = layer_handles + list(temp33)
+        return indices, layer_ids, layer_handles
 
-    def get_all_positions_per_unique_unit_cell(self):
-        """get_all_positions_per_unique_unit_cell
+    def get_all_positions_per_unique_layer(self):
+        """get_all_positions_per_unique_layer
 
         Returns a list with one vector of position indices for
-        each unique unitCell in the structure.
+        each unique layer in the structure.
 
         """
-        ucs = self.get_unique_unit_cells()
-        indices = self.get_unit_cell_vectors()[0]
+        layers = self.get_unique_layers()
+        indices = self.get_layer_vectors()[0]
         pos = {}  # Dictionary used instead of array
-        for i, uc in enumerate(ucs[0]):
-            pos[ucs[0][i]] = list(np.where(indices == i))
-        # Each element accessible through Unit cell id
+        for i, layer in enumerate(layers[0]):
+            pos[layer] = list(np.where(indices == i))
+        # Each element accessible through layer id
         return pos
 
-    def get_distances_of_unit_cells(self):
-        """get_distances_of_unit_cells
+    def get_distances_of_layers(self):
+        """get_distances_of_layers
 
-        Returns a vector of the distance from the surface for each unit
-        cell starting at 0 (dStart) and starting at the end of the first
-        unit cell (dEnd) and from the center of each unit cell (dMid).
+        Returns a vector of the distance from the surface for each layer
+        starting at 0 (dStart) and starting at the end of the first
+        layer (dEnd) and from the center of each layer (dMid).
 
         ToDo: add argument to return distances in according unit or only
         numbers.
 
         """
-        c_axes = self.get_unit_cell_property_vector('_c_axis')
-        d_end = np.cumsum(c_axes)
+        thickness = self.get_layer_property_vector('_thickness')
+        d_end = np.cumsum(thickness)
         d_start = np.hstack([[0], d_end[0:-1]])
-        d_mid = (d_start + c_axes)/2
+        d_mid = (d_start + thickness)/2
         return d_start*u.m, d_end*u.m, d_mid*u.m
 
     def get_distances_of_interfaces(self):
@@ -379,14 +374,14 @@ class Structure:
 
         """
 
-        d_start, d_end, d_mid = self.get_distances_of_unit_cells()
-        indices = np.r_[1, np.diff(self.get_unit_cell_vectors()[0])]
+        d_start, d_end, d_mid = self.get_distances_of_layers()
+        indices = np.r_[1, np.diff(self.get_layer_vectors()[0])]
         return np.append(d_start[np.nonzero(indices)].magnitude, d_end[-1].magnitude)*u.m
 
-    def get_unit_cell_property_vector(self, property_name):
-        """get_unit_cell_property_vector
+    def get_layer_property_vector(self, property_name):
+        """get_layer_property_vector
 
-        Returns a vector for a property of all unitCells in the
+        Returns a vector for a property of all layers in the
         structure. The property is determined by the propertyName and
         returns a scalar value or a function handle.
 
@@ -394,45 +389,45 @@ class Structure:
             property_name (str): type of property to return as vector
 
         """
-        # get the Handle to all unitCells in the Structure
-        handles = self.get_unit_cell_vectors()[2]
+        # get the Handle to all layers in the Structure
+        handles = self.get_layer_vectors()[2]
 
         if callable(getattr(handles[0], property_name)):
             # it's a function
-            prop = np.zeros([self.get_number_of_unit_cells()])
-            for i in range(self.get_number_of_unit_cells()):
+            prop = np.zeros([self.get_number_of_layers()])
+            for i in range(self.get_number_of_layers()):
                 prop[i] = getattr(handles[i], property_name)
         elif ((type(getattr(handles[0], property_name)) is list) or
                 (type(getattr(handles[0], property_name)) is str)):
             # it's a list of functions or str
             prop = []
-            for i in range(self.get_number_of_unit_cells()):
+            for i in range(self.get_number_of_layers()):
                 # Prop = Prop + getattr(Handles[i],types)
                 prop.append(getattr(handles[i], property_name))
         elif type(getattr(handles[0], property_name)) is Q_:
             # its a pint quantity
             unit = getattr(handles[0], property_name).units
-            prop = np.empty([self.get_number_of_unit_cells()])
-            for i in range(self.get_number_of_unit_cells()):
+            prop = np.empty([self.get_number_of_layers()])
+            for i in range(self.get_number_of_layers()):
                 prop[i] = getattr(handles[i], property_name).magnitude
             prop *= unit
         else:
             # its a number or array
-            ucs = self.get_unique_unit_cells()
-            temp = np.zeros([len(ucs[0]), 1])
-            for i, uc in enumerate(ucs[1]):
+            layers = self.get_unique_layers()
+            temp = np.zeros([len(layers[0]), 1])
+            for i, layer in enumerate(layers[1]):
                 try:
-                    temp[i] = len(getattr(uc, property_name))
+                    temp[i] = len(getattr(layer, property_name))
                 except TypeError:
                     temp[i] = 1
             max_dim = int(np.max(temp))
             if max_dim > 1:
-                prop = np.empty([self.get_number_of_unit_cells(), max_dim])
+                prop = np.empty([self.get_number_of_layers(), max_dim])
             else:
-                prop = np.empty([self.get_number_of_unit_cells()])
+                prop = np.empty([self.get_number_of_layers()])
             del temp
-            # traverse all unitCells
-            for i in range(self.get_number_of_unit_cells()):
+            # traverse all layers
+            for i in range(self.get_number_of_layers()):
                 temp = getattr(handles[i], property_name)
                 if max_dim > 1:
                     prop[i, :] = temp
@@ -441,13 +436,12 @@ class Structure:
 
         return prop
 
-    def get_unit_cell_handle(self, i):
-        """get_unit_cell_handle
+    def get_layer_handle(self, i):
+        """get_layer_handle
 
-        Returns the handle to the unitCell at position i in the
+        Returns the handle to the layer at position i in the
         structure.
 
         """
-        handles = self.get_unit_cell_vectors()[2]
-        handle = handles[i]
-        return handle
+        handles = self.get_layer_vectors()[2]
+        return handles[i]
