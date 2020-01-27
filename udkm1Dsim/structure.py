@@ -48,7 +48,6 @@ class Structure:
         substrate (object): structure of the substrate
         num_sub_systems (int): number of subsystems for heat and phonons
            (electronic, lattice, spins, ...)
-        roughness (float): gaussian width of the top roughness of a layer
 
     """
 
@@ -78,6 +77,12 @@ class Structure:
                         sub_structure[1],
                         sub_structure[0].name,
                         sub_structure[1]*sub_structure[0].c_axis.to('nm'))
+            elif isinstance(sub_structure[0], AmorphousLayer):
+                # the substructure is an unitCell
+                class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
+                        sub_structure[1],
+                        sub_structure[0].name,
+                        sub_structure[1]*sub_structure[0].thickness.to('nm'))
             else:
                 # the substructure is a structure instance by itself
                 # call the display() method recursively
@@ -180,7 +185,7 @@ class Structure:
         """
         N = 0
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], UnitCell):
+            if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
                 N = N + 1
             else:
                 N = N + self.sub_structures[i][0].get_number_of_sub_structures()
@@ -378,47 +383,6 @@ class Structure:
         indices = np.r_[1, np.diff(self.get_unit_cell_vectors()[0])]
         return np.append(d_start[np.nonzero(indices)].magnitude, d_end[-1].magnitude)*u.m
 
-    def interp_distance_at_interfaces(self):
-        """interp_distance_at_interfaces"""
-#        % Returns a distance Vector of the center of UCs interpolated by an
-#        % odd number N at the interface of sturctures.
-#        function [distInterp originalIndicies] = interpDistanceAtInterfaces(obj,N)
-#            [dStart,dEnd,dMid] = obj.getDistancesOfUnitCells();
-#            % these are the distances of the interfaces
-#            distIntf = obj.getDistancesOfInterfaces();
-#            % we start with the distances of the centers of the unit cells
-#            distInterp = dMid;
-#
-#            N = floor(N); % make N an integer
-#            if mod(N,2) == 0
-#                % we want to have odd numbers
-#                N = N+1;
-#            end%if
-#
-#            % traverse all distances
-#            for i=1:length(distIntf)
-#                x = distIntf(i); % this is the distance of an interface
-#
-#                inda = finderb(x,dStart); % this is the index of an UC after the interface
-#                indb = inda-1; % this is the index of an UC before the interface
-#
-#                % now interpolate linearly N new distances at the interface
-#                if indb == 0 % this is the surface interface
-#                    distInterp = vertcat(distInterp,linspace(0,dMid(inda),2+(N-1)/2)');
-#                elseif inda >= length(dMid) % this is the bottom interface
-#                    distInterp = vertcat(distInterp,
-#                   linspace(dMid(inda),dEnd(end),2+(N-1)/2)');
-#                else % this is a surface inside the structure
-#                    distInterp = vertcat(distInterp,linspace(dMid(indb),dMid(inda),2+N)');
-#                end%if
-#            end%for
-#
-#            distInterp = unique(sort(distInterp)); % sort and unify the distances
-#            % these are the indicies of the original distances in the interpolated new vector
-#            originalIndicies = finderb(dMid,distInterp);
-#        end%function
-        pass
-
     def get_unit_cell_property_vector(self, property_name):
         """get_unit_cell_property_vector
 
@@ -487,13 +451,3 @@ class Structure:
         handles = self.get_unit_cell_vectors()[2]
         handle = handles[i]
         return handle
-
-    @property
-    def roughness(self):
-        """float: roughness of the top of layer [m]"""
-        return Q_(self._roughness, u.meter).to('nm')
-
-    @roughness.setter
-    def roughness(self, roughness):
-        """set.roughness"""
-        self._roughness = roughness.to_base_units().magnitude

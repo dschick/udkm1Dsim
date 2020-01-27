@@ -23,6 +23,7 @@ __all__ = ["Layer", "AmorphousLayer", "UnitCell"]
 __docformat__ = "restructuredtext"
 
 import numpy as np
+from .atoms import Atom, AtomMixed
 from inspect import isfunction
 from sympy import integrate, Symbol
 from sympy.utilities.lambdify import lambdify
@@ -44,6 +45,7 @@ class Layer:
         deb_wal_fac (float): Debye Waller factor
         sound_vel (float): sound velocity
         phonon_damping (float): phonon damping
+        roughness (fload): gaussian width of the top roughness of a layer
         opt_pen_depth (float): optical penetration depth
         opt_ref_index (float): refractive index
         opt_ref_index_per_strain (float): change of refractive index per
@@ -56,11 +58,7 @@ class Layer:
     Attributes:
         id (str): id of the unit cell
         name (str): name of the unit cell
-        atoms (list[atom, @lambda]): list of atoms and funtion handle
-           for strain dependent displacement
-        num_atoms (int): number of atoms in unit cell
-        magnetizations (list[foat]): magnetization amplitutes, phi, and
-           gamma angle of each atom in the unit cell
+        roughness (float): gaussian width of the top roughness of a layer
         spring_const (ndarray[float]): spring constant of the unit cell
            [kg/s²] and higher orders
         opt_ref_index (ndarray[float]): optical refractive index - real
@@ -88,9 +86,7 @@ class Layer:
     def __init__(self, id, name, **kwargs):
         self.id = id
         self.name = name
-        self.atoms = []
-        self.num_atoms = 0
-        self.magnetizations = []
+        self.roughness = 0*u.nm
         self.spring_const = np.array([0])
         self.deb_wal_fac = kwargs.get('deb_wal_fac', 0*u.m**2)
         self.sound_vel = kwargs.get('sound_vel', 0*u.m/u.s)
@@ -410,6 +406,16 @@ class Layer:
         """set.opt_pen_depth"""
         self._opt_pen_depth = opt_pen_depth.to_base_units().magnitude
 
+    @property
+    def roughness(self):
+        """float: roughness of the top of layer [m]"""
+        return Q_(self._roughness, u.meter).to('nm')
+
+    @roughness.setter
+    def roughness(self, roughness):
+        """set.roughness"""
+        self._roughness = roughness.to_base_units().magnitude
+
 
 class AmorphousLayer(Layer):
     """AmorphousLayer
@@ -423,6 +429,7 @@ class AmorphousLayer(Layer):
         thickness (float): thickness of the layer
 
     Keyword Args:
+        atom (object): Atom or AtomMixed in the layer
         deb_wal_fac (float): Debye Waller factor
         sound_vel (float): sound velocity
         phonon_damping (float): phonon damping
@@ -437,7 +444,9 @@ class AmorphousLayer(Layer):
 
     Attributes:
         thickness (float): thickness of the layer
-        atoms (list[objects]): asdas
+        atom (object): Atom or AtomMixed in the layer
+        magnetization (dict[float]): magnetization amplitude, phi and
+           gamma angle inherited from the atom
 
     """
 
@@ -447,6 +456,7 @@ class AmorphousLayer(Layer):
         self.area = 1*u.angstrom**2  # set as unit area
         self.volume = self.area*self.thickness
         self.mass = self.density*self.volume
+        self.atom = kwargs.get('atom', [])
         super().__init__(id, name, **kwargs)
 
     def __str__(self):
@@ -457,24 +467,18 @@ class AmorphousLayer(Layer):
                   ]
         output += super().__str__()
 
+        try:
+            output += [['atom', self.atom.name],
+                       ['magnetization', ''],
+                       ['amplitude', self.magnetization['amplitude']],
+                       ['phi [°]', self.magnetization['phi']],
+                       ['gamma [°]', self.magnetization['gamma']], ]
+        except AttributeError as e:
+            output += [['no atom set', '']]
+
         class_str = 'Amorphous layer with the following properties\n\n'
         class_str += tabulate(output, headers=['parameter', 'value'], tablefmt='rst',
                               colalign=('right',), floatfmt=('.2f', '.2f'))
-        class_str += '\n\n' + str(self.num_atoms) + ' Constituents:\n'
-
-        # atoms_str = []
-        # for i in range(self.num_atoms):
-        #     atoms_str.append([self.atoms[i][0].name,
-        #                       '{:0.2f}'.format(self.atoms[i][1](0)),
-        #                       self.atoms[i][2],
-        #                       '',
-        #                       self.atoms[i][0].mag_amplitude,
-        #                       self.atoms[i][0].mag_phi.magnitude,
-        #                       self.atoms[i][0].mag_gamma.magnitude,
-        #                       ])
-        # class_str += tabulate(atoms_str, headers=['atom', 'position', 'position function',
-        #                                           'magn.', 'amplitude', 'phi [°]', 'gamma [°]'],
-        #                       tablefmt='rst')
         return class_str
 
     def get_property_dict(self, **kwargs):
@@ -486,16 +490,16 @@ class AmorphousLayer(Layer):
 
         """
         # initialize input parser and define defaults and validators
-        properties_by_types = {'heat': ['_c_axis', '_area', '_volume', '_opt_pen_depth',
+        properties_by_types = {'heat': ['_thickness', '_area', '_volume', '_opt_pen_depth',
                                         'therm_cond_str', 'heat_capacity_str',
                                         'int_heat_capacity_str', 'sub_system_coupling_str',
                                         'num_sub_systems'],
-                               'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_c_axis',
+                               'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
                                           '_mass', 'spring_const', '_phonon_damping'],
-                               'xray': ['num_atoms', '_area', '_deb_wal_fac', '_c_axis'],
+                               'xray': ['num_atoms', '_area', '_deb_wal_fac', '_thickness'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
-                               'magnetic': ['magnetizations'],
+                               'magnetic': ['magnetization'],
                                }
 
         types = (kwargs.get('types', 'all'))
@@ -535,6 +539,41 @@ class AmorphousLayer(Layer):
         """set.thickness"""
         self._thickness = thickness.to_base_units().magnitude
 
+    @property
+    def atom(self):
+        """get atom
+
+        Returns the atom of the layer.
+
+        """
+
+        return self._atom
+
+    @atom.setter
+    def atom(self, atom):
+        """set atom
+
+        Set the atom of the layer and check if its of type Atom or AtomMixed.
+
+        """
+        if atom == []:  # no atom is set
+            self.magnetization = {'amplitude': 0,
+                                  'phi': 0*u.deg,
+                                  'gamma': 0*u.deg,
+                                  }
+            return
+
+        if not isinstance(atom, (Atom, AtomMixed)):
+            raise ValueError('Class '
+                             + type(atom).__name__
+                             + ' is no possible atom of an amorphous layer. '
+                             + 'Only Atom and AtomMixed are allowed!')
+        self._atom = atom
+        self.magnetization = {'amplitude': atom.mag_amplitude,
+                              'phi': atom.mag_phi,
+                              'gamma': atom.mag_gamma,
+                              }
+
 
 class UnitCell(Layer):
     """Unit Cell
@@ -551,6 +590,11 @@ class UnitCell(Layer):
     Keyword Args:
         a_axis (float): a-axis of the UnitCell
         b_axis (float): b-axis of the UnitCell
+        atoms (list[atom, @lambda]): list of atoms and funtion handle
+           for strain dependent displacement
+        num_atoms (int): number of atoms in unit cell
+        magnetizations (list[foat]): magnetization amplitutes, phi, and
+           gamma angle of each atom in the unit cell
         deb_wal_fac (float): Debye Waller factor
         sound_vel (float): sound velocity
         phonon_damping (float): phonon damping
@@ -576,6 +620,9 @@ class UnitCell(Layer):
 
         self.area = self.a_axis * self.b_axis
         self.volume = self.area * self.c_axis
+        self.atoms = []
+        self.num_atoms = 0
+        self.magnetizations = []
 
     def __str__(self):
         """String representation of this class"""
