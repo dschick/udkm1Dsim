@@ -20,13 +20,13 @@
 
 """A :mod:`Structure` module """
 
-__all__ = ["Structure"]
+__all__ = ["Structure", "AmorphousLayer"]
 
 __docformat__ = "restructuredtext"
 
 import itertools
 import numpy as np
-from .unitCell import UnitCell
+from .layer import UnitCell
 from . import u, Q_
 from .helpers import make_hash_md5
 
@@ -67,7 +67,7 @@ class Structure:
 
         class_str = tab_str + 'Structure properties:\n\n'
         class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
-        class_str += tab_str + 'Length : {:0.2f} nm\n'.format(self.get_length()/1e-9)
+        class_str += tab_str + 'Thickness : {:0.2f} nm\n'.format(self.get_thickness()/1e-9)
         class_str += tab_str + 'Roughness : {:0.2f}\n'.format(self.roughness)
         class_str += tab_str + '----\n'
         # traverse all substructures
@@ -151,7 +151,7 @@ class Structure:
             N (int): number or repetitions
 
         """
-        # check of the sub_structure is an instance of the unitCell of
+        # check of the sub_structure is an instance of the unitCell or
         # structure class
         if not isinstance(sub_structure, (UnitCell, Structure)):
             raise ValueError('Class '
@@ -238,10 +238,10 @@ class Structure:
         N = len(self.get_unique_unit_cells()[0])
         return N
 
-    def get_length(self):
-        """get_length
+    def get_thickness(self):
+        """get_thickness
 
-        Returns the length from surface to bottom of the structure
+        Returns the thickness from surface to bottom of the structure
 
         """
         _, d_end, _ = self.get_distances_of_unit_cells()

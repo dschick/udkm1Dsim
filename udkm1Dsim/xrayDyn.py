@@ -27,7 +27,7 @@ __docformat__ = "restructuredtext"
 import numpy as np
 import scipy.constants as constants
 from .xray import Xray
-from .unitCell import UnitCell
+from .layer import UnitCell
 from time import time
 from os import path
 from tqdm import trange

@@ -29,7 +29,7 @@ import scipy.constants as constants
 from time import time
 from os import path
 from .xray import Xray
-from .unitCell import UnitCell
+from .layer import UnitCell
 from tqdm import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n
 from . import u

@@ -26,7 +26,7 @@ __docformat__ = "restructuredtext"
 
 import numpy as np
 from .xray import Xray
-from .unitCell import UnitCell
+from .layer import UnitCell
 from . import u
 from time import time
 
