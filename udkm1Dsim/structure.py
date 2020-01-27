@@ -48,6 +48,7 @@ class Structure:
         substrate (object): structure of the substrate
         num_sub_systems (int): number of subsystems for heat and phonons
            (electronic, lattice, spins, ...)
+        roughness (float): gaussian width of the top roughness of a layer
 
     """
 
@@ -56,6 +57,7 @@ class Structure:
         self.num_sub_systems = 1
         self.sub_structures = []
         self.substrate = []
+        self.roughness = 0*u.nm
 
     def __str__(self, tabs=0):
         """String representation of this class"""
@@ -66,6 +68,7 @@ class Structure:
         class_str = tab_str + 'Structure properties:\n\n'
         class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
         class_str += tab_str + 'Length : {:0.2f} nm\n'.format(self.get_length()/1e-9)
+        class_str += tab_str + 'Roughness : {:0.2f}\n'.format(self.roughness)
         class_str += tab_str + '----\n'
         # traverse all substructures
         for i, sub_structure in enumerate(self.sub_structures):
@@ -509,3 +512,13 @@ class Structure:
         handles = self.get_unit_cell_vectors()[2]
         handle = handles[i]
         return handle
+
+    @property
+    def roughness(self):
+        """float: roughness of the top of layer [m]"""
+        return Q_(self._roughness, u.meter).to('nm')
+
+    @roughness.setter
+    def roughness(self, roughness):
+        """set.roughness"""
+        self._roughness = roughness.to_base_units().magnitude
