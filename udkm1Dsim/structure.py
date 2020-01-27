@@ -20,13 +20,13 @@
 
 """A :mod:`Structure` module """
 
-__all__ = ["Structure", "AmorphousLayer"]
+__all__ = ["Structure"]
 
 __docformat__ = "restructuredtext"
 
 import itertools
 import numpy as np
-from .layer import UnitCell
+from .layer import AmorphousLayer, UnitCell
 from . import u, Q_
 from .helpers import make_hash_md5
 
@@ -98,31 +98,6 @@ class Structure:
             class_str += tab_str + 'no substrate\n'
         return class_str
 
-    def visualize(self):
-        """visualize"""
-#        % initialize input parser and define defaults and validators
-#            p = inputParser;
-#            p.addRequired('obj'      , @(x)isa(x,'structure'));
-#            p.addParamValue('handle', '', @ishandle);
-#            % parse the input
-#            p.parse(obj,varargin{:});
-#            % assign parser results to object properties
-#            if isempty(p.Results.handle)
-#                h = figure;
-#            else
-#                h = p.Results.handle;
-#            end%if
-#            a = obj.getUniqueUnitCells();
-#            N = size(a,1);
-#            figure(h);
-#            distances = obj.getDistancesOfUnitCells/units.nm;
-#            stairs(distances,obj.getUnitCellVectors, 'LineWidth', 2);
-#            axis([min(distances) max(distances) 0.9 length(obj.getUniqueUnitCells)+0.1]);
-#            xlabel('Distance [nm]');
-#            title('Structure Visualization');
-#            set(gca,'YTick',1:N,'YTickLabel', a(:,1));
-        pass
-
     def get_hash(self, **kwargs):
         """hash
 
@@ -153,11 +128,11 @@ class Structure:
         """
         # check of the sub_structure is an instance of the unitCell or
         # structure class
-        if not isinstance(sub_structure, (UnitCell, Structure)):
+        if not isinstance(sub_structure, (AmorphousLayer, UnitCell, Structure)):
             raise ValueError('Class '
                              + type(sub_structure).__name__
                              + ' is no possible sub structure. '
-                             + 'Only UnitCell and '
+                             + 'Only AmorphousLayer, UnitCell, and '
                              + 'Structure classes are allowed!')
 
         # if a structure is added as a sub_structure, the sub_structure

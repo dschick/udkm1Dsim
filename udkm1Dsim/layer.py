@@ -91,8 +91,6 @@ class Layer:
         self.atoms = []
         self.num_atoms = 0
         self.magnetizations = []
-        self.mass = 0*u.kg
-        self.density = 0*u.kg/u.m**2
         self.spring_const = np.array([0])
         self.deb_wal_fac = kwargs.get('deb_wal_fac', 0*u.m**2)
         self.sound_vel = kwargs.get('sound_vel', 0*u.m/u.s)
@@ -119,6 +117,9 @@ class Layer:
     def __str__(self):
         """String representation of this class"""
         output = [
+                  ['area', '{:.4~P}'.format(self.area.to('nm**2'))],
+                  ['volume', '{:.4~P}'.format(self.volume.to('nm**3'))],
+                  ['mass', '{:4~P}'.format(self.mass)],
                   ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
                   ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
                   ['sound velocity', '{:.4~P}'.format(self.sound_vel.to('meter/s'))],
@@ -443,19 +444,16 @@ class AmorphousLayer(Layer):
     def __init__(self, id, name, thickness, density, **kwargs):
         self.thickness = thickness
         self.density = density
+        self.area = 1*u.angstrom**2  # set as unit area
+        self.volume = self.area*self.thickness
+        self.mass = self.density*self.volume
         super().__init__(id, name, **kwargs)
-        # mass, area, volume
-        print(self.name)
 
     def __str__(self):
         """String representation of this class"""
         output = [['id', self.id],
                   ['name', self.name],
                   ['thickness', '{:.4~P}'.format(self.thickness)],
-                  ['density', '{:.4~P}'.format(self.density)],
-                  # ['area', '{:.4~P}'.format(self.area.to('nm**2'))],
-                  # ['volume', '{:.4~P}'.format(self.volume.to('nm**3'))],
-                  # ['mass', '{:.4~P}'.format(self.mass)],
                   ]
         output += super().__str__()
 
@@ -571,6 +569,8 @@ class UnitCell(Layer):
         self.c_axis = c_axis
         self.a_axis = kwargs.get('a_axis', self.c_axis)
         self.b_axis = kwargs.get('b_axis', self.a_axis)
+        self.mass = 0*u.kg
+        self.density = 0*u.kg/u.m**2
 
         super().__init__(id, name, **kwargs)
 
