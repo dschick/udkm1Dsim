@@ -58,6 +58,7 @@ class Layer:
     Attributes:
         id (str): id of the unit cell
         name (str): name of the unit cell
+        thickness (float): thickness of the layer
         roughness (float): gaussian width of the top roughness of a layer
         spring_const (ndarray[float]): spring constant of the unit cell
            [kg/s²] and higher orders
@@ -170,6 +171,53 @@ class Layer:
                                  'converted into a function handle!')
 
         return(output, outputStrs)
+
+    def get_property_dict(self, **kwargs):
+        """get_property_dict
+
+        Returns a dictionary with all parameters. objects or dicts and
+        objects are converted to strings. if a type is given, only these
+        properties are returned.
+
+        """
+        # initialize input parser and define defaults and validators
+        properties_by_types = {'heat': ['_thickness', '_area', '_volume', '_opt_pen_depth',
+                                        'therm_cond_str', 'heat_capacity_str',
+                                        'int_heat_capacity_str', 'sub_system_coupling_str',
+                                        'num_sub_systems'],
+                               'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
+                                          '_mass', 'spring_const', '_phonon_damping'],
+                               'xray': ['num_atoms', '_area', '_deb_wal_fac', '_thickness'],
+                               'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
+                                           'opt_ref_index_per_strain'],
+                               'magnetic': ['magnetization'],
+                               }
+
+        types = (kwargs.get('types', 'all'))
+        if not type(types) is list:
+            types = [types]
+        attrs = vars(self)
+        R = {}
+        for t in types:
+            # define the property names by the given type
+            if t == 'all':
+                return attrs
+            else:
+                S = dict((key, value) for key, value in attrs.items()
+                         if key in properties_by_types[t])
+                R.update(S)
+
+        return R
+
+    @property
+    def thickness(self):
+        """float: out-of-plane thickness [m]"""
+        return Q_(self._thickness, u.meter).to('nm')
+
+    @thickness.setter
+    def thickness(self, thickness):
+        """set.thickness"""
+        self._thickness = thickness.to_base_units().magnitude
 
     @property
     def heat_capacity(self):
@@ -427,6 +475,7 @@ class AmorphousLayer(Layer):
         id (str): id of the AmorphousLayer
         name (str): name of AmorphousLayer
         thickness (float): thickness of the layer
+        density (float): density of the layer
 
     Keyword Args:
         atom (object): Atom or AtomMixed in the layer
@@ -443,7 +492,6 @@ class AmorphousLayer(Layer):
         sub_system_coupling (float): sub-system coupling
 
     Attributes:
-        thickness (float): thickness of the layer
         atom (object): Atom or AtomMixed in the layer
         magnetization (dict[float]): magnetization amplitude, phi and
            gamma angle inherited from the atom
@@ -481,43 +529,6 @@ class AmorphousLayer(Layer):
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
 
-    def get_property_dict(self, **kwargs):
-        """get_property_dict
-
-        Returns a dictionary with all parameters. objects or dicts and
-        objects are converted to strings. if a type is given, only these
-        properties are returned.
-
-        """
-        # initialize input parser and define defaults and validators
-        properties_by_types = {'heat': ['_thickness', '_area', '_volume', '_opt_pen_depth',
-                                        'therm_cond_str', 'heat_capacity_str',
-                                        'int_heat_capacity_str', 'sub_system_coupling_str',
-                                        'num_sub_systems'],
-                               'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
-                                          '_mass', 'spring_const', '_phonon_damping'],
-                               'xray': ['num_atoms', '_area', '_deb_wal_fac', '_thickness'],
-                               'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
-                                           'opt_ref_index_per_strain'],
-                               'magnetic': ['magnetization'],
-                               }
-
-        types = (kwargs.get('types', 'all'))
-        if not type(types) is list:
-            types = [types]
-        attrs = vars(self)
-        R = {}
-        for t in types:
-            # define the property names by the given type
-            if t == 'all':
-                return attrs
-            else:
-                S = dict((key, value) for key, value in attrs.items()
-                         if key in properties_by_types[t])
-                R.update(S)
-
-        return R
-
     def calc_spring_const(self):
         """calc_spring_const
 
@@ -528,16 +539,6 @@ class AmorphousLayer(Layer):
 
         """
         self.spring_const[0] = (self._mass * (self._sound_vel/self._thickness)**2)
-
-    @property
-    def thickness(self):
-        """float: out-of-plane thickness [m]"""
-        return Q_(self._thickness, u.meter).to('nm')
-
-    @thickness.setter
-    def thickness(self, thickness):
-        """set.thickness"""
-        self._thickness = thickness.to_base_units().magnitude
 
     @property
     def atom(self):
@@ -593,7 +594,7 @@ class UnitCell(Layer):
         atoms (list[atom, @lambda]): list of atoms and funtion handle
            for strain dependent displacement
         num_atoms (int): number of atoms in unit cell
-        magnetizations (list[foat]): magnetization amplitutes, phi, and
+        magnetization (list[foat]): magnetization amplitutes, phi, and
            gamma angle of each atom in the unit cell
         deb_wal_fac (float): Debye Waller factor
         sound_vel (float): sound velocity
@@ -611,6 +612,7 @@ class UnitCell(Layer):
 
     def __init__(self, id, name, c_axis, **kwargs):
         self.c_axis = c_axis
+        self.thickness = c_axis
         self.a_axis = kwargs.get('a_axis', self.c_axis)
         self.b_axis = kwargs.get('b_axis', self.a_axis)
         self.mass = 0*u.kg
@@ -622,7 +624,7 @@ class UnitCell(Layer):
         self.volume = self.area * self.c_axis
         self.atoms = []
         self.num_atoms = 0
-        self.magnetizations = []
+        self.magnetization = []
 
     def __str__(self):
         """String representation of this class"""
@@ -708,43 +710,6 @@ class UnitCell(Layer):
             plt.legend()
             plt.show()
 
-    def get_property_dict(self, **kwargs):
-        """get_property_dict
-
-        Returns a dictionary with all parameters. objects or dicts and
-        objects are converted to strings. if a type is given, only these
-        properties are returned.
-
-        """
-        # initialize input parser and define defaults and validators
-        properties_by_types = {'heat': ['_c_axis', '_area', '_volume', '_opt_pen_depth',
-                                        'therm_cond_str', 'heat_capacity_str',
-                                        'int_heat_capacity_str', 'sub_system_coupling_str',
-                                        'num_sub_systems'],
-                               'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_c_axis',
-                                          '_mass', 'spring_const', '_phonon_damping'],
-                               'xray': ['num_atoms', '_area', '_deb_wal_fac', '_c_axis'],
-                               'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
-                                           'opt_ref_index_per_strain'],
-                               'magnetic': ['magnetizations'],
-                               }
-
-        types = (kwargs.get('types', 'all'))
-        if not type(types) is list:
-            types = [types]
-        attrs = vars(self)
-        R = {}
-        for t in types:
-            # define the property names by the given type
-            if t == 'all':
-                return attrs
-            else:
-                S = dict((key, value) for key, value in attrs.items()
-                         if key in properties_by_types[t])
-                R.update(S)
-
-        return R
-
     def add_atom(self, atom, position):
         """ add_atom
 
@@ -786,7 +751,7 @@ class UnitCell(Layer):
         # increase the number of atoms
         self.num_atoms = self.num_atoms + 1
 
-        self.magnetizations.append([atom.mag_amplitude, atom._mag_phi, atom._mag_gamma])
+        self.magnetization.append([atom.mag_amplitude, atom._mag_phi, atom._mag_gamma])
 
         self.mass = 0*u.kg
         for i in range(self.num_atoms):
