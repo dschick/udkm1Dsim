@@ -380,10 +380,21 @@ class XrayDynMag(Xray):
                 del_dist = (strain+1)-uc.atoms[j][1](strain)
             else:
                 del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
+            distance = del_dist*uc._c_axis
+
+            try:
+                # calculate molar density
+                if distance == 0:
+                    density = 0
+                else:
+                    mass_density = uc.atoms[j][0]._mass/(uc._area*distance)/1000  # in g/cm³
+                    density = mass_density/uc.atoms[j][0].mass_number_a
+            except AttributeError as e:
+                density = 0
 
             A, P, A_inv = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
-                                                              uc._area,
-                                                              del_dist*uc._c_axis)
+                                                              density,
+                                                              distance)
             if j == 0:
                 RT = m_times_n(A, m_times_n(P, A_inv))
             else:
@@ -392,7 +403,7 @@ class XrayDynMag(Xray):
                                          m_times_n(A_inv, RT)))
         return RT, A_inv
 
-    def get_atom_boundary_phase_matrix(self, atom, area, distance, *args):
+    def get_atom_boundary_phase_matrix(self, atom, density, distance, *args):
         """get_atom_boundary_phase_matrix
 
         Returns the boundary and phase matrices of an atom from
@@ -406,11 +417,11 @@ class XrayDynMag(Xray):
             index = -1
         except AttributeError:
             # its vacuum
-            A, P, A_inv = self.calc_atom_boundary_phase_matrix(atom, area, distance, *args)
+            A, P, A_inv = self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
             return A, P, A_inv
 
         # check for already calculated data
-        _hash = make_hash_md5([self._energy, self._qz, self.pol_in, self.pol_out, area, distance,
+        _hash = make_hash_md5([self._energy, self._qz, self.pol_in, self.pol_out, density, distance,
                                atom.mag_amplitude,
                                atom.mag_gamma,
                                atom.mag_phi,
@@ -425,7 +436,7 @@ class XrayDynMag(Xray):
         else:
             # These are new parameters so we have to calculate.
             # Get the reflection-transmission-factors
-            A, P, A_inv = self.calc_atom_boundary_phase_matrix(atom, area, distance, *args)
+            A, P, A_inv = self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
             # remember this matrix for next use with the same
             # parameters for this atom
             if index >= 0:
@@ -442,7 +453,7 @@ class XrayDynMag(Xray):
                 self.last_atom_ref_trans_matrices['A_inv'].append(A_inv)
         return A, P, A_inv
 
-    def calc_atom_boundary_phase_matrix(self, atom, area, distance, *args):
+    def calc_atom_boundary_phase_matrix(self, atom, density, distance, *args):
         """calc_atom_boundary_phase_matrix
 
         Calculates the boundary and phase matrices of an atom from
@@ -485,15 +496,6 @@ class XrayDynMag(Xray):
         A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
         P = np.zeros([M, N, 4, 4], dtype=np.cfloat)
 
-        try:
-            # calculate molar density
-            if distance == 0:
-                density = 0
-            else:
-                mass_density = atom._mass/(area*distance)/1000  # in g/cm³
-                density = mass_density/atom.mass_number_a
-        except AttributeError:
-            density = 0
         energy = self._energy
         factor = 830.9471/energy**2
         theta = self._theta
