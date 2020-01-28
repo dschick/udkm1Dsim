@@ -85,7 +85,8 @@ class XrayDynMag(Xray):
         self.last_atom_ref_trans_matrices = {'atom_ids': [],
                                              'hashes': [],
                                              'A': [],
-                                             'P': []}
+                                             'P': [],
+                                             'A_inv': []}
 
     def __str__(self):
         """String representation of this class"""
@@ -192,7 +193,7 @@ class XrayDynMag(Xray):
         # and the inverse of the last boundary matrix
         RT, A_inv = self.calc_homogeneous_matrix(self.S, strains)
         # vacuum boundary
-        A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
+        A0, _, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
         # if a substrate is included add it at the end
         if self.S.substrate != []:
             RT_sub, A_inv = self.calc_homogeneous_matrix(self.S.substrate)
@@ -327,7 +328,7 @@ class XrayDynMag(Xray):
 
             RT, A_inv = self.calc_inhomogeneous_matrix(strain_map[i, :])
             # vacuum
-            A0, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
+            A0, _, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
             # if a substrate is included add it at the end
             if self.S.substrate != []:
                 RT_sub, A_inv = self.calc_homogeneous_matrix(self.S.substrate)
@@ -380,10 +381,9 @@ class XrayDynMag(Xray):
             else:
                 del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
 
-            A, P = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
-                                                       uc._area,
-                                                       del_dist*uc._c_axis)
-            A_inv = np.linalg.inv(A)
+            A, P, A_inv = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
+                                                              uc._area,
+                                                              del_dist*uc._c_axis)
             if j == 0:
                 RT = m_times_n(A, m_times_n(P, A_inv))
             else:
@@ -406,8 +406,8 @@ class XrayDynMag(Xray):
             index = -1
         except AttributeError:
             # its vacuum
-            A, P = self.calc_atom_boundary_phase_matrix(atom, area, distance, *args)
-            return A, P
+            A, P, A_inv = self.calc_atom_boundary_phase_matrix(atom, area, distance, *args)
+            return A, P, A_inv
 
         # check for already calculated data
         _hash = make_hash_md5([self._energy, self._qz, self.pol_in, self.pol_out, area, distance,
@@ -421,10 +421,11 @@ class XrayDynMag(Xray):
             # can use the same matrix again for this atom
             A = self.last_atom_ref_trans_matrices['A'][index]
             P = self.last_atom_ref_trans_matrices['P'][index]
+            A_inv = self.last_atom_ref_trans_matrices['A_inv'][index]
         else:
             # These are new parameters so we have to calculate.
             # Get the reflection-transmission-factors
-            A, P = self.calc_atom_boundary_phase_matrix(atom, area, distance, *args)
+            A, P, A_inv = self.calc_atom_boundary_phase_matrix(atom, area, distance, *args)
             # remember this matrix for next use with the same
             # parameters for this atom
             if index >= 0:
@@ -432,12 +433,14 @@ class XrayDynMag(Xray):
                 self.last_atom_ref_trans_matrices['hashes'][index] = _hash
                 self.last_atom_ref_trans_matrices['A'][index] = A
                 self.last_atom_ref_trans_matrices['P'][index] = P
+                self.last_atom_ref_trans_matrices['A_inv'][index] = A_inv
             else:
                 self.last_atom_ref_trans_matrices['atom_ids'].append(atom.id)
                 self.last_atom_ref_trans_matrices['hashes'].append(_hash)
                 self.last_atom_ref_trans_matrices['A'].append(A)
                 self.last_atom_ref_trans_matrices['P'].append(P)
-        return A, P
+                self.last_atom_ref_trans_matrices['A_inv'].append(A_inv)
+        return A, P, A_inv
 
     def calc_atom_boundary_phase_matrix(self, atom, area, distance, *args):
         """calc_atom_boundary_phase_matrix
@@ -571,6 +574,8 @@ class XrayDynMag(Xray):
         A[:, :, :, :] = np.divide(A[:, :, :, :],
                                   np.sqrt(2) * eps[:, :, 0, 0][:, :, np.newaxis, np.newaxis])
 
+        A_inv = np.linalg.inv(A)
+
         phase = self._k * distance
         phase = phase[:, np.newaxis]
 
@@ -579,7 +584,7 @@ class XrayDynMag(Xray):
         P[:, :, 2, 2] = np.exp(-1j * phase * n_right_up * alpha_z_right_up)
         P[:, :, 3, 3] = np.exp(-1j * phase * n_left_up * alpha_z_left_up)
 
-        return A, P
+        return A, P, A_inv
 
     def calc_reflectivity_from_matrix(self, RT):
         """calc_reflectivity_from_matrix
