@@ -113,7 +113,7 @@ class Structure:
         param.append(IDs)
         return make_hash_md5(param)
 
-    def add_sub_structure(self, sub_structure, N):
+    def add_sub_structure(self, sub_structure, N=1):
         """add_sub_structure
 
         Add a sub_structure of N layers or N structures to the
