@@ -29,7 +29,7 @@ import scipy.constants as constants
 from time import time
 from os import path
 from .xray import Xray
-from .layer import UnitCell
+from .layer import AmorphousLayer, UnitCell
 from tqdm import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n
 from . import u
@@ -237,6 +237,17 @@ class XrayDynMag(Xray):
                                                                   strains[strainCounter])
                 temp = m_power_x(RT_uc, sub_structure[1])
                 strainCounter += 1
+            elif isinstance(sub_structure[0], AmorphousLayer):
+                # the sub_structure is an amorphous layer
+                # calculate the ref-trans matrices for N layers
+                layer = sub_structure[0]
+                
+                A, P, A_inv = self.get_atom_boundary_phase_matrix(layer.atom,
+                                                              layer._density,
+                                                              layer._thickness)
+                RT_amorph = m_times_n(A, m_times_n(P, A_inv))
+                temp = m_power_x(RT_amorph, sub_structure[1])
+                strainCounter += 1
             else:
                 # its a structure
                 # make a recursive call
@@ -383,12 +394,11 @@ class XrayDynMag(Xray):
             distance = del_dist*uc._c_axis
 
             try:
-                # calculate molar density
+                # calculate density
                 if distance == 0:
                     density = 0
                 else:
-                    mass_density = uc.atoms[j][0]._mass/(uc._area*distance)/1000  # in g/cm³
-                    density = mass_density/uc.atoms[j][0].mass_number_a
+                    density = uc.atoms[j][0]._mass/(uc._area*distance)
             except AttributeError as e:
                 density = 0
 
@@ -496,6 +506,11 @@ class XrayDynMag(Xray):
         A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
         P = np.zeros([M, N, 4, 4], dtype=np.cfloat)
 
+        try:
+            molar_density = density/1000/atom.mass_number_a
+        except AttributeError:
+            molar_density = 0
+
         energy = self._energy
         factor = 830.9471/energy**2
         theta = self._theta
@@ -509,9 +524,9 @@ class XrayDynMag(Xray):
         except AttributeError:
             mf = np.zeros_like(energy)
 
-        mag = factor*density*mag_amplitude*mf
+        mag = factor*molar_density*mag_amplitude*mf
         mag = np.tile(mag[:, np.newaxis], [1, N])
-        eps0 = 1 - factor*density*cf
+        eps0 = 1 - factor*molar_density*cf
         eps0 = np.tile(eps0[:, np.newaxis], [1, N])
 
         eps[:, :, 0, 0] = eps0
