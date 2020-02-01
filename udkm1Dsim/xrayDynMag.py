@@ -241,10 +241,10 @@ class XrayDynMag(Xray):
                 # the sub_structure is an amorphous layer
                 # calculate the ref-trans matrices for N layers
                 layer = sub_structure[0]
-                
+
                 A, P, A_inv = self.get_atom_boundary_phase_matrix(layer.atom,
-                                                              layer._density,
-                                                              layer._thickness)
+                                                                  layer._density,
+                                                                  layer._thickness)
                 RT_amorph = m_times_n(A, m_times_n(P, A_inv))
                 temp = m_power_x(RT_amorph, sub_structure[1])
                 strainCounter += 1
@@ -360,17 +360,24 @@ class XrayDynMag(Xray):
         .. math:: RT = \\prod_m \\left( A_m P_m A_m^{-1} \\right)
 
         """
-        L = self.S.get_number_of_unit_cells()  # number of unit cells
-        _, _, uc_handles = self.S.get_unit_cell_vectors()
+        L = self.S.get_number_of_layers()  # number of unit cells
+        _, _, layer_handles = self.S.get_layer_vectors()
 
         for i in range(L):
-            uc = uc_handles[i]
-            RT_uc, A_inv = self.calc_uc_boundary_phase_matrix(uc, strains[i])
-
-            if i == 0:
-                RT = RT_uc
+            layer = layer_handles[i]
+            if isinstance(layer, UnitCell):
+                RT_layer, A_inv = self.calc_uc_boundary_phase_matrix(layer, strains[i])
+            elif isinstance(layer, AmorphousLayer):
+                A, P, A_inv = self.get_atom_boundary_phase_matrix(layer.atom,
+                                                                  layer._density,
+                                                                  layer._thickness)
+                RT_layer = m_times_n(A, m_times_n(P, A_inv))
             else:
-                RT = m_times_n(RT_uc, RT)
+                raise ValueError('All layers must be either AmorphousLayers or UnitCells!')
+            if i == 0:
+                RT = RT_layer
+            else:
+                RT = m_times_n(RT_layer, RT)
 
         return RT, A_inv
 
@@ -431,7 +438,8 @@ class XrayDynMag(Xray):
             return A, P, A_inv
 
         # check for already calculated data
-        _hash = make_hash_md5([self._energy, self._qz, self.pol_in, self.pol_out, density, distance,
+        _hash = make_hash_md5([self._energy, self._qz, self.pol_in, self.pol_out,
+                               density, distance,
                                atom.mag_amplitude,
                                atom.mag_gamma,
                                atom.mag_phi,
