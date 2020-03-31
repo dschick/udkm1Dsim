@@ -38,8 +38,8 @@ class Layer:
     physical layers, such as amorphous layers and unit cells.
 
     Args:
-        id (str): id of the UnitCell
-        name (str): name of the UnitCell
+        id (str): id of the Layer
+        name (str): name of the Layer
 
     Keyword Args:
         deb_wal_fac (float): Debye Waller factor

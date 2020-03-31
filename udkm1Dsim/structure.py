@@ -239,13 +239,13 @@ class Structure:
                 # its a AmorphousLayer or UnitCell
                 layer_id = self.sub_structures[i][0].id
                 if not layer_ids:
-                    # the cell array is empty at the beginning so add
+                    # the list is empty at the beginning so add
                     # the first layer
                     layer_ids = layer_ids + [layer_id]
                     layer_handles = layer_handles + [self.sub_structures[i][0]]
                 else:
-                    # the cell array is not empty so check if the id is
-                    # already in the layers id vector
+                    # the list is not empty so check if the id is
+                    # already in the layers id list
                     if layer_id not in layer_ids:
                         # if id not in list, so add it
                         layer_ids = layer_ids + [layer_id]
@@ -253,15 +253,15 @@ class Structure:
             else:
                 # its a sub_structure
                 if not layer_ids:
-                    # the cell array is empty at the beginning so call
+                    # the list is empty at the beginning so call
                     # the method recursively and add the result to the
-                    # layers array
+                    # layers list
                     layer_ids = self.sub_structures[i][0].get_unique_layers()[0]
                     layer_handles = self.sub_structures[i][0].get_unique_layers()[1]
                 else:
-                    # the cell array is not empty so check if the ids
+                    # the list is not empty so check if the ids
                     # from the recursive call are already in the layers id
-                    # vector.
+                    # list.
                     temp1 = self.sub_structures[i][0].get_unique_layers()[0]
                     temp2 = self.sub_structures[i][0].get_unique_layers()[1]
                     for j, temp in enumerate(temp1):
@@ -301,17 +301,17 @@ class Structure:
             if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
                 # its a AmorphousLayer or UnitCell
                 # find the index of the current layer id in the unique
-                # layer vector
+                # layer list
                 Index = layers[0].index(self.sub_structures[i][0].id)
                 # add the index N times to the indices vector
                 indices = np.append(indices, Index*np.ones(self.sub_structures[i][1]))
-                # create a cell array of N layer ids and add them to
-                # the ids cell array
+                # create a list of N layer ids and add them to
+                # the ids list
                 temp1 = list(itertools.repeat(self.sub_structures[i][0].id,
                                               self.sub_structures[i][1]))
                 layer_ids = layer_ids + list(temp1)
-                # create a cell array of N layer handles and add them to
-                # the Handles cell array
+                # create a list of N layer handles and add them to
+                # the Handles list
                 temp2 = list(itertools.repeat(self.sub_structures[i][0],
                                               self.sub_structures[i][1]))
                 layer_handles = layer_handles + list(temp2)
