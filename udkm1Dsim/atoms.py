@@ -43,6 +43,8 @@ class Atom:
     Keyword Args:
         id (str): id of the atom
         ionicity (int): ionicity of the atom
+        atomic_form_factor_path (str): path to atomic form factor coeffs
+        magnetic_form_factor_path (str): path to magnetic form factor coeffs
 
     Attributes:
         symbol (str): symbol of the element
@@ -102,8 +104,10 @@ class Atom:
         self.mass_number_a = element[2]
         self._mass = self.mass_number_a*constants.atomic_mass
         self.mass = self._mass*u.kg
-        self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff()
-        self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff()
+        self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
+            filename=kwargs.get('atomic_form_factor_path', ''))
+        self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
+            filename=kwargs.get('magnetic_form_factor_path', ''))
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
     def __str__(self):
@@ -121,16 +125,17 @@ class Atom:
         return 'Atom with the following properties\n' + \
                tabulate(output, colalign=('right',), tablefmt="rst", floatfmt=('.2f', '.2f'))
 
-    def read_atomic_form_factor_coeff(self):
+    def read_atomic_form_factor_coeff(self, filename=''):
         """read_atomic_form_factor_coeff
 
         The atomic form factor :math:`f` in dependence from the energy
         :math:`E` is read from a parameter file given by [3]_.
 
         """
-        filename = os.path.join(os.path.dirname(__file__),
-                                'parameters/atomicFormFactors/{:s}.nff'.format(
-                                        self.symbol.lower()))
+        if not filename:
+            filename = os.path.join(os.path.dirname(__file__),
+                                    'parameters/atomicFormFactors/{:s}.nff'.format(
+                                            self.symbol.lower()))
         try:
             f = np.genfromtxt(filename, skip_header=1)
         except Exception as e:
@@ -233,16 +238,17 @@ class Atom:
                 np.sum(self.cromer_mann_coeff[0:3])
         return f
 
-    def read_magnetic_form_factor_coeff(self):
+    def read_magnetic_form_factor_coeff(self, filename=''):
         """read_magnetic_form_factor_coeff
 
         The magnetic form factor :math:`m` in dependence from the energy
         :math:`E` is read from a parameter file.
 
         """
-        filename = os.path.join(os.path.dirname(__file__),
-                                'parameters/magneticFormFactors/{:s}.mf'.format(
-                                        self.symbol))
+        if not filename:
+            filename = os.path.join(os.path.dirname(__file__),
+                                    'parameters/magneticFormFactors/{:s}.mf'.format(
+                                            self.symbol))
         try:
             f = np.genfromtxt(filename)
         except Exception as e:
