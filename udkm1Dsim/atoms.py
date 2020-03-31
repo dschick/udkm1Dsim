@@ -134,9 +134,7 @@ class Atom:
         try:
             f = np.genfromtxt(filename, skip_header=1)
         except Exception as e:
-            print('File {:s} not found!\nMake sure the path /parameters/atomicFormFactors/ is in'
-                  'your search path!',
-                  filename)
+            print('File {:s} not found!'.format(filename))
             print(e)
 
         return f
@@ -177,9 +175,7 @@ class Atom:
             cm = np.genfromtxt(filename, skip_header=1,
                                usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
         except Exception as e:
-            print('File {:s} not found!\nMake sure the path'
-                  '/parameters/atomicFormFactors/ is in your search path!',
-                  filename)
+            print('File {:s} not found!'.format(filename))
             print(e)
 
         return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
@@ -248,11 +244,9 @@ class Atom:
                                 'parameters/magneticFormFactors/{:s}.mf'.format(
                                         self.symbol))
         try:
-            f = np.genfromtxt(filename, skip_header=1)
+            f = np.genfromtxt(filename)
         except Exception as e:
-            print('File {:s} not found!\nMake sure the path /parameters/magneticFormFactors/ is in'
-                  'your search path!',
-                  filename)
+            print('File {:s} not found!'.format(filename))
             print(e)
             # return zero array
             f = np.zeros([1, 3])
