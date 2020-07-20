@@ -325,7 +325,7 @@ class XrayDyn(Xray):
         K = np.size(self._qz, 1)  # qz steps
 
         R = np.zeros([M, N, K])
-        uc_indicies, _, _ = self.S.get_unit_cell_vectors()
+        uc_indicies, _, _ = self.S.get_layer_vectors()
         # init unity matrix for matrix multiplication
         RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (N, K, 1, 1))
         # make RTM available for all works
@@ -398,7 +398,7 @@ class XrayDyn(Xray):
         # initialize ref_trans_matrix
         N = np.shape(self._qz)[1]  # number of q_z
         M = np.shape(self._qz)[0]  # number of energies
-        uc_indicies, _, _ = self.S.get_unit_cell_vectors()
+        uc_indicies, _, _ = self.S.get_layer_vectors()
 
         # initialize ref_trans_matrix
         RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
@@ -434,8 +434,8 @@ class XrayDyn(Xray):
             # Find the ref-trans matrix in the RTM cell array for the
             # current unit_cell ID and applied strain. Use the
             # ``knnsearch`` funtion to find the nearest strain value.
-            strain_index = finderb(strains[i], strain_vectors[uc_index])[0]
-            temp = RTM[uc_index][strain_index]
+            strain_index = finderb(strains[i], strain_vectors[int(uc_index)])[0]
+            temp = RTM[int(uc_index)][strain_index]
             if temp is not []:
                 RT = m_times_n(RT, temp)
             else:
@@ -454,7 +454,7 @@ class XrayDyn(Xray):
 
         """
         if len(args) == 0:
-            strain_vectors = [np.array([1])]*self.S.get_number_of_unique_unit_cells()
+            strain_vectors = [np.array([1])]*self.S.get_number_of_unique_layers()
         else:
             strain_vectors = args[0]
         # create a hash of all simulation parameters
@@ -484,7 +484,7 @@ class XrayDyn(Xray):
         t1 = time()
         self.disp_message('Calculate all _ref_trans_matricies_ ...')
         # initalize
-        uc_ids, uc_handles = self.S.get_unique_unit_cells()
+        uc_ids, uc_handles = self.S.get_unique_layers()
         # if no strain_vecorts are given we just do it for no strain (1)
         if len(args) == 0:
             strain_vectors = [np.array([1])]*len(uc_ids)

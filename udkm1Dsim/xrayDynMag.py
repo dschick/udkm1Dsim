@@ -478,7 +478,6 @@ class XrayDynMag(Xray):
         Elzo formalism.
 
         """
-
         if len(args) > 0:
             mag_amplitude = args[0]
         else:
@@ -506,9 +505,11 @@ class XrayDynMag(Xray):
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
 
-        U = [np.sin(mag_phi.magnitude) * np.cos(mag_gamma.magnitude),
-             np.sin(mag_phi.magnitude) * np.sin(mag_gamma.magnitude),
-             np.cos(mag_phi.magnitude)]
+        U = [np.sin(mag_phi.to_base_units().magnitude) *
+             np.cos(mag_gamma.to_base_units().magnitude),
+             np.sin(mag_phi.to_base_units().magnitude) *
+             np.sin(mag_gamma.to_base_units().magnitude),
+             np.cos(mag_phi.to_base_units().magnitude)]
 
         eps = np.zeros([M, N, 3, 3], dtype=np.cfloat)
         A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
@@ -530,9 +531,9 @@ class XrayDynMag(Xray):
         try:
             mf = atom.get_magnetic_form_factor(energy)
         except AttributeError:
-            mf = np.zeros_like(energy)
+            mf = np.zeros_like(energy, dtype=complex)
 
-        mag = factor*molar_density*mag_amplitude*mf
+        mag = factor * molar_density * mag_amplitude * mf
         mag = np.tile(mag[:, np.newaxis], [1, N])
         eps0 = 1 - factor*molar_density*cf
         eps0 = np.tile(eps0[:, np.newaxis], [1, N])
@@ -568,23 +569,23 @@ class XrayDynMag(Xray):
         alpha_y_left_up = np.cos(theta)/n_left_up
         alpha_z_left_up = np.sqrt(1-alpha_y_left_up**2)
 
-        A[:, :, 0, 0] = -1 - 1j * eps[:, :, 0, 1] * alpha_z_right_down
-        - 1j * eps[:, :, 0, 2] * alpha_y_right_down
-        A[:, :, 0, 1] = 1 - 1j * eps[:, :, 0, 1] * alpha_z_left_down
-        - 1j * eps[:, :, 0, 2] * alpha_y_left_down
-        A[:, :, 0, 2] = -1 + 1j * eps[:, :, 0, 1] * alpha_z_right_up
-        - 1j * eps[:, :, 0, 2] * alpha_y_right_up
-        A[:, :, 0, 3] = 1 + 1j * eps[:, :, 0, 1] * alpha_z_left_up
-        - 1j * eps[:, :, 0, 2] * alpha_y_left_up
+        A[:, :, 0, 0] = (-1 - 1j * eps[:, :, 0, 1] * alpha_z_right_down
+                         - 1j * eps[:, :, 0, 2] * alpha_y_right_down)
+        A[:, :, 0, 1] = (1 - 1j * eps[:, :, 0, 1] * alpha_z_left_down
+                         - 1j * eps[:, :, 0, 2] * alpha_y_left_down)
+        A[:, :, 0, 2] = (-1 + 1j * eps[:, :, 0, 1] * alpha_z_right_up
+                         - 1j * eps[:, :, 0, 2] * alpha_y_right_up)
+        A[:, :, 0, 3] = (1 + 1j * eps[:, :, 0, 1] * alpha_z_left_up
+                         - 1j * eps[:, :, 0, 2] * alpha_y_left_up)
 
-        A[:, :, 1, 0] = 1j * alpha_z_right_down - eps[:, :, 0, 1]
-        - 1j * eps[:, :, 1, 2] * alpha_y_right_down
-        A[:, :, 1, 1] = 1j * alpha_z_left_down + eps[:, :, 0, 1]
-        - 1j * eps[:, :, 1, 2] * alpha_y_left_down
-        A[:, :, 1, 2] = -1j * alpha_z_right_up - eps[:, :, 0, 1]
-        - 1j * eps[:, :, 1, 2] * alpha_y_right_up
-        A[:, :, 1, 3] = -1j * alpha_z_left_up + eps[:, :, 0, 1]
-        - 1j * eps[:, :, 1, 2] * alpha_y_left_up
+        A[:, :, 1, 0] = (1j * alpha_z_right_down - eps[:, :, 0, 1]
+                         - 1j * eps[:, :, 1, 2] * alpha_y_right_down)
+        A[:, :, 1, 1] = (1j * alpha_z_left_down + eps[:, :, 0, 1]
+                         - 1j * eps[:, :, 1, 2] * alpha_y_left_down)
+        A[:, :, 1, 2] = (-1j * alpha_z_right_up - eps[:, :, 0, 1]
+                         - 1j * eps[:, :, 1, 2] * alpha_y_right_up)
+        A[:, :, 1, 3] = (-1j * alpha_z_left_up + eps[:, :, 0, 1]
+                         - 1j * eps[:, :, 1, 2] * alpha_y_left_up)
 
         A[:, :, 2, 0] = -1j * n_right_down * A[:, :, 0, 0]
         A[:, :, 2, 1] = 1j * n_left_down * A[:, :, 0, 1]
@@ -596,8 +597,9 @@ class XrayDynMag(Xray):
         A[:, :, 3, 2] = alpha_z_right_up * n_right_up * A[:, :, 0, 2]
         A[:, :, 3, 3] = alpha_z_left_up * n_left_up * A[:, :, 0, 3]
 
-        A[:, :, :, :] = np.divide(A[:, :, :, :],
-                                  np.sqrt(2) * eps[:, :, 0, 0][:, :, np.newaxis, np.newaxis])
+        A[:, :, :, :] = np.divide(
+            A[:, :, :, :],
+            np.sqrt(2) * eps[:, :, 0, 0][:, :, np.newaxis, np.newaxis])
 
         A_inv = np.linalg.inv(A)
 
@@ -608,7 +610,6 @@ class XrayDynMag(Xray):
         P[:, :, 1, 1] = np.exp(1j * phase * n_left_down * alpha_z_left_down)
         P[:, :, 2, 2] = np.exp(-1j * phase * n_right_up * alpha_z_right_up)
         P[:, :, 3, 3] = np.exp(-1j * phase * n_left_up * alpha_z_left_up)
-
         return A, P, A_inv
 
     def calc_reflectivity_from_matrix(self, RT):

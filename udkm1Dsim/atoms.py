@@ -278,7 +278,7 @@ class Atom:
         m2 = np.interp(energy, self.magnetic_form_factor_coeff[:, 0],
                        self.magnetic_form_factor_coeff[:, 2])
 
-        return m1 + m2*1j
+        return m1 - m2*1j
 
     @property
     def mag_phi(self):
