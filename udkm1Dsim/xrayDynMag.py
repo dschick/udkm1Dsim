@@ -406,7 +406,7 @@ class XrayDynMag(Xray):
                     density = 0
                 else:
                     density = uc.atoms[j][0]._mass/(uc._area*distance)
-            except AttributeError as e:
+            except AttributeError:
                 density = 0
 
             A, P, A_inv = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],

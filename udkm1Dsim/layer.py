@@ -38,8 +38,8 @@ class Layer:
     physical layers, such as amorphous layers and unit cells.
 
     Args:
-        id (str): id of the Layer
-        name (str): name of the Layer
+        id (str): id of the layer
+        name (str): name of the layer
 
     Keyword Args:
         deb_wal_fac (float): Debye Waller factor
@@ -56,11 +56,11 @@ class Layer:
         sub_system_coupling (float): sub-system coupling
 
     Attributes:
-        id (str): id of the unit cell
-        name (str): name of the unit cell
+        id (str): id of the layer
+        name (str): name of the layer
         thickness (float): thickness of the layer
         roughness (float): gaussian width of the top roughness of a layer
-        spring_const (ndarray[float]): spring constant of the unit cell
+        spring_const (ndarray[float]): spring constant of the layer
            [kg/s²] and higher orders
         opt_ref_index (ndarray[float]): optical refractive index - real
            and imagenary part :math:`n + i\kappa`
@@ -521,7 +521,7 @@ class AmorphousLayer(Layer):
                        ['amplitude', self.magnetization['amplitude']],
                        ['phi [°]', self.magnetization['phi']],
                        ['gamma [°]', self.magnetization['gamma']], ]
-        except AttributeError as e:
+        except AttributeError:
             output += [['no atom set', '']]
 
         class_str = 'Amorphous layer with the following properties\n\n'
@@ -591,11 +591,6 @@ class UnitCell(Layer):
     Keyword Args:
         a_axis (float): a-axis of the UnitCell
         b_axis (float): b-axis of the UnitCell
-        atoms (list[atom, @lambda]): list of atoms and funtion handle
-           for strain dependent displacement
-        num_atoms (int): number of atoms in unit cell
-        magnetization (list[foat]): magnetization amplitutes, phi, and
-           gamma angle of each atom in the unit cell
         deb_wal_fac (float): Debye Waller factor
         sound_vel (float): sound velocity
         phonon_damping (float): phonon damping
@@ -607,6 +602,13 @@ class UnitCell(Layer):
         therm_cond (float): thermal conductivity
         lin_therm_exp (float): linear thermal expansion
         sub_system_coupling (float): sub-system coupling
+
+    Attributes:
+        atoms (list[atom, @lambda]): list of atoms and funtion handle
+           for strain dependent displacement
+        num_atoms (int): number of atoms in unit cell
+        magnetization (list[foat]): magnetization amplitutes, phi, and
+           gamma angle of each atom in the unit cell
 
     """
 
