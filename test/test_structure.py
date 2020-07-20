@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from udkm1Dsim.atoms import Atom
-from udkm1Dsim.unitCell import UnitCell
+from udkm1Dsim.layer import UnitCell
 from udkm1Dsim.structure import Structure
 from pint import UnitRegistry
 u = UnitRegistry()
