@@ -343,6 +343,9 @@ class AtomMixed(Atom):
         self.atoms = []
         self.num_atoms = 0
         self.cromer_mann_coeff = np.array([])
+        self.mag_amplitude = kwargs.get('mag_amplitude', 0)
+        self.mag_phi = kwargs.get('mag_phi', 0*u.deg)
+        self.mag_gamma = kwargs.get('mag_gamma', 0*u.deg)
 
     def __str__(self):
         """String representation of this class"""
