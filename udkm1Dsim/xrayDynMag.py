@@ -191,13 +191,13 @@ class XrayDynMag(Xray):
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
         # vacuum boundary
-        A0, _, _, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
+        A0, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
         # calc the reflectivity-transmisson matrix of the structure
         # and the inverse of the last boundary matrix
-        RT, last_A, last_A_inv, k_z = self.calc_homogeneous_matrix(self.S, A0, strains)        
+        RT, last_A, last_A_inv, last_k_z = self.calc_homogeneous_matrix(self.S, A0, k_z_0, strains)        
         # if a substrate is included add it at the end
         if self.S.substrate != []:
-            RT_sub, last_A, last_A_inv, _ = self.calc_homogeneous_matrix(self.S.substrate, last_A)
+            RT_sub, last_A, last_A_inv, _ = self.calc_homogeneous_matrix(self.S.substrate, last_A, last_k_z)
             RT = m_times_n(RT_sub, RT)
         # multiply the result of the structure with the boundary matrix
         # of vacuum (initial layer) and the final layer
@@ -207,7 +207,7 @@ class XrayDynMag(Xray):
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
         return R
 
-    def calc_homogeneous_matrix(self, S, last_A, *args):
+    def calc_homogeneous_matrix(self, S, last_A, last_k_z, *args):
         """calc_homogeneous_matrix
 
         Calculates the product of all reflection-transmission matrices of the
@@ -238,7 +238,6 @@ class XrayDynMag(Xray):
                 temp = m_power_x(RT_uc, sub_structure[1])
                 strainCounter += 1
             elif isinstance(sub_structure[0], AmorphousLayer):
-                print('amorph')
                 # the sub_structure is an amorphous layer
                 # calculate the ref-trans matrices for N layers
                 layer = sub_structure[0]
@@ -247,10 +246,32 @@ class XrayDynMag(Xray):
                                                                   layer._density,
                                                                   layer._thickness)
                 
-                
+                roughness = layer._roughness
+                R = np.zeros_like(A)
+                rugosp = np.exp(-((k_z + last_k_z)**2) * roughness**2 / 2)
+                rugosn = np.exp(-((-k_z + last_k_z)**2) * roughness**2 / 2)
+                R[:, :, 0, 0] = rugosn
+                R[:, :, 0, 1] = rugosn
+                R[:, :, 0, 2] = rugosp
+                R[:, :, 0, 3] = rugosp
+                R[:, :, 1, 0] = rugosn
+                R[:, :, 1, 1] = rugosn
+                R[:, :, 1, 2] = rugosp
+                R[:, :, 1, 3] = rugosp
+                R[:, :, 2, 0] = rugosp
+                R[:, :, 2, 1] = rugosp
+                R[:, :, 2, 2] = rugosn
+                R[:, :, 2, 3] = rugosn
+                R[:, :, 3, 0] = rugosp
+                R[:, :, 3, 1] = rugosp
+                R[:, :, 3, 2] = rugosn
+                R[:, :, 3, 3] = rugosn
+        
                 # if sub_structure[1] < 2:
                 # RT_amorph = m_times_n(A, m_times_n(P, A_inv))
-                RT_amorph = m_times_n(P, m_times_n(A_inv, last_A))
+                F = m_times_n(A_inv, last_A)
+                F_rough = F * R
+                RT_amorph = m_times_n(P, F_rough)
                 temp = RT_amorph
                 # temp = m_power_x(RT_amorph, sub_structure[1])
                 strainCounter += 1
@@ -259,6 +280,8 @@ class XrayDynMag(Xray):
                 # make a recursive call
                 temp, A, A_inv, k_z = self.calc_homogeneous_matrix(
                         sub_structure[0],
+                        last_A,
+                        last_k_z,
                         strains[strainCounter:(strainCounter
                                                + sub_structure[0].get_number_of_sub_structures())])
                 strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
@@ -563,8 +586,7 @@ class XrayDynMag(Xray):
         alpha_y = np.divide(np.cos(theta), np.sqrt(eps[:, :, 0, 0]))
         alpha_z = np.sqrt(1 - alpha_y**2)
         
-        wave_k = 5067084e-4 * energy #  k vector in meter
-        k_z = wave_k * np.sqrt(eps[:, :, 0,0]) * alpha_z   
+        k_z = self._k * np.sqrt(eps[:, :, 0,0]) * alpha_z   
 
         n_right_down = np.sqrt(eps[:, :, 0, 0] - 1j * eps[:, :, 0, 2] * alpha_y
                                - 1j * eps[:, :, 0, 1] * alpha_z)
