@@ -246,34 +246,63 @@ class XrayDynMag(Xray):
                                                                   layer._density,
                                                                   layer._thickness)
                 
-                roughness = layer._roughness
-                R = np.zeros_like(A)
-                rugosp = np.exp(-((k_z + last_k_z)**2) * roughness**2 / 2)
-                rugosn = np.exp(-((-k_z + last_k_z)**2) * roughness**2 / 2)
-                R[:, :, 0, 0] = rugosn
-                R[:, :, 0, 1] = rugosn
-                R[:, :, 0, 2] = rugosp
-                R[:, :, 0, 3] = rugosp
-                R[:, :, 1, 0] = rugosn
-                R[:, :, 1, 1] = rugosn
-                R[:, :, 1, 2] = rugosp
-                R[:, :, 1, 3] = rugosp
-                R[:, :, 2, 0] = rugosp
-                R[:, :, 2, 1] = rugosp
-                R[:, :, 2, 2] = rugosn
-                R[:, :, 2, 3] = rugosn
-                R[:, :, 3, 0] = rugosp
-                R[:, :, 3, 1] = rugosp
-                R[:, :, 3, 2] = rugosn
-                R[:, :, 3, 3] = rugosn
         
                 # if sub_structure[1] < 2:
                 # RT_amorph = m_times_n(A, m_times_n(P, A_inv))
-                F = m_times_n(A_inv, last_A)
-                F_rough = F * R
+                if last_A != []:
+                    roughness = layer._roughness
+                    R = np.zeros_like(A)
+                    rugosp = np.exp(-((k_z + last_k_z)**2) * roughness**2 / 2)
+                    rugosn = np.exp(-((-k_z + last_k_z)**2) * roughness**2 / 2)
+                    R[:, :, 0, 0] = rugosn
+                    R[:, :, 0, 1] = rugosn
+                    R[:, :, 0, 2] = rugosp
+                    R[:, :, 0, 3] = rugosp
+                    R[:, :, 1, 0] = rugosn
+                    R[:, :, 1, 1] = rugosn
+                    R[:, :, 1, 2] = rugosp
+                    R[:, :, 1, 3] = rugosp
+                    R[:, :, 2, 0] = rugosp
+                    R[:, :, 2, 1] = rugosp
+                    R[:, :, 2, 2] = rugosn
+                    R[:, :, 2, 3] = rugosn
+                    R[:, :, 3, 0] = rugosp
+                    R[:, :, 3, 1] = rugosp
+                    R[:, :, 3, 2] = rugosn
+                    R[:, :, 3, 3] = rugosn
+                    F = m_times_n(A_inv, last_A)
+                    F_rough = F * R
+                else:
+                    F_rough = A_inv
+
                 RT_amorph = m_times_n(P, F_rough)
                 temp = RT_amorph
                 # temp = m_power_x(RT_amorph, sub_structure[1])
+                if sub_structure[1] > 1:
+                    R = np.zeros_like(A)
+                    rugosp = np.exp(-((k_z + k_z)**2) * roughness**2 / 2)
+                    rugosn = np.exp(-((-k_z + k_z)**2) * roughness**2 / 2)
+                    R[:, :, 0, 0] = rugosn
+                    R[:, :, 0, 1] = rugosn
+                    R[:, :, 0, 2] = rugosp
+                    R[:, :, 0, 3] = rugosp
+                    R[:, :, 1, 0] = rugosn
+                    R[:, :, 1, 1] = rugosn
+                    R[:, :, 1, 2] = rugosp
+                    R[:, :, 1, 3] = rugosp
+                    R[:, :, 2, 0] = rugosp
+                    R[:, :, 2, 1] = rugosp
+                    R[:, :, 2, 2] = rugosn
+                    R[:, :, 2, 3] = rugosn
+                    R[:, :, 3, 0] = rugosp
+                    R[:, :, 3, 1] = rugosp
+                    R[:, :, 3, 2] = rugosn
+                    R[:, :, 3, 3] = rugosn
+                    F = m_times_n(A_inv, A)
+                    F_rough = F * R
+                    RT_amorph = m_times_n(P, F_rough)
+                    temp2 = m_power_x(RT_amorph, sub_structure[1]-1)
+                    temp = m_times_n(temp2, temp)
                 strainCounter += 1
             else:
                 # its a structure
@@ -284,9 +313,18 @@ class XrayDynMag(Xray):
                         last_k_z,
                         strains[strainCounter:(strainCounter
                                                + sub_structure[0].get_number_of_sub_structures())])
-                strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
                 # calculate the ref-trans matrices for N sub structures
-                # temp = m_power_x(temp, sub_structure[1])
+                if sub_structure[1] > 1:
+                    temp2, A, A_inv, k_z = self.calc_homogeneous_matrix(
+                            sub_structure[0],
+                            A,
+                            k_z,
+                            strains[strainCounter:(strainCounter
+                                                   + sub_structure[0].get_number_of_sub_structures())])
+                    temp2 = m_power_x(temp2, sub_structure[1]-1)
+                    temp = m_times_n(temp2, temp)               
+                
+                strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
 
             # multiply it to the output
             if i == 0:
