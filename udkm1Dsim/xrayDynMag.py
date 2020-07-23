@@ -213,12 +213,14 @@ class XrayDynMag(Xray):
         Calculates the product of all reflection-transmission matrices of the
         sample structure
 
-        .. math:: RT = \\prod_m \\left( A_m P_m A_m^{-1} \\right)
+        .. math:: RT = \\prod_m \\left(P_m A_m^{-1} A_{m-1} \\right)
 
         If the sub-structure :math:`m` consists of :math:`N` unit cells
         the matrix exponential rule is applied:
 
-        .. math:: RT_m = \\left( A_{UC} P_{UC} A_{UC}^{-1} \\right)^N
+        .. math:: RT_m = \\left( P_{UC} A_{UC}^{-1} A_{UC} \\right)^N
+        
+        Roughness is also included by a gaussian width
 
         """
         # if no strains are given we assume no strain (1)
@@ -230,12 +232,24 @@ class XrayDynMag(Xray):
         strainCounter = 0
         # traverse substructures
         for i, sub_structure in enumerate(S.sub_structures):
+            repetitions = sub_structure[1]
             if isinstance(sub_structure[0], UnitCell):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
-                RT_uc, A, A_inv, k_z = self.calc_uc_boundary_phase_matrix(sub_structure[0],
-                                                                  strains[strainCounter])
-                temp = m_power_x(RT_uc, sub_structure[1])
+                RT_uc, A, A_inv, k_z = self.calc_uc_boundary_phase_matrix(
+                    sub_structure[0],
+                    last_A,
+                    last_k_z,
+                    strains[strainCounter])
+                temp = RT_uc
+                if repetitions > 1:
+                    # use m_power_x for more than one repetition
+                    temp2, A, A_inv, k_z = self.calc_uc_boundary_phase_matrix(
+                            sub_structure[0], A, k_z,
+                            strains[strainCounter])
+                    temp2 = m_power_x(temp2, repetitions-1)
+                    temp = m_times_n(temp2, temp)
+                
                 strainCounter += 1
             elif isinstance(sub_structure[0], AmorphousLayer):
                 # the sub_structure is an amorphous layer
@@ -245,64 +259,20 @@ class XrayDynMag(Xray):
                 A, P, A_inv, k_z = self.get_atom_boundary_phase_matrix(layer.atom,
                                                                   layer._density,
                                                                   layer._thickness)
-                
-        
-                # if sub_structure[1] < 2:
-                # RT_amorph = m_times_n(A, m_times_n(P, A_inv))
-                if last_A != []:
-                    roughness = layer._roughness
-                    R = np.zeros_like(A)
-                    rugosp = np.exp(-((k_z + last_k_z)**2) * roughness**2 / 2)
-                    rugosn = np.exp(-((-k_z + last_k_z)**2) * roughness**2 / 2)
-                    R[:, :, 0, 0] = rugosn
-                    R[:, :, 0, 1] = rugosn
-                    R[:, :, 0, 2] = rugosp
-                    R[:, :, 0, 3] = rugosp
-                    R[:, :, 1, 0] = rugosn
-                    R[:, :, 1, 1] = rugosn
-                    R[:, :, 1, 2] = rugosp
-                    R[:, :, 1, 3] = rugosp
-                    R[:, :, 2, 0] = rugosp
-                    R[:, :, 2, 1] = rugosp
-                    R[:, :, 2, 2] = rugosn
-                    R[:, :, 2, 3] = rugosn
-                    R[:, :, 3, 0] = rugosp
-                    R[:, :, 3, 1] = rugosp
-                    R[:, :, 3, 2] = rugosn
-                    R[:, :, 3, 3] = rugosn
-                    F = m_times_n(A_inv, last_A)
-                    F_rough = F * R
-                else:
-                    F_rough = A_inv
 
-                RT_amorph = m_times_n(P, F_rough)
+                roughness = layer._roughness
+                F = m_times_n(A_inv, last_A)
+                if roughness > 0:
+                    W = self.calc_roughness_matrix(roughness, k_z, last_k_z)
+                    F = F * W
+
+                RT_amorph = m_times_n(P, F)
                 temp = RT_amorph
-                # temp = m_power_x(RT_amorph, sub_structure[1])
-                if sub_structure[1] > 1:
-                    R = np.zeros_like(A)
-                    rugosp = np.exp(-((k_z + k_z)**2) * roughness**2 / 2)
-                    rugosn = np.exp(-((-k_z + k_z)**2) * roughness**2 / 2)
-                    R[:, :, 0, 0] = rugosn
-                    R[:, :, 0, 1] = rugosn
-                    R[:, :, 0, 2] = rugosp
-                    R[:, :, 0, 3] = rugosp
-                    R[:, :, 1, 0] = rugosn
-                    R[:, :, 1, 1] = rugosn
-                    R[:, :, 1, 2] = rugosp
-                    R[:, :, 1, 3] = rugosp
-                    R[:, :, 2, 0] = rugosp
-                    R[:, :, 2, 1] = rugosp
-                    R[:, :, 2, 2] = rugosn
-                    R[:, :, 2, 3] = rugosn
-                    R[:, :, 3, 0] = rugosp
-                    R[:, :, 3, 1] = rugosp
-                    R[:, :, 3, 2] = rugosn
-                    R[:, :, 3, 3] = rugosn
-                    F = m_times_n(A_inv, A)
-                    F_rough = F * R
-                    RT_amorph = m_times_n(P, F_rough)
-                    temp2 = m_power_x(RT_amorph, sub_structure[1]-1)
-                    temp = m_times_n(temp2, temp)
+                if repetitions > 1:
+                    # use m_power_x for more than one repetition
+                    F = m_times_n(A_inv, A)                    
+                    RT_amorph = m_times_n(P, F)
+                    temp = m_times_n(m_power_x(RT_amorph, repetitions-1), temp)
                 strainCounter += 1
             else:
                 # its a structure
@@ -311,18 +281,19 @@ class XrayDynMag(Xray):
                         sub_structure[0],
                         last_A,
                         last_k_z,
-                        strains[strainCounter:(strainCounter
-                                               + sub_structure[0].get_number_of_sub_structures())])
+                        strains[strainCounter:(
+                            strainCounter
+                            + sub_structure[0].get_number_of_sub_structures()
+                            )])
                 # calculate the ref-trans matrices for N sub structures
-                if sub_structure[1] > 1:
+                if repetitions > 1:
+                    # use m_power_x for more than one repetition
                     temp2, A, A_inv, k_z = self.calc_homogeneous_matrix(
-                            sub_structure[0],
-                            A,
-                            k_z,
+                            sub_structure[0], A, k_z,
                             strains[strainCounter:(strainCounter
                                                    + sub_structure[0].get_number_of_sub_structures())])
-                    temp2 = m_power_x(temp2, sub_structure[1]-1)
-                    temp = m_times_n(temp2, temp)               
+
+                    temp = m_times_n(m_power_x(temp2, repetitions-1), temp)               
                 
                 strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
 
@@ -332,6 +303,7 @@ class XrayDynMag(Xray):
             else:
                 RT = m_times_n(temp, RT)
 
+            # update the last A and k_z
             last_A = A
             last_k_z = k_z
 
@@ -451,15 +423,15 @@ class XrayDynMag(Xray):
 
         return RT, A_inv
 
-    def calc_uc_boundary_phase_matrix(self, uc, last_A, strain):
+    def calc_uc_boundary_phase_matrix(self, uc, last_A, last_k_z, strain):
         """calc_uc_boundary_phase_matrix
 
         Calculates the product of all reflection-transmission matrices of
         a single unit cell for a given strain:
 
-        .. math:: RT = \\prod_m \\left( A_m P_m A_m^{-1} \\right)
+        .. math:: RT = \\prod_m \\left( P_m A_m^{-1} A_{m-1}\\right)
 
-        and returns also the last inverted boundary matrix :math:`A^{-1}`.
+        and returns also the last matrices :math:`A, A^{-1}, k_z`.
 
         """
         K = uc.num_atoms  # number of atoms
@@ -482,12 +454,23 @@ class XrayDynMag(Xray):
             A, P, A_inv, k_z = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
                                                               density,
                                                               distance)
+
+            F = m_times_n(A_inv, last_A)
+            if (j == 0) and (uc._roughness > 0):
+                # it is the first layer so care for the roughness
+                W = self.calc_roughness_matrix(uc._roughness, k_z, last_k_z)
+                F = F * W                
+            
+            temp = m_times_n(P, F)            
             if j == 0:
-                RT = m_times_n(A, m_times_n(P, A_inv))
+                RT = temp
             else:
-                RT = m_times_n(A,
-                               m_times_n(P,
-                                         m_times_n(A_inv, RT)))
+                RT = m_times_n(temp, RT)
+
+            # update last A and k_z
+            last_A = A
+            last_k_z = k_z
+            
         return RT, A, A_inv, k_z
 
     def get_atom_boundary_phase_matrix(self, atom, density, distance, *args):
@@ -717,3 +700,33 @@ class XrayDynMag(Xray):
             R = np.real(np.square(np.absolute(X)))
 
         return R
+
+    @staticmethod
+    def calc_roughness_matrix(roughness, k_z, last_k_z):
+        """calc_roughness_matrix
+
+        Calculates the roughness matrix for an interface with a gaussian
+        roughness for the Elzo formalism.
+
+        """
+        W = np.zeros([k_z.shape[0], k_z.shape[1], 4, 4], dtype=complex)
+        rugosp = np.exp(-((k_z + last_k_z)**2) * roughness**2 / 2)
+        rugosn = np.exp(-((-k_z + last_k_z)**2) * roughness**2 / 2)
+        W[:, :, 0, 0] = rugosn
+        W[:, :, 0, 1] = rugosn
+        W[:, :, 0, 2] = rugosp
+        W[:, :, 0, 3] = rugosp
+        W[:, :, 1, 0] = rugosn
+        W[:, :, 1, 1] = rugosn
+        W[:, :, 1, 2] = rugosp
+        W[:, :, 1, 3] = rugosp
+        W[:, :, 2, 0] = rugosp
+        W[:, :, 2, 1] = rugosp
+        W[:, :, 2, 2] = rugosn
+        W[:, :, 2, 3] = rugosn
+        W[:, :, 3, 0] = rugosp
+        W[:, :, 3, 1] = rugosp
+        W[:, :, 3, 2] = rugosn
+        W[:, :, 3, 3] = rugosn
+
+        return W
