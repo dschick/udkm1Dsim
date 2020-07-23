@@ -45,7 +45,7 @@ class Layer:
         deb_wal_fac (float): Debye Waller factor
         sound_vel (float): sound velocity
         phonon_damping (float): phonon damping
-        roughness (fload): gaussian width of the top roughness of a layer
+        roughness (float): gaussian width of the top roughness of a layer
         opt_pen_depth (float): optical penetration depth
         opt_ref_index (float): refractive index
         opt_ref_index_per_strain (float): change of refractive index per
@@ -87,7 +87,7 @@ class Layer:
     def __init__(self, id, name, **kwargs):
         self.id = id
         self.name = name
-        self.roughness = 0*u.nm
+        self.roughness = kwargs.get('roughness', 0*u.nm)
         self.spring_const = np.array([0])
         self.deb_wal_fac = kwargs.get('deb_wal_fac', 0*u.m**2)
         self.sound_vel = kwargs.get('sound_vel', 0*u.m/u.s)
@@ -118,6 +118,7 @@ class Layer:
                   ['volume', '{:.4~P}'.format(self.volume.to('nm**3'))],
                   ['mass', '{:4~P}'.format(self.mass)],
                   ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
+                  ['roughness', '{:.4~P}'.format(self.roughness.to('nm'))],
                   ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
                   ['sound velocity', '{:.4~P}'.format(self.sound_vel.to('meter/s'))],
                   ['spring constant', self.spring_const * u.kg/u.s**2],
@@ -482,6 +483,7 @@ class AmorphousLayer(Layer):
         deb_wal_fac (float): Debye Waller factor
         sound_vel (float): sound velocity
         phonon_damping (float): phonon damping
+        roughness (float): gaussian width of the top roughness of a layer
         opt_pen_depth (float): optical penetration depth
         opt_ref_index (float): refractive index
         opt_ref_index_per_strain (float): change of refractive index per
@@ -594,6 +596,7 @@ class UnitCell(Layer):
         deb_wal_fac (float): Debye Waller factor
         sound_vel (float): sound velocity
         phonon_damping (float): phonon damping
+        roughness (float): gaussian width of the top roughness of a layer
         opt_pen_depth (float): optical penetration depth
         opt_ref_index (float): refractive index
         opt_ref_index_per_strain (float): change of refractive index per
