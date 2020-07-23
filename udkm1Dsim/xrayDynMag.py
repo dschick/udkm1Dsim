@@ -194,10 +194,11 @@ class XrayDynMag(Xray):
         A0, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
         # calc the reflectivity-transmisson matrix of the structure
         # and the inverse of the last boundary matrix
-        RT, last_A, last_A_inv, last_k_z = self.calc_homogeneous_matrix(self.S, A0, k_z_0, strains)        
+        RT, last_A, last_A_inv, last_k_z = self.calc_homogeneous_matrix(self.S, A0, k_z_0, strains)
         # if a substrate is included add it at the end
         if self.S.substrate != []:
-            RT_sub, last_A, last_A_inv, _ = self.calc_homogeneous_matrix(self.S.substrate, last_A, last_k_z)
+            RT_sub, last_A, last_A_inv, _ = self.calc_homogeneous_matrix(
+                self.S.substrate, last_A, last_k_z)
             RT = m_times_n(RT_sub, RT)
         # multiply the result of the structure with the boundary matrix
         # of vacuum (initial layer) and the final layer
@@ -219,7 +220,7 @@ class XrayDynMag(Xray):
         the matrix exponential rule is applied:
 
         .. math:: RT_m = \\left( P_{UC} A_{UC}^{-1} A_{UC} \\right)^N
-        
+
         Roughness is also included by a gaussian width
 
         """
@@ -232,45 +233,41 @@ class XrayDynMag(Xray):
         strainCounter = 0
         # traverse substructures
         for i, sub_structure in enumerate(S.sub_structures):
+            layer = sub_structure[0]
             repetitions = sub_structure[1]
-            if isinstance(sub_structure[0], UnitCell):
+            if isinstance(layer, UnitCell):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
                 RT_uc, A, A_inv, k_z = self.calc_uc_boundary_phase_matrix(
-                    sub_structure[0],
-                    last_A,
-                    last_k_z,
-                    strains[strainCounter])
+                    layer, last_A, last_k_z, strains[strainCounter])
                 temp = RT_uc
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
                     temp2, A, A_inv, k_z = self.calc_uc_boundary_phase_matrix(
-                            sub_structure[0], A, k_z,
-                            strains[strainCounter])
+                            layer, A, k_z, strains[strainCounter])
                     temp2 = m_power_x(temp2, repetitions-1)
                     temp = m_times_n(temp2, temp)
-                
+
                 strainCounter += 1
-            elif isinstance(sub_structure[0], AmorphousLayer):
+            elif isinstance(layer, AmorphousLayer):
                 # the sub_structure is an amorphous layer
                 # calculate the ref-trans matrices for N layers
-                layer = sub_structure[0]
 
                 A, P, A_inv, k_z = self.get_atom_boundary_phase_matrix(layer.atom,
-                                                                  layer._density,
-                                                                  layer._thickness)
+                                                                       layer._density,
+                                                                       layer._thickness)
 
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
                 if roughness > 0:
-                    W = self.calc_roughness_matrix(roughness, k_z, last_k_z)
+                    W = XrayDynMag.calc_roughness_matrix(roughness, k_z, last_k_z)
                     F = F * W
 
                 RT_amorph = m_times_n(P, F)
                 temp = RT_amorph
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
-                    F = m_times_n(A_inv, A)                    
+                    F = m_times_n(A_inv, A)
                     RT_amorph = m_times_n(P, F)
                     temp = m_times_n(m_power_x(RT_amorph, repetitions-1), temp)
                 strainCounter += 1
@@ -278,24 +275,22 @@ class XrayDynMag(Xray):
                 # its a structure
                 # make a recursive call
                 temp, A, A_inv, k_z = self.calc_homogeneous_matrix(
-                        sub_structure[0],
-                        last_A,
-                        last_k_z,
+                        layer, last_A, last_k_z,
                         strains[strainCounter:(
                             strainCounter
-                            + sub_structure[0].get_number_of_sub_structures()
+                            + layer.get_number_of_sub_structures()
                             )])
                 # calculate the ref-trans matrices for N sub structures
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
                     temp2, A, A_inv, k_z = self.calc_homogeneous_matrix(
-                            sub_structure[0], A, k_z,
+                            layer, A, k_z,
                             strains[strainCounter:(strainCounter
-                                                   + sub_structure[0].get_number_of_sub_structures())])
+                                                   + layer.get_number_of_sub_structures())])
 
-                    temp = m_times_n(m_power_x(temp2, repetitions-1), temp)               
-                
-                strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
+                    temp = m_times_n(m_power_x(temp2, repetitions-1), temp)
+
+                strainCounter = strainCounter+layer.get_number_of_sub_structures()
 
             # multiply it to the output
             if i == 0:
@@ -379,27 +374,30 @@ class XrayDynMag(Xray):
             # get the inhomogenous reflectivity of the sample
             # structure for each time step of the strain map
 
-            RT, A_inv = self.calc_inhomogeneous_matrix(strain_map[i, :])
-            # vacuum
-            A0, _, _ = self.get_atom_boundary_phase_matrix([], 0, 0)
+            # vacuum boundary
+            A0, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+
+            RT, last_A, last_A_inv, last_k_z = self.calc_inhomogeneous_matrix(
+                A0, k_z_0, strain_map[i, :])
             # if a substrate is included add it at the end
             if self.S.substrate != []:
-                RT_sub, A_inv = self.calc_homogeneous_matrix(self.S.substrate)
+                RT_sub, last_A, last_A_inv, _ = self.calc_homogeneous_matrix(
+                    self.S.substrate, last_A, last_k_z)
                 RT = m_times_n(RT_sub, RT)
             # multiply vacuum and last layer
-            RT = m_times_n(A_inv, m_times_n(RT, A0))
+            RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
 
             R[i, :, :] = self.calc_reflectivity_from_matrix(RT)
 
         return R
 
-    def calc_inhomogeneous_matrix(self, strains):
+    def calc_inhomogeneous_matrix(self, last_A, last_k_z, strains):
         """calc_inhomogeneous_matrix
 
         Calculates the product of all reflection-transmission matrices of the
         sample structure for every atomic layer.
 
-        .. math:: RT = \\prod_m \\left( A_m P_m A_m^{-1} \\right)
+        .. math:: RT = \\prod_m \\left( P_m A_m^{-1} A_{m-1}  \\right)
 
         """
         L = self.S.get_number_of_layers()  # number of unit cells
@@ -408,12 +406,18 @@ class XrayDynMag(Xray):
         for i in range(L):
             layer = layer_handles[i]
             if isinstance(layer, UnitCell):
-                RT_layer, A_inv = self.calc_uc_boundary_phase_matrix(layer, strains[i])
+                RT_layer, A, A_inv, k_z = self.calc_uc_boundary_phase_matrix(
+                    layer, last_A, last_k_z, strains[i])
             elif isinstance(layer, AmorphousLayer):
-                A, P, A_inv = self.get_atom_boundary_phase_matrix(layer.atom,
-                                                                  layer._density,
-                                                                  layer._thickness)
-                RT_layer = m_times_n(A, m_times_n(P, A_inv))
+                A, P, A_inv, k_z = self.get_atom_boundary_phase_matrix(layer.atom,
+                                                                       layer._density,
+                                                                       layer._thickness)
+                roughness = layer._roughness
+                F = m_times_n(A_inv, last_A)
+                if roughness > 0:
+                    W = XrayDynMag.calc_roughness_matrix(roughness, k_z, last_k_z)
+                    F = F * W
+                RT_layer = m_times_n(P, F)
             else:
                 raise ValueError('All layers must be either AmorphousLayers or UnitCells!')
             if i == 0:
@@ -421,7 +425,11 @@ class XrayDynMag(Xray):
             else:
                 RT = m_times_n(RT_layer, RT)
 
-        return RT, A_inv
+            # update the last A and k_z
+            last_A = A
+            last_k_z = k_z
+
+        return RT, A, A_inv, k_z
 
     def calc_uc_boundary_phase_matrix(self, uc, last_A, last_k_z, strain):
         """calc_uc_boundary_phase_matrix
@@ -452,16 +460,14 @@ class XrayDynMag(Xray):
                 density = 0
 
             A, P, A_inv, k_z = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
-                                                              density,
-                                                              distance)
-
+                                                                   density,
+                                                                   distance)
             F = m_times_n(A_inv, last_A)
             if (j == 0) and (uc._roughness > 0):
                 # it is the first layer so care for the roughness
-                W = self.calc_roughness_matrix(uc._roughness, k_z, last_k_z)
-                F = F * W                
-            
-            temp = m_times_n(P, F)            
+                W = XrayDynMag.calc_roughness_matrix(uc._roughness, k_z, last_k_z)
+                F = F * W
+            temp = m_times_n(P, F)
             if j == 0:
                 RT = temp
             else:
@@ -470,7 +476,7 @@ class XrayDynMag(Xray):
             # update last A and k_z
             last_A = A
             last_k_z = k_z
-            
+
         return RT, A, A_inv, k_z
 
     def get_atom_boundary_phase_matrix(self, atom, density, distance, *args):
@@ -606,8 +612,7 @@ class XrayDynMag(Xray):
 
         alpha_y = np.divide(np.cos(theta), np.sqrt(eps[:, :, 0, 0]))
         alpha_z = np.sqrt(1 - alpha_y**2)
-        
-        k_z = self._k * np.sqrt(eps[:, :, 0,0]) * alpha_z   
+        k_z = self._k * np.sqrt(eps[:, :, 0, 0]) * alpha_z
 
         n_right_down = np.sqrt(eps[:, :, 0, 0] - 1j * eps[:, :, 0, 2] * alpha_y
                                - 1j * eps[:, :, 0, 1] * alpha_z)
