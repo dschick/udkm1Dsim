@@ -204,7 +204,7 @@ class XrayDynMag(Xray):
         # of vacuum (initial layer) and the final layer
         RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
         # calc the actual reflectivity from the matrix
-        R = self.calc_reflectivity_from_matrix(RT)
+        R = XrayDynMag.calc_reflectivity_from_matrix(RT, self.pol_in, self.pol_out)
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
         return R
 
@@ -407,7 +407,7 @@ class XrayDynMag(Xray):
             # multiply vacuum and last layer
             RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
 
-            R[i, :, :] = self.calc_reflectivity_from_matrix(RT)
+            R[i, :, :] = XrayDynMag.calc_reflectivity_from_matrix(RT, self.pol_in, self.pol_out)
 
         return R
 
@@ -747,7 +747,8 @@ class XrayDynMag(Xray):
 
         return A, P, A_inv, k_z
 
-    def calc_reflectivity_from_matrix(self, RT):
+    @staticmethod
+    def calc_reflectivity_from_matrix(RT, pol_in, pol_out):
         """calc_reflectivity_from_matrix
 
         Calculates the actual reflectivity from the reflectivity-transmission
@@ -767,12 +768,12 @@ class XrayDynMag(Xray):
         Ref = np.matmul(np.matmul(np.array([[-1, 1], [-1j, -1j]]), Ref),
                         np.array([[-1, 1j], [1, 1j]])*0.5)
 
-        if self.pol_out.size == 0:
+        if pol_out.size == 0:
             # no analyzer polarization
-            X = np.matmul(Ref, self.pol_in)
+            X = np.matmul(Ref, pol_in)
             R = np.real(np.matmul(np.square(np.absolute(X)), np.array([1, 1], dtype=complex)))
         else:
-            X = np.matmul(np.matmul(Ref, self.pol_in), self.pol_out)
+            X = np.matmul(np.matmul(Ref, pol_in), pol_out)
             R = np.real(np.square(np.absolute(X)))
 
         return R
