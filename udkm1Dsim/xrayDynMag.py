@@ -30,7 +30,7 @@ from time import time
 from os import path
 from .xray import Xray
 from .layer import AmorphousLayer, UnitCell
-from tqdm import trange
+from tqdm.notebook import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n
 from . import u
 
@@ -253,9 +253,11 @@ class XrayDynMag(Xray):
                 # the sub_structure is an amorphous layer
                 # calculate the ref-trans matrices for N layers
 
-                A, P, A_inv, k_z = self.get_atom_boundary_phase_matrix(layer.atom,
-                                                                       layer._density,
-                                                                       layer._thickness)
+                A, P, A_inv, k_z = \
+                    self.get_atom_boundary_phase_matrix(layer.atom,
+                                                        layer._density,
+                                                        layer._thickness*(
+                                                            strains[strainCounter]+1))
 
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
@@ -357,7 +359,7 @@ class XrayDynMag(Xray):
                                 '_sequential_, or _distributed_!')
             job = kwargs.get('job')
             num_workers = kwargs.get('num_workers', 1)
-                        
+
             # select the type of computation
             if calc_type == 'parallel':
                 R = self.parallel_inhomogeneous_reflectivity(strain_map,
@@ -398,7 +400,7 @@ class XrayDynMag(Xray):
             A0, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
 
             RT, last_A, last_A_inv, last_k_z = self.calc_inhomogeneous_matrix(
-                A0, k_z_0, strain_map[i, :])
+                A0, k_z_0, strain_map[i, :], spin_map[i, :])
             # if a substrate is included add it at the end
             if self.S.substrate != []:
                 RT_sub, last_A, last_A_inv, _ = self.calc_homogeneous_matrix(
@@ -434,14 +436,37 @@ class XrayDynMag(Xray):
 
         R = np.zeros([M, N, K])
         # vacuum boundary
-        # A0, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
-        # remote_A0 = dask_client.scatter(A0)
-        # remote_k_z_0 = dask_client.scatter(k_z_0)
+        A0, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+        remote_A0 = dask_client.scatter(A0)
+        remote_k_z_0 = dask_client.scatter(k_z_0)
+        remote_pol_in = dask_client.scatter(self.pol_in)
+        remote_pol_out = dask_client.scatter(self.pol_out)
+        remote_substrate = dask_client.scatter(self.S.substrate)
 
         # create dask.delayed tasks for all delay steps
         for i in range(M):
-            Ri = delayed(self.sequential_inhomogeneous_reflectivity)(
-                strain_map[[i], :], spin_map[[i], :])
+            t = delayed(self.calc_inhomogeneous_matrix)(remote_A0,
+                                                        remote_k_z_0,
+                                                        strain_map[i, :],
+                                                        spin_map[i, :])
+            # t = RT, last_A, last_A_inv, last_k_z
+            RT = t[0]
+            last_A = t[1]
+            last_A_inv = t[2]
+            last_k_z = t[3]
+            if remote_substrate != []:
+                t2 = delayed(self.calc_homogeneous_matrix)(
+                    remote_substrate, last_A, last_k_z)
+                RT_sub = t2[0]
+                last_A = t2[1]
+                last_A_inv = t2[2]
+                RT = delayed(m_times_n)(RT_sub, RT)
+            # multiply vacuum and last layer
+            temp = delayed(m_times_n)(last_A, RT)
+            RT = delayed(m_times_n)(last_A_inv, temp)
+            Ri = delayed(XrayDynMag.calc_reflectivity_from_matrix)(RT,
+                                                                   remote_pol_in,
+                                                                   remote_pol_out)
             res.append(Ri)
 
         # compute results
@@ -462,7 +487,7 @@ class XrayDynMag(Xray):
         """
         return
 
-    def calc_inhomogeneous_matrix(self, last_A, last_k_z, strains):
+    def calc_inhomogeneous_matrix(self, last_A, last_k_z, strains, spins):
         """calc_inhomogeneous_matrix
 
         Calculates the product of all reflection-transmission matrices of the
@@ -480,9 +505,9 @@ class XrayDynMag(Xray):
                 RT_layer, A, A_inv, k_z = self.calc_uc_boundary_phase_matrix(
                     layer, last_A, last_k_z, strains[i])
             elif isinstance(layer, AmorphousLayer):
-                A, P, A_inv, k_z = self.get_atom_boundary_phase_matrix(layer.atom,
-                                                                       layer._density,
-                                                                       layer._thickness)
+                A, P, A_inv, k_z = \
+                    self.get_atom_boundary_phase_matrix(
+                        layer.atom, layer._density, layer._thickness*(strains[i]+1))
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
                 if roughness > 0:
