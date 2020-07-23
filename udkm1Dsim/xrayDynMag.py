@@ -95,7 +95,7 @@ class XrayDynMag(Xray):
         class_str += super().__str__()
         return class_str
 
-    def get_hash(self, strain_vectors, **kwargs):
+    def get_hash(self, **kwargs):
         """get_hash
 
         Returns a unique hash given by the energy :math:`E`,
@@ -105,7 +105,7 @@ class XrayDynMag(Xray):
         used.
 
         """
-        param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy, strain_vectors]
+        param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy]
 
         if 'strain_map' in kwargs:
             strain_map = kwargs.get('strain_map')
@@ -312,7 +312,7 @@ class XrayDynMag(Xray):
     sample structure.
     """
 
-    def inhomogeneous_reflectivity(self, strain_map, strain_vectors=[]):
+    def inhomogeneous_reflectivity(self, strain_map, spin_map, **kwargs):
         """inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained and
@@ -325,14 +325,15 @@ class XrayDynMag(Xray):
         distributed) for the calculation the corresponding subroutines
         for the reflectivity computation are called:
 
-        * ``parallel`` not implemented, yet
-        * ``distributed`` not implemented in Python, yet
+        * ``parallel`` parallelization over the time steps utilizing
+          Dask
+        * ``distributed`` not yet implemented
         * ``sequential`` no parallelization at all
 
         """
         # create a hash of all simulation parameters
         filename = 'inhomogeneous_reflectivity_dynMag_' \
-                   + self.get_hash(strain_vectors, strain_map=strain_map) \
+                   + self.get_hash(strain_map=strain_map, spin_map=spin_map) \
                    + '.npy'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
@@ -346,17 +347,36 @@ class XrayDynMag(Xray):
             # parse the input arguments
             if not isinstance(strain_map, np.ndarray):
                 raise TypeError('strain_map must be a numpy ndarray!')
-            if not isinstance(strain_vectors, list):
-                raise TypeError('strain_vectors must be a list!')
+            if not isinstance(spin_map, np.ndarray):
+                raise TypeError('spin_map must be a numpy ndarray!')
 
-            R = self.sequential_inhomogeneous_reflectivity(strain_map)
+            dask_client = kwargs.get('dask_client', [])
+            calc_type = kwargs.get('calc_type', 'sequential')
+            if calc_type not in ['parallel', 'sequential', 'distributed']:
+                raise TypeError('calc_type must be either _parallel_, '
+                                '_sequential_, or _distributed_!')
+            job = kwargs.get('job')
+            num_workers = kwargs.get('num_workers', 1)
+                        
+            # select the type of computation
+            if calc_type == 'parallel':
+                R = self.parallel_inhomogeneous_reflectivity(strain_map,
+                                                             spin_map,
+                                                             dask_client)
+            elif calc_type == 'distributed':
+                R = self.distributed_inhomogeneous_reflectivity(strain_map,
+                                                                spin_map,
+                                                                job,
+                                                                num_workers)
+            else:  # sequential
+                R = self.sequential_inhomogeneous_reflectivity(strain_map, spin_map)
 
             self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
             self.save(full_filename, R, '_inhomogeneous_reflectivity_')
         return R
 
-    def sequential_inhomogeneous_reflectivity(self, strain_map):
+    def sequential_inhomogeneous_reflectivity(self, strain_map, spin_map):
         """sequential_inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained sample
@@ -390,6 +410,57 @@ class XrayDynMag(Xray):
             R[i, :, :] = self.calc_reflectivity_from_matrix(RT)
 
         return R
+
+    def parallel_inhomogeneous_reflectivity(self, strain_map, spin_map, dask_client):
+        """parallel_inhomogeneous_reflectivity
+
+        Returns the reflectivity of an inhomogenously strained sample
+        structure for a given ``strain_map`` in position and time, as
+        well as for a given set of possible strains for each unit cell
+        in the sample structure (``strain_vectors``).
+        The function tries to parallize the calculation over the time
+        steps, since the results do not depent on each other.
+
+        """
+        if not dask_client:
+            raise ValueError('no dask client set')
+        from dask import delayed  # to allow parallel computation
+
+        # initialize
+        res = []
+        M = np.size(strain_map, 0)  # delay steps
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        R = np.zeros([M, N, K])
+        # vacuum boundary
+        # A0, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+        # remote_A0 = dask_client.scatter(A0)
+        # remote_k_z_0 = dask_client.scatter(k_z_0)
+
+        # create dask.delayed tasks for all delay steps
+        for i in range(M):
+            Ri = delayed(self.sequential_inhomogeneous_reflectivity)(
+                strain_map[[i], :], spin_map[[i], :])
+            res.append(Ri)
+
+        # compute results
+        res = dask_client.compute(res, sync=True)
+
+        # reorder results to reflectivity matrix
+        for i in range(M):
+            R[i, :, :] = res[i]
+
+        return R
+
+    def distributed_inhomogeneous_reflectivity(self, job, num_worker,
+                                               strain_map, spin_map):
+        """distributed_inhomogeneous_reflectivity
+
+        This is a stub. Not yet implemented in python.
+
+        """
+        return
 
     def calc_inhomogeneous_matrix(self, last_A, last_k_z, strains):
         """calc_inhomogeneous_matrix
