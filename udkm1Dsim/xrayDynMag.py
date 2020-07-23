@@ -708,9 +708,8 @@ class XrayDynMag(Xray):
 
         alpha_y = np.divide(np.cos(theta), np.sqrt(eps[:, :, 0, 0]))
         alpha_z = np.sqrt(1 - alpha_y**2)
-        # reshape self._k for elementwise multiplication        
+        # reshape self._k for elementwise multiplication
         k = np.reshape(np.repeat(self._k, N), (M, N))
-        #print(k.shape)
         k_z = k * (np.sqrt(eps[:, :, 0, 0]) * alpha_z)
 
         n_right_down = np.sqrt(eps[:, :, 0, 0] - 1j * eps[:, :, 0, 2] * alpha_y
