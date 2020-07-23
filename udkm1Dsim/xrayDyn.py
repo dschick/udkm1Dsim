@@ -30,7 +30,7 @@ from .xray import Xray
 from .layer import UnitCell
 from time import time
 from os import path
-from tqdm import trange
+from tqdm.notebook import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n, finderb
 
 r_0 = constants.physical_constants['classical electron radius'][0]
