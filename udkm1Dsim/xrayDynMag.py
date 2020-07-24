@@ -392,9 +392,9 @@ class XrayDynMag(Xray):
                                                                     dask_client)
             elif calc_type == 'distributed':
                 R, R_Phi = self.distributed_inhomogeneous_reflectivity(strain_map,
-                                                                spin_map,
-                                                                job,
-                                                                num_workers)
+                                                                       spin_map,
+                                                                       job,
+                                                                       num_workers)
             else:  # sequential
                 R, R_phi = self.sequential_inhomogeneous_reflectivity(strain_map, spin_map)
 
@@ -440,8 +440,10 @@ class XrayDynMag(Xray):
             RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
             RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
 
-            R[i, :, :] = XrayDynMag.calc_reflectivity_from_matrix(RT, self.pol_in, self.pol_out)
-            R_phi[i, :, :] = XrayDynMag.calc_reflectivity_from_matrix(RT_phi, self.pol_in, self.pol_out)
+            R[i, :, :] = XrayDynMag.calc_reflectivity_from_matrix(
+                RT, self.pol_in, self.pol_out)
+            R_phi[i, :, :] = XrayDynMag.calc_reflectivity_from_matrix(
+                RT_phi, self.pol_in, self.pol_out)
 
         return R, R_phi
 
@@ -512,8 +514,8 @@ class XrayDynMag(Xray):
                                                                    remote_pol_in,
                                                                    remote_pol_out)
             Ri_phi = delayed(XrayDynMag.calc_reflectivity_from_matrix)(RT_phi,
-                                                                   remote_pol_in,
-                                                                   remote_pol_out)
+                                                                       remote_pol_in,
+                                                                       remote_pol_out)
             res.append(Ri)
             res.append(Ri_phi)
 
