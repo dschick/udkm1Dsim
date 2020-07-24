@@ -1,4 +1,4 @@
 sphinx>=1.4
 ipykernel
 nbsphinx
-IProgress
+ipywidgets
