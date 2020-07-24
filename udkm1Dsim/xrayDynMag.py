@@ -580,7 +580,8 @@ class XrayDynMag(Xray):
 
         Returns the boundary and phase matrices of an atom from
         Elzo formalism. The results for a given atom, energy, :math:`q_z`,
-        polarization, and magnetization are stored to RAM to avoid recalculation.
+        polarization, and magnetization are stored to RAM to avoid
+        recalculation.
 
         """
         try:
@@ -589,8 +590,9 @@ class XrayDynMag(Xray):
             index = -1
         except AttributeError:
             # its vacuum
-            A, P, A_inv, k_z = self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
-            return A, P, A_inv, k_z
+            A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
+            return A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z
 
         # check for already calculated data
         _hash = make_hash_md5([self._energy, self._qz, self.pol_in, self.pol_out,
@@ -604,30 +606,39 @@ class XrayDynMag(Xray):
             # These are the same X-ray parameters as last time so we
             # can use the same matrix again for this atom
             A = self.last_atom_ref_trans_matrices['A'][index]
+            A_phi = self.last_atom_ref_trans_matrices['A_phi'][index]
             P = self.last_atom_ref_trans_matrices['P'][index]
+            P_phi = self.last_atom_ref_trans_matrices['P_phi'][index]
             A_inv = self.last_atom_ref_trans_matrices['A_inv'][index]
+            A_inv_phi = self.last_atom_ref_trans_matrices['A_inv_phi'][index]
             k_z = self.last_atom_ref_trans_matrices['k_z'][index]
         else:
             # These are new parameters so we have to calculate.
             # Get the reflection-transmission-factors
-            A, P, A_inv, k_z = self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
+            A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
             # remember this matrix for next use with the same
             # parameters for this atom
             if index >= 0:
                 self.last_atom_ref_trans_matrices['atom_ids'][index] = atom.id
                 self.last_atom_ref_trans_matrices['hashes'][index] = _hash
                 self.last_atom_ref_trans_matrices['A'][index] = A
+                self.last_atom_ref_trans_matrices['A_phi'][index] = A_phi
                 self.last_atom_ref_trans_matrices['P'][index] = P
+                self.last_atom_ref_trans_matrices['P_phi'][index] = P_phi
                 self.last_atom_ref_trans_matrices['A_inv'][index] = A_inv
+                self.last_atom_ref_trans_matrices['A_inv_phi'][index] = A_inv_phi
                 self.last_atom_ref_trans_matrices['k_z'][index] = k_z
             else:
                 self.last_atom_ref_trans_matrices['atom_ids'].append(atom.id)
                 self.last_atom_ref_trans_matrices['hashes'].append(_hash)
                 self.last_atom_ref_trans_matrices['A'].append(A)
+                self.last_atom_ref_trans_matrices['A_phi'].append(A_phi)
                 self.last_atom_ref_trans_matrices['P'].append(P)
+                self.last_atom_ref_trans_matrices['P_phi'].append(P_phi)
                 self.last_atom_ref_trans_matrices['A_inv'].append(A_inv)
+                self.last_atom_ref_trans_matrices['A_inv_phi'].append(A_inv_phi)
                 self.last_atom_ref_trans_matrices['k_z'].append(k_z)
-        return A, P, A_inv, k_z
+        return A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z
 
     def calc_atom_boundary_phase_matrix(self, atom, density, distance, *args):
         """calc_atom_boundary_phase_matrix
@@ -671,7 +682,9 @@ class XrayDynMag(Xray):
 
         eps = np.zeros([M, N, 3, 3], dtype=np.cfloat)
         A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
+        A_phi = np.zeros([M, N, 4, 4], dtype=np.cfloat)
         P = np.zeros([M, N, 4, 4], dtype=np.cfloat)
+        P_phi = np.zeros([M, N, 4, 4], dtype=np.cfloat)
 
         try:
             molar_density = density/1000/atom.mass_number_a
@@ -758,11 +771,44 @@ class XrayDynMag(Xray):
         A[:, :, 3, 2] = alpha_z_right_up * n_right_up * A[:, :, 0, 2]
         A[:, :, 3, 3] = alpha_z_left_up * n_left_up * A[:, :, 0, 3]
 
+        A_phi[:, :, 0, 0] = (-1 + 1j * eps[:, :, 0, 1] * alpha_z_left_down
+                         + 1j * eps[:, :, 0, 2] * alpha_y_left_down)
+        A_phi[:, :, 0, 1] = (1 + 1j * eps[:, :, 0, 1] * alpha_z_right_down
+                         + 1j * eps[:, :, 0, 2] * alpha_y_right_down)
+        A_phi[:, :, 0, 2] = (-1 - 1j * eps[:, :, 0, 1] * alpha_z_left_up
+                         + 1j * eps[:, :, 0, 2] * alpha_y_left_up)
+        A_phi[:, :, 0, 3] = (1 - 1j * eps[:, :, 0, 1] * alpha_z_right_up
+                         + 1j * eps[:, :, 0, 2] * alpha_y_right_up)
+
+        A_phi[:, :, 1, 0] = (1j * alpha_z_left_down + eps[:, :, 0, 1]
+                         + 1j * eps[:, :, 1, 2] * alpha_y_left_down)
+        A_phi[:, :, 1, 1] = (1j * alpha_z_right_down - eps[:, :, 0, 1]
+                         + 1j * eps[:, :, 1, 2] * alpha_y_right_down)
+        A_phi[:, :, 1, 2] = (-1j * alpha_z_left_up + eps[:, :, 0, 1]
+                         + 1j * eps[:, :, 1, 2] * alpha_y_left_up)
+        A_phi[:, :, 1, 3] = (-1j * alpha_z_right_up - eps[:, :, 0, 1]
+                         + 1j * eps[:, :, 1, 2] * alpha_y_right_up)
+
+        A_phi[:, :, 2, 0] = 1j * n_left_down * A_phi[:, :, 0, 0]
+        A_phi[:, :, 2, 1] = -1j * n_right_down * A_phi[:, :, 0, 1]
+        A_phi[:, :, 2, 2] = 1j * n_left_up * A_phi[:, :, 0, 2]
+        A_phi[:, :, 2, 3] = -1j * n_right_up * A_phi[:, :, 0, 3]
+
+        A_phi[:, :, 3, 0] = - alpha_z_left_down * n_left_down * A_phi[:, :, 0, 0]
+        A_phi[:, :, 3, 1] = - alpha_z_right_down * n_right_down * A_phi[:, :, 0, 1]
+        A_phi[:, :, 3, 2] = alpha_z_left_up * n_right_up * A_phi[:, :, 0, 2]
+        A_phi[:, :, 3, 3] = alpha_z_right_up * n_right_up * A_phi[:, :, 0, 3]
+
         A[:, :, :, :] = np.divide(
             A[:, :, :, :],
             np.sqrt(2) * eps[:, :, 0, 0][:, :, np.newaxis, np.newaxis])
+        
+        A_phi[:, :, :, :] = np.divide(
+            A_phi[:, :, :, :],
+            np.sqrt(2) * eps[:, :, 0, 0][:, :, np.newaxis, np.newaxis])
 
         A_inv = np.linalg.inv(A)
+        A_inv_phi = np.linalg.inv(A_phi)
 
         phase = self._k * distance
         phase = phase[:, np.newaxis]
@@ -772,7 +818,12 @@ class XrayDynMag(Xray):
         P[:, :, 2, 2] = np.exp(-1j * phase * n_right_up * alpha_z_right_up)
         P[:, :, 3, 3] = np.exp(-1j * phase * n_left_up * alpha_z_left_up)
 
-        return A, P, A_inv, k_z
+        P_phi[:, :, 0, 0] = P[:, :, 1, 1]
+        P_phi[:, :, 1, 1] = P[:, :, 0, 0]
+        P_phi[:, :, 2, 2] = P[:, :, 3, 3]
+        P_phi[:, :, 3, 3] = P[:, :, 2, 2]
+        
+        return A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z
 
     @staticmethod
     def calc_reflectivity_from_matrix(RT, pol_in, pol_out):
