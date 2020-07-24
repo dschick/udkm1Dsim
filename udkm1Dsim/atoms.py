@@ -134,7 +134,7 @@ class Atom:
         """
         if not filename:
             filename = os.path.join(os.path.dirname(__file__),
-                                    'parameters/atomicFormFactors/{:s}.nff'.format(
+                                    'parameters/atomicFormFactors/chantler/{:s}.cf'.format(
                                             self.symbol.lower()))
         try:
             f = np.genfromtxt(filename, skip_header=1)
