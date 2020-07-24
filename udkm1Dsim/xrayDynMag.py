@@ -85,8 +85,11 @@ class XrayDynMag(Xray):
         self.last_atom_ref_trans_matrices = {'atom_ids': [],
                                              'hashes': [],
                                              'A': [],
+                                             'A_phi': [],
                                              'P': [],
+                                             'P_phi': [],
                                              'A_inv': [],
+                                             'A_inv_phi': [],
                                              'k_z': []}
 
     def __str__(self):
@@ -191,24 +194,27 @@ class XrayDynMag(Xray):
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
         # vacuum boundary
-        A0, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+        A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
         # calc the reflectivity-transmisson matrix of the structure
         # and the inverse of the last boundary matrix
-        RT, last_A, last_A_inv, last_k_z = self.calc_homogeneous_matrix(self.S, A0, k_z_0, strains)
+        RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, strains)
         # if a substrate is included add it at the end
         if self.S.substrate != []:
-            RT_sub, last_A, last_A_inv, _ = self.calc_homogeneous_matrix(
+            RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = self.calc_homogeneous_matrix(
                 self.S.substrate, last_A, last_k_z)
             RT = m_times_n(RT_sub, RT)
+            RT_phi = m_times_n(RT_sub_phi, RT_phi)
         # multiply the result of the structure with the boundary matrix
         # of vacuum (initial layer) and the final layer
         RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
+        RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
         # calc the actual reflectivity from the matrix
         R = XrayDynMag.calc_reflectivity_from_matrix(RT, self.pol_in, self.pol_out)
+        R_phi = XrayDynMag.calc_reflectivity_from_matrix(RT_phi, self.pol_in, self.pol_out)
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
-        return R
+        return R, R_phi
 
-    def calc_homogeneous_matrix(self, S, last_A, last_k_z, *args):
+    def calc_homogeneous_matrix(self, S, last_A, last_A_phi, last_k_z, *args):
         """calc_homogeneous_matrix
 
         Calculates the product of all reflection-transmission matrices of the
@@ -238,22 +244,25 @@ class XrayDynMag(Xray):
             if isinstance(layer, UnitCell):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
-                RT_uc, A, A_inv, k_z = self.calc_uc_boundary_phase_matrix(
-                    layer, last_A, last_k_z, strains[strainCounter])
+                RT_uc, RT_uc_phi, A, A_phi, A_inv, A_inv_phi, k_z = self.calc_uc_boundary_phase_matrix(
+                    layer, last_A, last_A_phi, last_k_z, strains[strainCounter])
                 temp = RT_uc
+                temp_phi = RT_uc_phi
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
-                    temp2, A, A_inv, k_z = self.calc_uc_boundary_phase_matrix(
-                            layer, A, k_z, strains[strainCounter])
+                    temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = self.calc_uc_boundary_phase_matrix(
+                            layer, A, A_phi, k_z, strains[strainCounter])
                     temp2 = m_power_x(temp2, repetitions-1)
+                    temp2_phi = m_power_x(temp2_phi, repetitions-1)
                     temp = m_times_n(temp2, temp)
+                    temp_phi = m_times_n(temp2_phi, temp_phi)
 
                 strainCounter += 1
             elif isinstance(layer, AmorphousLayer):
                 # the sub_structure is an amorphous layer
                 # calculate the ref-trans matrices for N layers
 
-                A, P, A_inv, k_z = \
+                A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                     self.get_atom_boundary_phase_matrix(layer.atom,
                                                         layer._density,
                                                         layer._thickness*(
@@ -261,23 +270,30 @@ class XrayDynMag(Xray):
 
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
+                F_phi = m_times_n(A_inv_phi, last_A_phi)
                 if roughness > 0:
                     W = XrayDynMag.calc_roughness_matrix(roughness, k_z, last_k_z)
                     F = F * W
+                    F_phi = F_phi * W
 
                 RT_amorph = m_times_n(P, F)
+                RT_amorph_phi = m_times_n(P_phi, F_phi)
                 temp = RT_amorph
+                temp_phi = RT_amorph_phi
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
                     F = m_times_n(A_inv, A)
+                    F_phi = m_times_n(A_inv_phi, A_phi)
                     RT_amorph = m_times_n(P, F)
+                    RT_amorph_phi = m_times_n(P_phi, F_phi)
                     temp = m_times_n(m_power_x(RT_amorph, repetitions-1), temp)
+                    temp_phi = m_times_n(m_power_x(RT_amorph_phi, repetitions-1), temp_phi)
                 strainCounter += 1
             else:
                 # its a structure
                 # make a recursive call
-                temp, A, A_inv, k_z = self.calc_homogeneous_matrix(
-                        layer, last_A, last_k_z,
+                temp, temp_phi, A, A_phi, A_inv, A_inv_phi, k_z = self.calc_homogeneous_matrix(
+                        layer, last_A, last_A_phi, last_k_z,
                         strains[strainCounter:(
                             strainCounter
                             + layer.get_number_of_sub_structures()
@@ -285,26 +301,30 @@ class XrayDynMag(Xray):
                 # calculate the ref-trans matrices for N sub structures
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
-                    temp2, A, A_inv, k_z = self.calc_homogeneous_matrix(
-                            layer, A, k_z,
+                    temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = self.calc_homogeneous_matrix(
+                            layer, A, A_phi, k_z,
                             strains[strainCounter:(strainCounter
                                                    + layer.get_number_of_sub_structures())])
 
                     temp = m_times_n(m_power_x(temp2, repetitions-1), temp)
+                    temp_phi = m_times_n(m_power_x(temp2_phi, repetitions-1), temp_phi)
 
                 strainCounter = strainCounter+layer.get_number_of_sub_structures()
 
             # multiply it to the output
             if i == 0:
                 RT = temp
+                RT_phi = temp_phi
             else:
                 RT = m_times_n(temp, RT)
+                RT_phi = m_times_n(temp_phi, RT_phi)
 
             # update the last A and k_z
             last_A = A
+            last_A_phi = A_phi
             last_k_z = k_z
 
-        return RT, A, A_inv, k_z
+        return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
     """
     Inhomogenous Sample Structure
