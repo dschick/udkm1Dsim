@@ -366,7 +366,7 @@ class XrayDynMag(Xray):
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
-            (R, R_phi) = np.load(full_filename)
+            R, R_phi = np.load(full_filename)
             self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
         else:
             t1 = time()
@@ -388,8 +388,8 @@ class XrayDynMag(Xray):
             # select the type of computation
             if calc_type == 'parallel':
                 R, R_phi = self.parallel_inhomogeneous_reflectivity(strain_map,
-                                                             spin_map,
-                                                             dask_client)
+                                                                    spin_map,
+                                                                    dask_client)
             elif calc_type == 'distributed':
                 R, R_Phi = self.distributed_inhomogeneous_reflectivity(strain_map,
                                                                 spin_map,
@@ -400,7 +400,7 @@ class XrayDynMag(Xray):
 
             self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
-            self.save(full_filename, (R, R_phi), '_inhomogeneous_reflectivity_')
+            self.save(full_filename, [R, R_phi], '_inhomogeneous_reflectivity_')
         return R, R_phi
 
     def sequential_inhomogeneous_reflectivity(self, strain_map, spin_map):
@@ -417,7 +417,7 @@ class XrayDynMag(Xray):
         # initialize
         N = np.size(strain_map, 0)  # delay steps
         R = np.zeros([N, np.size(self._qz, 0), np.size(self._qz, 1)])
-        R_phi = np.zeros_like(R)
+        R_phi = np.zeros_like(R, dtype=np.cfloat)
 
         for i in trange(N, desc='Progress', leave=True):
             # get the inhomogenous reflectivity of the sample
@@ -467,10 +467,11 @@ class XrayDynMag(Xray):
         K = np.size(self._qz, 1)  # qz steps
 
         R = np.zeros([M, N, K])
-        R_phi = np.zeros([M, N, K])
+        R_phi = np.zeros_like(R)
         # vacuum boundary
-        A0, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+        A0, A0_phi, _, _,  _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
         remote_A0 = dask_client.scatter(A0)
+        remote_A0_phi = dask_client.scatter(A0_phi)
         remote_k_z_0 = dask_client.scatter(k_z_0)
         remote_pol_in = dask_client.scatter(self.pol_in)
         remote_pol_out = dask_client.scatter(self.pol_out)
@@ -479,37 +480,52 @@ class XrayDynMag(Xray):
         # create dask.delayed tasks for all delay steps
         for i in range(M):
             t = delayed(self.calc_inhomogeneous_matrix)(remote_A0,
+                                                        remote_A0_phi,
                                                         remote_k_z_0,
                                                         strain_map[i, :],
                                                         spin_map[i, :])
-            # t = RT, last_A, last_A_inv, last_k_z
+
             RT = t[0]
-            last_A = t[1]
-            last_A_inv = t[2]
-            last_k_z = t[3]
+            RT_phi = t[1]
+            last_A = t[2]
+            last_A_phi = t[3]
+            last_A_inv = t[4]
+            last_A_inv_phi = t[5]
+            last_k_z = t[6]
             if remote_substrate != []:
                 t2 = delayed(self.calc_homogeneous_matrix)(
-                    remote_substrate, last_A, last_k_z)
+                    remote_substrate, last_A, last_A_phi, last_k_z)
                 RT_sub = t2[0]
-                last_A = t2[1]
-                last_A_inv = t2[2]
+                RT_sub_phi = t2[1]
+                last_A = t2[2]
+                last_A_phi = t2[3]
+                last_A_inv = t2[4]
+                last_A_inv_phi = t2[5]
                 RT = delayed(m_times_n)(RT_sub, RT)
+                RT_phi = delayed(m_times_n)(RT_sub_phi, RT_phi)
             # multiply vacuum and last layer
             temp = delayed(m_times_n)(last_A, RT)
+            temp_phi = delayed(m_times_n)(last_A_phi, RT_phi)
             RT = delayed(m_times_n)(last_A_inv, temp)
+            RT_phi = delayed(m_times_n)(last_A_inv_phi, temp_phi)
             Ri = delayed(XrayDynMag.calc_reflectivity_from_matrix)(RT,
                                                                    remote_pol_in,
                                                                    remote_pol_out)
+            Ri_phi = delayed(XrayDynMag.calc_reflectivity_from_matrix)(RT_phi,
+                                                                   remote_pol_in,
+                                                                   remote_pol_out)
             res.append(Ri)
+            res.append(Ri_phi)
 
         # compute results
         res = dask_client.compute(res, sync=True)
 
         # reorder results to reflectivity matrix
         for i in range(M):
-            R[i, :, :] = res[i]
+            R[i, :, :] = res[2*i]
+            R_phi[i, :, :] = res[2*i + 1]
 
-        return R
+        return R, R_phi
 
     def distributed_inhomogeneous_reflectivity(self, job, num_worker,
                                                strain_map, spin_map):
