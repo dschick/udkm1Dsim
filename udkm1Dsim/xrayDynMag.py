@@ -197,11 +197,13 @@ class XrayDynMag(Xray):
         A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
         # calc the reflectivity-transmisson matrix of the structure
         # and the inverse of the last boundary matrix
-        RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, strains)
+        RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
+            self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, strains)
         # if a substrate is included add it at the end
         if self.S.substrate != []:
-            RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = self.calc_homogeneous_matrix(
-                self.S.substrate, last_A, last_A_phi, last_k_z)
+            RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = \
+                self.calc_homogeneous_matrix(
+                    self.S.substrate, last_A, last_A_phi, last_k_z)
             RT = m_times_n(RT_sub, RT)
             RT_phi = m_times_n(RT_sub_phi, RT_phi)
         # multiply the result of the structure with the boundary matrix
@@ -244,13 +246,15 @@ class XrayDynMag(Xray):
             if isinstance(layer, UnitCell):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
-                RT_uc, RT_uc_phi, A, A_phi, A_inv, A_inv_phi, k_z = self.calc_uc_boundary_phase_matrix(
-                    layer, last_A, last_A_phi, last_k_z, strains[strainCounter])
+                RT_uc, RT_uc_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
+                    self.calc_uc_boundary_phase_matrix(
+                        layer, last_A, last_A_phi, last_k_z, strains[strainCounter])
                 temp = RT_uc
                 temp_phi = RT_uc_phi
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
-                    temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = self.calc_uc_boundary_phase_matrix(
+                    temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
+                        self.calc_uc_boundary_phase_matrix(
                             layer, A, A_phi, k_z, strains[strainCounter])
                     temp2 = m_power_x(temp2, repetitions-1)
                     temp2_phi = m_power_x(temp2_phi, repetitions-1)
@@ -301,7 +305,8 @@ class XrayDynMag(Xray):
                 # calculate the ref-trans matrices for N sub structures
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
-                    temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = self.calc_homogeneous_matrix(
+                    temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
+                        self.calc_homogeneous_matrix(
                             layer, A, A_phi, k_z,
                             strains[strainCounter:(strainCounter
                                                    + layer.get_number_of_sub_structures())])
@@ -640,7 +645,8 @@ class XrayDynMag(Xray):
         else:
             # These are new parameters so we have to calculate.
             # Get the reflection-transmission-factors
-            A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
+            A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
             # remember this matrix for next use with the same
             # parameters for this atom
             if index >= 0:
@@ -797,22 +803,22 @@ class XrayDynMag(Xray):
         A[:, :, 3, 3] = alpha_z_left_up * n_left_up * A[:, :, 0, 3]
 
         A_phi[:, :, 0, 0] = (-1 + 1j * eps[:, :, 0, 1] * alpha_z_left_down
-                         + 1j * eps[:, :, 0, 2] * alpha_y_left_down)
+                             + 1j * eps[:, :, 0, 2] * alpha_y_left_down)
         A_phi[:, :, 0, 1] = (1 + 1j * eps[:, :, 0, 1] * alpha_z_right_down
-                         + 1j * eps[:, :, 0, 2] * alpha_y_right_down)
+                             + 1j * eps[:, :, 0, 2] * alpha_y_right_down)
         A_phi[:, :, 0, 2] = (-1 - 1j * eps[:, :, 0, 1] * alpha_z_left_up
-                         + 1j * eps[:, :, 0, 2] * alpha_y_left_up)
+                             + 1j * eps[:, :, 0, 2] * alpha_y_left_up)
         A_phi[:, :, 0, 3] = (1 - 1j * eps[:, :, 0, 1] * alpha_z_right_up
-                         + 1j * eps[:, :, 0, 2] * alpha_y_right_up)
+                             + 1j * eps[:, :, 0, 2] * alpha_y_right_up)
 
         A_phi[:, :, 1, 0] = (1j * alpha_z_left_down + eps[:, :, 0, 1]
-                         + 1j * eps[:, :, 1, 2] * alpha_y_left_down)
+                             + 1j * eps[:, :, 1, 2] * alpha_y_left_down)
         A_phi[:, :, 1, 1] = (1j * alpha_z_right_down - eps[:, :, 0, 1]
-                         + 1j * eps[:, :, 1, 2] * alpha_y_right_down)
+                             + 1j * eps[:, :, 1, 2] * alpha_y_right_down)
         A_phi[:, :, 1, 2] = (-1j * alpha_z_left_up + eps[:, :, 0, 1]
-                         + 1j * eps[:, :, 1, 2] * alpha_y_left_up)
+                             + 1j * eps[:, :, 1, 2] * alpha_y_left_up)
         A_phi[:, :, 1, 3] = (-1j * alpha_z_right_up - eps[:, :, 0, 1]
-                         + 1j * eps[:, :, 1, 2] * alpha_y_right_up)
+                             + 1j * eps[:, :, 1, 2] * alpha_y_right_up)
 
         A_phi[:, :, 2, 0] = 1j * n_left_down * A_phi[:, :, 0, 0]
         A_phi[:, :, 2, 1] = -1j * n_right_down * A_phi[:, :, 0, 1]
@@ -827,7 +833,7 @@ class XrayDynMag(Xray):
         A[:, :, :, :] = np.divide(
             A[:, :, :, :],
             np.sqrt(2) * eps[:, :, 0, 0][:, :, np.newaxis, np.newaxis])
-        
+
         A_phi[:, :, :, :] = np.divide(
             A_phi[:, :, :, :],
             np.sqrt(2) * eps[:, :, 0, 0][:, :, np.newaxis, np.newaxis])
@@ -847,7 +853,7 @@ class XrayDynMag(Xray):
         P_phi[:, :, 1, 1] = P[:, :, 0, 0]
         P_phi[:, :, 2, 2] = P[:, :, 3, 3]
         P_phi[:, :, 3, 3] = P[:, :, 2, 2]
-        
+
         return A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z
 
     @staticmethod
