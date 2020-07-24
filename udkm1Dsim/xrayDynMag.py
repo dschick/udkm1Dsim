@@ -201,7 +201,7 @@ class XrayDynMag(Xray):
         # if a substrate is included add it at the end
         if self.S.substrate != []:
             RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = self.calc_homogeneous_matrix(
-                self.S.substrate, last_A, last_k_z)
+                self.S.substrate, last_A, last_A_phi, last_k_z)
             RT = m_times_n(RT_sub, RT)
             RT_phi = m_times_n(RT_sub_phi, RT_phi)
         # multiply the result of the structure with the boundary matrix
@@ -547,7 +547,7 @@ class XrayDynMag(Xray):
 
         return RT, A, A_inv, k_z
 
-    def calc_uc_boundary_phase_matrix(self, uc, last_A, last_k_z, strain):
+    def calc_uc_boundary_phase_matrix(self, uc, last_A, last_A_phi, last_k_z, strain):
         """calc_uc_boundary_phase_matrix
 
         Calculates the product of all reflection-transmission matrices of
@@ -575,25 +575,30 @@ class XrayDynMag(Xray):
             except AttributeError:
                 density = 0
 
-            A, P, A_inv, k_z = self.get_atom_boundary_phase_matrix(uc.atoms[j][0],
-                                                                   density,
-                                                                   distance)
+            A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                self.get_atom_boundary_phase_matrix(uc.atoms[j][0], density, distance)
             F = m_times_n(A_inv, last_A)
+            F_phi = m_times_n(A_inv_phi, last_A_phi)
             if (j == 0) and (uc._roughness > 0):
                 # it is the first layer so care for the roughness
                 W = XrayDynMag.calc_roughness_matrix(uc._roughness, k_z, last_k_z)
                 F = F * W
+                F_phi = F_phi * W
             temp = m_times_n(P, F)
+            temp_phi = m_times_n(P_phi, F_phi)
             if j == 0:
                 RT = temp
+                RT_phi = temp_phi
             else:
                 RT = m_times_n(temp, RT)
+                RT_phi = m_times_n(temp_phi, RT_phi)
 
             # update last A and k_z
             last_A = A
+            last_A_phi = A_phi
             last_k_z = k_z
 
-        return RT, A, A_inv, k_z
+        return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
     def get_atom_boundary_phase_matrix(self, atom, density, distance, *args):
         """get_atom_boundary_phase_matrix
