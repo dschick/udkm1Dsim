@@ -17,7 +17,7 @@ def test_atom():
     assert Dy.mass.magnitude == pytest.approx(2.698e-25)
     # check if python hash works the same on different systems
     assert np.array_equal(Dy.atomic_form_factor_coeff[10],
-                          np.array([1.492335000000000100e+01, 1.096560000000000024e+01, 4.675500000000000211e-01]))
+                          np.array([1.492335e+01, 1.09656e+01, 4.6755e-01]))
     assert np.array_equal(Dy.cromer_mann_coeff,
                           np.array([66.0, 0.0, 26.507, 17.6383, 14.5596, 2.96577, 2.1802, 0.202172,
                                     12.1899, 111.874, 4.29728]))
