@@ -237,6 +237,8 @@ class XrayDynMag(Xray):
             strains = np.zeros([S.get_number_of_sub_structures(), 1])
         else:
             strains = args[0]
+            
+        magnetizations = np.zeros([S.get_number_of_sub_structures(), 3])
 
         strainCounter = 0
         # traverse substructures
@@ -248,14 +250,14 @@ class XrayDynMag(Xray):
                 # calculate the ref-trans matrices for N unitCells
                 RT_uc, RT_uc_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
-                        layer, last_A, last_A_phi, last_k_z, strains[strainCounter])
+                        layer, last_A, last_A_phi, last_k_z, strains[strainCounter], magnetizations[strainCounter])
                 temp = RT_uc
                 temp_phi = RT_uc_phi
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
                     temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                         self.calc_uc_boundary_phase_matrix(
-                            layer, A, A_phi, k_z, strains[strainCounter])
+                            layer, A, A_phi, k_z, strains[strainCounter], magnetizations[strainCounter])
                     temp2 = m_power_x(temp2, repetitions-1)
                     temp2_phi = m_power_x(temp2_phi, repetitions-1)
                     temp = m_times_n(temp2, temp)
@@ -339,14 +341,13 @@ class XrayDynMag(Xray):
     sample structure.
     """
 
-    def inhomogeneous_reflectivity(self, strain_map, spin_map, **kwargs):
+    def inhomogeneous_reflectivity(self, strain_map, magnetization_map, **kwargs):
         """inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained and
         magnetized sample structure for a given _strain_map_ and
-        __spin_map__ in position and time, as well as for a given set
-        of possible strains for each unit cell in the sample structure
-        (``strain_vectors``).
+        _magnetization_map_ in position and time for each unit cell or
+        amorphous layer in the sample structure.
         If no reflectivity is saved in the cache it is caluclated.
         Providing the _type_ (parallel [default], sequential,
         distributed) for the calculation the corresponding subroutines
@@ -360,7 +361,7 @@ class XrayDynMag(Xray):
         """
         # create a hash of all simulation parameters
         filename = 'inhomogeneous_reflectivity_dynMag_' \
-                   + self.get_hash(strain_map=strain_map, spin_map=spin_map) \
+                   + self.get_hash(strain_map=strain_map, magnetization_map=magnetization_map) \
                    + '.npy'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
@@ -374,8 +375,8 @@ class XrayDynMag(Xray):
             # parse the input arguments
             if not isinstance(strain_map, np.ndarray):
                 raise TypeError('strain_map must be a numpy ndarray!')
-            if not isinstance(spin_map, np.ndarray):
-                raise TypeError('spin_map must be a numpy ndarray!')
+            if not isinstance(magnetization_map, np.ndarray):
+                raise TypeError('magnetization_map must be a numpy ndarray!')
 
             dask_client = kwargs.get('dask_client', [])
             calc_type = kwargs.get('calc_type', 'sequential')
@@ -388,22 +389,22 @@ class XrayDynMag(Xray):
             # select the type of computation
             if calc_type == 'parallel':
                 R, R_phi = self.parallel_inhomogeneous_reflectivity(strain_map,
-                                                                    spin_map,
+                                                                    magnetization_map,
                                                                     dask_client)
             elif calc_type == 'distributed':
                 R, R_Phi = self.distributed_inhomogeneous_reflectivity(strain_map,
-                                                                       spin_map,
+                                                                       magnetization_map,
                                                                        job,
                                                                        num_workers)
             else:  # sequential
-                R, R_phi = self.sequential_inhomogeneous_reflectivity(strain_map, spin_map)
+                R, R_phi = self.sequential_inhomogeneous_reflectivity(strain_map, magnetization_map)
 
             self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
             self.save(full_filename, [R, R_phi], '_inhomogeneous_reflectivity_')
         return R, R_phi
 
-    def sequential_inhomogeneous_reflectivity(self, strain_map, spin_map):
+    def sequential_inhomogeneous_reflectivity(self, strain_map, magnetization_map):
         """sequential_inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained sample
@@ -428,7 +429,7 @@ class XrayDynMag(Xray):
 
             RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
                 self.calc_inhomogeneous_matrix(
-                    A0, A0_phi, k_z_0, strain_map[i, :], spin_map[i, :])
+                    A0, A0_phi, k_z_0, strain_map[i, :], magnetization_map[i, :])
             # if a substrate is included add it at the end
             if self.S.substrate != []:
                 RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = \
@@ -447,7 +448,7 @@ class XrayDynMag(Xray):
 
         return R, R_phi
 
-    def parallel_inhomogeneous_reflectivity(self, strain_map, spin_map, dask_client):
+    def parallel_inhomogeneous_reflectivity(self, strain_map, magnetization_map, dask_client):
         """parallel_inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained sample
@@ -485,7 +486,7 @@ class XrayDynMag(Xray):
                                                         remote_A0_phi,
                                                         remote_k_z_0,
                                                         strain_map[i, :],
-                                                        spin_map[i, :])
+                                                        magnetization_map[i, :])
 
             RT = t[0]
             RT_phi = t[1]
@@ -530,7 +531,7 @@ class XrayDynMag(Xray):
         return R, R_phi
 
     def distributed_inhomogeneous_reflectivity(self, job, num_worker,
-                                               strain_map, spin_map):
+                                               strain_map, magnetization_map):
         """distributed_inhomogeneous_reflectivity
 
         This is a stub. Not yet implemented in python.
@@ -538,7 +539,7 @@ class XrayDynMag(Xray):
         """
         return
 
-    def calc_inhomogeneous_matrix(self, last_A, last_A_phi, last_k_z, strains, spins):
+    def calc_inhomogeneous_matrix(self, last_A, last_A_phi, last_k_z, strains, magnetizations):
         """calc_inhomogeneous_matrix
 
         Calculates the product of all reflection-transmission matrices of the
@@ -555,11 +556,11 @@ class XrayDynMag(Xray):
             if isinstance(layer, UnitCell):
                 RT_layer, RT_layer_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
-                        layer, last_A, last_A_phi, last_k_z, strains[i])
+                        layer, last_A, last_A_phi, last_k_z, strains[i], magnetizations[i])
             elif isinstance(layer, AmorphousLayer):
                 A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                     self.get_atom_boundary_phase_matrix(
-                        layer.atom, layer._density, layer._thickness*(strains[i]+1))
+                        layer.atom, layer._density, layer._thickness*(strains[i]+1), magnetizations[i])
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
                 F_phi = m_times_n(A_inv_phi, last_A_phi)
@@ -585,7 +586,7 @@ class XrayDynMag(Xray):
 
         return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
-    def calc_uc_boundary_phase_matrix(self, uc, last_A, last_A_phi, last_k_z, strain):
+    def calc_uc_boundary_phase_matrix(self, uc, last_A, last_A_phi, last_k_z, strain, magnetization):
         """calc_uc_boundary_phase_matrix
 
         Calculates the product of all reflection-transmission matrices of
@@ -614,7 +615,7 @@ class XrayDynMag(Xray):
                 density = 0
 
             A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
-                self.get_atom_boundary_phase_matrix(uc.atoms[j][0], density, distance)
+                self.get_atom_boundary_phase_matrix(uc.atoms[j][0], density, distance, magnetization)
             F = m_times_n(A_inv, last_A)
             F_phi = m_times_n(A_inv_phi, last_A_phi)
             if (j == 0) and (uc._roughness > 0):
@@ -712,37 +713,32 @@ class XrayDynMag(Xray):
 
         """
         if len(args) > 0:
-            mag_amplitude = args[0]
+            magnetization = args[0]
+            mag_amplitude = magnetization[0]
+            mag_phi = magnetization[1]
+            mag_gamma = magnetization[2]
         else:
             try:
                 mag_amplitude = atom.mag_amplitude
             except AttributeError:
                 mag_amplitude = 0
-
-        if len(args) > 1:
-            mag_phi = args[1]
-        else:
             try:
-                mag_phi = atom.mag_phi
+                mag_phi = atom.mag_phi.to_base_units().magnitude
             except AttributeError:
-                mag_phi = 0*u.deg
-
-        if len(args) > 2:
-            mag_gamma = args[2]
-        else:
+                mag_phi = 0
             try:
-                mag_gamma = atom.mag_gamma
+                mag_gamma = atom.mag_gamma.to_base_units().magnitude
             except AttributeError:
-                mag_gamma = 0*u.deg
+                mag_gamma = 0
 
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
 
-        U = [np.sin(mag_phi.to_base_units().magnitude) *
-             np.cos(mag_gamma.to_base_units().magnitude),
-             np.sin(mag_phi.to_base_units().magnitude) *
-             np.sin(mag_gamma.to_base_units().magnitude),
-             np.cos(mag_phi.to_base_units().magnitude)]
+        U = [np.sin(mag_phi) *
+             np.cos(mag_gamma),
+             np.sin(mag_phi) *
+             np.sin(mag_gamma),
+             np.cos(mag_phi)]
 
         eps = np.zeros([M, N, 3, 3], dtype=np.cfloat)
         A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
