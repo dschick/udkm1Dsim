@@ -434,7 +434,7 @@ class XrayDynMag(Xray):
         # initialize
         N = np.size(strain_map, 0)  # delay steps
         R = np.zeros([N, np.size(self._qz, 0), np.size(self._qz, 1)])
-        R_phi = np.zeros_like(R, dtype=np.cfloat)
+        R_phi = np.zeros_like(R)
 
         for i in trange(N, desc='Progress', leave=True):
             # get the inhomogenous reflectivity of the sample
