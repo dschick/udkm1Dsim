@@ -191,6 +191,12 @@ class XrayDynMag(Xray):
             strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
         else:
             strains = args[0]
+            
+        if len(args) < 2:   
+            magnetizations = np.zeros([self.S.get_number_of_sub_structures(), 3])
+        else:
+            magnetizations = args[1]
+
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
         # vacuum boundary
@@ -198,7 +204,7 @@ class XrayDynMag(Xray):
         # calc the reflectivity-transmisson matrix of the structure
         # and the inverse of the last boundary matrix
         RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
-            self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, strains)
+            self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, strains, magnetizations)
         # if a substrate is included add it at the end
         if self.S.substrate != []:
             RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = \
@@ -237,8 +243,11 @@ class XrayDynMag(Xray):
             strains = np.zeros([S.get_number_of_sub_structures(), 1])
         else:
             strains = args[0]
-            
-        magnetizations = np.zeros([S.get_number_of_sub_structures(), 3])
+
+        if len(args) < 2:   
+            magnetizations = np.zeros([S.get_number_of_sub_structures(), 3])
+        else:
+            magnetizations = args[1]
 
         strainCounter = 0
         # traverse substructures
@@ -272,7 +281,8 @@ class XrayDynMag(Xray):
                     self.get_atom_boundary_phase_matrix(layer.atom,
                                                         layer._density,
                                                         layer._thickness*(
-                                                            strains[strainCounter]+1))
+                                                            strains[strainCounter]+1),
+                                                        magnetizations[strainCounter])
 
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
@@ -303,6 +313,10 @@ class XrayDynMag(Xray):
                         strains[strainCounter:(
                             strainCounter
                             + layer.get_number_of_sub_structures()
+                            )],
+                        magnetizations[strainCounter:(
+                            strainCounter
+                            + layer.get_number_of_sub_structures()
                             )])
                 # calculate the ref-trans matrices for N sub structures
                 if repetitions > 1:
@@ -311,6 +325,8 @@ class XrayDynMag(Xray):
                         self.calc_homogeneous_matrix(
                             layer, A, A_phi, k_z,
                             strains[strainCounter:(strainCounter
+                                                   + layer.get_number_of_sub_structures())],
+                            magnetizations[strainCounter:(strainCounter
                                                    + layer.get_number_of_sub_structures())])
 
                     temp = m_times_n(m_power_x(temp2, repetitions-1), temp)
@@ -712,25 +728,26 @@ class XrayDynMag(Xray):
         Elzo formalism.
 
         """
+
+        try:
+            mag_amplitude = atom.mag_amplitude
+        except AttributeError:
+            mag_amplitude = 0
+        try:
+            mag_phi = atom.mag_phi.to_base_units().magnitude
+        except AttributeError:
+            mag_phi = 0
+        try:
+            mag_gamma = atom.mag_gamma.to_base_units().magnitude
+        except AttributeError:
+            mag_gamma = 0
+
         if len(args) > 0:
             magnetization = args[0]
-            mag_amplitude = magnetization[0]
-            mag_phi = magnetization[1]
-            mag_gamma = magnetization[2]
-        else:
-            try:
-                mag_amplitude = atom.mag_amplitude
-            except AttributeError:
-                mag_amplitude = 0
-            try:
-                mag_phi = atom.mag_phi.to_base_units().magnitude
-            except AttributeError:
-                mag_phi = 0
-            try:
-                mag_gamma = atom.mag_gamma.to_base_units().magnitude
-            except AttributeError:
-                mag_gamma = 0
-
+            mag_amplitude += magnetization[0]
+            mag_phi += magnetization[1]
+            mag_gamma += magnetization[2]
+        
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
 
