@@ -32,7 +32,6 @@ from .xray import Xray
 from .layer import AmorphousLayer, UnitCell
 from tqdm.notebook import trange
 from .helpers import make_hash_md5, m_power_x, m_times_n
-from . import u
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -191,8 +190,8 @@ class XrayDynMag(Xray):
             strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
         else:
             strains = args[0]
-            
-        if len(args) < 2:   
+
+        if len(args) < 2:
             magnetizations = np.zeros([self.S.get_number_of_sub_structures(), 3])
         else:
             magnetizations = args[1]
@@ -244,7 +243,7 @@ class XrayDynMag(Xray):
         else:
             strains = args[0]
 
-        if len(args) < 2:   
+        if len(args) < 2:
             magnetizations = np.zeros([S.get_number_of_sub_structures(), 3])
         else:
             magnetizations = args[1]
@@ -259,14 +258,16 @@ class XrayDynMag(Xray):
                 # calculate the ref-trans matrices for N unitCells
                 RT_uc, RT_uc_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
-                        layer, last_A, last_A_phi, last_k_z, strains[strainCounter], magnetizations[strainCounter])
+                        layer, last_A, last_A_phi, last_k_z, strains[strainCounter],
+                        magnetizations[strainCounter])
                 temp = RT_uc
                 temp_phi = RT_uc_phi
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
                     temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                         self.calc_uc_boundary_phase_matrix(
-                            layer, A, A_phi, k_z, strains[strainCounter], magnetizations[strainCounter])
+                            layer, A, A_phi, k_z, strains[strainCounter],
+                            magnetizations[strainCounter])
                     temp2 = m_power_x(temp2, repetitions-1)
                     temp2_phi = m_power_x(temp2_phi, repetitions-1)
                     temp = m_times_n(temp2, temp)
@@ -327,7 +328,7 @@ class XrayDynMag(Xray):
                             strains[strainCounter:(strainCounter
                                                    + layer.get_number_of_sub_structures())],
                             magnetizations[strainCounter:(strainCounter
-                                                   + layer.get_number_of_sub_structures())])
+                                                          + layer.get_number_of_sub_structures())])
 
                     temp = m_times_n(m_power_x(temp2, repetitions-1), temp)
                     temp_phi = m_times_n(m_power_x(temp2_phi, repetitions-1), temp_phi)
@@ -413,7 +414,8 @@ class XrayDynMag(Xray):
                                                                        job,
                                                                        num_workers)
             else:  # sequential
-                R, R_phi = self.sequential_inhomogeneous_reflectivity(strain_map, magnetization_map)
+                R, R_phi = self.sequential_inhomogeneous_reflectivity(strain_map,
+                                                                      magnetization_map)
 
             self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
@@ -576,7 +578,8 @@ class XrayDynMag(Xray):
             elif isinstance(layer, AmorphousLayer):
                 A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                     self.get_atom_boundary_phase_matrix(
-                        layer.atom, layer._density, layer._thickness*(strains[i]+1), magnetizations[i])
+                        layer.atom, layer._density, layer._thickness*(strains[i]+1),
+                        magnetizations[i])
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
                 F_phi = m_times_n(A_inv_phi, last_A_phi)
@@ -602,7 +605,8 @@ class XrayDynMag(Xray):
 
         return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
-    def calc_uc_boundary_phase_matrix(self, uc, last_A, last_A_phi, last_k_z, strain, magnetization):
+    def calc_uc_boundary_phase_matrix(self, uc, last_A, last_A_phi, last_k_z, strain,
+                                      magnetization):
         """calc_uc_boundary_phase_matrix
 
         Calculates the product of all reflection-transmission matrices of
@@ -631,7 +635,8 @@ class XrayDynMag(Xray):
                 density = 0
 
             A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
-                self.get_atom_boundary_phase_matrix(uc.atoms[j][0], density, distance, magnetization)
+                self.get_atom_boundary_phase_matrix(uc.atoms[j][0], density, distance,
+                                                    magnetization)
             F = m_times_n(A_inv, last_A)
             F_phi = m_times_n(A_inv_phi, last_A_phi)
             if (j == 0) and (uc._roughness > 0):
@@ -747,7 +752,7 @@ class XrayDynMag(Xray):
             mag_amplitude += magnetization[0]
             mag_phi += magnetization[1]
             mag_gamma += magnetization[2]
-        
+
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
 
