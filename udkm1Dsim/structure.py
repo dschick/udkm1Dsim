@@ -66,7 +66,7 @@ class Structure:
 
         class_str = tab_str + 'Structure properties:\n\n'
         class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
-        class_str += tab_str + 'Thickness : {:0.2f} nm\n'.format(self.get_thickness()/1e-9)
+        class_str += tab_str + 'Thickness : {:0.2f}\n'.format(self.get_thickness().to('nm'))
         class_str += tab_str + 'Roughness : {:0.2f}\n'.format(self.roughness)
         class_str += tab_str + '----\n'
         # traverse all substructures
@@ -235,7 +235,8 @@ class Structure:
         layer_handles = []
         # traverse the sub_structures
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
+            if isinstance(self.sub_structures[i][0], (AmorphousLayer)) or \
+                isinstance(self.sub_structures[i][0], (UnitCell)):
                 # its a AmorphousLayer or UnitCell
                 layer_id = self.sub_structures[i][0].id
                 if not layer_ids:
