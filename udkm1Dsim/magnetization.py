@@ -82,7 +82,7 @@ class Magnetization(Simulation):
     def get_magnetization_map(self, delays, **kwargs):
         """get_magnetization_map
 
-        Returns a differential `magnetization_map` for the sample structure.
+        Returns an absolute `magnetization_map` for the sample structure.
         The `magnetization_map` can depend on the `temp_map` and `strain_map`
         that can be also calculated for the sample structure.
 
@@ -119,7 +119,7 @@ class Magnetization(Simulation):
     def calc_magnetization_map(self, delays, **kwargs):
         """calc_magnetization_map
 
-        Calculates a differential `magnetization_map` for the sample structure.
+        Calculates an absolute `magnetization_map` for the sample structure.
         The `magnetization_map` can depend on the `temp_map` and `strain_map`
         that can be also calculated for the sample structure.
 
