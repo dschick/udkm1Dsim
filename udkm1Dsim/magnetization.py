@@ -89,7 +89,7 @@ class Magnetization(Simulation):
         """
         # create a hash of all simulation parameters
         filename = 'magnetization_map_' \
-                   + self.get_hash(delays, kwargs) \
+                   + self.get_hash(delays, **kwargs) \
                    + '.npy'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
@@ -109,7 +109,7 @@ class Magnetization(Simulation):
                 if not isinstance(kwargs['temp_map'], np.ndarray):
                     raise TypeError('temp_map must be a numpy ndarray!')
 
-            magnetization_map = self.calc_magnetization_map(delays, kwargs)
+            magnetization_map = self.calc_magnetization_map(delays, **kwargs)
 
             self.disp_message('Elapsed time for _magnetization_map_:'
                               ' {:f} s'.format(time()-t1))
