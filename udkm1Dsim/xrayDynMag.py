@@ -734,25 +734,25 @@ class XrayDynMag(Xray):
 
         """
 
-        try:
-            mag_amplitude = atom.mag_amplitude
-        except AttributeError:
-            mag_amplitude = 0
-        try:
-            mag_phi = atom.mag_phi.to_base_units().magnitude
-        except AttributeError:
-            mag_phi = 0
-        try:
-            mag_gamma = atom.mag_gamma.to_base_units().magnitude
-        except AttributeError:
-            mag_gamma = 0
-
         if len(args) > 0:
             magnetization = args[0]
-            mag_amplitude += magnetization[0]
-            mag_phi += magnetization[1]
-            mag_gamma += magnetization[2]
-
+            mag_amplitude = magnetization[0]
+            mag_phi = magnetization[1]
+            mag_gamma = magnetization[2]
+        else:
+            try:
+                mag_amplitude = atom.mag_amplitude
+            except AttributeError:
+                mag_amplitude = 0
+            try:
+                mag_phi = atom.mag_phi.to_base_units().magnitude
+            except AttributeError:
+                mag_phi = 0
+            try:
+                mag_gamma = atom.mag_gamma.to_base_units().magnitude
+            except AttributeError:
+                mag_gamma = 0
+        
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
 
