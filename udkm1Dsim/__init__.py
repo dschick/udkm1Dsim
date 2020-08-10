@@ -6,10 +6,11 @@ from .atoms import Atom, AtomMixed
 from .layer import AmorphousLayer, UnitCell
 from .structure import Structure
 from .simulation import Simulation
+from .magnetization import Magnetization
 from .xray import Xray
 from .xrayKin import XrayKin
 from .xrayDyn import XrayDyn
 from .xrayDynMag import XrayDynMag
 
 __all__ = ['Atom', 'AtomMixed', 'AmorphousLayer', 'UnitCell', 'Structure', 'Simulation',
-           'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
+           'Magnetization', 'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']

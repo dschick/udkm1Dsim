@@ -25,8 +25,9 @@ __all__ = ["Magnetization"]
 __docformat__ = "restructuredtext"
 
 import numpy as np
+from time import time
+from os import path
 from .simulation import Simulation
-from . import u, Q_
 from .helpers import make_hash_md5
 
 
@@ -48,7 +49,7 @@ class Magnetization(Simulation):
         """String representation of this class"""
         return super().__str__(output)
 
-    def get_hash(self, **kwargs):
+    def get_hash(self, delays, **kwargs):
         """get_hash
 
         Returns a unique hash given by the energy :math:`E`,
@@ -57,7 +58,7 @@ class Magnetization(Simulation):
         Optionally, part of the strain_map is used.
 
         """
-        param = []
+        param = [delays]
 
         if 'strain_map' in kwargs:
             strain_map = kwargs.get('strain_map')
@@ -70,10 +71,61 @@ class Magnetization(Simulation):
             temp_map = kwargs.get('temp_map')
             if np.size(temp_map) > 1e6:
                 temp_map = temp_map.flatten()[0:1000000]
-            param.append(strain_map)
+            param.append(temp_map)
             kwargs.pop('temp_map')
 
         for key, value in kwargs.items():
-            param.append(value)            
+            param.append(value)
 
-        return self.S.get_hash(types='magnetization') + '_' + make_hash_md5(param)
+        return self.S.get_hash(types='magnetic') + '_' + make_hash_md5(param)
+
+    def get_magnetization_map(self, delays, **kwargs):
+        """get_magnetization_map
+
+        Returns a differential `magnetization_map` for the sample structure.
+        The `magnetization_map` can depend on the `temp_map` and `strain_map`
+        that can be also calculated for the sample structure.
+
+        """
+        # create a hash of all simulation parameters
+        filename = 'magnetization_map_' \
+                   + self.get_hash(delays, kwargs) \
+                   + '.npy'
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        # check if we find some corresponding data in the cache dir
+        if path.exists(full_filename) and not self.force_recalc:
+            # found something so load it
+            magnetization_map = np.load(full_filename)
+            self.disp_message('_magnetization_map_ loaded from file:\n\t' + filename)
+        else:
+            t1 = time()
+            self.disp_message('Calculating _magnetization_map_ ...')
+            # parse the input arguments
+
+            if ('strain_map' in kwargs):
+                if not isinstance(kwargs['strain_map'], np.ndarray):
+                    raise TypeError('strain_map must be a numpy ndarray!')
+            if ('temp_map' in kwargs):
+                if not isinstance(kwargs['temp_map'], np.ndarray):
+                    raise TypeError('temp_map must be a numpy ndarray!')
+
+            magnetization_map = self.calc_magnetization_map(delays, kwargs)
+
+            self.disp_message('Elapsed time for _magnetization_map_:'
+                              ' {:f} s'.format(time()-t1))
+            self.save(full_filename, magnetization_map, '_magnetization_map_')
+        return magnetization_map
+
+    def calc_magnetization_map(self, delays, **kwargs):
+        """calc_magnetization_map
+
+        Calculates a differential `magnetization_map` for the sample structure.
+        The `magnetization_map` can depend on the `temp_map` and `strain_map`
+        that can be also calculated for the sample structure.
+
+        This method is just an interface and should be overwritten for the
+        actual simulations.
+
+        """
+
+        pass
