@@ -103,8 +103,8 @@ class XrayDynMag(Xray):
         Returns a unique hash given by the energy :math:`E`,
         :math:`q_z` range, polarization states and the strain vectors as
         well as the sample structure hash for relevant xray and magnetic
-        parameters. Optionally, part of the strain_map and spin_map are
-        used.
+        parameters. Optionally, part of the strain_map and magnetization_map
+        are used.
 
         """
         param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy]
@@ -114,11 +114,11 @@ class XrayDynMag(Xray):
             if np.size(strain_map) > 1e6:
                 strain_map = strain_map.flatten()[0:1000000]
             param.append(strain_map)
-        if 'spin_map' in kwargs:
-            spin_map = kwargs.get('spin_map')
-            if np.size(spin_map) > 1e6:
-                spin_map = spin_map.flatten()[0:1000000]
-            param.append(spin_map)
+        if 'magnetization_map' in kwargs:
+            magnetization_map = kwargs.get('magnetization_map')
+            if np.size(magnetization_map) > 1e6:
+                magnetization_map = magnetization_map.flatten()[0:1000000]
+            param.append(magnetization_map)
 
         return self.S.get_hash(types=['xray', 'magnetic']) + '_' + make_hash_md5(param)
 
