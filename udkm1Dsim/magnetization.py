@@ -47,7 +47,9 @@ class Magnetization(Simulation):
 
     def __str__(self, output=[]):
         """String representation of this class"""
-        return super().__str__(output)
+        class_str = 'Magnetization simulation properties:\n\n'
+        class_str += super().__str__(output)
+        return class_str
 
     def get_hash(self, delays, **kwargs):
         """get_hash
