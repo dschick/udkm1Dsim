@@ -40,17 +40,51 @@ class Heat(Simulation):
         S (object): sample to do simulations with
         force_recalc (boolean): force recalculation of results
 
+    Keyword Args:
+        heat_diffusion (boolean): true when including heat diffusion in the
+            calculations
+        intp_at_interface (int): number of additional spacial points at the
+            interface of each layer
+
+    Attributes:
+        S (object): sample to do simulations with
+        force_recalc (boolean): force recalculation of results
+        heat_diffusion (boolean): true when including heat diffusion in the
+            calculations
+        intp_at_interface (int): number of additional spacial points at the
+            interface of each layer
+        distances (ndarray[float]): array of distances where to calc heat
+            diffusion. If not set heat diffusion is calculated at each unit
+            cell location or at every angstrom in amorphous layers
+        ode_options (dict): dict with options for the MATLAB pdepe solver, see
+            odeset, used for heat diffusion.
+        boundary_conditions (dict): dict of the left and right type of the
+            boundary conditions for the MATLAB heat diffusion calculation
+            1: isolator - 2: temperature - 3: flux
+            For the last two cases the corresponding value has to be set as
+            Kx1 array, where K is the number of sub-systems
+
     """
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-        self.heat_diffusion = False
+        self.heat_diffusion = kwargs.get('heat_diffusion', False)
+        self.intp_at_interface = kwargs.get('intp_at_interface', 11)
+
+        self.distances = np.array([])
+        self.boundary_conditions = {
+            'left_type': 1,
+            'left_value': np.array([]),
+            'right_type': 1,
+            'right_value': np.array([]),
+            }
+        self.ode_options = {'RelTol': 1e-3}
 
     def __str__(self, output=[]):
         """String representation of this class"""
         return super().__str__(output)
 
-    def get_hash(self, delays, **kwargs):
+    def get_hash(self, delays, excitation, init_temp, **kwargs):
         """get_hash
 
         Returns a unique hash given by the energy :math:`E`,
@@ -59,7 +93,7 @@ class Heat(Simulation):
         Optionally, part of the strain_map is used.
 
         """
-        param = [delays]
+        param = [delays, excitation, init_temp, self.heat_diffusion, self.intp_at_interface]
 
         for key, value in kwargs.items():
             param.append(value)
