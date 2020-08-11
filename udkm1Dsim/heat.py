@@ -25,8 +25,8 @@ __all__ = ["Heat"]
 __docformat__ = "restructuredtext"
 
 import numpy as np
-from time import time
-from os import path
+# from time import time
+# from os import path
 from .simulation import Simulation
 from .helpers import make_hash_md5
 
@@ -84,31 +84,36 @@ class Heat(Simulation):
 
     def __str__(self, output=[]):
         """String representation of this class"""
-        
+
         output = [['heat diffusion', self.heat_diffusion],
                   ['interpolate at interfaces', self.intp_at_interface],
-                  ['distances', 'no distance mesh is set for heat diffusion calculations' if self.distances.size == 0 else
+                  ['distances', 'no distance mesh is set for heat diffusion calculations'
+                   if self.distances.size == 0 else
                    'a distance mesh is set for heat diffusion calculations.'],
-                  ['left boundary type', self.boundary_types[self.boundary_conditions['left_type']]],
+                  ['left boundary type',
+                   self.boundary_types[self.boundary_conditions['left_type']]],
                   ] + output
 
         if self.boundary_conditions['left_type'] == 1:
-            output += [['left boundary temperature', str(self.boundary_conditions['left_value']) + ' K'],]
+            output += [['left boundary temperature',
+                        str(self.boundary_conditions['left_value']) + ' K']]
         elif self.boundary_conditions['left_type'] == 2:
-            output += [['left boundary flux', str(self.boundary_conditions['left_value']) + ' W/m²'],]
+            output += [['left boundary flux',
+                        str(self.boundary_conditions['left_value']) + ' W/m²']]
 
-        output += [
-                  ['right boundary type', self.boundary_types[self.boundary_conditions['right_type']]],
-                  ]
+        output += [['right boundary type',
+                   self.boundary_types[self.boundary_conditions['right_type']]]]
 
         if self.boundary_conditions['right_type'] == 1:
-            output += [['right boundary temperature', str(self.boundary_conditions['right_value']) + ' K'],]
+            output += [['right boundary temperature',
+                        str(self.boundary_conditions['right_value']) + ' K']]
         elif self.boundary_conditions['right_type'] == 2:
-            output += [['right boundary flux', str(self.boundary_conditions['right_value']) + ' W/m²'],]
+            output += [['right boundary flux',
+                        str(self.boundary_conditions['right_value']) + ' W/m²']]
 
         class_str = 'Heat simulation properties:\n\n'
         class_str += super().__str__(output)
-        
+
         return class_str
 
     def get_hash(self, delays, excitation, init_temp, **kwargs):
@@ -149,7 +154,7 @@ class Heat(Simulation):
         if (btype > 0) and (np.size(value) != K):
             raise ValueError('Non-isolating boundary conditions must have the '
                              'same dimensionality as the numer of sub-systems K!')
-        
+
         if boundary_side == 'left':
             self.boundary_conditions['left_type'] = btype
             self.boundary_conditions['left_value'] = value
