@@ -379,7 +379,7 @@ class XrayDynMag(Xray):
             self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
         else:
             t1 = time()
-            self.disp_message('Calculating _inhomogenousReflectivity_ ...')
+            self.disp_message('Calculating _inhomogenous_reflectivity_ ...')
             # parse the input arguments
             if not isinstance(strain_map, np.ndarray):
                 raise TypeError('strain_map must be a numpy ndarray!')
