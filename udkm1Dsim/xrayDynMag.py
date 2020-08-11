@@ -239,7 +239,7 @@ class XrayDynMag(Xray):
         else:
             magnetizations = args[1]
 
-        strainCounter = 0
+        layer_counter = 0
         # traverse substructures
         for i, sub_structure in enumerate(S.sub_structures):
             layer = sub_structure[0]
@@ -249,22 +249,22 @@ class XrayDynMag(Xray):
                 # calculate the ref-trans matrices for N unitCells
                 RT_uc, RT_uc_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
-                        layer, last_A, last_A_phi, last_k_z, strains[strainCounter],
-                        magnetizations[strainCounter])
+                        layer, last_A, last_A_phi, last_k_z, strains[layer_counter],
+                        magnetizations[layer_counter])
                 temp = RT_uc
                 temp_phi = RT_uc_phi
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
                     temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                         self.calc_uc_boundary_phase_matrix(
-                            layer, A, A_phi, k_z, strains[strainCounter],
-                            magnetizations[strainCounter])
+                            layer, A, A_phi, k_z, strains[layer_counter],
+                            magnetizations[layer_counter])
                     temp2 = m_power_x(temp2, repetitions-1)
                     temp2_phi = m_power_x(temp2_phi, repetitions-1)
                     temp = m_times_n(temp2, temp)
                     temp_phi = m_times_n(temp2_phi, temp_phi)
 
-                strainCounter += 1
+                layer_counter += 1
             elif isinstance(layer, AmorphousLayer):
                 # the sub_structure is an amorphous layer
                 # calculate the ref-trans matrices for N layers
@@ -273,8 +273,8 @@ class XrayDynMag(Xray):
                     self.get_atom_boundary_phase_matrix(layer.atom,
                                                         layer._density,
                                                         layer._thickness*(
-                                                            strains[strainCounter]+1),
-                                                        magnetizations[strainCounter])
+                                                            strains[layer_counter]+1),
+                                                        magnetizations[layer_counter])
 
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
@@ -296,18 +296,18 @@ class XrayDynMag(Xray):
                     RT_amorph_phi = m_times_n(P_phi, F_phi)
                     temp = m_times_n(m_power_x(RT_amorph, repetitions-1), temp)
                     temp_phi = m_times_n(m_power_x(RT_amorph_phi, repetitions-1), temp_phi)
-                strainCounter += 1
+                layer_counter += 1
             else:
                 # its a structure
                 # make a recursive call
                 temp, temp_phi, A, A_phi, A_inv, A_inv_phi, k_z = self.calc_homogeneous_matrix(
                         layer, last_A, last_A_phi, last_k_z,
-                        strains[strainCounter:(
-                            strainCounter
+                        strains[layer_counter:(
+                            layer_counter
                             + layer.get_number_of_sub_structures()
                             )],
-                        magnetizations[strainCounter:(
-                            strainCounter
+                        magnetizations[layer_counter:(
+                            layer_counter
                             + layer.get_number_of_sub_structures()
                             )])
                 # calculate the ref-trans matrices for N sub structures
@@ -316,15 +316,15 @@ class XrayDynMag(Xray):
                     temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                         self.calc_homogeneous_matrix(
                             layer, A, A_phi, k_z,
-                            strains[strainCounter:(strainCounter
+                            strains[layer_counter:(layer_counter
                                                    + layer.get_number_of_sub_structures())],
-                            magnetizations[strainCounter:(strainCounter
+                            magnetizations[layer_counter:(layer_counter
                                                           + layer.get_number_of_sub_structures())])
 
                     temp = m_times_n(m_power_x(temp2, repetitions-1), temp)
                     temp_phi = m_times_n(m_power_x(temp2_phi, repetitions-1), temp_phi)
 
-                strainCounter = strainCounter+layer.get_number_of_sub_structures()
+                layer_counter = layer_counter+layer.get_number_of_sub_structures()
 
             # multiply it to the output
             if i == 0:
