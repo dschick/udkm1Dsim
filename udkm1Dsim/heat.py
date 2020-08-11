@@ -127,6 +127,38 @@ class Heat(Simulation):
 
         return self.S.get_hash(types='heat') + '_' + make_hash_md5(param)
 
+    def set_boundary_condition(self, boundary_side='left', boundary_type='isolator', value=0):
+        """set_boundary_condition
+
+        set the boundary conditions of the heat diffusion simulations
+
+        """
+
+        if boundary_type == 'temperature':
+            btype = 1
+        elif boundary_type == 'flux':
+            btype = 2
+        elif boundary_type == 'isolator':
+            btype = 0
+        else:
+            btype = 0
+            raise ValueError('boundary_type must be either _isolator_, '
+                             '_temperature_ or _flux_!')
+
+        K = self.S.num_sub_systems
+        if (btype > 0) and (np.size(value) != K):
+            raise ValueError('Non-isolating boundary conditions must have the '
+                             'same dimensionality as the numer of sub-systems K!')
+        
+        if boundary_side == 'left':
+            self.boundary_conditions['left_type'] = btype
+            self.boundary_conditions['left_value'] = value
+        elif boundary_side == 'right':
+            self.boundary_conditions['right_type'] = btype
+            self.boundary_conditions['right_value'] = value
+        else:
+            raise ValueError('boundary_side must be either _left_ or _right_!')
+
     def check_initial_temperature(self, init_temp):
         """check_initial_temperature
 
