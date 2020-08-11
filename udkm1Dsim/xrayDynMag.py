@@ -103,8 +103,8 @@ class XrayDynMag(Xray):
         Returns a unique hash given by the energy :math:`E`,
         :math:`q_z` range, polarization states and the strain vectors as
         well as the sample structure hash for relevant xray and magnetic
-        parameters. Optionally, part of the strain_map and spin_map are
-        used.
+        parameters. Optionally, part of the strain_map and magnetization_map
+        are used.
 
         """
         param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy]
@@ -114,11 +114,11 @@ class XrayDynMag(Xray):
             if np.size(strain_map) > 1e6:
                 strain_map = strain_map.flatten()[0:1000000]
             param.append(strain_map)
-        if 'spin_map' in kwargs:
-            spin_map = kwargs.get('spin_map')
-            if np.size(spin_map) > 1e6:
-                spin_map = spin_map.flatten()[0:1000000]
-            param.append(spin_map)
+        if 'magnetization_map' in kwargs:
+            magnetization_map = kwargs.get('magnetization_map')
+            if np.size(magnetization_map) > 1e6:
+                magnetization_map = magnetization_map.flatten()[0:1000000]
+            param.append(magnetization_map)
 
         return self.S.get_hash(types=['xray', 'magnetic']) + '_' + make_hash_md5(param)
 
@@ -185,16 +185,6 @@ class XrayDynMag(Xray):
         reflectivities as function of energy and :math:`q_z`.
 
         """
-        # if no strains are given we assume no strain
-        if len(args) == 0:
-            strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
-        else:
-            strains = args[0]
-
-        if len(args) < 2:
-            magnetizations = np.zeros([self.S.get_number_of_sub_structures(), 3])
-        else:
-            magnetizations = args[1]
 
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
@@ -203,7 +193,7 @@ class XrayDynMag(Xray):
         # calc the reflectivity-transmisson matrix of the structure
         # and the inverse of the last boundary matrix
         RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
-            self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, strains, magnetizations)
+            self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, *args)
         # if a substrate is included add it at the end
         if self.S.substrate != []:
             RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = \
@@ -244,11 +234,12 @@ class XrayDynMag(Xray):
             strains = args[0]
 
         if len(args) < 2:
-            magnetizations = np.zeros([S.get_number_of_sub_structures(), 3])
+            # create non-working magnetizations
+            magnetizations = np.zeros([S.get_number_of_sub_structures(), 1])
         else:
             magnetizations = args[1]
 
-        strainCounter = 0
+        layer_counter = 0
         # traverse substructures
         for i, sub_structure in enumerate(S.sub_structures):
             layer = sub_structure[0]
@@ -258,22 +249,22 @@ class XrayDynMag(Xray):
                 # calculate the ref-trans matrices for N unitCells
                 RT_uc, RT_uc_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
-                        layer, last_A, last_A_phi, last_k_z, strains[strainCounter],
-                        magnetizations[strainCounter])
+                        layer, last_A, last_A_phi, last_k_z, strains[layer_counter],
+                        magnetizations[layer_counter])
                 temp = RT_uc
                 temp_phi = RT_uc_phi
                 if repetitions > 1:
                     # use m_power_x for more than one repetition
                     temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                         self.calc_uc_boundary_phase_matrix(
-                            layer, A, A_phi, k_z, strains[strainCounter],
-                            magnetizations[strainCounter])
+                            layer, A, A_phi, k_z, strains[layer_counter],
+                            magnetizations[layer_counter])
                     temp2 = m_power_x(temp2, repetitions-1)
                     temp2_phi = m_power_x(temp2_phi, repetitions-1)
                     temp = m_times_n(temp2, temp)
                     temp_phi = m_times_n(temp2_phi, temp_phi)
 
-                strainCounter += 1
+                layer_counter += 1
             elif isinstance(layer, AmorphousLayer):
                 # the sub_structure is an amorphous layer
                 # calculate the ref-trans matrices for N layers
@@ -282,8 +273,8 @@ class XrayDynMag(Xray):
                     self.get_atom_boundary_phase_matrix(layer.atom,
                                                         layer._density,
                                                         layer._thickness*(
-                                                            strains[strainCounter]+1),
-                                                        magnetizations[strainCounter])
+                                                            strains[layer_counter]+1),
+                                                        magnetizations[layer_counter])
 
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
@@ -305,18 +296,18 @@ class XrayDynMag(Xray):
                     RT_amorph_phi = m_times_n(P_phi, F_phi)
                     temp = m_times_n(m_power_x(RT_amorph, repetitions-1), temp)
                     temp_phi = m_times_n(m_power_x(RT_amorph_phi, repetitions-1), temp_phi)
-                strainCounter += 1
+                layer_counter += 1
             else:
                 # its a structure
                 # make a recursive call
                 temp, temp_phi, A, A_phi, A_inv, A_inv_phi, k_z = self.calc_homogeneous_matrix(
                         layer, last_A, last_A_phi, last_k_z,
-                        strains[strainCounter:(
-                            strainCounter
+                        strains[layer_counter:(
+                            layer_counter
                             + layer.get_number_of_sub_structures()
                             )],
-                        magnetizations[strainCounter:(
-                            strainCounter
+                        magnetizations[layer_counter:(
+                            layer_counter
                             + layer.get_number_of_sub_structures()
                             )])
                 # calculate the ref-trans matrices for N sub structures
@@ -325,15 +316,15 @@ class XrayDynMag(Xray):
                     temp2, temp2_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                         self.calc_homogeneous_matrix(
                             layer, A, A_phi, k_z,
-                            strains[strainCounter:(strainCounter
+                            strains[layer_counter:(layer_counter
                                                    + layer.get_number_of_sub_structures())],
-                            magnetizations[strainCounter:(strainCounter
+                            magnetizations[layer_counter:(layer_counter
                                                           + layer.get_number_of_sub_structures())])
 
                     temp = m_times_n(m_power_x(temp2, repetitions-1), temp)
                     temp_phi = m_times_n(m_power_x(temp2_phi, repetitions-1), temp_phi)
 
-                strainCounter = strainCounter+layer.get_number_of_sub_structures()
+                layer_counter = layer_counter+layer.get_number_of_sub_structures()
 
             # multiply it to the output
             if i == 0:
@@ -388,7 +379,7 @@ class XrayDynMag(Xray):
             self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
         else:
             t1 = time()
-            self.disp_message('Calculating _inhomogenousReflectivity_ ...')
+            self.disp_message('Calculating _inhomogenous_reflectivity_ ...')
             # parse the input arguments
             if not isinstance(strain_map, np.ndarray):
                 raise TypeError('strain_map must be a numpy ndarray!')
@@ -735,23 +726,25 @@ class XrayDynMag(Xray):
         """
 
         try:
-            mag_amplitude = atom.mag_amplitude
-        except AttributeError:
-            mag_amplitude = 0
-        try:
-            mag_phi = atom.mag_phi.to_base_units().magnitude
-        except AttributeError:
-            mag_phi = 0
-        try:
-            mag_gamma = atom.mag_gamma.to_base_units().magnitude
-        except AttributeError:
-            mag_gamma = 0
-
-        if len(args) > 0:
             magnetization = args[0]
-            mag_amplitude += magnetization[0]
-            mag_phi += magnetization[1]
-            mag_gamma += magnetization[2]
+            mag_amplitude = magnetization[0]
+            mag_phi = magnetization[1]
+            mag_gamma = magnetization[2]
+        except IndexError:
+            # here we catch magnetizations with only one instead of three
+            # elements
+            try:
+                mag_amplitude = atom.mag_amplitude
+            except AttributeError:
+                mag_amplitude = 0
+            try:
+                mag_phi = atom.mag_phi.to_base_units().magnitude
+            except AttributeError:
+                mag_phi = 0
+            try:
+                mag_gamma = atom.mag_gamma.to_base_units().magnitude
+            except AttributeError:
+                mag_gamma = 0
 
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z

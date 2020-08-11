@@ -191,7 +191,7 @@ class Layer:
                                'xray': ['num_atoms', '_area', '_deb_wal_fac', '_thickness'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
-                               'magnetic': ['magnetization'],
+                               'magnetic': ['_thickness', 'magnetization'],
                                }
 
         types = (kwargs.get('types', 'all'))
