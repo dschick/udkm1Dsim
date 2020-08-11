@@ -58,6 +58,7 @@ class Heat(Simulation):
             cell location or at every angstrom in amorphous layers
         ode_options (dict): dict with options for the MATLAB pdepe solver, see
             odeset, used for heat diffusion.
+        boundary_types (list[str]): description of boundary types
         boundary_conditions (dict): dict of the left and right type of the
             boundary conditions for the MATLAB heat diffusion calculation
             1: isolator - 2: temperature - 3: flux
@@ -72,17 +73,43 @@ class Heat(Simulation):
         self.intp_at_interface = kwargs.get('intp_at_interface', 11)
 
         self.distances = np.array([])
+        self.boundary_types = ['isolator', 'temperature', 'flux']
         self.boundary_conditions = {
-            'left_type': 1,
+            'left_type': 0,
             'left_value': np.array([]),
-            'right_type': 1,
+            'right_type': 0,
             'right_value': np.array([]),
             }
         self.ode_options = {'RelTol': 1e-3}
 
     def __str__(self, output=[]):
         """String representation of this class"""
-        return super().__str__(output)
+        
+        output = [['heat diffusion', self.heat_diffusion],
+                  ['interpolate at interfaces', self.intp_at_interface],
+                  ['distances', 'no distance mesh is set for heat diffusion calculations' if self.distances.size == 0 else
+                   'a distance mesh is set for heat diffusion calculations.'],
+                  ['left boundary type', self.boundary_types[self.boundary_conditions['left_type']]],
+                  ] + output
+
+        if self.boundary_conditions['left_type'] == 1:
+            output += [['left boundary temperature', str(self.boundary_conditions['left_value']) + ' K'],]
+        elif self.boundary_conditions['left_type'] == 2:
+            output += [['left boundary flux', str(self.boundary_conditions['left_value']) + ' W/m²'],]
+
+        output += [
+                  ['right boundary type', self.boundary_types[self.boundary_conditions['right_type']]],
+                  ]
+
+        if self.boundary_conditions['right_type'] == 1:
+            output += [['right boundary temperature', str(self.boundary_conditions['right_value']) + ' K'],]
+        elif self.boundary_conditions['right_type'] == 2:
+            output += [['right boundary flux', str(self.boundary_conditions['right_value']) + ' W/m²'],]
+
+        class_str = 'Heat simulation properties:\n\n'
+        class_str += super().__str__(output)
+        
+        return class_str
 
     def get_hash(self, delays, excitation, init_temp, **kwargs):
         """get_hash
@@ -100,7 +127,6 @@ class Heat(Simulation):
 
         return self.S.get_hash(types='heat') + '_' + make_hash_md5(param)
 
-    
     def check_initial_temperature(self, init_temp):
         """check_initial_temperature
 
@@ -111,7 +137,7 @@ class Heat(Simulation):
 
         Args:
             init_temp (float, ndarray): initial temperature
-    
+
         """
         N = self.S.get_number_of_layers()
         K = self.S.num_sub_systems
@@ -124,6 +150,6 @@ class Heat(Simulation):
             # init_temp is a vector but has not as many elements as layers
             raise ValueError('The initial temperature vector must have 1 or '
                              'NxK elements, where N is the number of layers '
-                             'in the structure and K the number of subsystems!');
+                             'in the structure and K the number of subsystems!')
 
         return init_temp
