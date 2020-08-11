@@ -185,16 +185,6 @@ class XrayDynMag(Xray):
         reflectivities as function of energy and :math:`q_z`.
 
         """
-        # if no strains are given we assume no strain
-        if len(args) == 0:
-            strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
-        else:
-            strains = args[0]
-
-        if len(args) < 2:
-            magnetizations = np.zeros([self.S.get_number_of_sub_structures(), 3])
-        else:
-            magnetizations = args[1]
 
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
@@ -203,7 +193,7 @@ class XrayDynMag(Xray):
         # calc the reflectivity-transmisson matrix of the structure
         # and the inverse of the last boundary matrix
         RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
-            self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, strains, magnetizations)
+            self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, *args)
         # if a substrate is included add it at the end
         if self.S.substrate != []:
             RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = \
@@ -244,7 +234,8 @@ class XrayDynMag(Xray):
             strains = args[0]
 
         if len(args) < 2:
-            magnetizations = np.zeros([S.get_number_of_sub_structures(), 3])
+            # create non-working magnetizations
+            magnetizations = np.zeros([S.get_number_of_sub_structures(), 1])
         else:
             magnetizations = args[1]
 
@@ -734,12 +725,14 @@ class XrayDynMag(Xray):
 
         """
 
-        if len(args) > 0:
+        try:
             magnetization = args[0]
             mag_amplitude = magnetization[0]
             mag_phi = magnetization[1]
             mag_gamma = magnetization[2]
-        else:
+        except IndexError:
+            # here we catch magnetizations with only one instead of three
+            # elements
             try:
                 mag_amplitude = atom.mag_amplitude
             except AttributeError:
