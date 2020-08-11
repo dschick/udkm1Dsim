@@ -236,7 +236,7 @@ class Structure:
         # traverse the sub_structures
         for i in range(len(self.sub_structures)):
             if isinstance(self.sub_structures[i][0], (AmorphousLayer)) or \
-                isinstance(self.sub_structures[i][0], (UnitCell)):
+                    isinstance(self.sub_structures[i][0], (UnitCell)):
                 # its a AmorphousLayer or UnitCell
                 layer_id = self.sub_structures[i][0].id
                 if not layer_ids:

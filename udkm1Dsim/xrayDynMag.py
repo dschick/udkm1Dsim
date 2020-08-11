@@ -745,7 +745,7 @@ class XrayDynMag(Xray):
                 mag_gamma = atom.mag_gamma.to_base_units().magnitude
             except AttributeError:
                 mag_gamma = 0
-        
+
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
 
