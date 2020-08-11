@@ -65,3 +65,31 @@ class Heat(Simulation):
             param.append(value)
 
         return self.S.get_hash(types='heat') + '_' + make_hash_md5(param)
+
+    
+    def check_initial_temperature(self, init_temp):
+        """check_initial_temperature
+
+        An inital temperature for a heat simulation can be either a
+        single temperature which is assumed to be valid for all layers
+        in the structure or a temeprature profile is given with one
+        temperature for each layer in the structure and for each subsystem.
+
+        Args:
+            init_temp (float, ndarray): initial temperature
+    
+        """
+        N = self.S.get_number_of_layers()
+        K = self.S.num_sub_systems
+
+        # check size of initTemp
+        if np.size(init_temp) == 1:
+            # it is the same initial temperature for all layers
+            init_temp = init_temp*np.ones([N, K])
+        elif np.shape(init_temp) != [N, K]:
+            # init_temp is a vector but has not as many elements as layers
+            raise ValueError('The initial temperature vector must have 1 or '
+                             'NxK elements, where N is the number of layers '
+                             'in the structure and K the number of subsystems!');
+
+        return init_temp
