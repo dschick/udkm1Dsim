@@ -98,7 +98,7 @@ class Structure:
         return class_str
 
     def get_hash(self, **kwargs):
-        """hash
+        """get_hash
 
         Returns a unique hash from all layer IDs in the correct order
         in the structure.
