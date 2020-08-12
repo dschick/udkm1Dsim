@@ -200,19 +200,25 @@ class Heat(Simulation):
 
         """
         # check the size of excitation, if we have a multipulse excitation
-        if np.size(excitation) == 1:
-            # we have just a fluence and no delay_pump or pulse_width
-            fluence = excitation
-            delay_pump = 0 # we define that the exciation is at t=0
-            pulse_width = 0 # pulse width is 0 by default
-        elif np.size(excitation) == 2:
-            fluence = excitation[0, :] # set the fluences
-            delay_pump = excitation[1, :] # set the delay
-            pulse_width = np.zeros([1, excitation.shape[1]]) # set the pulse width to 0 by default
+        if isinstance(excitation, (float, int)):
+            # just a fluence is given
+            fluence = [excitation]
+            delay_pump = [0] # we define that the exciation is at t=0
+            pulse_width = [0] # pulse width is 0 by default
+        elif isinstance(excitation, dict):
+            try:
+                fluence = excitation['fluence'] if isinstance(excitation['fluence'], list) else [excitation['fluence']]
+                delay_pump = excitation['delay_pump'] if isinstance(excitation['delay_pump'], list) else [excitation['delay_pump']]
+                pulse_width = excitation['pulse_width'] if isinstance(excitation['pulse_width'], list) else [excitation['pulse_width']]
+            except KeyError:
+                print('The excitation dictionary must include the tree keys '
+                      '_fluence_, _delay_pump_, _pulse_width_')
         else:
-            fluence = excitation[0, :] # set the fluences
-            delay_pump = excitation[1, :] # set the delay
-            pulse_width = excitation[2,:] # set the pulse width
+            raise ValueError('_excitation_ must be either a float/int or dict!')
+        
+        if not len(fluence) == len(delay_pump) == len(pulse_width):
+            raise ValueError('_fluence_, _delay_pump_, and _pulse_width_ must have '
+                             'the same number of elements!')
 
         # check the elements of the delay_pump vector
         if len(delay_pump) != len(np.unique(delay_pump)):
