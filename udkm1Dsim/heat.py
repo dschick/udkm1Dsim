@@ -196,112 +196,110 @@ class Heat(Simulation):
 
         return init_temp
 
-    # def check_excitation(self, delays):
-    #     """check_excitation
+    def check_excitation(self, delays):
+        """check_excitation
 
-    #     The optical excitation is a :math:`3 \times N` matrix with a fluence
-    #     :math:`F` [J/m²], delays :math:`t` [s] of the pump events, and pulse
-    #     width :math:`\tau´ [s]. :math:`N` is the number of pump events.
+        The optical excitation is a dictionary with fluence
+        :math:`F` [J/m²], delays :math:`t` [s] of the pump events, and pulse
+        width :math:`\tau´ [s]. :math:`N` is the number of pump events.
 
-    #     """
-    #     fluence = self.excitation['fluence']
-    #     delay_pump = self.excitation['delay_pump']
-    #     pulse_width = self.excitation['pulse_width']
+        """
+        delays = delays.to('s').magnitude
+        fluence = self._excitation['fluence']
+        delay_pump = self._excitation['delay_pump']
+        pulse_width = self._excitation['pulse_width']
 
-    #     # throw warnings if heat diffusion should be enabled
-    #     if (self.S.num_sub_systems > 1) and not self.heat_diffusion:
-    #         raise Warning('If you are introducing more than 1 subsystem you ' \
-    #                       'should enable heat diffusion!')
+        # throw warnings if heat diffusion should be enabled
+        if (self.S.num_sub_systems > 1) and not self.heat_diffusion:
+            raise Warning('If you are introducing more than 1 subsystem you '
+                          'should enable heat diffusion!')
 
-    #     if np.sum(pulse_width) > 0 and not self.heat_diffusion:
-    #         pulse_width = np.zeros_like(fluence)
-    #         raise Warning('The effect of finite pulse duration of the excitation ' \
-    #                       'is only considered if heat diffusion is enabled! ' \
-    #                       'All pulse durations are set to 0!');
+        if np.sum(pulse_width) > 0 and not self.heat_diffusion:
+            pulse_width = np.zeros_like(fluence)
+            raise Warning('The effect of finite pulse duration of the excitation '
+                          'is only considered if heat diffusion is enabled! '
+                          'All pulse durations are set to 0!')
 
-    #     """
-    #     traverse excitation vector to update the `delay_pump` :math:`t_p`
-    #     vector for finite pulse durations :math:`w(i)` as follows
+        """
+        traverse excitation vector to update the `delay_pump` :math:`t_p`
+        vector for finite pulse durations :math:`w(i)` as follows
 
-    #     .. math:: t_p(i)-\mbox{window}\cdot w(i):w(i)/\mbox{intp}:t_p(i)+\mbox{window}\cdot w(i)
+        .. math:: t_p(i)-\mbox{window}\cdot w(i):w(i)/\mbox{intp}:t_p(i)+\mbox{window}\cdot w(i)
 
-    #     and to combine excitations which have overlapping intervalls
-    #     """
-    #     n_excitation = [] # the result of the traversed excitation is a cell vector
-    #     window = 1.5 # window factor for finite pulse duration
-    #     intp = 1000 # interpolation factor for finite pulse duration
+        and to combine excitations which have overlapping intervalls
+        """
+        n_excitation = []  # the result of the traversed excitation is a cell vector
+        window = 1.5  # window factor for finite pulse duration
+        intp = 1000  # interpolation factor for finite pulse duration
 
-    #     i = 0 # start counter
-    #     while i < len(delay_pump):
-    #         k = i
-    #         temp = []
-    #         # check all upcoming excitations if they overlap with the current
-    #         while k < len(delay_pump):
-    #             print(i)
-    #             print(k)
-    #             print('--------')
-    #             temp.append([delay_pump[k], pulse_width[k], fluence[k]])
-    #             if (k+1 < len(delay_pump)) and
-    #               ((delay_pump[k] + window*pulse_width[k]) >= (delay_pump[k+1] - window*pulse_width[k+1])):
-    #                 # there is an overlap in time so add the next
-    #                 # excitation to the current element
-    #                 k += 1
-    #                 if pulse_width[k] == 0:
-    #                     # an overlapping pulse cannot have a pulseWidth
-    #                     # of 0! Throw an error!
-    #                     raise ValueError('Overlapping pulse must have duration > 0!');
-    #             else:
-    #                 # no overlap, so go to the next iteration of the
-    #                 # outer while loop
-    #                 break
+        i = 0  # start counter
+        while i < len(delay_pump):
+            k = i
+            temp = []
+            # check all upcoming excitations if they overlap with the current
+            while k < len(delay_pump):
+                temp.append([delay_pump[k], pulse_width[k], fluence[k]])
+                if (k+1 < len(delay_pump)) and \
+                    ((delay_pump[k] + window*pulse_width[k]) >=
+                     (delay_pump[k+1] - window*pulse_width[k+1])):
+                    # there is an overlap in time so add the next
+                    # excitation to the current element
+                    k += 1
+                    if pulse_width[k] == 0:
+                        # an overlapping pulse cannot have a pulseWidth
+                        # of 0! Throw an error!
+                        raise ValueError('Overlapping pulse must have duration > 0!')
+                else:
+                    # no overlap, so go to the next iteration of the outer while loop
+                    break
 
-    #         # caclulate the new time vector of the current excitation
-    #         delta_delay = np.min(pulse_width[i:(k+1)])/intp
-    #         if delta_delay == 0:
-    #             # its pulse_width = 0 or no heat diffusion was enabled
-    #             # so calculate just at a single delay step
-    #             intervall = delay_pump[i]
-    #         else:
-    #             intervall = np.r_[(delay_pump[i] - window*pulse_width[i]):
-    #                               (delay_pump[k] + window*pulse_width[k]):
-    #                               delta_delay]
+            # caclulate the new time vector of the current excitation
+            delta_delay = np.min(pulse_width[i:(k+1)])/intp
+            if delta_delay == 0:
+                # its pulse_width = 0 or no heat diffusion was enabled
+                # so calculate just at a single delay step
+                intervall = np.array([delay_pump[i]])
+            else:
+                intervall = np.r_[(delay_pump[i] - window*pulse_width[i]):
+                                  (delay_pump[k] + window*pulse_width[k]):
+                                  delta_delay]
+            # update the new excitation list
+            n_excitation.append([intervall,
+                                 [t[0] for t in temp],
+                                 [t[1] for t in temp],
+                                 [t[2] for t in temp]])
+            i = k+1  # increase counter
 
-    #         # update the new excitation cell array
-    #         n_excitation.append([intervall,
-    #                              [t[0] for t in temp],
-    #                              [t[1] for t in temp],
-    #                              [t[2] for t in temp]])
-    #         i = k+1 # increase counter
+        """
+        traverse the n_excitation list and add additional time vectors between
+        the pump events for the later temperature calculation
+        """
+        res = []  # initialize the result list
 
-    #     """
-    #     traverse the n_excitation list and add additional time vectors between
-    #     the pump events for the later temperature calculation
-    #     """
-    #     res = [] # initialize the result list
+        # check for delay < delay_pump[0]
+        if np.size(delays[delays < np.min(n_excitation[0][0])]) > 0:
+            res.append([delays[delays < np.min(n_excitation[0][0])], [], [], []])
+        else:
+            raise Warning('Please add more delay steps before the first excitation!')
 
-    #     # check for delay < delay_pump[0]
-    #     if np.size(delays[delays < n_excitation[0][0]]) > 0:
-    #         res = [delays[delays < n_excitation[0][0]], [], [], []]
-    #     else:
-    #         raise Warning('Please add more delay steps before the first excitation!')
+        # traverse n_excitation
+        for i, excitation in enumerate(n_excitation):
+            res.append(excitation)
+            if i+1 < len(n_excitation):
+                # there is an upcoming pump event
+                if np.size(delays[np.logical_and(delays > excitation[0][-1],
+                                                 delays < n_excitation[i+1][0][0])]) > 0:
+                    # there are times between the current and next excitation
+                    temp = [delays[np.logical_and(delays > excitation[0][-1],
+                                                  delays < n_excitation[i+1][0][0])], [], [], []]
+                    res.append(temp)
+            else:  # this is the last pump event
+                if np.size(delays[delays > excitation[0][-1]]) > 0:
+                    # there are times after the current last excitation
+                    temp = [delays[delays > excitation[0][-1]], [], [], []]
+                    res.append(temp)
 
-    #     # traverse n_excitation
-    #     for i, excitation in enumerate(n_excitation):
-    #         del temp
-    #         res.append(excitation)
-    #         if i+1 < len(n_excitation):
-    #             # there is an upcoming pump event
-    #             if np.size(delays[(delays > excitation[3]) and (delays < n_excitation[i+1][0])]) > 0:
-    #                 # there are times between the current and next excitation
-    #                 temp = [delays[(delays > excitation[3]) and (delays < n_excitation[i+1][0])], [], [], []]
-    #                 res.append(temp)
-    #         else: # this is the last pump event
-    #             if np.size(delays[delays > excitation[3]]) > 0:
-    #                 # there are times after the current last excitation
-    #                 temp = [delays[delays > excitation[3]], [], [], []]
-    #                 res.append(temp)
-
-    #     return res, fluence, delay_pump, pulse_width
+        return res, fluence, delay_pump, pulse_width
 
     @property
     def excitation(self):
@@ -339,7 +337,9 @@ class Heat(Simulation):
             raise ValueError('_excitation_ must be either a float/int or dict '
                              'of pint quantities!')
 
-        if not len(self._excitation['fluence']) == len(self._excitation['delay_pump']) == len(self._excitation['pulse_width']):
+        if not (len(self._excitation['fluence'])
+                == len(self._excitation['delay_pump'])
+                == len(self._excitation['pulse_width'])):
             raise ValueError('Elements of excitation dict must have '
                              'the same number of elements!')
 
