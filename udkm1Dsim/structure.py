@@ -364,7 +364,7 @@ class Structure:
         thickness = self.get_layer_property_vector('_thickness')
         d_end = np.cumsum(thickness)
         d_start = np.hstack([[0], d_end[0:-1]])
-        d_mid = (d_start + thickness)/2
+        d_mid = (d_start + thickness/2)
         return d_start*u.m, d_end*u.m, d_mid*u.m
 
     def get_distances_of_interfaces(self):
