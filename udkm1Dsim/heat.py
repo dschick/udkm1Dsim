@@ -25,7 +25,8 @@ __all__ = ["Heat"]
 __docformat__ = "restructuredtext"
 
 import numpy as np
-# from time import time
+from scipy.optimize import brentq
+from time import time
 # from os import path
 from .simulation import Simulation
 from . import u, Q_
@@ -357,6 +358,65 @@ class Heat(Simulation):
                 I0 = I0*np.exp(-(interfaces[i+1]-interfaces[i])/opt_pen_depth)
             k = k+m  # set the counter
         return dalpha_dz
+
+
+    def get_temperature_after_delta_excitation(self, fluence, init_temp):
+        """get_temperature_after_delta_excitation
+
+        Returns a vector of the end temperature and temperature change 
+        for each layer of the sample structure after an optical 
+        exciation with a fluence :math:`F` [J/m^2] and an inital temperature 
+        :math:`T_1` [K]:
+
+        .. math:: \Delta E = \int_{T_1}^{T_2} m \, c(T)\, \mbox{d}T
+
+        where :math:`\Delta E` is the absorbed energy in each layer and 
+        :math:`c(T)` is the temperature-dependent heat capacity [J/kg K] and
+        :math:`m` is the mass [kg].
+
+        The absorbed energy per layer can be linearized from the
+        absorption profile :math:`d\alpha/dz` as
+
+        .. math:: \Delta E = \frac{d\alpha}{dz} \, E_0 \, \Delta z
+
+        where :math:`E_0` is the initial energy impinging on the first layer
+        given by the fluence :math:`F = E / A`.
+        :math:`\Delta z` is equal to the thickness of each layer.
+
+        Finally, one has to minimize the following modulus to obtain the
+        final temperature :math:`T_2` of each layer:
+
+        .. math::
+
+             \left| \int_{T_1}^{T_2} m \, c(T)\, \mbox{d}T - 
+             \frac{d\alpha}{dz} \, E_0 \, \Delta z \, \right|  
+             \stackrel{!}{=} 0 $$
+
+        """
+        # initialize
+        t1 = time()
+        # absorption profile from Lambert-Beer's law
+        dalpha_dz = self.get_absorption_profile()
+        
+        int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
+        thicknesses = self.S.get_layer_property_vector('_thickness')
+        masses = self.S.get_layer_property_vector('_mass')
+        areas = self.S.get_layer_property_vector('_area')
+        E0 = fluence*areas[1]  # mass are normalized to 1Ang^2
+        
+        init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
+        final_temp = init_temp
+        # traverse layers
+        for i, int_heat_capacity in enumerate(int_heat_capacities):
+            if dalpha_dz[i] > 0:
+                # if there is absorption in the current layer
+                del_E = dalpha_dz[i]*E0*thicknesses[i]
+                fun = lambda final_temp: (masses[i]*(int_heat_capacity[0](final_temp) - int_heat_capacity[0](init_temp[i]))-del_E)
+                final_temp[i] = brentq(fun, init_temp[i], 1e5)
+        delta_T = final_temp - init_temp  # this is the temperature change
+        self.disp_message('Elapsed time for _temperature_after_delta_excitation_:'
+                          ' {:f} s'.format(time()-t1))
+        return final_temp, delta_T
 
     @property
     def excitation(self):
