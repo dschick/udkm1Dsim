@@ -764,7 +764,7 @@ class UnitCell(Layer):
 
         self.density = self.mass / self.volume
         # set mass per unit area (do not know if necessary)
-        self.mass = self.mass * 1*u.angstrom**2 / self.area
+        # self.mass = self.mass * 1*u.angstrom**2 / self.area
         self.calc_spring_const()
 
     def add_multiple_atoms(self, atom, position, Nb):
