@@ -380,19 +380,19 @@ class XrayDyn(Xray):
         :math:`H_i` of each atom and the phase matrices between the
         atoms :math:`L_i`:
 
-        .. math: M_{RT} = \prod_i H_i \ L_i
+        .. math:: M_{RT} = \prod_i H_i \ L_i
 
         Since all layers are generally inhomogeneously strained we have
         to traverse all individual unit cells (:math:`j = 1\ldots M`) in
         the sample to calculate the total reflection-transmission matrix
         :math:`M_{RT}^t`:
 
-        .. math: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
+        .. math:: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
 
         The reflectivity of the :math:`2\\times 2` matrices for each
         :math:`q_z` is calculates as follow:
 
-        .. math: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
+        .. math:: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
 
         """
         # initialize ref_trans_matrix
@@ -426,7 +426,7 @@ class XrayDyn(Xray):
         parallel computing (needs to be static) only for calculating the
         total reflection-transmission matrix :math:`M_{RT}^t`:
 
-        .. math: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
+        .. math:: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
 
         """
         # traverse all unit cells in the sample structure

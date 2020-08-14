@@ -202,7 +202,17 @@ class Heat(Simulation):
 
         The optical excitation is a dictionary with fluence
         :math:`F` [J/m²], delays :math:`t` [s] of the pump events, and pulse
-        width :math:`\tau´ [s]. :math:`N` is the number of pump events.
+        width :math:`\tau` [s]. :math:`N` is the number of pump events.
+
+        Traverse excitation vector to update the `delay_pump` :math:`t_p`
+        vector for finite pulse durations :math:`w(i)` as follows
+
+        .. math::
+
+            t_p(i)-\mbox{window}\cdot w(i):t_p(i)+\mbox{window}\cdot w(i):
+            w(i)/\mbox{intp}
+
+        and to combine excitations which have overlapping intervalls.
 
         """
         delays = delays.to('s').magnitude
@@ -221,14 +231,6 @@ class Heat(Simulation):
                           'is only considered if heat diffusion is enabled! '
                           'All pulse durations are set to 0!')
 
-        """
-        traverse excitation vector to update the `delay_pump` :math:`t_p`
-        vector for finite pulse durations :math:`w(i)` as follows
-
-        .. math:: t_p(i)-\mbox{window}\cdot w(i):w(i)/\mbox{intp}:t_p(i)+\mbox{window}\cdot w(i)
-
-        and to combine excitations which have overlapping intervalls
-        """
         n_excitation = []  # the result of the traversed excitation is a cell vector
         window = 1.5  # window factor for finite pulse duration
         intp = 1000  # interpolation factor for finite pulse duration
@@ -271,10 +273,8 @@ class Heat(Simulation):
                                  [t[2] for t in temp]])
             i = k+1  # increase counter
 
-        """
-        traverse the n_excitation list and add additional time vectors between
-        the pump events for the later temperature calculation
-        """
+        # traverse the n_excitation list and add additional time vectors between
+        # the pump events for the later temperature calculation
         res = []  # initialize the result list
 
         # check for delay < delay_pump[0]
@@ -303,12 +303,12 @@ class Heat(Simulation):
         return res, fluence, delay_pump, pulse_width
 
     def get_absorption_profile(self, distances=[]):
-        """get_absorption_profile
+        r"""get_absorption_profile
 
         Returns a vector of the absorption profile derived from Lambert-Beer's
         law. The transmission is given by:
 
-        .. math:: \tau = \frac{I}{I_0} =  \exp(-z/\zeta)
+        .. math:: \tau = \frac{I}{I_0} =  \exp(-z/ \zeta)
 
         and the absorption by:
 
@@ -316,7 +316,10 @@ class Heat(Simulation):
 
         The absorption profile can be derived from the spatial derivative:
 
-        .. math:: \frac{d \alpha(z)}{dz} = \frac{1}{\zeta} \exp(-z/\zeta)
+        .. math::
+
+            \frac{\mbox{d}\alpha(z)}{\mbox{d}z} = \frac{1}{\zeta}
+            \exp(-z/\zeta)
 
         """
         if distances == []:
@@ -360,7 +363,7 @@ class Heat(Simulation):
         return dalpha_dz
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp):
-        """get_temperature_after_delta_excitation
+        r"""get_temperature_after_delta_excitation
 
         Returns a vector of the end temperature and temperature change
         for each layer of the sample structure after an optical
@@ -374,9 +377,9 @@ class Heat(Simulation):
         :math:`m` is the mass [kg].
 
         The absorbed energy per layer can be linearized from the
-        absorption profile :math:`d\alpha/dz` as
+        absorption profile :math:`\mbox{d} \alpha / \mbox{d}z` as
 
-        .. math:: \Delta E = \frac{d\alpha}{dz} \, E_0 \, \Delta z
+        .. math:: \Delta E = \frac{\mbox{d} \alpha}{\mbox{d}z} E_0 \Delta z
 
         where :math:`E_0` is the initial energy impinging on the first layer
         given by the fluence :math:`F = E / A`.
@@ -387,9 +390,8 @@ class Heat(Simulation):
 
         .. math::
 
-             \left| \int_{T_1}^{T_2} m \, c(T)\, \mbox{d}T -
-             \frac{d\alpha}{dz} \, E_0 \, \Delta z \, \right|
-             \stackrel{!}{=} 0
+             \left| \int_{T_1}^{T_2} m c(T)\, temp_mapT - \frac{\mbox{d}\alpha}
+             {\mbox{d}z} E_0 \Delta z \right| \stackrel{!}{=} 0
 
         """
         # initialize
@@ -410,9 +412,12 @@ class Heat(Simulation):
             if dalpha_dz[i] > 0:
                 # if there is absorption in the current layer
                 del_E = dalpha_dz[i]*E0*thicknesses[i]
-                fun = lambda final_temp: (masses[i]*(int_heat_capacity[0](final_temp) -
-                                                     int_heat_capacity[0](init_temp[i])) -
-                                          del_E)
+
+                def fun(final_temp):
+                    return (masses[i]*(int_heat_capacity[0](final_temp)
+                                       - int_heat_capacity[0](init_temp[i]))
+                            - del_E)
+
                 final_temp[i] = brentq(fun, init_temp[i], 1e5)
         delta_T = final_temp - init_temp  # this is the temperature change
         self.disp_message('Elapsed time for _temperature_after_delta_excitation_:'

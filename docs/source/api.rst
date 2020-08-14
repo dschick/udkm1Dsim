@@ -31,6 +31,18 @@ Simulation
 .. autoclass:: udkm1Dsim.Simulation
     :members:
 
+Heat
+^^^^
+
+.. autoclass:: udkm1Dsim.Heat
+    :members:
+    
+Magnetization
+^^^^^^^^^^^^^
+
+.. autoclass:: udkm1Dsim.Magnetization
+    :members:
+
 Xray
 ^^^^
 
