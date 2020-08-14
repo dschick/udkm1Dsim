@@ -195,7 +195,8 @@ class Structure:
         N = 0
         # traverse the substructres
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
+            if isinstance(self.sub_structures[i][0], AmorphousLayer) or \
+                isinstance(self.sub_structures[i][0], UnitCell):
                 N = N + self.sub_structures[i][1]
             else:
                 # its a sturcture, so call the method recursively
