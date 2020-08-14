@@ -29,7 +29,7 @@ import numpy as np
 # from os import path
 from .simulation import Simulation
 from . import u, Q_
-from .helpers import make_hash_md5
+from .helpers import make_hash_md5, finderb
 
 
 class Heat(Simulation):
@@ -300,6 +300,63 @@ class Heat(Simulation):
                     res.append(temp)
 
         return res, fluence, delay_pump, pulse_width
+
+    def get_absorption_profile(self, distances=[]):
+        """get_absorption_profile
+
+        Returns a vector of the absorption profile derived from Lambert-Beer's
+        law. The transmission is given by:
+
+        .. math:: \tau = \frac{I}{I_0} =  \exp(-z/\zeta)
+
+        and the absorption by:
+
+        .. math:: \alpha = 1 - \tau =  1 - \exp(-z/\zeta)
+
+        The absorption profile can be derived from the spatial derivative:
+
+        .. math:: \frac{d \alpha(z)}{dz} = \frac{1}{\zeta} \exp(-z/\zeta)
+
+        """
+        if distances == []:
+            # if no distances are set, calculate the extinction on
+            # the middle of each unit cell
+            d_start, _, distances = self.S.get_distances_of_layers()
+        else:
+            d_start, _, _ = self.S.get_distances_of_layers()
+
+        interfaces = self.S.get_distances_of_interfaces()
+        # convert to [m] and get rid of quantities for faster calculations
+        d_start = d_start.to('m').magnitude
+        distances = distances.to('m').magnitude
+        interfaces = interfaces.to('m').magnitude
+
+        N = len(distances)
+        dalpha_dz = np.zeros(N)  # initialize relative absorbed energies
+        I0 = 1  # initial intensity
+        k = 0  # counter for first layer
+        for i in range(len(interfaces)-1):
+            # find the first layer and get properties
+            index = finderb(interfaces[i], d_start)
+            layer = self.S.get_layer_handle(index[0])
+            opt_pen_depth = layer.opt_pen_depth.to('m').magnitude
+
+            # get all distances in the current layer we have to
+            # calculate the absorption profile for
+            if i >= len(interfaces)-2:  # last layer
+                z = distances[np.logical_and(distances >= interfaces[i],
+                                             distances <= interfaces[i+1])]
+            else:
+                z = distances[np.logical_and(distances >= interfaces[i],
+                                             distances < interfaces[i+1])]
+            m = len(z)
+            if not np.isinf(opt_pen_depth):
+                # the layer is absorbing
+                dalpha_dz[k:k+m] = I0/opt_pen_depth*np.exp(-(z-interfaces[i])/opt_pen_depth)
+                # calculate the remaining intensity for the next layer
+                I0 = I0*np.exp(-(interfaces[i+1]-interfaces[i])/opt_pen_depth)
+            k = k+m  # set the counter
+        return dalpha_dz
 
     @property
     def excitation(self):
