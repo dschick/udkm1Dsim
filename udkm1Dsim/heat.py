@@ -26,6 +26,7 @@ __docformat__ = "restructuredtext"
 
 import numpy as np
 from scipy.optimize import brentq
+from scipy.interpolate import interp2d
 from time import time
 from os import path
 from .simulation import Simulation
@@ -264,6 +265,8 @@ class Heat(Simulation):
                 intervall = np.r_[(delay_pump[i] - window*pulse_width[i]):
                                   (delay_pump[k] + window*pulse_width[k]):
                                   delta_delay]
+            # print(delay_pump[k] + window*pulse_width[k])
+            # print(intervall)
             # update the new excitation list
             n_excitation.append([intervall,
                                  [t[0] for t in temp],
@@ -277,13 +280,15 @@ class Heat(Simulation):
 
         # check for delay < delay_pump[0]
         if np.size(delays[delays < np.min(n_excitation[0][0])]) > 0:
-            res.append([delays[delays < np.min(n_excitation[0][0])], [], [], []])
+            res.append([delays[delays < n_excitation[0][0][0]], [], [], []])
         else:
             warnings.warn('Please add more delay steps before the first excitation!')
 
         # traverse n_excitation
         for i, excitation in enumerate(n_excitation):
             res.append(excitation)
+            # print(excitation[0][-1])
+            # print(n_excitation[i+1][0][0])
             if i+1 < len(n_excitation):
                 # there is an upcoming pump event
                 if np.size(delays[np.logical_and(delays > excitation[0][-1],
@@ -297,7 +302,6 @@ class Heat(Simulation):
                     # there are times after the current last excitation
                     temp = [delays[delays > excitation[0][-1]], [], [], []]
                     res.append(temp)
-
         return res, fluence, delay_pump, pulse_width
 
     def get_absorption_profile(self, distances=[]):
@@ -456,20 +460,22 @@ class Heat(Simulation):
         # initialize
         N = self.S.get_number_of_layers()
         K = self.S.num_sub_systems
-        
+
         # there is an initial time step for the init_temp - we will remove it later on
         temp_map = np.zeros([1, N, K])
         init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
         checked_excitation, _, _, _ = self.check_excitation(delays)  # check excitation
         temp_map[0, :, :] = init_temp  # this is initial temperature before the simulation starts
-                    
-        num_ex = 1 # excitation counter
+
+        num_ex = 1  # excitation counter
+        excitation_delays = np.array([])
         # traverse excitations
         for i, excitation in enumerate(checked_excitation):
             # reset inital temperature for delta excitation with heat diffusion enabled
             special_init_temp = []
             # extract excitation parameters for the current iteration
             sub_delays = excitation[0]
+            excitation_delays = np.concatenate((excitation_delays, sub_delays))
             delay_pump = excitation[1]
             pulse_width = excitation[2]
             fluence = excitation[3]
@@ -477,13 +483,13 @@ class Heat(Simulation):
             # heat diffusion is required
             temp_gradient = np.sum(np.sum(np.abs(np.diff(temp_map[-1, :, :], 0, 1))))
             if self.heat_diffusion and len(sub_delays) > 2 \
-                    and ((np.sum(fluence) == 0 and temp_gradient != 0) \
+                    and ((np.sum(fluence) == 0 and temp_gradient != 0)
                          or (np.sum(fluence) > 0 and np.sum(pulse_width) > 0)):
                 # heat diffusion enabled and more than 2 time steps AND
                 # either no excitation with temperature gradient or excitation with finite pulse
                 # duration
-                if np.sum(fluence) == 0: 
-                    self.disp_message('Calculating _heat_diffusion_ ...');
+                if np.sum(fluence) == 0:
+                    self.disp_message('Calculating _heat_diffusion_ ...')
                 else:
                     self.disp_message('Calculating _heat_diffusion_ for excitation ' +
                                       '{:d}:{:d} ...'.format(num_ex, num_ex+len(fluence)-1))
@@ -495,15 +501,18 @@ class Heat(Simulation):
                     # last time of this intervall to the current
                     sub_delays = np.r_[checked_excitation[i-1][0][-1], sub_delays]
                     start = 1
-                if i < len(checked_excitation)-1 and np.sum(checked_excitation[i+1][3]) > 0 and np.sum(checked_excitation[i+1][2]) == 0:
+                if i < len(checked_excitation)-1 and \
+                        np.sum(checked_excitation[i+1][3]) > 0 and \
+                        np.sum(checked_excitation[i+1][2]) == 0:
                     # there is a next intervall of delta excitation so
                     # we add this time at the end of the current
                     # intervall
                     sub_delays = np.r_[sub_delays, checked_excitation[i+1][0][0]]
                     stop = 1
-                
+
                 # calc heat diffusion
-                temp = self.calc_heat_diffusion(init_temp, sub_delays, delay_pump, pulse_width, fluence)
+                temp = self.calc_heat_diffusion(init_temp, sub_delays, delay_pump,
+                                                pulse_width, fluence)
 
                 if stop == 1:
                     # there is an upcomming delta excitation so we have
@@ -512,59 +521,50 @@ class Heat(Simulation):
                     special_init_temp = temp[-1, :, :]
                 # cut the before added time steps
                 temp = temp[start:-1-stop, :, :]
-            elif np.sum(fluence) > 0 and (not self.heat_diffusion or (self.heat_diffusion and np.sum(pulse_width) == 0)):
+            if np.sum(fluence) > 0 and (not self.heat_diffusion or
+                                        (self.heat_diffusion and
+                                         np.sum(pulse_width) == 0)):
                 # excitation with no heat diffusion -> only delta excitation
                 # possible in this case OR excitation with heat diffusion and
                 # pulse_width equal to 0
-                print('delta')
                 temp, _ = self.get_temperature_after_delta_excitation(fluence, init_temp)
-                temp = np.reshape(temp, [1, np.size(temp, 0), np.size(temp,1)])
-                temp = np.zeros_like(temp)
+                temp = np.reshape(temp, [1, np.size(temp, 0), np.size(temp, 1)])
             else:
                 # no excitation and no heat diffusion or not enough time
                 # step to calculate heat difusion, so just repeat the
                 # initial temperature + every unhandled case
-                temp = np.tile(np.reshape(init_temp, [1, N, K]),[len(sub_delays), 1, 1])
-            
+                temp = np.tile(np.reshape(init_temp, [1, N, K]), [len(sub_delays), 1, 1])
+
             # concat results
-            #temp_map = np.concatenate((temp_map, temp))
-            
-            print(np.shape(temp))
-            print(len(sub_delays))
-            print(np.shape(temp_map))
-            
-            print(temp[:, 1, 0])
-            print(temp_map[:, 1, 0])
-            print('---')
+            temp_map = np.append(temp_map, temp, axis=0)
             # set the initial temperature for the next iteration
             if len(special_init_temp) > 0:
                 init_temp = special_init_temp
             else:
-                init_temp = temp_map[-1, :, :]
+                init_temp = temp_map[-1, :, :].copy()
             # increase excitation counder
             if np.sum(fluence) > 0:
                 num_ex += len(fluence)
-        
-        # if ~isequal([checkedEx{1,:}],time)
-        #     % if the time grid for the calculation is not the same as 
-        #     % the grid to return the results on. Then extrapolate the 
-        #     % results on the original time vector but keep the first 
-        #     % element in time for the deltaTempMap calculation.
-        #     [X,Y] = meshgrid([checkedEx{1,:}],1:N);
-        #     [XI,YI] = meshgrid(time,1:N);
-        #     temp = tempMap;
-        #     tempMap = zeros(length(time)+1,N,K);
-        #     for i = 1:K
-        #         tempMap(:,:,i) = vertcat(temp(1,:,i), interp2(X,Y,temp(2:end,:,i)',XI,YI)'); 
-        #     end
-        # end
-        
+
+        if not np.all(excitation_delays == delays.to('s').magnitude):
+            # if the time grid for the calculation is not the same as
+            # the grid to return the results on. Then extrapolate the
+            # results on the original delay array but keep the first
+            # element in time for the deltaTempMap calculation.
+            x = np.arange(N)
+            temp = temp_map.copy()
+            temp_map = np.zeros([len(delays)+1, N, K])
+            for i in range(K):
+                f = interp2d(x, excitation_delays, temp[1:, :, i], kind='linear')
+                temp_map[:, :, i] = np.append(temp[0:1, :, i],
+                                              f(x, delays.to('s').magnitude), axis=0)
+
         # calculate the difference temperature map
         delta_temp_map = np.diff(temp_map, axis=0)
         # delete the initial temperature that was added at the beginning
         temp_map = temp_map[1:, :, :]
         self.disp_message('Elapsed time for _temp_map_:'
-                              ' {:f} s'.format(time()-t1))    
+                          ' {:f} s'.format(time()-t1))
         return np.squeeze(temp_map), np.squeeze(delta_temp_map), checked_excitation
 
     @property
