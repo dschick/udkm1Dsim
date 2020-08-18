@@ -414,6 +414,7 @@ class Heat(Simulation):
             if dalpha_dz[i] > 0:
                 # if there is absorption in the current layer
                 del_E = dalpha_dz[i]*E0*thicknesses[i]
+
                 def fun(final_temp):
                     return (masses[i]*(int_heat_capacity[0](final_temp)
                                        - int_heat_capacity[0](init_temp[i]))
