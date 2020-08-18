@@ -414,19 +414,17 @@ class Heat(Simulation):
             if dalpha_dz[i] > 0:
                 # if there is absorption in the current layer
                 del_E = dalpha_dz[i]*E0*thicknesses[i]
-
                 def fun(final_temp):
                     return (masses[i]*(int_heat_capacity[0](final_temp)
                                        - int_heat_capacity[0](init_temp[i]))
                             - del_E)
-
                 final_temp[i] = brentq(fun, init_temp[i], 1e5)
         delta_T = final_temp - init_temp  # this is the temperature change
         self.disp_message('Elapsed time for _temperature_after_delta_excitation_:'
                           ' {:f} s'.format(time()-t1))
         return final_temp, delta_T
 
-    def get_temp_map(self, delays, excitation, init_temp):
+    def get_temp_map(self, delays, init_temp):
         """get_temp_map
 
         % Returns a tempperature profile for the sample structure after
@@ -444,11 +442,11 @@ class Heat(Simulation):
         else:
             # file does not exist so calculate and save
             temp_map, delta_temp_map, checked_excitations = \
-                self.calc_temp_map(delays, excitation, init_temp)
+                self.calc_temp_map(delays, init_temp)
             self.save(full_filename, [temp_map, delta_temp_map, checked_excitations], '_temp_map_')
         return temp_map, delta_temp_map, checked_excitations
 
-    def calc_temp_map(self, delays, excitation, init_temp):
+    def calc_temp_map(self, delays, init_temp):
         """calc_temp_map
 
         Calculates the temp_map and temp_map difference for a given delay
