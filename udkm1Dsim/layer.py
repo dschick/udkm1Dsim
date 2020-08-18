@@ -240,7 +240,10 @@ class Layer:
         """
 
         self._heat_capacity, self.heat_capacity_str = self.check_cell_array_input(heat_capacity)
-        self.int_heat_capacity  # recalculate the anti-derivative
+        # delete last anti-derivative
+        self._int_heat_capacity = None
+        # recalculate the anti-derivative
+        self.int_heat_capacity
 
     @property
     def int_heat_capacity(self):
@@ -264,11 +267,11 @@ class Layer:
                     self.int_heat_capacity_str.append('lambda T : ' + str(integral))
 
             except Exception as e:
-                print('The sympy integration did not work. You can set the'
-                      'analytical anti-derivative of the heat capacity'
-                      'of your unit cells as lambda function of the temperature'
-                      'T by typing UC.int_heat_capacity = lambda T: c(T)'
-                      'where UC is the name of the unit cell object.')
+                print('The sympy integration did not work. You can set the '
+                      'analytical anti-derivative of the heat capacity '
+                      'of your layer as lambda function of the temperature '
+                      'T by typing layer.int_heat_capacity = lambda T: c(T) '
+                      'where layer is the name of the layer object.')
                 print(e)
 
         return self._int_heat_capacity
@@ -304,7 +307,10 @@ class Layer:
         """
 
         self._lin_therm_exp, self.lin_therm_exp_str = self.check_cell_array_input(lin_therm_exp)
-        self.int_lin_therm_exp  # recalculate the anti-derivative
+        # delete last anti-derivative
+        self._int_lin_therm_exp = None
+        # recalculate the anti-derivative
+        self.int_lin_therm_exp
 
     @property
     def int_lin_therm_exp(self):
