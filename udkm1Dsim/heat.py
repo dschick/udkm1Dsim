@@ -484,10 +484,12 @@ class Heat(Simulation):
             fluence = excitation[3]
             # determine if a temperature gradient is present and if
             # heat diffusion is required
-            temp_gradient = np.sum(np.sum(np.abs(np.diff(temp_map[-1, :, :], 0, 1))))
-            if self.heat_diffusion and len(sub_delays) > 2 \
+            temp_gradient = np.sum(np.sum(np.abs(np.diff(temp_map[-1, :, :], 1, 0))))
+            if self.heat_diffusion and (len(sub_delays) > 2) \
                     and ((np.sum(fluence) == 0 and temp_gradient != 0)
-                         or (np.sum(fluence) > 0 and np.sum(pulse_width) > 0)):
+                         or (np.sum(fluence) > 0 and np.sum(pulse_width) > 0)
+                         or (self.boundary_conditions['left_type']
+                             + self.boundary_conditions['right_type']) > 0):
                 # heat diffusion enabled and more than 2 time steps AND
                 # either no excitation with temperature gradient or excitation with finite pulse
                 # duration
@@ -636,8 +638,10 @@ class Heat(Simulation):
             self.S.get_layer_property_vector('heat_capacity_str'),
             matlab.double(self.S.get_layer_property_vector('_density').tolist()),
             self.S.get_layer_property_vector('sub_system_coupling_str'),
-            0, 0, 0, 0
-            # matlab.int32(2), matlab.double(1000), matlab.int32(2), matlab.double(1000)
+            matlab.int32([self.boundary_conditions['left_type']+1]),
+            matlab.double([self.boundary_conditions['left_value']]),
+            matlab.int32([self.boundary_conditions['right_type']+1]),
+            matlab.double([self.boundary_conditions['right_value']]),
         )
         temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
 
