@@ -70,6 +70,8 @@ class Heat(Simulation):
             1: isolator - 2: temperature - 3: flux
             For the last two cases the corresponding value has to be set as
             Kx1 array, where K is the number of sub-systems
+        matlab_engine (module): MATLAB to Python API engine required for
+            calculating heat diffusion
 
     """
 
@@ -88,6 +90,7 @@ class Heat(Simulation):
             'right_value': np.array([]),
             }
         self.ode_options = {'RelTol': 1e-3}
+        self.matlab_engine = []
 
     def __str__(self, output=[]):
         """String representation of this class"""
@@ -468,6 +471,7 @@ class Heat(Simulation):
 
         num_ex = 1  # excitation counter
         excitation_delays = np.array([])
+        temp = []
         # traverse excitations
         for i, excitation in enumerate(checked_excitation):
             # reset inital temperature for delta excitation with heat diffusion enabled
@@ -518,11 +522,13 @@ class Heat(Simulation):
                     # to set the initial temperature for this next
                     # intervall seperately
                     special_init_temp = temp[-1, :, :]
+                    temp = temp[start:-1, :, :]
+                else:
+                    temp = temp[start:, :, :]
                 # cut the before added time steps
-                temp = temp[start:-1-stop, :, :]
-            if np.sum(fluence) > 0 and (not self.heat_diffusion or
-                                        (self.heat_diffusion and
-                                         np.sum(pulse_width) == 0)):
+            elif np.sum(fluence) > 0 and (not self.heat_diffusion or
+                                          (self.heat_diffusion and
+                                           np.sum(pulse_width) == 0)):
                 # excitation with no heat diffusion -> only delta excitation
                 # possible in this case OR excitation with heat diffusion and
                 # pulse_width equal to 0
@@ -565,6 +571,88 @@ class Heat(Simulation):
         self.disp_message('Elapsed time for _temp_map_:'
                           ' {:f} s'.format(time()-t1))
         return np.squeeze(temp_map), np.squeeze(delta_temp_map), checked_excitation
+
+    def calc_heat_diffusion(self, init_temp, delays, delay_pump, pulse_width, fluence):
+        r""" calc_heat_diffusion
+
+        Returns a temp_map that is calculated by heat diffusion for a
+        given delay array and initial temperature profile.
+        Here we have to solve the 1D heat equation:
+
+        .. math::
+
+            c(T) \, \rho \, \frac{\partial T}{\partial t}
+            = \frac{\partial}{\partial z}
+            \left( k(T) \,\frac{\partial T}{\partial z} \right)
+            + S(z,t)
+
+        where :math:`T` is the temperature [K], :math:`z` the distance [m],
+        :math:`t` the delay [s], :math:`c(T)` the temperature dependent heat
+        capacity [J/kg K], :math:`\rho` the density [kg/m^3] and :math:`k(T)`
+        is the temperature-dependent thermal conductivity [W/m K] and
+        :math:`S(z,t)` is a source term [W/m^3].
+
+        """
+        t1 = time()
+        try:
+            import matlab.engine
+        except ImportError:
+            raise Warning('You need to have a working MATLAB installation '
+                          'on your machine with installed matlab.engine for '
+                          'Python.\n'
+                          'See '
+                          'https://de.mathworks.com/help/matlab/matlab-engine-for-python.html '
+                          'for details.')
+
+        # statr MATLAB engine if not already done
+        if self.matlab_engine == []:
+            self.matlab_engine = matlab.engine.start_matlab()
+
+        K = self.S.num_sub_systems
+        init_temp = self.check_initial_temperature(init_temp)
+        d_start, _, d_Mid = self.S.get_distances_of_layers()
+        dalpha_dz = self.get_absorption_profile()
+
+        if len(self.distances) == 0:
+            # no user-defined distaces are given, so calculate heat diffusion
+            # by layer and also interpolate at the interfaces
+            distances = d_Mid  # self.S.interp_distance_at_interfaces(self.intp_at_nterface);
+        else:
+            # a user-defined distances vector is given, so determine the
+            # indicies for final assignment per layer
+            distances = self.distances
+
+        temp_map = self.matlab_engine.calc_heat_diffusion(
+            K,
+            matlab.double(init_temp.tolist()),
+            matlab.double(d_start.to('m').magnitude.tolist()),
+            matlab.double(distances.to('m').magnitude.tolist()),
+            matlab.double(self.excitation['fluence'].to_base_units().magnitude.tolist()),
+            matlab.double(self.excitation['pulse_width'].to_base_units().magnitude.tolist()),
+            matlab.double(self.excitation['delay_pump'].to_base_units().magnitude.tolist()),
+            matlab.double(dalpha_dz.tolist()),
+            matlab.double(delays.tolist()),
+            self.S.get_layer_property_vector('therm_cond_str'),
+            self.S.get_layer_property_vector('heat_capacity_str'),
+            matlab.double(self.S.get_layer_property_vector('_density').tolist()),
+            self.S.get_layer_property_vector('sub_system_coupling_str'),
+            0, 0, 0, 0
+            # matlab.int32(2), matlab.double(1000), matlab.int32(2), matlab.double(1000)
+        )
+        temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
+
+        for i in range(K):
+            f = interp2d(distances.to('m').magnitude.tolist(), delays,
+                         temp_map[:, :, i], kind='linear')
+            temp_map[:, :, i] = f(d_Mid.to('m').magnitude.tolist(), delays)
+
+        if fluence == []:
+            self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
+        else:
+            self.disp_message('Elapsed time for _heat_diffusion_ with {:d} '
+                              'excitation(s): {:f} s'.format(len(fluence), time()-t1))
+
+        return temp_map
 
     @property
     def excitation(self):
@@ -613,3 +701,8 @@ class Heat(Simulation):
             raise ValueError('The excitations have to be unique in delays!')
         else:
             self._excitation['delay_pump'] = np.sort(self._excitation['delay_pump'])
+
+    def __del__(self):
+        # stop matlab engine if exists
+        if self.matlab_engine != []:
+            self.matlab_engine.quit()
