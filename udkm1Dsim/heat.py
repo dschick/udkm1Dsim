@@ -642,6 +642,7 @@ class Heat(Simulation):
             matlab.double([self.boundary_conditions['left_value']]),
             matlab.int32([self.boundary_conditions['right_type']+1]),
             matlab.double([self.boundary_conditions['right_value']]),
+            self.ode_options
         )
         temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
 
