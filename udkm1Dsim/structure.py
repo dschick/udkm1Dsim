@@ -381,12 +381,12 @@ class Structure:
 
         d_start, d_end, d_mid = self.get_distances_of_layers(False)
         indices = np.r_[1, np.diff(self.get_layer_vectors()[0])]
-        
+        res = np.append(d_start[np.nonzero(indices)], d_end[-1])
         if units:
-            return np.append(d_start[np.nonzero(indices)].magnitude, d_end[-1].magnitude)*u.m
+            return res*u.m
         else:
-            return np.append(d_start[np.nonzero(indices)], d_end[-1])
-    
+            return res
+
     def interp_distance_at_interfaces(self, N, units=True):
         """ interpDistanceAtInterfaces
 

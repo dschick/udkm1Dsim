@@ -81,7 +81,7 @@ class Heat(Simulation):
         self.intp_at_interface = kwargs.get('intp_at_interface', 11)
 
         self._excitation = {'fluence': [], 'delay_pump': [], 'pulse_width': []}
-        self.distances = np.array([])
+        self._distances = np.array([])
         self.boundary_types = ['isolator', 'temperature', 'flux']
         self.boundary_conditions = {
             'left_type': 0,
@@ -330,15 +330,15 @@ class Heat(Simulation):
         if distances == []:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
-            d_start, _, distances = self.S.get_distances_of_layers()
+            d_start, _, distances = self.S.get_distances_of_layers(False)
         else:
-            d_start, _, _ = self.S.get_distances_of_layers()
+            d_start, _, _ = self.S.get_distances_of_layers(False)
 
-        interfaces = self.S.get_distances_of_interfaces()
-        # convert to [m] and get rid of quantities for faster calculations
-        d_start = d_start.to('m').magnitude
-        distances = distances.to('m').magnitude
-        interfaces = interfaces.to('m').magnitude
+        interfaces = self.S.get_distances_of_interfaces(False)
+        # # convert to [m] and get rid of quantities for faster calculations
+        # d_start = d_start.to('m').magnitude
+        # distances = distances.to('m').magnitude
+        # interfaces = interfaces.to('m').magnitude
 
         N = len(distances)
         dalpha_dz = np.zeros(N)  # initialize relative absorbed energies
@@ -612,23 +612,23 @@ class Heat(Simulation):
 
         K = self.S.num_sub_systems
         init_temp = self.check_initial_temperature(init_temp)
-        d_start, _, d_Mid = self.S.get_distances_of_layers()
+        d_start, _, d_mid = self.S.get_distances_of_layers(False)
         dalpha_dz = self.get_absorption_profile()
 
         if len(self.distances) == 0:
             # no user-defined distaces are given, so calculate heat diffusion
             # by layer and also interpolate at the interfaces
-            distances = d_Mid  # self.S.interp_distance_at_interfaces(self.intp_at_nterface);
+            distances, _ = self.S.interp_distance_at_interfaces(self.intp_at_interface, False);
         else:
             # a user-defined distances vector is given, so determine the
             # indicies for final assignment per layer
-            distances = self.distances
+            distances = self._distances
 
         temp_map = self.matlab_engine.calc_heat_diffusion(
             K,
             matlab.double(init_temp.tolist()),
-            matlab.double(d_start.to('m').magnitude.tolist()),
-            matlab.double(distances.to('m').magnitude.tolist()),
+            matlab.double(d_start.tolist()),
+            matlab.double(distances.tolist()),
             matlab.double(self.excitation['fluence'].to_base_units().magnitude.tolist()),
             matlab.double(self.excitation['pulse_width'].to_base_units().magnitude.tolist()),
             matlab.double(self.excitation['delay_pump'].to_base_units().magnitude.tolist()),
@@ -645,11 +645,13 @@ class Heat(Simulation):
             self.ode_options
         )
         temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
-
+        res = np.zeros([len(delays), len(d_mid), K])
+        print(temp_map.shape)
+        print(len(d_mid))
         for i in range(K):
-            f = interp2d(distances.to('m').magnitude.tolist(), delays,
+            f = interp2d(distances, delays,
                          temp_map[:, :, i], kind='linear')
-            temp_map[:, :, i] = f(d_Mid.to('m').magnitude.tolist(), delays)
+            res[:, :, i] = f(d_mid, delays)
 
         if fluence == []:
             self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
@@ -657,7 +659,7 @@ class Heat(Simulation):
             self.disp_message('Elapsed time for _heat_diffusion_ with {:d} '
                               'excitation(s): {:f} s'.format(len(fluence), time()-t1))
 
-        return temp_map
+        return res
 
     @property
     def excitation(self):
@@ -706,6 +708,16 @@ class Heat(Simulation):
             raise ValueError('The excitations have to be unique in delays!')
         else:
             self._excitation['delay_pump'] = np.sort(self._excitation['delay_pump'])
+
+    @property
+    def distances(self):
+        """float: distances for heat diffusion [m]"""
+        return Q_(self._distances, u.meter).to('nm')
+
+    @distances.setter
+    def distances(self, distances):
+        """set.distances"""
+        self._distances = distances.to_base_units().magnitude
 
     def __del__(self):
         # stop matlab engine if exists
