@@ -366,6 +366,134 @@ class Heat(Simulation):
                 I0 = I0*np.exp(-(interfaces[i+1]-interfaces[i])/opt_pen_depth)
             k = k+m  # set the counter
         return dalpha_dz
+    
+    def get_multilayers_absorption(self, incidence, wavelength):
+        """Calculates the intensity, absorption and temperature increase profiles
+        in each layer of a multilayers structure for p-polarized light.
+        
+        Calculation of intensity, absorption and temperature increase profiles
+        in multilayers.
+        
+        Calculation based on the method by K. Ohta and H. Ishida, Appl. Opt. 29,
+        2466 (1990).
+        Code developed Matlab for L. Le Guyader & al., Phys. Rev. B 87, 054437 (2013).
+        
+        Copyright (2012-2014) Loïc Le Guyader <loic.le_guyader@helmholtz-berlin.de>
+    
+        Arguments:
+            layers: a 2D array, each rows corresponds to one layer, starting from
+                the top layer, usually vacuum or air, down to the bottom layer,
+                usually the substrate. For each layer, i.e. row, the complex index
+                of refraction n+jk, the density [g.cm-3], the heat capacity
+                [J.kg-1.K-1] and the thickness [m] are given in that order.
+            incidence: the angle of incidence, in degree.
+            wavelength: the vacuum wavelength [m].
+            steps: the number of data points for the calculation of the intensity,
+                absorption, temperature increase profiles for each layer. If steps
+                is None, then only Rtotal and Ttotal are calculated
+        
+        Returns:
+            zs: a 2D array containing the depth z [m] within each layer where the
+                other quantities are calculated.
+            Ints: a 2D array containing the intensity profiles within each layer
+                for an incoming intensity is 1 J.m-2 or 0.1 mJ.cm-2
+            dAs: a 2D array containing the differential absorption [m-1] within
+                each layer.
+            dTs: a 2D array containing the temperature increase [K] within each
+                layer.
+            Rtotal: total amount of reflection from the multilayer.
+            Ttotal: total transmission in the last layer of the multilayer.
+        """
+        
+        nblayers = self.S.get_number_of_layers()
+        N = self.S.get_layer_property_vector('opt_ref_index')
+        thickness = self.S.get_layer_property_vector('_thickness')
+        # thickness = np.empty((nblayers,1), dtype=float)
+        # density = np.empty((nblayers,1), dtype=float)
+        # heatcapacity = np.empty((nblayers,1), dtype=float)
+        # for n in range(0, nblayers):
+        #     N[n] = layers[n][0]               #refractive index n+ik
+        #     density[n] = 1e3*layers[n][1]     #density in g/cm3 or kg/m3
+        #     heatcapacity[n] = layers[n][2]    #heat capacity in J/kg.K
+        #     thickness[n] = layers[n][3]       #thickness [m]
+        
+        #Snell laws
+        theta = np.empty(nblayers, dtype=complex)
+        theta[0] = incidence/180.0*np.pi
+        for n in range(1, nblayers):
+            theta[n] = np.arcsin(N[0]/N[n]*np.sin(theta[0]))
+        
+        #fresnel coefficient for P polarized light
+        rfresnel = np.empty(((nblayers -1),1), dtype=complex)
+        tfresnel = np.empty(((nblayers -1),1), dtype=complex)
+        
+        for n in range(0, nblayers-1):
+            rfresnel[n] = (N[n+1]*np.cos(theta[n]) - N[n]*np.cos(theta[n+1]))/(N[n+1]*np.cos(theta[n]) + N[n]*np.cos(theta[n+1]))
+            tfresnel[n] = 2.0*N[n]*np.cos(theta[n])/(N[n+1]*np.cos(theta[n]) + N[n]*np.cos(theta[n+1]))
+        
+        #interface change matrix
+        Jnm = np.empty((2,2,nblayers-1), dtype=complex)
+        for n in range(0, nblayers-1):
+            Jnm[0,0,n] = np.asscalar(1.0/tfresnel[n])
+            Jnm[0,1,n] = np.asscalar(rfresnel[n]/tfresnel[n])
+            Jnm[1,0,n] = np.asscalar(rfresnel[n]/tfresnel[n])
+            Jnm[1,1,n] = np.asscalar(1.0/tfresnel[n])
+        
+        #calculating z-component of the wave vector
+        Kz = 2.0*np.pi/wavelength*N*np.cos(theta)       
+        
+        #phase changes
+        beta = Kz*thickness
+        Ln = np.empty((2,2,nblayers-1), dtype=complex)
+        Ln[:,:,0] = [[1,0],[0,1]]
+        for n in range(1, nblayers-1):
+            Ln[0,0,n] = np.asscalar(np.exp(-1.0j*beta[n]))
+            Ln[0,1,n] = 0
+            Ln[1,0,n] = 0
+            Ln[1,1,n] = np.asscalar(np.exp(1.0j*beta[n]))
+        
+        #calculating propagation matrix
+        S = Jnm[:,:,nblayers-2]
+        for n in range(nblayers-3, -1 ,-1):
+            S = np.dot(Jnm[:,:,n], np.dot(Ln[:,:,n+1], S))
+        
+        #Total transmission and reflection of the multilayer
+        Rtotal = np.abs(S[1,0]/S[0,0])**2;
+        Ttotal = np.asscalar(np.real(np.conj(N[nblayers-1])*np.cos(theta[nblayers-1])/(N[0]*np.cos(theta[0])))*np.abs(1/S[0,0])**2)
+
+        #calculating D matrix for intermediate field
+        Dn = np.empty((2,2,nblayers), dtype=complex)
+        Dn[0,0,nblayers-1] = np.asscalar(1.0/S[0,0])
+        Dn[0,1,nblayers-1] = 0.0
+        Dn[1,0,nblayers-1] = 0.0
+        Dn[1,1,nblayers-1] = np.asscalar(1.0/S[0,0])
+        for n in range(nblayers-2, -1 ,-1):
+            Temp = np.dot(Ln[:,:,n], np.dot(Jnm[:,:,n], Dn[:,:,n+1]))
+            Dn[0,0,n] = Temp[0,0]
+            Dn[0,1,n] = Temp[0,1]
+            Dn[1,0,n] = Temp[1,0]
+            Dn[1,1,n] = Temp[1,1]
+        
+        #For each layer except the first, compute Intensity,
+        #Absorption, Temperature
+        # zs = np.empty(nblayers, dtype=float)
+        Ints = np.empty(nblayers, dtype=float)
+        dAs = np.empty(nblayers, dtype=float)
+        # dTs = np.empty(nblayers, dtype=float)
+        
+        d_start, _, _ = self.S.get_distances_of_layers(False)
+        for n in range(0, nblayers):
+            Ep = Dn[0,0,n]*np.exp(1.0j*Kz[n]*d_start[n])
+            Em = Dn[1,0,n]*np.exp(-1.0j*Kz[n]*d_start[n])
+            Etx = 0.0*Ep + 0.0*Em
+            Ety = np.cos(theta[n])*Ep - np.cos(theta[n])*Em
+            Etz = -np.sin(theta[n])*Ep - np.sin(theta[n])*Em
+            Ints[n] = np.real(Etx * np.conj(Etx) + Ety*np.conj(Ety) + Etz*np.conj(Etz))
+            dAs[n] = np.real(N[n]*np.cos(theta[n])/(N[0]*np.cos(theta[0])))*2.0*np.imag(Kz[n])*Ints[n]
+            # dTs[n] = dAs[n]/(density[n]*heatcapacity[n])
+        
+    
+        return Ints, dAs, Rtotal, Ttotal
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp):
         r"""get_temperature_after_delta_excitation
