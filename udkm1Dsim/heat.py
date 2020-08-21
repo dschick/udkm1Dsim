@@ -613,7 +613,6 @@ class Heat(Simulation):
         K = self.S.num_sub_systems
         init_temp = self.check_initial_temperature(init_temp)
         d_start, _, d_mid = self.S.get_distances_of_layers(False)
-        dalpha_dz = self.get_absorption_profile()
 
         if len(self.distances) == 0:
             # no user-defined distaces are given, so calculate heat diffusion
@@ -623,6 +622,8 @@ class Heat(Simulation):
             # a user-defined distances vector is given, so determine the
             # indicies for final assignment per layer
             distances = self._distances
+        
+        dalpha_dz = self.get_absorption_profile(distances)
 
         temp_map = self.matlab_engine.calc_heat_diffusion(
             K,
