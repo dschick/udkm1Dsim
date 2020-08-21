@@ -465,20 +465,25 @@ class Structure:
             # its a number or array
             layers = self.get_unique_layers()
             temp = np.zeros([len(layers[0]), 1])
+            set_dtype = float
             for i, layer in enumerate(layers[1]):
+                if isinstance(getattr(layer, property_name), complex):
+                    set_dtype = complex
                 try:
-                    temp[i] = len(getattr(layer, property_name))
+                    temp[i] = len(getattr(layer, property_name))                    
                 except TypeError:
                     temp[i] = 1
             max_dim = int(np.max(temp))
             if max_dim > 1:
-                prop = np.empty([self.get_number_of_layers(), max_dim])
+                prop = np.empty([self.get_number_of_layers(), max_dim], dtype=set_dtype)
             else:
-                prop = np.empty([self.get_number_of_layers()])
+                prop = np.empty([self.get_number_of_layers()], dtype=set_dtype)
             del temp
             # traverse all layers
             for i in range(self.get_number_of_layers()):
                 temp = getattr(handles[i], property_name)
+                if isinstance(temp, complex):
+                    prop.dtype = complex
                 if max_dim > 1:
                     prop[i, :] = temp
                 else:
