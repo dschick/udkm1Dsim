@@ -394,7 +394,7 @@ class Structure:
         odd number N at the interface of sturctures.
 
         """
-        
+
         [d_start, d_end, d_mid] = self.get_distances_of_layers(False)
         # these are the distances of the interfaces
         dist_intf = self.get_distances_of_interfaces(False)
@@ -402,7 +402,7 @@ class Structure:
         dist_interp = d_mid
 
         N = int(N)  # make N an integer
-        if N%2 == 0:
+        if N % 2 == 0:
             # odd numbers are required
             N += 1
 
@@ -410,15 +410,16 @@ class Structure:
         for i, z in enumerate(dist_intf):
             inda = finderb(z, d_start)  # this is the index of a layer after the interface
             indb = inda-1  # this is the index of a layer before the interface
-            
+
             # interpolate linearly N new distances at the interface
             if indb == 0:  # this is the surface interface
                 dist_interp = np.append(dist_interp, np.linspace(0, d_mid[inda], 2+(N-1)/2))
             elif inda >= len(d_mid):  # this is the bottom interface
-                dist_interp = np.append(dist_interp, np.linspace(d_mid[inda], d_end[-1], 2+(N-1)/2))
+                dist_interp = np.append(dist_interp,
+                                        np.linspace(d_mid[inda], d_end[-1], 2+(N-1)/2))
             else:  # this is a surface inside the structure
                 dist_interp = np.append(dist_interp, np.linspace(d_mid[indb], d_mid[inda], 2+N))
-        
+
         dist_interp = np.unique(np.sort(dist_interp))  # sort and unify the distances
         # these are the indicies of the original distances in the interpolated new array
         original_indicies = finderb(d_mid, dist_interp)

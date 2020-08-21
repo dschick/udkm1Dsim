@@ -102,7 +102,8 @@ class Layer:
         self.sub_system_coupling, self.sub_system_coupling_str = self.check_cell_array_input(
                 kwargs.get('sub_system_coupling', 0))
 
-        if len(self.heat_capacity) == len(self.therm_cond) == len(self.lin_therm_exp) == len(self.sub_system_coupling):
+        if len(self.heat_capacity) == len(self.therm_cond) \
+                == len(self.lin_therm_exp) == len(self.sub_system_coupling):
             self.num_sub_systems = len(self.heat_capacity)
         else:
             raise ValueError('Heat capacity, thermal conductivity, linear '
