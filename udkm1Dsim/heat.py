@@ -420,9 +420,9 @@ class Heat(Simulation):
 
                 def fun(final_temp):
                     return (masses[i]*(int_heat_capacity[0](final_temp)
-                                       - int_heat_capacity[0](init_temp[i]))
+                                       - int_heat_capacity[0](init_temp[i, 0]))
                             - del_E)
-                final_temp[i] = brentq(fun, init_temp[i], 1e5)
+                final_temp[i, 0] = brentq(fun, init_temp[i, 0], 1e5)
         delta_T = final_temp - init_temp  # this is the temperature change
         self.disp_message('Elapsed time for _temperature_after_delta_excitation_:'
                           ' {:f} s'.format(time()-t1))
@@ -646,8 +646,6 @@ class Heat(Simulation):
         )
         temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
         res = np.zeros([len(delays), len(d_mid), K])
-        print(temp_map.shape)
-        print(len(d_mid))
         for i in range(K):
             f = interp2d(distances, delays,
                          temp_map[:, :, i], kind='linear')
