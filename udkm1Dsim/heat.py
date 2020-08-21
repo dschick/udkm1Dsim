@@ -606,9 +606,13 @@ class Heat(Simulation):
                           'https://de.mathworks.com/help/matlab/matlab-engine-for-python.html '
                           'for details.')
 
-        # statr MATLAB engine if not already done
+        # start MATLAB engine if not already done
         if self.matlab_engine == []:
             self.matlab_engine = matlab.engine.start_matlab()
+
+        # add path of matlab script to matlab's search path
+        matlab_path = path.join(path.dirname(path.abspath(__file__)), 'matlab')
+        self.matlab_engine.addpath(matlab_path)
 
         K = self.S.num_sub_systems
         init_temp = self.check_initial_temperature(init_temp)
@@ -617,12 +621,12 @@ class Heat(Simulation):
         if len(self.distances) == 0:
             # no user-defined distaces are given, so calculate heat diffusion
             # by layer and also interpolate at the interfaces
-            distances, _ = self.S.interp_distance_at_interfaces(self.intp_at_interface, False);
+            distances, _ = self.S.interp_distance_at_interfaces(self.intp_at_interface, False)
         else:
             # a user-defined distances vector is given, so determine the
             # indicies for final assignment per layer
             distances = self._distances
-        
+
         dalpha_dz = self.get_absorption_profile(distances)
 
         temp_map = self.matlab_engine.calc_heat_diffusion(
