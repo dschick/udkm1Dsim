@@ -391,3 +391,14 @@ class AtomMixed(Atom):
             f += self.atoms[i][0].get_cm_atomic_form_factor(energy, qz) * self.atoms[i][1]
 
         return f
+
+    def get_magnetic_form_factor(self, energy):
+        """get_magnetic_form_factor
+
+        Returns the mixed energy dependent magnetic form factor.
+        """
+        f = 0
+        for i in range(self.num_atoms):
+            f += self.atoms[i][0].get_magnetic_form_factor(energy) * self.atoms[i][1]
+
+        return f

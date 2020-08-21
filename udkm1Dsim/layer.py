@@ -102,13 +102,12 @@ class Layer:
         self.sub_system_coupling, self.sub_system_coupling_str = self.check_cell_array_input(
                 kwargs.get('sub_system_coupling', 0))
 
-        if (len(self.heat_capacity) == len(self.therm_cond)
-            and len(self.heat_capacity) == len(self.lin_therm_exp)
-                and len(self.heat_capacity) == len(self.sub_system_coupling)):
+        if len(self.heat_capacity) == len(self.therm_cond) \
+                == len(self.lin_therm_exp) == len(self.sub_system_coupling):
             self.num_sub_systems = len(self.heat_capacity)
         else:
-            raise ValueError('Heat capacity, thermal conductivity, linear'
-                             'thermal expansion and subsystem coupling have not'
+            raise ValueError('Heat capacity, thermal conductivity, linear '
+                             'thermal expansion and subsystem coupling have not '
                              'the same number of elements!')
 
     def __str__(self):
@@ -240,7 +239,10 @@ class Layer:
         """
 
         self._heat_capacity, self.heat_capacity_str = self.check_cell_array_input(heat_capacity)
-        self.int_heat_capacity  # recalculate the anti-derivative
+        # delete last anti-derivative
+        self._int_heat_capacity = None
+        # recalculate the anti-derivative
+        self.int_heat_capacity
 
     @property
     def int_heat_capacity(self):
@@ -264,11 +266,11 @@ class Layer:
                     self.int_heat_capacity_str.append('lambda T : ' + str(integral))
 
             except Exception as e:
-                print('The sympy integration did not work. You can set the'
-                      'analytical anti-derivative of the heat capacity'
-                      'of your unit cells as lambda function of the temperature'
-                      'T by typing UC.int_heat_capacity = lambda T: c(T)'
-                      'where UC is the name of the unit cell object.')
+                print('The sympy integration did not work. You can set the '
+                      'analytical anti-derivative of the heat capacity '
+                      'of your layer as lambda function of the temperature '
+                      'T by typing layer.int_heat_capacity = lambda T: c(T) '
+                      'where layer is the name of the layer object.')
                 print(e)
 
         return self._int_heat_capacity
@@ -304,7 +306,10 @@ class Layer:
         """
 
         self._lin_therm_exp, self.lin_therm_exp_str = self.check_cell_array_input(lin_therm_exp)
-        self.int_lin_therm_exp  # recalculate the anti-derivative
+        # delete last anti-derivative
+        self._int_lin_therm_exp = None
+        # recalculate the anti-derivative
+        self.int_lin_therm_exp
 
     @property
     def int_lin_therm_exp(self):
@@ -764,7 +769,7 @@ class UnitCell(Layer):
 
         self.density = self.mass / self.volume
         # set mass per unit area (do not know if necessary)
-        self.mass = self.mass * 1*u.angstrom**2 / self.area
+        # self.mass = self.mass * 1*u.angstrom**2 / self.area
         self.calc_spring_const()
 
     def add_multiple_atoms(self, atom, position, Nb):

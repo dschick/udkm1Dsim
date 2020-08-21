@@ -28,7 +28,7 @@ import itertools
 import numpy as np
 from .layer import AmorphousLayer, UnitCell
 from . import u, Q_
-from .helpers import make_hash_md5
+from .helpers import make_hash_md5, finderb
 
 
 class Structure:
@@ -98,7 +98,7 @@ class Structure:
         return class_str
 
     def get_hash(self, **kwargs):
-        """hash
+        """get_hash
 
         Returns a unique hash from all layer IDs in the correct order
         in the structure.
@@ -195,7 +195,8 @@ class Structure:
         N = 0
         # traverse the substructres
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
+            if isinstance(self.sub_structures[i][0], AmorphousLayer) or \
+                    isinstance(self.sub_structures[i][0], UnitCell):
                 N = N + self.sub_structures[i][1]
             else:
                 # its a sturcture, so call the method recursively
@@ -350,7 +351,7 @@ class Structure:
         # Each element accessible through layer id
         return pos
 
-    def get_distances_of_layers(self):
+    def get_distances_of_layers(self, units=True):
         """get_distances_of_layers
 
         Returns a vector of the distance from the surface for each layer
@@ -364,10 +365,13 @@ class Structure:
         thickness = self.get_layer_property_vector('_thickness')
         d_end = np.cumsum(thickness)
         d_start = np.hstack([[0], d_end[0:-1]])
-        d_mid = (d_start + thickness)/2
-        return d_start*u.m, d_end*u.m, d_mid*u.m
+        d_mid = (d_start + thickness/2)
+        if units:
+            return d_start*u.m, d_end*u.m, d_mid*u.m
+        else:
+            return d_start, d_end, d_mid
 
-    def get_distances_of_interfaces(self):
+    def get_distances_of_interfaces(self, units=True):
         """get_distances_of_interfaces
 
         Returns the distances from the surface of each interface of the
@@ -375,9 +379,54 @@ class Structure:
 
         """
 
-        d_start, d_end, d_mid = self.get_distances_of_layers()
+        d_start, d_end, d_mid = self.get_distances_of_layers(False)
         indices = np.r_[1, np.diff(self.get_layer_vectors()[0])]
-        return np.append(d_start[np.nonzero(indices)].magnitude, d_end[-1].magnitude)*u.m
+        res = np.append(d_start[np.nonzero(indices)], d_end[-1])
+        if units:
+            return res*u.m
+        else:
+            return res
+
+    def interp_distance_at_interfaces(self, N, units=True):
+        """ interpDistanceAtInterfaces
+
+        Returns a distance array of the center of layers interpolated by an
+        odd number N at the interface of sturctures.
+
+        """
+
+        [d_start, d_end, d_mid] = self.get_distances_of_layers(False)
+        # these are the distances of the interfaces
+        dist_intf = self.get_distances_of_interfaces(False)
+        # start with the distances of the centers of the layers
+        dist_interp = d_mid
+
+        N = int(N)  # make N an integer
+        if N % 2 == 0:
+            # odd numbers are required
+            N += 1
+
+        # traverse all distances
+        for i, z in enumerate(dist_intf):
+            inda = finderb(z, d_start)  # this is the index of a layer after the interface
+            indb = inda-1  # this is the index of a layer before the interface
+
+            # interpolate linearly N new distances at the interface
+            if indb == 0:  # this is the surface interface
+                dist_interp = np.append(dist_interp, np.linspace(0, d_mid[inda], 2+(N-1)/2))
+            elif inda >= len(d_mid):  # this is the bottom interface
+                dist_interp = np.append(dist_interp,
+                                        np.linspace(d_mid[inda], d_end[-1], 2+(N-1)/2))
+            else:  # this is a surface inside the structure
+                dist_interp = np.append(dist_interp, np.linspace(d_mid[indb], d_mid[inda], 2+N))
+
+        dist_interp = np.unique(np.sort(dist_interp))  # sort and unify the distances
+        # these are the indicies of the original distances in the interpolated new array
+        original_indicies = finderb(d_mid, dist_interp)
+        if units:
+            return dist_interp*u.m, original_indicies
+        else:
+            return dist_interp, original_indicies
 
     def get_layer_property_vector(self, property_name):
         """get_layer_property_vector
