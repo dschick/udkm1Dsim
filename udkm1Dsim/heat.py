@@ -405,9 +405,9 @@ class Heat(Simulation):
             Ttotal: total transmission in the last layer of the multilayer.
         """
         
-        nblayers = self.S.get_number_of_layers()
-        N = self.S.get_layer_property_vector('opt_ref_index')
-        thickness = self.S.get_layer_property_vector('_thickness')
+        nblayers = self.S.get_number_of_layers()+1  # plus 1 for vacuum/air
+        N = np.append(1, self.S.get_layer_property_vector('opt_ref_index'))
+        thickness = np.append(1e-9, self.S.get_layer_property_vector('_thickness'))
         # thickness = np.empty((nblayers,1), dtype=float)
         # density = np.empty((nblayers,1), dtype=float)
         # heatcapacity = np.empty((nblayers,1), dtype=float)
@@ -476,21 +476,22 @@ class Heat(Simulation):
         
         #For each layer except the first, compute Intensity,
         #Absorption, Temperature
-        # zs = np.empty(nblayers, dtype=float)
+        # zs = np.empty((nblayers, steps), dtype=float)
         Ints = np.empty(nblayers, dtype=float)
         dAs = np.empty(nblayers, dtype=float)
-        # dTs = np.empty(nblayers, dtype=float)
-        
-        d_start, _, _ = self.S.get_distances_of_layers(False)
-        for n in range(0, nblayers):
-            Ep = Dn[0,0,n]*np.exp(1.0j*Kz[n]*d_start[n])
-            Em = Dn[1,0,n]*np.exp(-1.0j*Kz[n]*d_start[n])
+        # dTs = np.empty((nblayers, steps), dtype=float)
+        for n in range(nblayers):
+            # zs[n,:] = np.logspace(-10.0, np.log10(thickness[n]), steps)
+            # Ep = Dn[0,0,n]*np.exp(1.0j*Kz[n]*zs[n,:])
+            # Em = Dn[1,0,n]*np.exp(-1.0j*Kz[n]*zs[n,:])
+            Ep = Dn[0,0,n]*np.exp(1.0j*Kz[n]*0)
+            Em = Dn[1,0,n]*np.exp(-1.0j*Kz[n]*0)
             Etx = 0.0*Ep + 0.0*Em
             Ety = np.cos(theta[n])*Ep - np.cos(theta[n])*Em
             Etz = -np.sin(theta[n])*Ep - np.sin(theta[n])*Em
             Ints[n] = np.real(Etx * np.conj(Etx) + Ety*np.conj(Ety) + Etz*np.conj(Etz))
             dAs[n] = np.real(N[n]*np.cos(theta[n])/(N[0]*np.cos(theta[0])))*2.0*np.imag(Kz[n])*Ints[n]
-            # dTs[n] = dAs[n]/(density[n]*heatcapacity[n])
+            # dTs[n,:] = dAs[n,:]/(density[n]*heatcapacity[n])
         
     
         return Ints, dAs, Rtotal, Ttotal
