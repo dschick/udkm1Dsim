@@ -335,10 +335,6 @@ class Heat(Simulation):
             d_start, _, _ = self.S.get_distances_of_layers(False)
 
         interfaces = self.S.get_distances_of_interfaces(False)
-        # # convert to [m] and get rid of quantities for faster calculations
-        # d_start = d_start.to('m').magnitude
-        # distances = distances.to('m').magnitude
-        # interfaces = interfaces.to('m').magnitude
 
         N = len(distances)
         dalpha_dz = np.zeros(N)  # initialize relative absorbed energies
@@ -406,7 +402,7 @@ class Heat(Simulation):
         """
         
         nblayers = self.S.get_number_of_layers()+1  # plus 1 for vacuum/air
-        N = np.append(1, self.S.get_layer_property_vector('opt_ref_index'))
+        N = np.append(1+0.0j, self.S.get_layer_property_vector('opt_ref_index'))
         thickness = np.append(1e-9, self.S.get_layer_property_vector('_thickness'))
         # thickness = np.empty((nblayers,1), dtype=float)
         # density = np.empty((nblayers,1), dtype=float)
@@ -480,10 +476,8 @@ class Heat(Simulation):
         Ints = np.empty(nblayers, dtype=float)
         dAs = np.empty(nblayers, dtype=float)
         # dTs = np.empty((nblayers, steps), dtype=float)
-        for n in range(nblayers):
+        for n in range(0, nblayers):
             # zs[n,:] = np.logspace(-10.0, np.log10(thickness[n]), steps)
-            # Ep = Dn[0,0,n]*np.exp(1.0j*Kz[n]*zs[n,:])
-            # Em = Dn[1,0,n]*np.exp(-1.0j*Kz[n]*zs[n,:])
             Ep = Dn[0,0,n]*np.exp(1.0j*Kz[n]*0)
             Em = Dn[1,0,n]*np.exp(-1.0j*Kz[n]*0)
             Etx = 0.0*Ep + 0.0*Em
@@ -494,7 +488,7 @@ class Heat(Simulation):
             # dTs[n,:] = dAs[n,:]/(density[n]*heatcapacity[n])
         
     
-        return Ints, dAs, Rtotal, Ttotal
+        return Ints[1:], dAs[1:], Rtotal, Ttotal
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp):
         r"""get_temperature_after_delta_excitation
