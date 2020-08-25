@@ -470,7 +470,7 @@ class Structure:
                 if isinstance(getattr(layer, property_name), complex):
                     set_dtype = complex
                 try:
-                    temp[i] = len(getattr(layer, property_name))                    
+                    temp[i] = len(getattr(layer, property_name))
                 except TypeError:
                     temp[i] = 1
             max_dim = int(np.max(temp))
