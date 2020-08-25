@@ -477,19 +477,34 @@ class Heat(Simulation):
             Dn[1, 0, i] = Temp[1, 0]
             Dn[1, 1, i] = Temp[1, 1]
 
-        # For each layer except the first, compute Intensity, Absorption
-        Ints = np.empty(N, dtype=float)
-        dAs = np.empty(N, dtype=float)
-        Ep = Dn[0, 0, :]
-        Em = Dn[1, 0, :]
-        Etx = 0.0*Ep + 0.0*Em
-        Ety = np.cos(theta)*Ep - np.cos(theta)*Em
-        Etz = -np.sin(theta)*Ep - np.sin(theta)*Em
-        Ints = np.real(Etx * np.conj(Etx) + Ety*np.conj(Ety) + Etz*np.conj(Etz))
-        dAs = np.real(opt_ref_indices*np.cos(theta)/(opt_ref_indices[0]*np.cos(theta[0]))) \
-                * 2.0*np.imag(k_z)*Ints
+        K = len(distances)
+        Ints = np.empty(K, dtype=float)  # initialize relative intensities
+        dAs = np.empty(K, dtype=float)  # initialize relative absorbed energies
+        k = 0  # counter for first layer
+        for i in range(1, N):
+            # get all distances in the current layer we have to
+            # calculate the absorption profile for
+            if i >= N-2:  # last layer
+                z = distances[np.logical_and(distances >= interfaces[i-1],
+                                             distances <= interfaces[i])]
+            else:
+                z = distances[np.logical_and(distances >= interfaces[i-1],
+                                             distances < interfaces[i])]
+            m = len(z)
+            z -= interfaces[i-1]  # relative positon within the layer
+            # For each layer except the first, compute Intensity, Absorption
+            Ep = Dn[0, 0, i]*np.exp(1.0j*k_z[i]*z)
+            Em = Dn[1, 0, i]*np.exp(1.0j*k_z[i]*z)
+            Etx = 0.0*Ep + 0.0*Em
+            Ety = np.cos(theta[i])*Ep - np.cos(theta[i])*Em
+            Etz = -np.sin(theta[i])*Ep - np.sin(theta[i])*Em
+            Ints[k:k+m] = np.real(Etx * np.conj(Etx) + Ety*np.conj(Ety) + Etz*np.conj(Etz))
+            dAs[k:k+m] = np.real(opt_ref_indices[i]*np.cos(theta[i])/(opt_ref_indices[0]*np.cos(theta[0]))) \
+                    * 2.0*np.imag(k_z[i])*Ints[k:k+m]
+
+            k = k+m  # set the counter
     
-        return Ints[1:], dAs[1:], R_total, T_total
+        return Ints, dAs, R_total, T_total
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp):
         r"""get_temperature_after_delta_excitation
