@@ -361,9 +361,10 @@ class Heat(Simulation):
                 # calculate the remaining intensity for the next layer
                 I0 = I0*np.exp(-(interfaces[i+1]-interfaces[i])/opt_pen_depth)
             k = k+m  # set the counter
+
         return dalpha_dz
 
-    def get_multilayers_absorption(self, incidence, wavelength):
+    def get_multilayers_absorption(self, incidence, wavelength, distances=[]):
         """get_multilayers_absorption
 
         Calculates the intensity, absorption and temperature increase profiles
@@ -393,85 +394,102 @@ class Heat(Simulation):
             Ttotal: total transmission in the last layer of the multilayer.
 
         """
+        
+        if distances == []:
+            # if no distances are set, calculate the extinction on
+            # the middle of each unit cell
+            d_start, _, distances = self.S.get_distances_of_layers(False)
+        else:
+            d_start, _, _ = self.S.get_distances_of_layers(False)
 
-        nblayers = self.S.get_number_of_layers()+1  # plus 1 for vacuum/air
-        N = np.append(1+0.0j, self.S.get_layer_property_vector('opt_ref_index'))
-        thickness = np.append(1e-9, self.S.get_layer_property_vector('_thickness'))
+        interfaces = self.S.get_distances_of_interfaces(False)
+        N = len(interfaces)
+        opt_ref_indices = np.empty(N, dtype=complex)
+        thicknesses = np.empty(N, dtype=float)
+        
+        # first layer is vacuum/air
+        opt_ref_indices[0] = 1+0.0j
+        thicknesses[0] = 1e-9
+
+        for i in range(N-1):
+            index = finderb(interfaces[i], d_start)
+            layer = self.S.get_layer_handle(index[0])
+            opt_ref_indices[i+1] = layer.opt_ref_index            
+            thicknesses[i+1] = interfaces[i+1]-interfaces[i]
+
+        #nblayers = self.S.get_number_of_layers()+1  # plus 1 for vacuum/air
+        #N = np.append(1+0.0j, self.S.get_layer_property_vector('opt_ref_index'))
+        #thickness = np.append(1e-9, self.S.get_layer_property_vector('_thickness'))
 
         # Snell laws
-        theta = np.empty(nblayers, dtype=complex)
+        theta = np.empty(N, dtype=complex)
         theta[0] = incidence/180.0*np.pi
-        for n in range(1, nblayers):
-            theta[n] = np.arcsin(N[0]/N[n]*np.sin(theta[0]))
+        theta[1:] = np.arcsin(opt_ref_indices[0]/opt_ref_indices[1:]*np.sin(theta[0]))
 
         # fresnel coefficient for P polarized light
-        rfresnel = np.empty(((nblayers-1), 1), dtype=complex)
-        tfresnel = np.empty(((nblayers-1), 1), dtype=complex)
-
-        for n in range(0, nblayers-1):
-            rfresnel[n] = (N[n+1]*np.cos(theta[n]) - N[n]*np.cos(theta[n+1])) \
-                / (N[n+1]*np.cos(theta[n]) + N[n]*np.cos(theta[n+1]))
-            tfresnel[n] = 2.0*N[n]*np.cos(theta[n]) \
-                / (N[n+1]*np.cos(theta[n]) + N[n]*np.cos(theta[n+1]))
+        rfresnel = np.empty(N-1, dtype=complex)
+        tfresnel = np.empty(N-1, dtype=complex)
+        
+        rfresnel[:] = (opt_ref_indices[1:]*np.cos(theta[0:-1]) - opt_ref_indices[0:-1]*np.cos(theta[1:])) \
+            / (opt_ref_indices[1:]*np.cos(theta[0:-1]) + opt_ref_indices[0:-1]*np.cos(theta[1:]))
+        tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(theta[0:-1]) \
+                / (opt_ref_indices[1:]*np.cos(theta[0:-1]) + opt_ref_indices[0:-1]*np.cos(theta[1:]))
 
         # interface change matrix
-        Jnm = np.empty((2, 2, nblayers-1), dtype=complex)
-        for n in range(0, nblayers-1):
-            Jnm[0, 0, n] = np.asscalar(1.0/tfresnel[n])
-            Jnm[0, 1, n] = np.asscalar(rfresnel[n]/tfresnel[n])
-            Jnm[1, 0, n] = np.asscalar(rfresnel[n]/tfresnel[n])
-            Jnm[1, 1, n] = np.asscalar(1.0/tfresnel[n])
+        Jnm = np.empty((2, 2, N-1), dtype=complex)
+        Jnm[0, 0, :] = 1.0/tfresnel
+        Jnm[0, 1, :] = rfresnel/tfresnel
+        Jnm[1, 0, :] = rfresnel/tfresnel
+        Jnm[1, 1, :] = 1.0/tfresnel
 
         # calculating z-component of the wave vector
-        Kz = 2.0*np.pi/wavelength*N*np.cos(theta)
+        k_z = 2.0*np.pi/wavelength*opt_ref_indices*np.cos(theta)
 
         # phase changes
-        beta = Kz*thickness
-        Ln = np.empty((2, 2, nblayers-1), dtype=complex)
+        beta = k_z*thicknesses
+        Ln = np.empty((2, 2, N-1), dtype=complex)
         Ln[:, :, 0] = [[1, 0], [0, 1]]
-        for n in range(1, nblayers-1):
-            Ln[0, 0, n] = np.asscalar(np.exp(-1.0j*beta[n]))
-            Ln[0, 1, n] = 0
-            Ln[1, 0, n] = 0
-            Ln[1, 1, n] = np.asscalar(np.exp(1.0j*beta[n]))
+        Ln[0, 0, 1:] = np.exp(-1.0j*beta[1:-1])
+        Ln[0, 1, 1:] = 0
+        Ln[1, 0, 1:] = 0
+        Ln[1, 1, 1:] = np.exp(1.0j*beta[1:-1])
 
         # calculating propagation matrix
-        S = Jnm[:, :, nblayers-2]
-        for n in range(nblayers-3, -1, -1):
-            S = np.dot(Jnm[:, :, n], np.dot(Ln[:, :, n+1], S))
+        S = Jnm[:, :, N-2]
+        for i in range(N-3, -1, -1):
+            S = np.dot(Jnm[:, :, i], np.dot(Ln[:, :, i+1], S))
 
         # Total transmission and reflection of the multilayer
-        Rtotal = np.abs(S[1, 0]/S[0, 0])**2
-        Ttotal = np.asscalar(np.real(np.conj(N[nblayers-1])*np.cos(theta[nblayers-1])
-                                     / (N[0]*np.cos(theta[0])))*np.abs(1/S[0, 0])**2)
+        R_total = np.abs(S[1, 0]/S[0, 0])**2
+        T_total = np.asscalar(np.real(np.conj(opt_ref_indices[N-1])*np.cos(theta[N-1])
+                                     / (opt_ref_indices[0]*np.cos(theta[0])))*np.abs(1/S[0, 0])**2)
 
         # calculating D matrix for intermediate field
-        Dn = np.empty((2, 2, nblayers), dtype=complex)
-        Dn[0, 0, nblayers-1] = np.asscalar(1.0/S[0, 0])
-        Dn[0, 1, nblayers-1] = 0.0
-        Dn[1, 0, nblayers-1] = 0.0
-        Dn[1, 1, nblayers-1] = np.asscalar(1.0/S[0, 0])
-        for n in range(nblayers-2, -1, -1):
-            Temp = np.dot(Ln[:, :, n], np.dot(Jnm[:, :, n], Dn[:, :, n+1]))
-            Dn[0, 0, n] = Temp[0, 0]
-            Dn[0, 1, n] = Temp[0, 1]
-            Dn[1, 0, n] = Temp[1, 0]
-            Dn[1, 1, n] = Temp[1, 1]
+        Dn = np.empty((2, 2, N), dtype=complex)
+        Dn[0, 0, N-1] = np.asscalar(1.0/S[0, 0])
+        Dn[0, 1, N-1] = 0.0
+        Dn[1, 0, N-1] = 0.0
+        Dn[1, 1, N-1] = np.asscalar(1.0/S[0, 0])
+        for i in range(N-2, -1, -1):
+            Temp = np.dot(Ln[:, :, i], np.dot(Jnm[:, :, i], Dn[:, :, i+1]))
+            Dn[0, 0, i] = Temp[0, 0]
+            Dn[0, 1, i] = Temp[0, 1]
+            Dn[1, 0, i] = Temp[1, 0]
+            Dn[1, 1, i] = Temp[1, 1]
 
         # For each layer except the first, compute Intensity, Absorption
-        Ints = np.empty(nblayers, dtype=float)
-        dAs = np.empty(nblayers, dtype=float)
-        for n in range(0, nblayers):
-            Ep = Dn[0, 0, n]*np.exp(1.0j*Kz[n]*0)
-            Em = Dn[1, 0, n]*np.exp(-1.0j*Kz[n]*0)
-            Etx = 0.0*Ep + 0.0*Em
-            Ety = np.cos(theta[n])*Ep - np.cos(theta[n])*Em
-            Etz = -np.sin(theta[n])*Ep - np.sin(theta[n])*Em
-            Ints[n] = np.real(Etx * np.conj(Etx) + Ety*np.conj(Ety) + Etz*np.conj(Etz))
-            dAs[n] = np.real(N[n]*np.cos(theta[n])/(N[0]*np.cos(theta[0]))) \
-                * 2.0*np.imag(Kz[n])*Ints[n]
-
-        return Ints[1:], dAs[1:], Rtotal, Ttotal
+        Ints = np.empty(N, dtype=float)
+        dAs = np.empty(N, dtype=float)
+        Ep = Dn[0, 0, :]
+        Em = Dn[1, 0, :]
+        Etx = 0.0*Ep + 0.0*Em
+        Ety = np.cos(theta)*Ep - np.cos(theta)*Em
+        Etz = -np.sin(theta)*Ep - np.sin(theta)*Em
+        Ints = np.real(Etx * np.conj(Etx) + Ety*np.conj(Ety) + Etz*np.conj(Etz))
+        dAs = np.real(opt_ref_indices*np.cos(theta)/(opt_ref_indices[0]*np.cos(theta[0]))) \
+                * 2.0*np.imag(k_z)*Ints
+    
+        return Ints[1:], dAs[1:], R_total, T_total
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp):
         r"""get_temperature_after_delta_excitation
