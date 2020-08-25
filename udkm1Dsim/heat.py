@@ -394,7 +394,7 @@ class Heat(Simulation):
             Ttotal: total transmission in the last layer of the multilayer.
 
         """
-        
+
         if distances == []:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
@@ -404,9 +404,15 @@ class Heat(Simulation):
 
         interfaces = self.S.get_distances_of_interfaces(False)
         N = len(interfaces)
-        opt_ref_indices = np.empty(N, dtype=complex)
-        thicknesses = np.empty(N, dtype=float)
-        
+        # if a substrate is included add it at the end
+        if self.S.substrate != []:
+            M = N + 1
+        else:
+            M = N
+
+        opt_ref_indices = np.empty(M, dtype=complex)
+        thicknesses = np.empty(M, dtype=float)
+
         # first layer is vacuum/air
         opt_ref_indices[0] = 1+0.0j
         thicknesses[0] = 1e-9
@@ -414,29 +420,32 @@ class Heat(Simulation):
         for i in range(N-1):
             index = finderb(interfaces[i], d_start)
             layer = self.S.get_layer_handle(index[0])
-            opt_ref_indices[i+1] = layer.opt_ref_index            
+            opt_ref_indices[i+1] = layer.opt_ref_index
             thicknesses[i+1] = interfaces[i+1]-interfaces[i]
 
-        #nblayers = self.S.get_number_of_layers()+1  # plus 1 for vacuum/air
-        #N = np.append(1+0.0j, self.S.get_layer_property_vector('opt_ref_index'))
-        #thickness = np.append(1e-9, self.S.get_layer_property_vector('_thickness'))
+        if M != N:
+            opt_ref_indices[N] = self.S.substrate.get_layer_handle(0).opt_ref_index
+            thicknesses[N] = self.S.substrate.get_thickness(False)
 
         # Snell laws
-        theta = np.empty(N, dtype=complex)
+        theta = np.empty(M, dtype=complex)
         theta[0] = incidence/180.0*np.pi
         theta[1:] = np.arcsin(opt_ref_indices[0]/opt_ref_indices[1:]*np.sin(theta[0]))
 
         # fresnel coefficient for P polarized light
-        rfresnel = np.empty(N-1, dtype=complex)
-        tfresnel = np.empty(N-1, dtype=complex)
-        
-        rfresnel[:] = (opt_ref_indices[1:]*np.cos(theta[0:-1]) - opt_ref_indices[0:-1]*np.cos(theta[1:])) \
-            / (opt_ref_indices[1:]*np.cos(theta[0:-1]) + opt_ref_indices[0:-1]*np.cos(theta[1:]))
+        rfresnel = np.empty(M-1, dtype=complex)
+        tfresnel = np.empty(M-1, dtype=complex)
+
+        rfresnel[:] = (opt_ref_indices[1:]*np.cos(theta[0:-1])
+                       - opt_ref_indices[0:-1]*np.cos(theta[1:])) \
+            / (opt_ref_indices[1:]*np.cos(theta[0:-1])
+               + opt_ref_indices[0:-1]*np.cos(theta[1:]))
         tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(theta[0:-1]) \
-                / (opt_ref_indices[1:]*np.cos(theta[0:-1]) + opt_ref_indices[0:-1]*np.cos(theta[1:]))
+            / (opt_ref_indices[1:]*np.cos(theta[0:-1])
+               + opt_ref_indices[0:-1]*np.cos(theta[1:]))
 
         # interface change matrix
-        Jnm = np.empty((2, 2, N-1), dtype=complex)
+        Jnm = np.empty((2, 2, M-1), dtype=complex)
         Jnm[0, 0, :] = 1.0/tfresnel
         Jnm[0, 1, :] = rfresnel/tfresnel
         Jnm[1, 0, :] = rfresnel/tfresnel
@@ -447,7 +456,7 @@ class Heat(Simulation):
 
         # phase changes
         beta = k_z*thicknesses
-        Ln = np.empty((2, 2, N-1), dtype=complex)
+        Ln = np.empty((2, 2, M-1), dtype=complex)
         Ln[:, :, 0] = [[1, 0], [0, 1]]
         Ln[0, 0, 1:] = np.exp(-1.0j*beta[1:-1])
         Ln[0, 1, 1:] = 0
@@ -455,22 +464,23 @@ class Heat(Simulation):
         Ln[1, 1, 1:] = np.exp(1.0j*beta[1:-1])
 
         # calculating propagation matrix
-        S = Jnm[:, :, N-2]
-        for i in range(N-3, -1, -1):
+        S = Jnm[:, :, M-2]
+        for i in range(M-3, -1, -1):
             S = np.dot(Jnm[:, :, i], np.dot(Ln[:, :, i+1], S))
 
         # Total transmission and reflection of the multilayer
         R_total = np.abs(S[1, 0]/S[0, 0])**2
-        T_total = np.asscalar(np.real(np.conj(opt_ref_indices[N-1])*np.cos(theta[N-1])
-                                     / (opt_ref_indices[0]*np.cos(theta[0])))*np.abs(1/S[0, 0])**2)
+        T_total = np.asscalar(np.real(np.conj(opt_ref_indices[M-1])*np.cos(theta[M-1])
+                                      / (opt_ref_indices[0]*np.cos(theta[0])))
+                              * np.abs(1/S[0, 0])**2)
 
         # calculating D matrix for intermediate field
-        Dn = np.empty((2, 2, N), dtype=complex)
-        Dn[0, 0, N-1] = np.asscalar(1.0/S[0, 0])
-        Dn[0, 1, N-1] = 0.0
-        Dn[1, 0, N-1] = 0.0
-        Dn[1, 1, N-1] = np.asscalar(1.0/S[0, 0])
-        for i in range(N-2, -1, -1):
+        Dn = np.empty((2, 2, M), dtype=complex)
+        Dn[0, 0, M-1] = np.asscalar(1.0/S[0, 0])
+        Dn[0, 1, M-1] = 0.0
+        Dn[1, 0, M-1] = 0.0
+        Dn[1, 1, M-1] = np.asscalar(1.0/S[0, 0])
+        for i in range(M-2, -1, -1):
             Temp = np.dot(Ln[:, :, i], np.dot(Jnm[:, :, i], Dn[:, :, i+1]))
             Dn[0, 0, i] = Temp[0, 0]
             Dn[0, 1, i] = Temp[0, 1]
@@ -484,7 +494,7 @@ class Heat(Simulation):
         for i in range(1, N):
             # get all distances in the current layer we have to
             # calculate the absorption profile for
-            if i >= N-2:  # last layer
+            if i >= N-1:  # last layer
                 z = distances[np.logical_and(distances >= interfaces[i-1],
                                              distances <= interfaces[i])]
             else:
@@ -499,11 +509,12 @@ class Heat(Simulation):
             Ety = np.cos(theta[i])*Ep - np.cos(theta[i])*Em
             Etz = -np.sin(theta[i])*Ep - np.sin(theta[i])*Em
             Ints[k:k+m] = np.real(Etx * np.conj(Etx) + Ety*np.conj(Ety) + Etz*np.conj(Etz))
-            dAs[k:k+m] = np.real(opt_ref_indices[i]*np.cos(theta[i])/(opt_ref_indices[0]*np.cos(theta[0]))) \
-                    * 2.0*np.imag(k_z[i])*Ints[k:k+m]
+            dAs[k:k+m] = np.real(opt_ref_indices[i]*np.cos(theta[i])
+                                 / (opt_ref_indices[0]*np.cos(theta[0]))) \
+                * 2.0*np.imag(k_z[i])*Ints[k:k+m]
 
             k = k+m  # set the counter
-    
+
         return Ints, dAs, R_total, T_total
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp):
