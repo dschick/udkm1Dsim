@@ -214,13 +214,13 @@ class Structure:
         N = len(self.get_unique_layers()[0])
         return N
 
-    def get_thickness(self):
+    def get_thickness(self, units=True):
         """get_thickness
 
         Returns the thickness from surface to bottom of the structure
 
         """
-        _, d_end, _ = self.get_distances_of_layers()
+        _, d_end, _ = self.get_distances_of_layers(units)
         return d_end[-1]
 
     def get_unique_layers(self):
