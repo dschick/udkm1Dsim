@@ -504,7 +504,7 @@ class Heat(Simulation):
             z -= interfaces[i-1]  # relative positon within the layer
             # For each layer except the first, compute Intensity, Absorption
             Ep = Dn[0, 0, i]*np.exp(1.0j*k_z[i]*z)
-            Em = Dn[1, 0, i]*np.exp(1.0j*k_z[i]*z)
+            Em = Dn[1, 0, i]*np.exp(-1.0j*k_z[i]*z)
             Etx = 0.0*Ep + 0.0*Em
             Ety = np.cos(theta[i])*Ep - np.cos(theta[i])*Em
             Etz = -np.sin(theta[i])*Ep - np.sin(theta[i])*Em
