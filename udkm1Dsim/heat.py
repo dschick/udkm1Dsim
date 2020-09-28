@@ -148,14 +148,9 @@ class Heat(Simulation):
 
         """
 
-        if boundary_type == 'temperature':
-            btype = 1
-        elif boundary_type == 'flux':
-            btype = 2
-        elif boundary_type == 'isolator':
-            btype = 0
-        else:
-            btype = 0
+        try:
+            btype = self.boundary_types.index(boundary_type)
+        except ValueError:
             raise ValueError('boundary_type must be either _isolator_, '
                              '_temperature_ or _flux_!')
 
