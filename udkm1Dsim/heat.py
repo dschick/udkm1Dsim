@@ -57,6 +57,9 @@ class Heat(Simulation):
             calculations
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer
+        boundary_conditions (dict): dictionary of boundary conditions:
+            boundary type top/bottom: isolator/temperature/flux
+            boundary value top/bottom
         excitation (dict): dictionary of excitation parameters: fluence,
             delay_pump, pulse_width, wavelength, theta, polarization,
             multilayer_absorption
@@ -85,11 +88,11 @@ class Heat(Simulation):
                             'polarization': 'p', 'multilayer_absorption': True}
         self._distances = np.array([])
         self.boundary_types = ['isolator', 'temperature', 'flux']
-        self.boundary_conditions = {
-            'left_type': 0,
-            'left_value': np.array([]),
-            'right_type': 0,
-            'right_value': np.array([]),
+        self._boundary_conditions = {
+            'top_type': 0,
+            'top_value': np.array([]),
+            'bottom_type': 0,
+            'bottom_value': np.array([]),
             }
         self.ode_options = {'RelTol': 1e-3}
         self.matlab_engine = []
@@ -109,26 +112,24 @@ class Heat(Simulation):
                   ['distances', 'no distance mesh is set for heat diffusion calculations'
                    if self.distances.size == 0 else
                    'a distance mesh is set for heat diffusion calculations.'],
-                  ['left boundary type',
-                   self.boundary_types[self.boundary_conditions['left_type']]],
+                  ['top boundary type', self.boundary_conditions['top_type']],
                   ] + output
 
-        if self.boundary_conditions['left_type'] == 1:
-            output += [['left boundary temperature',
-                        str(self.boundary_conditions['left_value']) + ' K']]
-        elif self.boundary_conditions['left_type'] == 2:
-            output += [['left boundary flux',
-                        str(self.boundary_conditions['left_value']) + ' W/m²']]
+        if self._boundary_conditions['top_type'] == 1:
+            output += [['top boundary temperature',
+                        str(self.boundary_conditions['top_value'])]]
+        elif self._boundary_conditions['top_type'] == 2:
+            output += [['top boundary flux',
+                        str(self.boundary_conditions['top_value'])]]
 
-        output += [['right boundary type',
-                   self.boundary_types[self.boundary_conditions['right_type']]]]
+        output += [['bottom boundary type', self.boundary_conditions['bottom_type']]]
 
-        if self.boundary_conditions['right_type'] == 1:
-            output += [['right boundary temperature',
-                        str(self.boundary_conditions['right_value']) + ' K']]
-        elif self.boundary_conditions['right_type'] == 2:
-            output += [['right boundary flux',
-                        str(self.boundary_conditions['right_value']) + ' W/m²']]
+        if self._boundary_conditions['bottom_type'] == 1:
+            output += [['bottom boundary temperature',
+                        str(self.boundary_conditions['bottom_value'])]]
+        elif self._boundary_conditions['bottom_type'] == 2:
+            output += [['bottom boundary flux',
+                        str(self.boundary_conditions['bottom_value'])]]
 
         class_str = 'Heat simulation properties:\n\n'
         class_str += super().__str__(output)
@@ -149,33 +150,6 @@ class Heat(Simulation):
             param.append(value)
 
         return self.S.get_hash(types='heat') + '_' + make_hash_md5(param)
-
-    def set_boundary_condition(self, boundary_side='left', boundary_type='isolator', value=0):
-        """set_boundary_condition
-
-        set the boundary conditions of the heat diffusion simulations
-
-        """
-
-        try:
-            btype = self.boundary_types.index(boundary_type)
-        except ValueError:
-            raise ValueError('boundary_type must be either _isolator_, '
-                             '_temperature_ or _flux_!')
-
-        K = self.S.num_sub_systems
-        if (btype > 0) and (np.size(value) != K):
-            raise ValueError('Non-isolating boundary conditions must have the '
-                             'same dimensionality as the numer of sub-systems K!')
-
-        if boundary_side == 'left':
-            self.boundary_conditions['left_type'] = btype
-            self.boundary_conditions['left_value'] = value
-        elif boundary_side == 'right':
-            self.boundary_conditions['right_type'] = btype
-            self.boundary_conditions['right_value'] = value
-        else:
-            raise ValueError('boundary_side must be either _left_ or _right_!')
 
     def check_initial_temperature(self, init_temp):
         """check_initial_temperature
@@ -840,10 +814,10 @@ class Heat(Simulation):
             self.S.get_layer_property_vector('heat_capacity_str'),
             matlab.double(self.S.get_layer_property_vector('_density').tolist()),
             self.S.get_layer_property_vector('sub_system_coupling_str'),
-            matlab.int32([self.boundary_conditions['left_type']+1]),
-            matlab.double([self.boundary_conditions['left_value']]),
-            matlab.int32([self.boundary_conditions['right_type']+1]),
-            matlab.double([self.boundary_conditions['right_value']]),
+            matlab.int32([self._boundary_conditions['top_type']+1]),
+            matlab.double([self._boundary_conditions['top_value']]),
+            matlab.int32([self._boundary_conditions['bottom_type']+1]),
+            matlab.double([self._boundary_conditions['bottom_value']]),
             self.ode_options
         )
         temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
@@ -920,6 +894,71 @@ class Heat(Simulation):
             raise ValueError('The excitations have to be unique in delays!')
         else:
             self._excitation['delay_pump'] = np.sort(self._excitation['delay_pump'])
+
+    @property
+    def boundary_conditions(self):
+        """dict: boundary_conditions
+
+        Convert to from default SI units to real quantities
+
+        """
+        boundary_conditions = {'top_type': self.boundary_types[self._boundary_conditions['top_type']],
+                               }
+
+        if self._boundary_conditions['top_type'] == 1:
+            boundary_conditions['top_value'] = Q_(self._boundary_conditions['top_value'], 'K')
+        elif self._boundary_conditions['top_type'] == 2:
+            boundary_conditions['top_value'] = Q_(self._boundary_conditions['top_value'], 'W/m**2')
+
+        boundary_conditions['bottom_type'] = self.boundary_types[self._boundary_conditions['bottom_type']]
+
+        if self._boundary_conditions['bottom_type'] == 1:
+            boundary_conditions['bottom_value'] = Q_(self._boundary_conditions['bottom_value'], 'K')
+        elif self._boundary_conditions['bottom_type'] == 2:
+            boundary_conditions['bottom_value'] = Q_(self._boundary_conditions['bottom_value'], 'W/m**2')
+        return boundary_conditions
+
+    @boundary_conditions.setter
+    def boundary_conditions(self, boundary_conditions):
+        """set.boundary_conditions"""
+
+        if isinstance(boundary_conditions, dict):
+            if 'top_type' in boundary_conditions:
+                try:
+                    btype = self.boundary_types.index(boundary_conditions['top_type'])
+                except ValueError:
+                    raise ValueError('boundary_type must be either _isolator_, '
+                                     '_temperature_ or _flux_!')
+                
+                self._boundary_conditions['top_type'] = btype
+            if 'bottom_type' in boundary_conditions:
+                try:
+                    btype = self.boundary_types.index(boundary_conditions['bottom_type'])
+                except ValueError:
+                    raise ValueError('boundary_type must be either _isolator_, '
+                                     '_temperature_ or _flux_!')
+                
+                self._boundary_conditions['bottom_type'] = btype
+            if 'top_value' in boundary_conditions:
+                if self._boundary_conditions['top_type'] == 1:
+                    self._boundary_conditions['top_value'] = boundary_conditions['top_value'].to('K').magnitude
+                elif self._boundary_conditions['top_type'] == 2:
+                    self._boundary_conditions['top_value'] = boundary_conditions['top_value'].to('W/m**2').magnitude
+            if 'bottom_value' in boundary_conditions:
+                if self._boundary_conditions['bottom_type'] == 1:
+                    self._boundary_conditions['bottom_value'] = boundary_conditions['bottom_value'].to('K').magnitude
+                elif self._boundary_conditions['bottom_type'] == 2:
+                    self._boundary_conditions['bottom_value'] = boundary_conditions['bottom_value'].to('W/m**2').magnitude
+        else:
+            raise ValueError('_boundary_conditions_ must be a dict!')
+
+        K = self.S.num_sub_systems
+        if (self._boundary_conditions['top_type'] > 0) and (np.size(self._boundary_conditions['top_value']) != K):
+            raise ValueError('Non-isolating top boundary conditions must have the '
+                              'same dimensionality as the numer of sub-systems K!')
+        if (self._boundary_conditions['bottom_type'] > 0) and (np.size(self._boundary_conditions['bottom_value']) != K):
+            raise ValueError('Non-isolating bottom boundary conditions must have the '
+                              'same dimensionality as the numer of sub-systems K!')
 
     @property
     def distances(self):
