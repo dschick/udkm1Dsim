@@ -58,7 +58,7 @@ class Heat(Simulation):
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer
         excitation (dict): dictionary of excitation parameters: fluence,
-            delay_pump, and pulse_width
+            delay_pump, pulse_width, wavelength, theta, multilayer_absorption
         distances (ndarray[float]): array of distances where to calc heat
             diffusion. If not set heat diffusion is calculated at each unit
             cell location or at every angstrom in amorphous layers
@@ -79,8 +79,9 @@ class Heat(Simulation):
         super().__init__(S, force_recalc, **kwargs)
         self.heat_diffusion = kwargs.get('heat_diffusion', False)
         self.intp_at_interface = kwargs.get('intp_at_interface', 11)
-
-        self._excitation = {'fluence': [], 'delay_pump': [], 'pulse_width': []}
+        self._excitation = {'fluence': [], 'delay_pump': [0], 'pulse_width': [0],
+                            'wavelength': 800e-9, 'theta': np.pi/2,
+                            'multilayer_absorption': True}
         self._distances = np.array([])
         self.boundary_types = ['isolator', 'temperature', 'flux']
         self.boundary_conditions = {
@@ -180,6 +181,11 @@ class Heat(Simulation):
             init_temp (float, ndarray): initial temperature
 
         """
+        try:
+            init_temp = init_temp.to('K').magnitude
+        except:
+            pass
+
         N = self.S.get_number_of_layers()
         K = self.S.num_sub_systems
         # check size of initTemp
@@ -305,6 +311,19 @@ class Heat(Simulation):
     def get_absorption_profile(self, distances=[]):
         r"""get_absorption_profile
 
+        Returns a vector of the absorption profile
+
+        """
+        if self._excitation['multilayer_absorption']:
+            dAdz, Ints, R_total, T_total = self.get_multilayers_absorption_profile(distances)
+            
+            return dAdz
+        else:            
+            return self.get_Lambert_Beer_absorption_profile(distances)
+
+    def get_Lambert_Beer_absorption_profile(self, distances=[]):
+        r"""get_Lambert_Beer_absorption_profile
+
         Returns a vector of the absorption profile derived from Lambert-Beer's
         law. The transmission is given by:
 
@@ -359,8 +378,8 @@ class Heat(Simulation):
 
         return dalpha_dz
 
-    def get_multilayers_absorption(self, incidence, wavelength, distances=[]):
-        """get_multilayers_absorption
+    def get_multilayers_absorption_profile(self, distances=[]):
+        """get_multilayers_absorption_profile
 
         Calculates the intensity, absorption and temperature increase profiles
         in each layer of a multilayers structure for p-polarized light.
@@ -423,21 +442,21 @@ class Heat(Simulation):
             thicknesses[N] = self.S.substrate.get_thickness(False)
 
         # Snell laws
-        theta = np.empty(M, dtype=complex)
-        theta[0] = incidence/180.0*np.pi
-        theta[1:] = np.arcsin(opt_ref_indices[0]/opt_ref_indices[1:]*np.sin(theta[0]))
+        alpha = np.empty(M, dtype=complex)
+        alpha[0] = np.pi/2 - self._excitation['theta']
+        alpha[1:] = np.arcsin(opt_ref_indices[0]/opt_ref_indices[1:]*np.sin(alpha[0]))
 
         # fresnel coefficient for P polarized light
         rfresnel = np.empty(M-1, dtype=complex)
         tfresnel = np.empty(M-1, dtype=complex)
 
-        rfresnel[:] = (opt_ref_indices[1:]*np.cos(theta[0:-1])
-                       - opt_ref_indices[0:-1]*np.cos(theta[1:])) \
-            / (opt_ref_indices[1:]*np.cos(theta[0:-1])
-               + opt_ref_indices[0:-1]*np.cos(theta[1:]))
-        tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(theta[0:-1]) \
-            / (opt_ref_indices[1:]*np.cos(theta[0:-1])
-               + opt_ref_indices[0:-1]*np.cos(theta[1:]))
+        rfresnel[:] = (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                       - opt_ref_indices[0:-1]*np.cos(alpha[1:])) \
+            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+        tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
+            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
 
         # interface change matrix
         Jnm = np.empty((2, 2, M-1), dtype=complex)
@@ -447,7 +466,7 @@ class Heat(Simulation):
         Jnm[1, 1, :] = 1.0/tfresnel
 
         # calculating z-component of the wave vector
-        k_z = 2.0*np.pi/wavelength*opt_ref_indices*np.cos(theta)
+        k_z = 2.0*np.pi/self._excitation['wavelength']*opt_ref_indices*np.cos(alpha)
 
         # phase changes
         beta = k_z*thicknesses
@@ -465,8 +484,8 @@ class Heat(Simulation):
 
         # Total transmission and reflection of the multilayer
         R_total = np.abs(S[1, 0]/S[0, 0])**2
-        T_total = np.asscalar(np.real(np.conj(opt_ref_indices[M-1])*np.cos(theta[M-1])
-                                      / (opt_ref_indices[0]*np.cos(theta[0])))
+        T_total = np.asscalar(np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
+                                      / (opt_ref_indices[0]*np.cos(alpha[0])))
                               * np.abs(1/S[0, 0])**2)
 
         # calculating D matrix for intermediate field
@@ -484,7 +503,7 @@ class Heat(Simulation):
 
         K = len(distances)
         Ints = np.empty(K, dtype=float)  # initialize relative intensities
-        dAs = np.empty(K, dtype=float)  # initialize relative absorbed energies
+        dAdz = np.empty(K, dtype=float)  # initialize relative absorbed energies
         k = 0  # counter for first layer
         for i in range(1, N):
             # get all distances in the current layer we have to
@@ -501,19 +520,26 @@ class Heat(Simulation):
             Ep = Dn[0, 0, i]*np.exp(1.0j*k_z[i]*z)
             Em = Dn[1, 0, i]*np.exp(-1.0j*k_z[i]*z)
             Etx = 0.0*Ep + 0.0*Em
-            Ety = np.cos(theta[i])*Ep - np.cos(theta[i])*Em
-            Etz = -np.sin(theta[i])*Ep - np.sin(theta[i])*Em
+            Ety = np.cos(alpha[i])*Ep - np.cos(alpha[i])*Em
+            Etz = -np.sin(alpha[i])*Ep - np.sin(alpha[i])*Em
             Ints[k:k+m] = np.real(Etx * np.conj(Etx) + Ety*np.conj(Ety) + Etz*np.conj(Etz))
-            dAs[k:k+m] = np.real(opt_ref_indices[i]*np.cos(theta[i])
-                                 / (opt_ref_indices[0]*np.cos(theta[0]))) \
+            dAdz[k:k+m] = np.real(opt_ref_indices[i]*np.cos(alpha[i])
+                                 / (opt_ref_indices[0]*np.cos(alpha[0]))) \
                 * 2.0*np.imag(k_z[i])*Ints[k:k+m]
 
             k = k+m  # set the counter
 
-        return Ints, dAs, R_total, T_total
+        return dAdz, Ints, R_total, T_total
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp):
         r"""get_temperature_after_delta_excitation
+
+        Args:
+            fluence (float/pint quantity): incident fluence in J/m² as float
+                or as pint quantity
+            init_temp (float): initial temperature of the sample either
+                homogeneous temperature across the whole sample or as array
+                for every layer of the sample structure
 
         Returns a vector of the end temperature and temperature change
         for each layer of the sample structure after an optical
@@ -543,11 +569,16 @@ class Heat(Simulation):
              \left| \int_{T_1}^{T_2} m c(T)\, temp_mapT - \frac{\mbox{d}\alpha}
              {\mbox{d}z} E_0 \Delta z \right| \stackrel{!}{=} 0
 
-        """
+        """        
         # initialize
         t1 = time()
         # absorption profile from Lambert-Beer's law
         dalpha_dz = self.get_absorption_profile()
+
+        try:
+            fluence = fluence.to('J/m**2').magnitude
+        except:
+            pass
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
@@ -576,10 +607,13 @@ class Heat(Simulation):
     def get_temp_map(self, delays, init_temp):
         """get_temp_map
 
-        % Returns a tempperature profile for the sample structure after
-        % optical excitation.
-        % create a unique hash
+        Returns a tempperature profile for the sample structure after
+        optical excitation.
+        create a unique hash
+        
         """
+        
+        init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
         filename = 'temp_map_' \
                    + self.get_hash(delays, init_temp) \
                    + '.npy'
@@ -818,7 +852,10 @@ class Heat(Simulation):
         """
         excitation = {'fluence': Q_(self._excitation['fluence'], u.J/u.m**2).to('mJ/cm**2'),
                       'delay_pump': Q_(self._excitation['delay_pump'], u.s).to('ps'),
-                      'pulse_width': Q_(self._excitation['pulse_width'], u.s).to('ps')}
+                      'pulse_width': Q_(self._excitation['pulse_width'], u.s).to('ps'),
+                      'wavelength': Q_(self._excitation['wavelength'], u.m).to('nm'),
+                      'theta': Q_(self._excitation['theta'], u.rad).to('deg'),
+                      'multilayer_absorption': self._excitation['multilayer_absorption']}
 
         return excitation
 
@@ -830,25 +867,27 @@ class Heat(Simulation):
         if isinstance(excitation, Q_):
             # just a fluence is given
             self._excitation['fluence'] = [excitation.to('J/m**2').magnitude]
-            self._excitation['delay_pump'] = [0]  # we define that the exciation is at t=0
-            self._excitation['pulse_width'] = [0]  # pulse width is 0 by default
         elif isinstance(excitation, dict):
-            try:
-                self._excitation['fluence'] = excitation['fluence'].to('J/m**2').magnitude
-                self._excitation['delay_pump'] = excitation['delay_pump'].to('s').magnitude
-                self._excitation['pulse_width'] = excitation['pulse_width'].to('s').magnitude
-            except KeyError:
-                print('The excitation dictionary must include the tree keys '
-                      '_fluence_, _delay_pump_, _pulse_width_. Each must be'
-                      'a single or array of pint quantities.')
+            if 'fluence' in excitation:
+               self._excitation['fluence'] = excitation['fluence'].to('J/m**2').magnitude
+            if 'delay_pump' in excitation:
+               self._excitation['delay_pump'] = excitation['delay_pump'].to('s').magnitude
+            if 'pulse_width' in excitation:
+               self._excitation['pulse_width'] = excitation['pulse_width'].to('s').magnitude
+            if 'wavelength' in excitation:
+                self._excitation['wavelength'] = excitation['wavelength'].to('m').magnitude
+            if 'theta' in excitation:
+                self._excitation['theta'] = excitation['theta'].to('rad').magnitude
+            if 'multilayer_absorption' in excitation:
+                self._excitation['multilayer_absorption'] = bool(excitation['multilayer_absorption'])
         else:
-            raise ValueError('_excitation_ must be either a float/int or dict '
-                             'of pint quantities!')
+            raise ValueError('_excitation_ must be either a float/int or dict!')
 
         if not (len(self._excitation['fluence'])
                 == len(self._excitation['delay_pump'])
                 == len(self._excitation['pulse_width'])):
-            raise ValueError('Elements of excitation dict must have '
+            raise ValueError('Elements of excitation dict, fluence, delay_pump, '
+                             'and pulse_width must have '
                              'the same number of elements!')
 
         # check the elements of the delay_pump vector
