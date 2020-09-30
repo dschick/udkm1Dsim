@@ -97,7 +97,14 @@ class Heat(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        output = [['heat diffusion', self.heat_diffusion],
+        output = [['excitation fluence', self.excitation['fluence']],
+                  ['excitation delay', self.excitation['delay_pump']],
+                  ['excitation pulse length', self.excitation['pulse_width']],
+                  ['excitation wavelength', self.excitation['wavelength']],
+                  ['excitation theta', self.excitation['theta']],
+                  ['excitation polarization', self.excitation['polarization']],
+                  ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
+                  ['heat diffusion', self.heat_diffusion],
                   ['interpolate at interfaces', self.intp_at_interface],
                   ['distances', 'no distance mesh is set for heat diffusion calculations'
                    if self.distances.size == 0 else
