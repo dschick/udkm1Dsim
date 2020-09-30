@@ -58,7 +58,8 @@ class Heat(Simulation):
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer
         excitation (dict): dictionary of excitation parameters: fluence,
-            delay_pump, pulse_width, wavelength, theta, multilayer_absorption
+            delay_pump, pulse_width, wavelength, theta, polarization,
+            multilayer_absorption
         distances (ndarray[float]): array of distances where to calc heat
             diffusion. If not set heat diffusion is calculated at each unit
             cell location or at every angstrom in amorphous layers
@@ -81,7 +82,7 @@ class Heat(Simulation):
         self.intp_at_interface = kwargs.get('intp_at_interface', 11)
         self._excitation = {'fluence': [], 'delay_pump': [0], 'pulse_width': [0],
                             'wavelength': 800e-9, 'theta': np.pi/2,
-                            'multilayer_absorption': True}
+                            'polarization': 'p', 'multilayer_absorption': True}
         self._distances = np.array([])
         self.boundary_types = ['isolator', 'temperature', 'flux']
         self.boundary_conditions = {
@@ -309,20 +310,26 @@ class Heat(Simulation):
         return res, fluence, delay_pump, pulse_width
 
     def get_absorption_profile(self, distances=[]):
-        r"""get_absorption_profile
+        """get_absorption_profile
 
-        Returns a vector of the absorption profile
+        Args:
+            distances (ndarray[float]): spatial grid for calculation
+
+        Returns a vector of the absorption profile calculated either by
+        Lambert-Beers law or by a mulitlayer absorption formalism
 
         """
         if self._excitation['multilayer_absorption']:
-            dAdz, Ints, R_total, T_total = self.get_multilayers_absorption_profile(distances)
-            
+            dAdz, _, _, _ = self.get_multilayers_absorption_profile(distances)            
             return dAdz
         else:            
             return self.get_Lambert_Beer_absorption_profile(distances)
 
     def get_Lambert_Beer_absorption_profile(self, distances=[]):
         r"""get_Lambert_Beer_absorption_profile
+
+        Args:
+            distances (ndarray[float]): spatial grid for calculation
 
         Returns a vector of the absorption profile derived from Lambert-Beer's
         law. The transmission is given by:
@@ -393,19 +400,14 @@ class Heat(Simulation):
 
         Copyright (2012-2014) Loïc Le Guyader <loic.le_guyader@helmholtz-berlin.de>
 
-        Arguments:
-            incidence: the angle of incidence, in degree.
-            wavelength: the vacuum wavelength [m].
+        Args:
+            distances (ndarray[float]): spatial grid for calculation
 
         Returns:
-            Ints: a 2D array containing the intensity profiles within each layer
-                for an incoming intensity is 1 J.m-2 or 0.1 mJ.cm-2
-            dAs: a 2D array containing the differential absorption [m-1] within
-                each layer.
-            dTs: a 2D array containing the temperature increase [K] within each
-                layer.
-            Rtotal: total amount of reflection from the multilayer.
-            Ttotal: total transmission in the last layer of the multilayer.
+            dAdz (ndarray[float]): differential absorption within each layer
+            Ints (ndarray[float]): intensity profiles within each layer
+            R_total (float): total amount of reflection from the multilayer
+            T_total (float): total transmission in the last layer of the multilayer
 
         """
 
@@ -450,13 +452,22 @@ class Heat(Simulation):
         rfresnel = np.empty(M-1, dtype=complex)
         tfresnel = np.empty(M-1, dtype=complex)
 
-        rfresnel[:] = (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-                       - opt_ref_indices[0:-1]*np.cos(alpha[1:])) \
-            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
-        tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
-            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+        if self._excitation['polarization'] == 's':
+            rfresnel[:] = (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+                    - opt_ref_indices[1:]*np.cos(alpha[1:])) \
+                / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+                    + opt_ref_indices[1:]*np.cos(alpha[1:]))
+            tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
+                / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+                + opt_ref_indices[1:]*np.cos(alpha[1:]))
+        else:  # p-polarization
+            rfresnel[:] = (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                            - opt_ref_indices[0:-1]*np.cos(alpha[1:])) \
+                / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                    + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+            tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
+                / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                    + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
 
         # interface change matrix
         Jnm = np.empty((2, 2, M-1), dtype=complex)
@@ -855,6 +866,7 @@ class Heat(Simulation):
                       'pulse_width': Q_(self._excitation['pulse_width'], u.s).to('ps'),
                       'wavelength': Q_(self._excitation['wavelength'], u.m).to('nm'),
                       'theta': Q_(self._excitation['theta'], u.rad).to('deg'),
+                      'polarization': self._excitation['polarization'],
                       'multilayer_absorption': self._excitation['multilayer_absorption']}
 
         return excitation
@@ -878,6 +890,12 @@ class Heat(Simulation):
                 self._excitation['wavelength'] = excitation['wavelength'].to('m').magnitude
             if 'theta' in excitation:
                 self._excitation['theta'] = excitation['theta'].to('rad').magnitude
+            if 'polarization' in excitation:
+                if excitation['polarization'] in ['s', 'p']:
+                    self._excitation['polarization'] = excitation['polarization']
+                else:
+                    self._excitation['polarization'] = 'p'
+                    raise Warning('Polarization musted be either _s_ or _p_!')                    
             if 'multilayer_absorption' in excitation:
                 self._excitation['multilayer_absorption'] = bool(excitation['multilayer_absorption'])
         else:
