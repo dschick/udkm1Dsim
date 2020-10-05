@@ -368,6 +368,15 @@ class Layer:
         self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
         self.spring_const = np.hstack((self.spring_const, HO))
 
+    def set_opt_pen_depth_from_ref_index(self, wavelength):
+        """set_opt_pen_depth_from_ref_index
+
+        Set the optical penetration depth from the optical referactive index
+        for a given wavelength
+
+        """
+        self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
+
     @property
     def mass(self):
         """float: mass of unit cell normalized to area of 1 Å² [kg]"""

@@ -117,10 +117,10 @@ function [pl,ql,pr,qr] = pde_boundary_conditions(zl, Tl, zr, Tr, t, K, left_type
     % check the type of the left boundary condition
     switch left_type
         case 2 % temperature
-            pl = Tl - left_value;
+            pl = Tl - left_value';
             ql = zeros(dim);
         case 3 % flux
-            pl = left_value;
+            pl = left_value';
             ql = ones(dim);                    
         otherwise % isolator
             pl = zeros(dim);
@@ -134,10 +134,10 @@ function [pl,ql,pr,qr] = pde_boundary_conditions(zl, Tl, zr, Tr, t, K, left_type
     % check the type of the right boundary condition
     switch right_type
         case 2 % temperature
-            pr = Tr - right_value;
+            pr = Tr - right_value';
             qr = zeros(dim);
         case 3 % flux
-            pr = -right_value;
+            pr = -right_value';
             qr = ones(dim);                    
         otherwise % isolator
             pr = zeros(dim);

@@ -57,15 +57,19 @@ class Heat(Simulation):
             calculations
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer
+        boundary_conditions (dict): dictionary of boundary conditions:
+            boundary type top/bottom: isolator/temperature/flux
+            boundary value top/bottom
         excitation (dict): dictionary of excitation parameters: fluence,
-            delay_pump, and pulse_width
+            delay_pump, pulse_width, wavelength, theta, polarization,
+            multilayer_absorption
         distances (ndarray[float]): array of distances where to calc heat
             diffusion. If not set heat diffusion is calculated at each unit
             cell location or at every angstrom in amorphous layers
         ode_options (dict): dict with options for the MATLAB pdepe solver, see
             odeset, used for heat diffusion.
         boundary_types (list[str]): description of boundary types
-        boundary_conditions (dict): dict of the left and right type of the
+        boundary_conditions (dict): dict of the top and bottom type of the
             boundary conditions for the MATLAB heat diffusion calculation
             1: isolator - 2: temperature - 3: flux
             For the last two cases the corresponding value has to be set as
@@ -79,15 +83,17 @@ class Heat(Simulation):
         super().__init__(S, force_recalc, **kwargs)
         self.heat_diffusion = kwargs.get('heat_diffusion', False)
         self.intp_at_interface = kwargs.get('intp_at_interface', 11)
-
-        self._excitation = {'fluence': [], 'delay_pump': [], 'pulse_width': []}
+        self._excitation = {'fluence': [], 'delay_pump': [0], 'pulse_width': [0],
+                            'wavelength': 800e-9, 'theta': np.pi/2,
+                            # 'polarization': 'p',
+                            'multilayer_absorption': True}
         self._distances = np.array([])
         self.boundary_types = ['isolator', 'temperature', 'flux']
-        self.boundary_conditions = {
-            'left_type': 0,
-            'left_value': np.array([]),
-            'right_type': 0,
-            'right_value': np.array([]),
+        self._boundary_conditions = {
+            'top_type': 0,
+            'top_value': np.array([]),
+            'bottom_type': 0,
+            'bottom_value': np.array([]),
             }
         self.ode_options = {'RelTol': 1e-3}
         self.matlab_engine = []
@@ -95,31 +101,36 @@ class Heat(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        output = [['heat diffusion', self.heat_diffusion],
+        output = [['excitation fluence', self.excitation['fluence']],
+                  ['excitation delay', self.excitation['delay_pump']],
+                  ['excitation pulse length', self.excitation['pulse_width']],
+                  ['excitation wavelength', self.excitation['wavelength']],
+                  ['excitation theta', self.excitation['theta']],
+                  # ['excitation polarization', self.excitation['polarization']],
+                  ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
+                  ['heat diffusion', self.heat_diffusion],
                   ['interpolate at interfaces', self.intp_at_interface],
                   ['distances', 'no distance mesh is set for heat diffusion calculations'
                    if self.distances.size == 0 else
                    'a distance mesh is set for heat diffusion calculations.'],
-                  ['left boundary type',
-                   self.boundary_types[self.boundary_conditions['left_type']]],
+                  ['top boundary type', self.boundary_conditions['top_type']],
                   ] + output
 
-        if self.boundary_conditions['left_type'] == 1:
-            output += [['left boundary temperature',
-                        str(self.boundary_conditions['left_value']) + ' K']]
-        elif self.boundary_conditions['left_type'] == 2:
-            output += [['left boundary flux',
-                        str(self.boundary_conditions['left_value']) + ' W/m²']]
+        if self._boundary_conditions['top_type'] == 1:
+            output += [['top boundary temperature',
+                        str(self.boundary_conditions['top_value'])]]
+        elif self._boundary_conditions['top_type'] == 2:
+            output += [['top boundary flux',
+                        str(self.boundary_conditions['top_value'])]]
 
-        output += [['right boundary type',
-                   self.boundary_types[self.boundary_conditions['right_type']]]]
+        output += [['bottom boundary type', self.boundary_conditions['bottom_type']]]
 
-        if self.boundary_conditions['right_type'] == 1:
-            output += [['right boundary temperature',
-                        str(self.boundary_conditions['right_value']) + ' K']]
-        elif self.boundary_conditions['right_type'] == 2:
-            output += [['right boundary flux',
-                        str(self.boundary_conditions['right_value']) + ' W/m²']]
+        if self._boundary_conditions['bottom_type'] == 1:
+            output += [['bottom boundary temperature',
+                        str(self.boundary_conditions['bottom_value'])]]
+        elif self._boundary_conditions['bottom_type'] == 2:
+            output += [['bottom boundary flux',
+                        str(self.boundary_conditions['bottom_value'])]]
 
         class_str = 'Heat simulation properties:\n\n'
         class_str += super().__str__(output)
@@ -141,38 +152,6 @@ class Heat(Simulation):
 
         return self.S.get_hash(types='heat') + '_' + make_hash_md5(param)
 
-    def set_boundary_condition(self, boundary_side='left', boundary_type='isolator', value=0):
-        """set_boundary_condition
-
-        set the boundary conditions of the heat diffusion simulations
-
-        """
-
-        if boundary_type == 'temperature':
-            btype = 1
-        elif boundary_type == 'flux':
-            btype = 2
-        elif boundary_type == 'isolator':
-            btype = 0
-        else:
-            btype = 0
-            raise ValueError('boundary_type must be either _isolator_, '
-                             '_temperature_ or _flux_!')
-
-        K = self.S.num_sub_systems
-        if (btype > 0) and (np.size(value) != K):
-            raise ValueError('Non-isolating boundary conditions must have the '
-                             'same dimensionality as the numer of sub-systems K!')
-
-        if boundary_side == 'left':
-            self.boundary_conditions['left_type'] = btype
-            self.boundary_conditions['left_value'] = value
-        elif boundary_side == 'right':
-            self.boundary_conditions['right_type'] = btype
-            self.boundary_conditions['right_value'] = value
-        else:
-            raise ValueError('boundary_side must be either _left_ or _right_!')
-
     def check_initial_temperature(self, init_temp):
         """check_initial_temperature
 
@@ -185,6 +164,12 @@ class Heat(Simulation):
             init_temp (float, ndarray): initial temperature
 
         """
+
+        try:
+            init_temp = init_temp.to('K').magnitude
+        except AttributeError:
+            pass
+
         N = self.S.get_number_of_layers()
         K = self.S.num_sub_systems
         # check size of initTemp
@@ -308,7 +293,26 @@ class Heat(Simulation):
         return res, fluence, delay_pump, pulse_width
 
     def get_absorption_profile(self, distances=[]):
-        r"""get_absorption_profile
+        """get_absorption_profile
+
+        Args:
+            distances (ndarray[float]): spatial grid for calculation
+
+        Returns a vector of the absorption profile calculated either by
+        Lambert-Beers law or by a mulitlayer absorption formalism
+
+        """
+        if self._excitation['multilayer_absorption']:
+            dAdz, _, _, _ = self.get_multilayers_absorption_profile(distances)
+            return dAdz
+        else:
+            return self.get_Lambert_Beer_absorption_profile(distances)
+
+    def get_Lambert_Beer_absorption_profile(self, distances=[]):
+        r"""get_Lambert_Beer_absorption_profile
+
+        Args:
+            distances (ndarray[float]): spatial grid for calculation
 
         Returns a vector of the absorption profile derived from Lambert-Beer's
         law. The transmission is given by:
@@ -335,10 +339,6 @@ class Heat(Simulation):
             d_start, _, _ = self.S.get_distances_of_layers(False)
 
         interfaces = self.S.get_distances_of_interfaces(False)
-        # # convert to [m] and get rid of quantities for faster calculations
-        # d_start = d_start.to('m').magnitude
-        # distances = distances.to('m').magnitude
-        # interfaces = interfaces.to('m').magnitude
 
         N = len(distances)
         dalpha_dz = np.zeros(N)  # initialize relative absorbed energies
@@ -365,10 +365,175 @@ class Heat(Simulation):
                 # calculate the remaining intensity for the next layer
                 I0 = I0*np.exp(-(interfaces[i+1]-interfaces[i])/opt_pen_depth)
             k = k+m  # set the counter
+
         return dalpha_dz
+
+    def get_multilayers_absorption_profile(self, distances=[]):
+        """get_multilayers_absorption_profile
+
+        Calculates the intensity, absorption and temperature increase profiles
+        in each layer of a multilayers structure for p-polarized light.
+
+        Calculation of intensity, absorption and temperature increase profiles
+        in multilayers.
+
+        Calculation based on the method by K. Ohta and H. Ishida, Appl. Opt. 29,
+        2466 (1990).
+        Code developed Matlab for L. Le Guyader & al., Phys. Rev. B 87, 054437 (2013).
+
+        Copyright (2012-2014) Loïc Le Guyader <loic.le_guyader@helmholtz-berlin.de>
+
+        Args:
+            distances (ndarray[float]): spatial grid for calculation
+
+        Returns:
+            dAdz (ndarray[float]): differential absorption within each layer
+            Ints (ndarray[float]): intensity profiles within each layer
+            R_total (float): total amount of reflection from the multilayer
+            T_total (float): total transmission in the last layer of the multilayer
+
+        """
+
+        if distances == []:
+            # if no distances are set, calculate the extinction on
+            # the middle of each unit cell
+            d_start, _, distances = self.S.get_distances_of_layers(False)
+        else:
+            d_start, _, _ = self.S.get_distances_of_layers(False)
+
+        interfaces = self.S.get_distances_of_interfaces(False)
+        N = len(interfaces)
+        # if a substrate is included add it at the end
+        if self.S.substrate != []:
+            M = N + 1
+        else:
+            M = N
+
+        opt_ref_indices = np.empty(M, dtype=complex)
+        thicknesses = np.empty(M, dtype=float)
+
+        # first layer is vacuum/air
+        opt_ref_indices[0] = 1+0.0j
+        thicknesses[0] = 1e-9
+
+        for i in range(N-1):
+            index = finderb(interfaces[i], d_start)
+            layer = self.S.get_layer_handle(index[0])
+            opt_ref_indices[i+1] = layer.opt_ref_index
+            thicknesses[i+1] = interfaces[i+1]-interfaces[i]
+
+        if M != N:
+            opt_ref_indices[N] = self.S.substrate.get_layer_handle(0).opt_ref_index
+            thicknesses[N] = self.S.substrate.get_thickness(False)
+
+        # Snell laws
+        alpha = np.empty(M, dtype=complex)
+        alpha[0] = np.pi/2 - self._excitation['theta']
+        alpha[1:] = np.arcsin(opt_ref_indices[0]/opt_ref_indices[1:]*np.sin(alpha[0]))
+
+        # fresnel coefficient
+        rfresnel = np.empty(M-1, dtype=complex)
+        tfresnel = np.empty(M-1, dtype=complex)
+
+        # if self._excitation['polarization'] == 's':
+        #     rfresnel[:] = (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+        #                    - opt_ref_indices[1:]*np.cos(alpha[1:])) \
+        #         / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+        #            + opt_ref_indices[1:]*np.cos(alpha[1:]))
+        #     tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
+        #         / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+        #            + opt_ref_indices[1:]*np.cos(alpha[1:]))
+        # else:  # p-polarization
+        rfresnel[:] = (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                       - opt_ref_indices[0:-1]*np.cos(alpha[1:])) \
+            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+        tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
+            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+
+        # interface change matrix
+        Jnm = np.empty((2, 2, M-1), dtype=complex)
+        Jnm[0, 0, :] = 1.0/tfresnel
+        Jnm[0, 1, :] = rfresnel/tfresnel
+        Jnm[1, 0, :] = rfresnel/tfresnel
+        Jnm[1, 1, :] = 1.0/tfresnel
+
+        # calculating z-component of the wave vector
+        k_z = 2.0*np.pi/self._excitation['wavelength']*opt_ref_indices*np.cos(alpha)
+
+        # phase changes
+        beta = k_z*thicknesses
+        Ln = np.empty((2, 2, M-1), dtype=complex)
+        Ln[:, :, 0] = [[1, 0], [0, 1]]
+        Ln[0, 0, 1:] = np.exp(-1.0j*beta[1:-1])
+        Ln[0, 1, 1:] = 0
+        Ln[1, 0, 1:] = 0
+        Ln[1, 1, 1:] = np.exp(1.0j*beta[1:-1])
+
+        # calculating propagation matrix
+        S = Jnm[:, :, M-2]
+        for i in range(M-3, -1, -1):
+            S = np.dot(Jnm[:, :, i], np.dot(Ln[:, :, i+1], S))
+
+        # Total transmission and reflection of the multilayer
+        R_total = np.abs(S[1, 0]/S[0, 0])**2
+        T_total = np.asscalar(np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
+                                      / (opt_ref_indices[0]*np.cos(alpha[0])))
+                              * np.abs(1/S[0, 0])**2)
+
+        # calculating D matrix for intermediate field
+        Dn = np.empty((2, 2, M), dtype=complex)
+        Dn[0, 0, M-1] = np.asscalar(1.0/S[0, 0])
+        Dn[0, 1, M-1] = 0.0
+        Dn[1, 0, M-1] = 0.0
+        Dn[1, 1, M-1] = np.asscalar(1.0/S[0, 0])
+        for i in range(M-2, -1, -1):
+            Temp = np.dot(Ln[:, :, i], np.dot(Jnm[:, :, i], Dn[:, :, i+1]))
+            Dn[0, 0, i] = Temp[0, 0]
+            Dn[0, 1, i] = Temp[0, 1]
+            Dn[1, 0, i] = Temp[1, 0]
+            Dn[1, 1, i] = Temp[1, 1]
+
+        K = len(distances)
+        Ints = np.empty(K, dtype=float)  # initialize relative intensities
+        dAdz = np.empty(K, dtype=float)  # initialize relative absorbed energies
+        k = 0  # counter for first layer
+        for i in range(1, N):
+            # get all distances in the current layer we have to
+            # calculate the absorption profile for
+            if i >= N-1:  # last layer
+                z = distances[np.logical_and(distances >= interfaces[i-1],
+                                             distances <= interfaces[i])]
+            else:
+                z = distances[np.logical_and(distances >= interfaces[i-1],
+                                             distances < interfaces[i])]
+            m = len(z)
+            z -= interfaces[i-1]  # relative positon within the layer
+            # For each layer except the first, compute Intensity, Absorption
+            Ep = Dn[0, 0, i]*np.exp(1.0j*k_z[i]*z)
+            Em = Dn[1, 0, i]*np.exp(-1.0j*k_z[i]*z)
+            Etx = 0.0*Ep + 0.0*Em
+            Ety = np.cos(alpha[i])*Ep - np.cos(alpha[i])*Em
+            Etz = -np.sin(alpha[i])*Ep - np.sin(alpha[i])*Em
+            Ints[k:k+m] = np.real(Etx * np.conj(Etx) + Ety*np.conj(Ety) + Etz*np.conj(Etz))
+            dAdz[k:k+m] = np.real(opt_ref_indices[i]*np.cos(alpha[i])
+                                  / (opt_ref_indices[0]*np.cos(alpha[0]))) \
+                * 2.0*np.imag(k_z[i])*Ints[k:k+m]
+
+            k = k+m  # set the counter
+
+        return dAdz, Ints, R_total, T_total
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp):
         r"""get_temperature_after_delta_excitation
+
+        Args:
+            fluence (float/pint quantity): incident fluence in J/m² as float
+                or as pint quantity
+            init_temp (float): initial temperature of the sample either
+                homogeneous temperature across the whole sample or as array
+                for every layer of the sample structure
 
         Returns a vector of the end temperature and temperature change
         for each layer of the sample structure after an optical
@@ -404,6 +569,11 @@ class Heat(Simulation):
         # absorption profile from Lambert-Beer's law
         dalpha_dz = self.get_absorption_profile()
 
+        try:
+            fluence = fluence.to('J/m**2').magnitude
+        except AttributeError:
+            pass
+
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
         masses = self.S.get_layer_property_vector('_mass')
@@ -431,10 +601,13 @@ class Heat(Simulation):
     def get_temp_map(self, delays, init_temp):
         """get_temp_map
 
-        % Returns a tempperature profile for the sample structure after
-        % optical excitation.
-        % create a unique hash
+        Returns a tempperature profile for the sample structure after
+        optical excitation.
+        create a unique hash
+
         """
+
+        init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
         filename = 'temp_map_' \
                    + self.get_hash(delays, init_temp) \
                    + '.npy'
@@ -488,8 +661,8 @@ class Heat(Simulation):
             if self.heat_diffusion and (len(sub_delays) > 2) \
                     and ((np.sum(fluence) == 0 and temp_gradient != 0)
                          or (np.sum(fluence) > 0 and np.sum(pulse_width) > 0)
-                         or (self.boundary_conditions['left_type']
-                             + self.boundary_conditions['right_type']) > 0):
+                         or (self._boundary_conditions['top_type']
+                             + self._boundary_conditions['bottom_type']) > 0):
                 # heat diffusion enabled and more than 2 time steps AND
                 # either no excitation with temperature gradient or excitation with finite pulse
                 # duration
@@ -634,19 +807,19 @@ class Heat(Simulation):
             matlab.double(init_temp.tolist()),
             matlab.double(d_start.tolist()),
             matlab.double(distances.tolist()),
-            matlab.double(self.excitation['fluence'].to_base_units().magnitude.tolist()),
-            matlab.double(self.excitation['pulse_width'].to_base_units().magnitude.tolist()),
-            matlab.double(self.excitation['delay_pump'].to_base_units().magnitude.tolist()),
+            matlab.double(self._excitation['fluence'].tolist()),
+            matlab.double(self._excitation['pulse_width'].tolist()),
+            matlab.double(self._excitation['delay_pump'].tolist()),
             matlab.double(dalpha_dz.tolist()),
             matlab.double(delays.tolist()),
             self.S.get_layer_property_vector('therm_cond_str'),
             self.S.get_layer_property_vector('heat_capacity_str'),
             matlab.double(self.S.get_layer_property_vector('_density').tolist()),
             self.S.get_layer_property_vector('sub_system_coupling_str'),
-            matlab.int32([self.boundary_conditions['left_type']+1]),
-            matlab.double([self.boundary_conditions['left_value']]),
-            matlab.int32([self.boundary_conditions['right_type']+1]),
-            matlab.double([self.boundary_conditions['right_value']]),
+            matlab.int32([self._boundary_conditions['top_type']+1]),
+            matlab.double([self._boundary_conditions['top_value'].tolist()]),
+            matlab.int32([self._boundary_conditions['bottom_type']+1]),
+            matlab.double([self._boundary_conditions['bottom_value'].tolist()]),
             self.ode_options
         )
         temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
@@ -673,7 +846,11 @@ class Heat(Simulation):
         """
         excitation = {'fluence': Q_(self._excitation['fluence'], u.J/u.m**2).to('mJ/cm**2'),
                       'delay_pump': Q_(self._excitation['delay_pump'], u.s).to('ps'),
-                      'pulse_width': Q_(self._excitation['pulse_width'], u.s).to('ps')}
+                      'pulse_width': Q_(self._excitation['pulse_width'], u.s).to('ps'),
+                      'wavelength': Q_(self._excitation['wavelength'], u.m).to('nm'),
+                      'theta': Q_(self._excitation['theta'], u.rad).to('deg'),
+                      # 'polarization': self._excitation['polarization'],
+                      'multilayer_absorption': self._excitation['multilayer_absorption']}
 
         return excitation
 
@@ -685,25 +862,34 @@ class Heat(Simulation):
         if isinstance(excitation, Q_):
             # just a fluence is given
             self._excitation['fluence'] = [excitation.to('J/m**2').magnitude]
-            self._excitation['delay_pump'] = [0]  # we define that the exciation is at t=0
-            self._excitation['pulse_width'] = [0]  # pulse width is 0 by default
         elif isinstance(excitation, dict):
-            try:
+            if 'fluence' in excitation:
                 self._excitation['fluence'] = excitation['fluence'].to('J/m**2').magnitude
+            if 'delay_pump' in excitation:
                 self._excitation['delay_pump'] = excitation['delay_pump'].to('s').magnitude
+            if 'pulse_width' in excitation:
                 self._excitation['pulse_width'] = excitation['pulse_width'].to('s').magnitude
-            except KeyError:
-                print('The excitation dictionary must include the tree keys '
-                      '_fluence_, _delay_pump_, _pulse_width_. Each must be'
-                      'a single or array of pint quantities.')
+            if 'wavelength' in excitation:
+                self._excitation['wavelength'] = excitation['wavelength'].to('m').magnitude
+            if 'theta' in excitation:
+                self._excitation['theta'] = excitation['theta'].to('rad').magnitude
+            # if 'polarization' in excitation:
+            #     if excitation['polarization'] in ['s', 'p']:
+            #         self._excitation['polarization'] = excitation['polarization']
+            #     else:
+            #         self._excitation['polarization'] = 'p'
+            #         raise Warning('Polarization musted be either _s_ or _p_!')
+            if 'multilayer_absorption' in excitation:
+                self._excitation['multilayer_absorption'] = \
+                    bool(excitation['multilayer_absorption'])
         else:
-            raise ValueError('_excitation_ must be either a float/int or dict '
-                             'of pint quantities!')
+            raise ValueError('_excitation_ must be either a float/int or dict!')
 
         if not (len(self._excitation['fluence'])
                 == len(self._excitation['delay_pump'])
                 == len(self._excitation['pulse_width'])):
-            raise ValueError('Elements of excitation dict must have '
+            raise ValueError('Elements of excitation dict, fluence, delay_pump, '
+                             'and pulse_width must have '
                              'the same number of elements!')
 
         # check the elements of the delay_pump vector
@@ -711,6 +897,83 @@ class Heat(Simulation):
             raise ValueError('The excitations have to be unique in delays!')
         else:
             self._excitation['delay_pump'] = np.sort(self._excitation['delay_pump'])
+
+    @property
+    def boundary_conditions(self):
+        """dict: boundary_conditions
+
+        Convert to from default SI units to real quantities
+
+        """
+        boundary_conditions = {'top_type':
+                               self.boundary_types[self._boundary_conditions['top_type']],
+                               }
+
+        if self._boundary_conditions['top_type'] == 1:
+            boundary_conditions['top_value'] = Q_(self._boundary_conditions['top_value'],
+                                                  'K')
+        elif self._boundary_conditions['top_type'] == 2:
+            boundary_conditions['top_value'] = Q_(self._boundary_conditions['top_value'],
+                                                  'W/m**2')
+
+        boundary_conditions['bottom_type'] = \
+            self.boundary_types[self._boundary_conditions['bottom_type']]
+
+        if self._boundary_conditions['bottom_type'] == 1:
+            boundary_conditions['bottom_value'] = Q_(self._boundary_conditions['bottom_value'],
+                                                     'K')
+        elif self._boundary_conditions['bottom_type'] == 2:
+            boundary_conditions['bottom_value'] = Q_(self._boundary_conditions['bottom_value'],
+                                                     'W/m**2')
+        return boundary_conditions
+
+    @boundary_conditions.setter
+    def boundary_conditions(self, boundary_conditions):
+        """set.boundary_conditions"""
+
+        if isinstance(boundary_conditions, dict):
+            if 'top_type' in boundary_conditions:
+                try:
+                    btype = self.boundary_types.index(boundary_conditions['top_type'])
+                except ValueError:
+                    raise ValueError('boundary_type must be either _isolator_, '
+                                     '_temperature_ or _flux_!')
+
+                self._boundary_conditions['top_type'] = btype
+            if 'bottom_type' in boundary_conditions:
+                try:
+                    btype = self.boundary_types.index(boundary_conditions['bottom_type'])
+                except ValueError:
+                    raise ValueError('boundary_type must be either _isolator_, '
+                                     '_temperature_ or _flux_!')
+
+                self._boundary_conditions['bottom_type'] = btype
+            if 'top_value' in boundary_conditions:
+                if self._boundary_conditions['top_type'] == 1:
+                    self._boundary_conditions['top_value'] = \
+                        boundary_conditions['top_value'].to('K').magnitude
+                elif self._boundary_conditions['top_type'] == 2:
+                    self._boundary_conditions['top_value'] = \
+                        boundary_conditions['top_value'].to('W/m**2').magnitude
+            if 'bottom_value' in boundary_conditions:
+                if self._boundary_conditions['bottom_type'] == 1:
+                    self._boundary_conditions['bottom_value'] = \
+                        boundary_conditions['bottom_value'].to('K').magnitude
+                elif self._boundary_conditions['bottom_type'] == 2:
+                    self._boundary_conditions['bottom_value'] = \
+                        boundary_conditions['bottom_value'].to('W/m**2').magnitude
+        else:
+            raise ValueError('_boundary_conditions_ must be a dict!')
+
+        K = self.S.num_sub_systems
+        if (self._boundary_conditions['top_type'] > 0) \
+                and (np.size(self._boundary_conditions['top_value']) != K):
+            raise ValueError('Non-isolating top boundary conditions must have the '
+                             'same dimensionality as the numer of sub-systems K!')
+        if (self._boundary_conditions['bottom_type'] > 0) \
+                and (np.size(self._boundary_conditions['bottom_value']) != K):
+            raise ValueError('Non-isolating bottom boundary conditions must have the '
+                             'same dimensionality as the numer of sub-systems K!')
 
     @property
     def distances(self):
