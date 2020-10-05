@@ -849,7 +849,7 @@ class Heat(Simulation):
                       'pulse_width': Q_(self._excitation['pulse_width'], u.s).to('ps'),
                       'wavelength': Q_(self._excitation['wavelength'], u.m).to('nm'),
                       'theta': Q_(self._excitation['theta'], u.rad).to('deg'),
-                      'polarization': self._excitation['polarization'],
+                      # 'polarization': self._excitation['polarization'],
                       'multilayer_absorption': self._excitation['multilayer_absorption']}
 
         return excitation
