@@ -347,7 +347,7 @@ class Structure:
         indices = self.get_layer_vectors()[0]
         pos = {}  # Dictionary used instead of array
         for i, layer in enumerate(layers[0]):
-            pos[layer] = list(np.where(indices == i))
+            pos[layer] = np.flatnonzero(indices == i)
         # Each element accessible through layer id
         return pos
 
