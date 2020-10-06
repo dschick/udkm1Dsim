@@ -212,30 +212,30 @@ class Phonon(Simulation):
 
         # calculate initial integrated linear thermal expansion from T1 to T2
         # traverse subsystems
-        for m in range(M):
-            for l in range(L):
-                int_alpha_T0[l, m] = int_lin_therm_exps[l][m](temp_map[0, l, m]
-                                                              - delta_temp_map[0, l, m])
+        for ii in range(L):
+            for iii in range(M):
+                int_alpha_T0[ii, iii] = int_lin_therm_exps[ii][iii](temp_map[0, ii, iii]
+                                                                    - delta_temp_map[0, ii, iii])
 
         # calculate sticks for all subsytsems for all delay steps
         # traverse time
-        for k in range(K):
-            if np.any(delta_temp_map[k, :]):  # there is a temperature change
+        for i in range(K):
+            if np.any(delta_temp_map[i, :]):  # there is a temperature change
                 # Calculate new sticks from the integrated linear thermal
                 # expansion from initial temperature to current temperature for
                 # each subsystem
                 # traverse subsystems
-                for m in range(M):
-                    for l in range(L):
-                        int_alpha_T[l, m] = int_lin_therm_exps[l][m](temp_map[k, l, m])
+                for ii in range(L):
+                    for iii in range(M):
+                        int_alpha_T[ii, iii] = int_lin_therm_exps[ii][iii](temp_map[i, ii, iii])
 
                 # calculate the length of the sticks of each subsystem and sum
                 # them up
-                sticks_sub_systems[k, :, :] = np.tile(thicknesses, (M, 1)).T \
+                sticks_sub_systems[i, :, :] = np.tile(thicknesses, (M, 1)).T \
                     * np.exp(int_alpha_T-int_alpha_T0) - np.tile(thicknesses, (M, 1)).T
-                # sticks[k, :] = np.sum(sticks_sub_systems[k, :, :], 2)
+                sticks[i, :] = np.sum(sticks_sub_systems[i, :, :], 1)
             else:  # no temperature change, so keep the current sticks
-                if k > 0:
-                    sticks_sub_systems[k, :, :] = sticks_sub_systems[k-1, :, :]
-                    sticks[k, :] = sticks[k-1, :]
+                if i > 0:
+                    sticks_sub_systems[i, :, :] = sticks_sub_systems[i-1, :, :]
+                    sticks[i, :] = sticks[i-1, :]
         return sticks, sticks_sub_systems
