@@ -25,14 +25,8 @@ __all__ = ["Phonon"]
 __docformat__ = "restructuredtext"
 
 import numpy as np
-from scipy.optimize import brentq
-from scipy.interpolate import interp2d
-from time import time
-from os import path
 from .simulation import Simulation
-from . import u, Q_
-from .helpers import make_hash_md5, finderb
-import warnings
+from .helpers import make_hash_md5
 
 
 class Phonon(Simulation):
@@ -82,11 +76,11 @@ class Phonon(Simulation):
 
         """
         param = [delays, self.only_heat]
-        
+
         if np.size(temp_map) > 1e6:
             temp_map = temp_map.flatten()[0:1000000]
             delta_temp_map = delta_temp_map.flatten()[0:1000000]
-        param.append(temp_map)            
+        param.append(temp_map)
         param.append(delta_temp_map)
 
         for key, value in kwargs.items():
@@ -96,15 +90,15 @@ class Phonon(Simulation):
 
     def get_all_strains_per_unique_layer(self, strain_map):
         """get_all_strains_per_unique_layer
-        
+
         Returns a dict with all strains per unique layer that
         are given by the input _strain_map_.
-        
+
         """
         # get the position indices of all unique layers in the sample structure
         positions = self.S.get_all_positions_per_unique_layer()
         strains = {}
-        
+
         for key, value in positions.items():
             strains[key] = np.sort(np.unique(strain_map[:, value].flatten()))
 
@@ -113,68 +107,73 @@ class Phonon(Simulation):
     def get_reduced_strains_per_unique_layer(self, strain_map, N=100):
         """ get_reduced_strains_per_unique_layer
 
-        Returns a cell array with all strains per unique unit cell that
-        are given by the input _strainMap_, BUT with a reduced number. The
-        reduction is done by equally spacing the strains between the min
-        and max strain with a given number $N$.
-        $N$ can be also a vector of the length($N$) = $M$, where $M$ is 
-        the number of unique unit cells.
+        Returns a dict with all strains per unique layer that are given by the
+        input _strain_map_, BUT with a reduced number. The reduction is done
+        by equally spacing the strains between the min and max strain with a
+        given number :math:`N`, which can be also a vector of the
+        :math:`len(N) = M`, where :math:`M` is the number of unique layers.
 
         """
-
         # initialize
         all_strains = self.get_all_strains_per_unique_layer(strain_map)
-        M = len(all_strains) # Nb. of unique layers
-        strains = {}        
-        
+        M = len(all_strains)  # Nb. of unique layers
+        strains = {}
+
         if np.size(N) == 1:
-            N = N*np.ones([M, 1])                
+            N = N*np.ones([M, 1])
         elif np.size(N) != M:
             raise ValueError('The dimension of N must be either 1 or the number '
                              'of unique layers the structure!')
-        
-        
+
         for i, (key, value) in enumerate(all_strains.items()):
             min_strain = np.min(value)
             max_strain = np.max(value)
-            strains[key] = np.sort(np.unique(np.r_[0, np.linspace(min_strain, max_strain, int(N[i]))]))
+            strains[key] = np.sort(np.unique(
+                np.r_[0, np.linspace(min_strain, max_strain, int(N[i]))]))
 
         return strains
 
-"""        
-        %% checkTempMaps
-        % Returns the corrected _deltaTempMap_ for the _strainMap_ 
-        % calculation and checks _tempMap_ and _deltaTempMap_ for the 
-        % correct dimensions.
-        function [tempMap, deltaTempMap] = checkTempMaps(obj,tempMap,deltaTempMap,time)
-            N = obj.S.getNumberOfUnitCells; % nb of unit cells
-            M = length(time);               % nb of time steps
-            K = obj.S.numSubSystems;        % nb of subsystems
-            
-            % check size of deltaTempMap
-            if K == 1
-                if isequal(size(deltaTempMap),[1 N])
-                    temp                = deltaTempMap;
-                    deltaTempMap        = zeros(M,N);
-                    deltaTempMap(1,:)   = temp;
-                elseif size(deltaTempMap,1) ~= M || size(deltaTempMap,2) ~= N
-                    error('The given temperature difference map does not have the dimension M x N, where M is the number of time steps and N the number of unitCells!');
-                end%if
-            else
-                if isequal(size(deltaTempMap),[1 N K])
-                    temp                = deltaTempMap;
-                    deltaTempMap        = zeros(M,N,K);
-                    deltaTempMap(1,:,:) = temp;
-                elseif size(deltaTempMap,1) ~= M || size(deltaTempMap,2) ~= N || size(deltaTempMap,3) ~= K
-                    error('The given temperature difference map does not have the dimension M x N, where M is the number of time steps and N the number of unitCells and K is the number of subsystems!');
-                end%if
-            end%if
-            
-            if size(tempMap) ~= size(deltaTempMap)
-                error('The temperature map does not have the same size as the temperature difference map!');
-            end%if
-        end%function
-        
+    def check_temp_maps(self, temp_map, delta_temp_map, delays):
+        """ check_temp_maps
+
+        Returns the corrected _delta_temp_map_ for the _strain_map_
+        calculation and checks _temp_map_ and _delta_temp_map_ for the
+        correct dimensions.
+
+        """
+        M = len(delays)
+        N = self.S.get_number_of_layers()
+        K = self.S.num_sub_systems
+
+        # check size of delta_temp_map
+        if K == 1:
+            if np.shape(delta_temp_map) == (1, N):
+                temp = delta_temp_map
+                delta_temp_map = np.zeros([M, N])
+                delta_temp_map[0, :] = temp
+            elif (np.size(delta_temp_map, 0) != M) or (np.size(delta_temp_map, 1) != N):
+                raise ValueError('The given temperature difference map does not have the '
+                                 'dimension M x N, where M is the number of time steps '
+                                 'and N the number of layers!')
+        else:
+            if np.shape(delta_temp_map) == (1, N, K):
+                temp = delta_temp_map
+                delta_temp_map = np.zeros([M, N, K])
+                delta_temp_map[0, :, :] = temp
+            elif ((np.size(delta_temp_map, 0) != M)
+                  or (np.size(delta_temp_map, 1) != N)
+                  or (np.size(delta_temp_map, 2) != K)):
+                raise ValueError('The given temperature difference map does not have the '
+                                 'dimension M x N x K, where M is the number of time steps '
+                                 'and N the number of layers and K is the number of subsystems!')
+
+        if np.shape(temp_map) != np.shape(delta_temp_map):
+            raise ValueError('The temperature map does not have the same size as the '
+                             'temperature difference map!')
+
+        return temp_map, delta_temp_map
+
+        """
         %% calcSticksFromTempMap
         % Calculates the sticks to insert into the unit cell springs which
         % model the external force (thermal stress). The length of $l_i$ 
