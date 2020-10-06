@@ -173,63 +173,67 @@ class Phonon(Simulation):
 
         return temp_map, delta_temp_map
 
-        """
-        %% calcSticksFromTempMap
-        % Calculates the sticks to insert into the unit cell springs which
-        % model the external force (thermal stress). The length of $l_i$ 
-        % of the i-th spacer stick is calculated from the
-        % temperature-dependent linear thermal expansion $\alpha(T)$ of 
-        % the unit cell:
-        %
-        % $$ \alpha(T) = \frac{1}{L} \frac{d L}{d T} $$
-        % 
-        % which results after integration in
-        %
-        % $$ l = \Delta L = L_1 \exp(A(T_2) - A(T_1)) - L_1 $$
-        %
-        % where $A(T)$ is the integrated lin. therm. expansion
-        % coefficient in respect to the temperature $T$. The indices 1 and
-        % 2 indicate the initial and final state.
-        function [sticks, sticksSubSystems] = calcSticksFromTempMap(obj,tempMap,deltaTempMap)
-            N = obj.S.getNumberOfUnitCells; % nb of unit cells
-            K = obj.S.numSubSystems;        % nb of subsystems
-            M = size(tempMap,1);            % nb of time steps
-            
-            cAxises         = obj.S.getUnitCellPropertyVector('cAxis');            
-            intLinThermExps = obj.S.getUnitCellPropertyVector('intLinThermExp'); % integrated linear thermal expansion function
-            intAlphaT0      = zeros(N,K); % evaluated initial integrated linear thermal expansion from T1 to T2
-            intAlphaT       = zeros(N,K); % evaluated integrated linear thermal expansion from T1 to T2
-            sticks          = zeros(M,N); % the sticks inserted in the unit cells
-            sticksSubSystems= zeros(M,N,K); % the sticks for each thermodynamic subsystem
-            
-            % calculate initial integrated linear thermal expansion from T1 to T2
-            % traverse subsystems
-            for j=1:K
-                intAlphaT0(:,j) = cellfun(@feval,intLinThermExps(:,j),num2cell(squeeze(tempMap(1,:,j))'-squeeze(deltaTempMap(1,:,j))'));
-            end%for
-            
-            % calculate sticks for all subsytsems for all time steps
-            % traverse time
-            for i=1:M
-                if find(deltaTempMap(i,:)) % there is a temperature change
-                    % Calculate new sticks from the integrated linear 
-                    % thermal expansion from initial temperature to 
-                    % current temperature for each subsystem                        
-                    % traverse subsystems
-                    for j=1:K
-                        intAlphaT(:,j) = cellfun(@feval,intLinThermExps(:,j),num2cell(squeeze(tempMap(i,:,j))'));
-                    end%for
+    def calc_sticks_from_temp_map(self, temp_map, delta_temp_map):
+        """calc_sticks_from_temp_map
 
-                    % calculate the length of the sticks of each subsystem and sum
-                    % them up 
-                    sticksSubSystems(i,:,:) = repmat(cAxises,1,K) .*exp(intAlphaT-intAlphaT0)-repmat(cAxises,1,K);
-                    sticks(i,:)             = sum(sticksSubSystems(i,:,:),3)';
-                else % no temperature change, so keep the current sticks
-                    if i > 1
-                        sticksSubSystems(i,:,:) = sticksSubSystems(i-1,:,:);
-                        sticks(i,:)             = sticks(i-1,:);
-                    end%if
-                end%if
-            end%for            
-        end%function
-"""
+        Calculates the sticks to insert into the layer springs which model the
+        external force (thermal stress). The length of :math:`l_i` of the
+        :math:`i`-th spacer stick is calculated from the temperature-dependent
+        linear thermal expansion :math:`\alpha(T)` of the layer:
+
+        .. math::
+
+            \alpha(T) = \frac{1}{L} \frac{d L}{d T}
+
+        which results after integration in
+
+        .. math::
+
+            l = \Delta L = L_1 \exp(A(T_2) - A(T_1)) - L_1 $$
+
+        where :math:`A(T)` is the integrated lin. therm. expansion coefficient
+        in respect to the temperature :math:`T`. The indices 1 and 2 indicate
+        the initial and final state.
+
+        """
+        M = np.size(temp_map, 0)  # nb of delay steps
+        N = self.S.get_number_of_layers()
+        K = self.S.num_sub_systems
+
+        thicknesses = self.S.get_layer_property_vector('_thickness')
+        int_lin_therm_exps = self.S.get_layer_property_vector('_int_lin_therm_exp')
+
+        # evaluated initial integrated linear thermal expansion from T1 to T2
+        int_alpha_T0 = np.zeros([N, K])
+        # evaluated integrated linear thermal expansion from T1 to T2
+        int_alpha_T = np.zeros([N, K])
+        sticks = np.zeros([M, N])  # the sticks inserted in the unit cells
+        sticks_sub_systems = np.zeros([M, N, K])  # the sticks for each thermodynamic subsystem
+
+        # calculate initial integrated linear thermal expansion from T1 to T2
+        # traverse subsystems
+        for j in range(K):
+            for l in range(N):
+                int_alpha_T0[l, j] = int_lin_therm_exps[l][j](np.squeeze(temp_map[0, l, j]) - np.squeeze(delta_temp_map[0, l, j]))
+
+        # calculate sticks for all subsytsems for all delay steps
+        # traverse time
+        for i in range(M):
+            if np.any(delta_temp_map[i, :]):  # there is a temperature change
+                # Calculate new sticks from the integrated linear
+                # thermal expansion from initial temperature to
+                # current temperature for each subsystem
+                # traverse subsystems
+                for j in range(K):
+                    for l in range(N):
+                        int_alpha_T[l, j] = int_lin_therm_exps[l][j](np.squeeze(temp_map[i, l, j]))
+
+                # calculate the length of the sticks of each subsystem and sum
+                # them up
+                sticks_sub_systems[i, :, :] = np.tile(thicknesses, (K, 1)).T * np.exp(int_alpha_T-int_alpha_T0) - np.tile(thicknesses, (K, 1)).T
+                # sticks[i, :] = np.sum(sticks_sub_systems[i, :, :], 2)
+            else:  # no temperature change, so keep the current sticks
+                if i > 0:
+                    sticks_sub_systems[i, :, :] = sticks_sub_systems[i-1, :, :]
+                    sticks[i, :] = sticks[i-1, :]
+        return sticks, sticks_sub_systems
