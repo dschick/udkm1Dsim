@@ -601,12 +601,11 @@ class Heat(Simulation):
     def get_temp_map(self, delays, init_temp):
         """get_temp_map
 
-        Returns a tempperature profile for the sample structure after
-        optical excitation.
-        create a unique hash
+        Returns a tempperature profile for the sample structure after optical
+        excitation. The result can be saved using an unique hash of the sample
+        and the simulation parameters in order to reuse it.
 
         """
-
         init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
         filename = 'temp_map_' \
                    + self.get_hash(delays, init_temp) \
@@ -615,7 +614,7 @@ class Heat(Simulation):
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
             temp_map, delta_temp_map, checked_excitations = np.load(full_filename)
-            self.disp_message('_tempMap_ loaded from file:\n\t' + filename)
+            self.disp_message('_temp_map_ loaded from file:\n\t' + filename)
         else:
             # file does not exist so calculate and save
             temp_map, delta_temp_map, checked_excitations = \

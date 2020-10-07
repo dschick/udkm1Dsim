@@ -45,17 +45,12 @@ class Phonon(Simulation):
     Attributes:
         S (object): sample to do simulations with
         only_heat (boolean): force recalculation of results
-        heat_diffusion (boolean): true when including only thermal expanison without
-            coherent phonon dynamics
-        matlab_engine (module): MATLAB to Python API engine required for
-            calculating heat diffusion
 
     """
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.only_heat = kwargs.get('only_heat', False)
-        self.matlab_engine = []
 
     def __str__(self, output=[]):
         """String representation of this class"""
