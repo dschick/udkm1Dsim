@@ -367,7 +367,7 @@ class Structure:
         d_start = np.hstack([[0], d_end[0:-1]])
         d_mid = (d_start + thickness/2)
         if units:
-            return d_start*u.m, d_end*u.m, d_mid*u.m
+            return Q_(d_start, u.m), Q_(d_end, u.m), Q_(d_mid, u.m)
         else:
             return d_start, d_end, d_mid
 
@@ -383,7 +383,7 @@ class Structure:
         indices = np.r_[1, np.diff(self.get_layer_vectors()[0])]
         res = np.append(d_start[np.nonzero(indices)], d_end[-1])
         if units:
-            return res*u.m
+            return Q_(res, u.m)
         else:
             return res
 
@@ -424,7 +424,7 @@ class Structure:
         # these are the indicies of the original distances in the interpolated new array
         original_indicies = finderb(d_mid, dist_interp)
         if units:
-            return dist_interp*u.m, original_indicies
+            return Q_(dist_interp, u.m), original_indicies
         else:
             return dist_interp, original_indicies
 
