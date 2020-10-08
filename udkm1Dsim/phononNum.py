@@ -48,6 +48,8 @@ class PhononNum(Phonon):
     Attributes:
         S (object): sample to do simulations with
         only_heat (boolean): force recalculation of results
+        ode_options (dict): options for scipy solve_ivp ode solver, see
+        <https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html>
 
     References:
 
@@ -61,6 +63,13 @@ class PhononNum(Phonon):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.only_heat = kwargs.get('only_heat', False)
+        self.ode_options = {
+            'method': 'RK23',
+            'first_step': None,
+            'max_step': np.inf,
+            'rtol': 1e-3,
+            'atol': 1e-6,
+            }
 
     def __str__(self, output=[]):
         """String representation of this class"""
@@ -181,7 +190,7 @@ class PhononNum(Phonon):
                 x0,
                 args=(delays, force_from_heat, damping, spring_consts, masses, L),
                 t_eval=delays,
-                method='RK23',
+                **self.ode_options
                 )
 
             # calculate the strainMap as the second spacial derivative
