@@ -16,5 +16,5 @@ from .xrayDyn import XrayDyn
 from .xrayDynMag import XrayDynMag
 
 __all__ = ['Atom', 'AtomMixed', 'AmorphousLayer', 'UnitCell', 'Structure', 'Simulation',
-           'Heat', 'Phonon', 'PhononNum', 'Magnetization', 'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag',
-           'u', 'Q_']
+           'Heat', 'Phonon', 'PhononNum', 'Magnetization', 'Xray', 'XrayKin', 'XrayDyn',
+           'XrayDynMag', 'u', 'Q_']

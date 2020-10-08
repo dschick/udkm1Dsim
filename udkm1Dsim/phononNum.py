@@ -162,7 +162,7 @@ class PhononNum(Phonon):
         else:
             # include coherent dynamics
             self.disp_message('Calculating coherent dynamics with ODE solver ...')
-            
+
             # calculate the strainMap as the second spacial derivative
             # of the layer shift x(t). The result of the ode solver
             # contains x(t) = X(:,1:N) and v(t) = X(:,N+1:end) the

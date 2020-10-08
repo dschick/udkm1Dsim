@@ -194,7 +194,7 @@ class Phonon(Simulation):
         M = np.size(temp_map, 0)  # nb of delay steps
         L = self.S.get_number_of_layers()
         K = self.S.num_sub_systems
-        
+
         temp_map = np.reshape(temp_map, [M, L, K])
         delta_temp_map = np.reshape(delta_temp_map, [M, L, K])
 
