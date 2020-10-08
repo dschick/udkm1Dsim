@@ -136,31 +136,31 @@ class Phonon(Simulation):
         correct dimensions.
 
         """
-        K = len(delays)
+        M = len(delays)
         L = self.S.get_number_of_layers()
-        M = self.S.num_sub_systems
+        K = self.S.num_sub_systems
 
         # check size of delta_temp_map
-        if M == 1:
+        if K == 1:
             if np.shape(delta_temp_map) == (1, L):
                 temp = delta_temp_map
-                delta_temp_map = np.zeros([K, L])
+                delta_temp_map = np.zeros([M, L])
                 delta_temp_map[0, :] = temp
-            elif (np.size(delta_temp_map, 0) != K) or (np.size(delta_temp_map, 1) != L):
+            elif (np.size(delta_temp_map, 0) != M) or (np.size(delta_temp_map, 1) != L):
                 raise ValueError('The given temperature difference map does not have the '
-                                 'dimension K x L, where K is the number of delay steps '
+                                 'dimension M x L, where K is the number of delay steps '
                                  'and L the number of layers!')
         else:
-            if np.shape(delta_temp_map) == (1, L, M):
+            if np.shape(delta_temp_map) == (1, L, K):
                 temp = delta_temp_map
-                delta_temp_map = np.zeros([K, L, M])
+                delta_temp_map = np.zeros([K, L, K])
                 delta_temp_map[0, :, :] = temp
-            elif ((np.size(delta_temp_map, 0) != K)
+            elif ((np.size(delta_temp_map, 0) != M)
                   or (np.size(delta_temp_map, 1) != L)
-                  or (np.size(delta_temp_map, 2) != M)):
+                  or (np.size(delta_temp_map, 2) != K)):
                 raise ValueError('The given temperature difference map does not have the '
-                                 'dimension K x L x M, where K is the number of delay steps '
-                                 'and L the number of layers and M is the number of subsystems!')
+                                 'dimension M x L x K, where M is the number of delay steps '
+                                 'and L the number of layers and K is the number of subsystems!')
 
         if np.shape(temp_map) != np.shape(delta_temp_map):
             raise ValueError('The temperature map does not have the same size as the '
@@ -191,43 +191,46 @@ class Phonon(Simulation):
         the initial and final state.
 
         """
-        K = np.size(temp_map, 0)  # nb of delay steps
+        M = np.size(temp_map, 0)  # nb of delay steps
         L = self.S.get_number_of_layers()
-        M = self.S.num_sub_systems
+        K = self.S.num_sub_systems
+        
+        temp_map = np.reshape(temp_map, [M, L, K])
+        delta_temp_map = np.reshape(delta_temp_map, [M, L, K])
 
         thicknesses = self.S.get_layer_property_vector('_thickness')
         int_lin_therm_exps = self.S.get_layer_property_vector('_int_lin_therm_exp')
 
         # evaluated initial integrated linear thermal expansion from T1 to T2
-        int_alpha_T0 = np.zeros([L, M])
+        int_alpha_T0 = np.zeros([L, K])
         # evaluated integrated linear thermal expansion from T1 to T2
-        int_alpha_T = np.zeros([L, M])
-        sticks = np.zeros([K, L])  # the sticks inserted in the unit cells
-        sticks_sub_systems = np.zeros([K, L, M])  # the sticks for each thermodynamic subsystem
+        int_alpha_T = np.zeros([L, K])
+        sticks = np.zeros([M, L])  # the sticks inserted in the unit cells
+        sticks_sub_systems = np.zeros([M, L, K])  # the sticks for each thermodynamic subsystem
 
         # calculate initial integrated linear thermal expansion from T1 to T2
         # traverse subsystems
         for ii in range(L):
-            for iii in range(M):
+            for iii in range(K):
                 int_alpha_T0[ii, iii] = int_lin_therm_exps[ii][iii](temp_map[0, ii, iii]
                                                                     - delta_temp_map[0, ii, iii])
 
         # calculate sticks for all subsytsems for all delay steps
         # traverse time
-        for i in range(K):
+        for i in range(M):
             if np.any(delta_temp_map[i, :]):  # there is a temperature change
                 # Calculate new sticks from the integrated linear thermal
                 # expansion from initial temperature to current temperature for
                 # each subsystem
                 # traverse subsystems
                 for ii in range(L):
-                    for iii in range(M):
+                    for iii in range(K):
                         int_alpha_T[ii, iii] = int_lin_therm_exps[ii][iii](temp_map[i, ii, iii])
 
                 # calculate the length of the sticks of each subsystem and sum
                 # them up
-                sticks_sub_systems[i, :, :] = np.tile(thicknesses, (M, 1)).T \
-                    * np.exp(int_alpha_T-int_alpha_T0) - np.tile(thicknesses, (M, 1)).T
+                sticks_sub_systems[i, :, :] = np.tile(thicknesses, (K, 1)).T \
+                    * np.exp(int_alpha_T-int_alpha_T0) - np.tile(thicknesses, (K, 1)).T
                 sticks[i, :] = np.sum(sticks_sub_systems[i, :, :], 1)
             else:  # no temperature change, so keep the current sticks
                 if i > 0:
