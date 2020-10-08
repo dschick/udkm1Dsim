@@ -187,7 +187,7 @@ class XrayDynMag(Xray):
         """
 
         t1 = time()
-        self.disp_message('Calculating _homogenous_reflectivity_ ...')
+        self.disp_message('Calculating _homogeneous_reflectivity_ ...')
         # vacuum boundary
         A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
         # calc the reflectivity-transmisson matrix of the structure
@@ -208,7 +208,7 @@ class XrayDynMag(Xray):
         # calc the actual reflectivity from the matrix
         R = XrayDynMag.calc_reflectivity_from_matrix(RT, self.pol_in, self.pol_out)
         R_phi = XrayDynMag.calc_reflectivity_from_matrix(RT_phi, self.pol_in, self.pol_out)
-        self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
+        self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(time()-t1))
         return R, R_phi
 
     def calc_homogeneous_matrix(self, S, last_A, last_A_phi, last_k_z, *args):
@@ -342,7 +342,7 @@ class XrayDynMag(Xray):
         return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
     """
-    Inhomogenous Sample Structure
+    Inhomogeneous Sample Structure
     All unit cells in the sample are inhomogeneously
     strained. This is generally the case when calculating the
     transient rocking curves for coherent phonon dynamics in the
@@ -352,7 +352,7 @@ class XrayDynMag(Xray):
     def inhomogeneous_reflectivity(self, strain_map, magnetization_map, **kwargs):
         """inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogenously strained and
+        Returns the reflectivity of an inhomogeneously strained and
         magnetized sample structure for a given _strain_map_ and
         _magnetization_map_ in position and time for each unit cell or
         amorphous layer in the sample structure.
@@ -379,7 +379,7 @@ class XrayDynMag(Xray):
             self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
         else:
             t1 = time()
-            self.disp_message('Calculating _inhomogenous_reflectivity_ ...')
+            self.disp_message('Calculating _inhomogeneous_reflectivity_ ...')
             # parse the input arguments
             if not isinstance(strain_map, np.ndarray):
                 raise TypeError('strain_map must be a numpy ndarray!')
@@ -408,7 +408,7 @@ class XrayDynMag(Xray):
                 R, R_phi = self.sequential_inhomogeneous_reflectivity(strain_map,
                                                                       magnetization_map)
 
-            self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
+            self.disp_message('Elapsed time for _inhomogeneous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
             self.save(full_filename, [R, R_phi], '_inhomogeneous_reflectivity_')
         return R, R_phi
@@ -416,7 +416,7 @@ class XrayDynMag(Xray):
     def sequential_inhomogeneous_reflectivity(self, strain_map, magnetization_map):
         """sequential_inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogenously strained sample
+        Returns the reflectivity of an inhomogeneously strained sample
         structure for a given ``strain_map`` in position and time, as
         well as for a given set of possible strains for each unit cell
         in the sample structure (``strain_vectors``).
@@ -430,7 +430,7 @@ class XrayDynMag(Xray):
         R_phi = np.zeros_like(R)
 
         for i in trange(N, desc='Progress', leave=True):
-            # get the inhomogenous reflectivity of the sample
+            # get the inhomogeneous reflectivity of the sample
             # structure for each time step of the strain map
 
             # vacuum boundary
@@ -460,7 +460,7 @@ class XrayDynMag(Xray):
     def parallel_inhomogeneous_reflectivity(self, strain_map, magnetization_map, dask_client):
         """parallel_inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogenously strained sample
+        Returns the reflectivity of an inhomogeneously strained sample
         structure for a given ``strain_map`` in position and time, as
         well as for a given set of possible strains for each unit cell
         in the sample structure (``strain_vectors``).
