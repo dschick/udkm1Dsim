@@ -24,10 +24,12 @@ __all__ = ["PhononNum"]
 
 __docformat__ = "restructuredtext"
 
-import numpy as np
 from .phonon import Phonon
+from .helpers import finderb
+import numpy as np
 from os import path
 from time import time
+from scipy.integrate import solve_ivp
 
 
 class PhononNum(Phonon):
@@ -141,7 +143,7 @@ class PhononNum(Phonon):
         # initialize
         L = self.S.get_number_of_layers()
         thicknesses = self.S.get_layer_property_vector('_thickness')
-        x0 = np.zeros([2*L, 1])  # initial condition for the shift of the layers
+        x0 = np.zeros([2*L])  # initial condition for the shift of the layers
 
         try:
             delays = delays.to('s').magnitude
@@ -163,19 +165,150 @@ class PhononNum(Phonon):
             # include coherent dynamics
             self.disp_message('Calculating coherent dynamics with ODE solver ...')
 
+            L = self.S.get_number_of_layers()
+            masses = self.S.get_layer_property_vector('_mass')
+            thicknesses = self.S.get_layer_property_vector('_thickness')
+            spring_consts = self.S.get_layer_property_vector('spring_const')
+            damping = self.S.get_layer_property_vector('_phonon_damping')
+            force_from_heat = PhononNum.calc_force_from_heat(sticks, spring_consts)
+
+            # apply MATLAB's ode-solver and input also temporal grid
+            # (time) on which the result is extrapolated to and the
+            # initial conditions x0 and the odeOptions
+            sol = solve_ivp(
+                PhononNum.ode_func,
+                [delays[0], delays[-1]],
+                x0,
+                args=(delays, force_from_heat, damping, spring_consts, masses, L),
+                t_eval=delays,
+                method='RK23',
+                )
+
             # calculate the strainMap as the second spacial derivative
             # of the layer shift x(t). The result of the ode solver
             # contains x(t) = X(:,1:N) and v(t) = X(:,N+1:end) the
             # positions and velocities of the layers, respectively.
-            temp = np.diff(X[:, 0:L], 0, 2)
-            temp[:, :+1] = 0
-            strain_map = temp/np.tile(thicknesses, np.size(temp, 0), 1)
-            velocities = X[:, L+1:]
+            # temp = np.diff(X[:, 0:L], 0, 2)
+            # temp[:, :+1] = 0
+            # strain_map = temp/np.tile(thicknesses, np.size(temp, 0), 1)
+            # velocities = X[:, L+1:]
+            temp = np.diff(sol.y[0:L, :].T, 1, 1)
+            strain_map = temp/np.tile(thicknesses[:-1], [np.size(temp, 0), 1])
+            velocities = sol.y[L:, :].T
         self.disp_message('Elapsed time for _strain_map_:'
                           ' {:f} s'.format(time()-t1))
         return strain_map, sticks_sub_systems, velocities
 
-    def __del__(self):
-        # stop matlab engine if exists
-        if self.matlab_engine != []:
-            self.matlab_engine.quit()
+    @staticmethod
+    def ode_func(t, X, delays, force_from_heat, damping, spring_consts, masses, L):
+        """ode_func
+
+        Provides the according ode function for the ode solver which has to be
+        solved. The ode function has the input :math:`t` and :math:`X(t)` and
+        calculates the temporal derivative :math:`\dot{X}(t)` where the vector
+
+        .. math::
+
+            X(t) = [x(t) \; \dot{x}(t)] \quad \mbox{and } \quad
+            \dot{X}(t) = [\dot{x}(t) \; \ddot{x}(t)] .
+
+        :math:`x(t)` is the actual shift of each layer.
+
+        """
+        x = X[0:L]
+        v = X[L:]
+
+        # the output must be a column vector
+        X_prime = np.zeros([2*L])
+
+        # accelerations = derivative of velocities
+        X_prime[L:] = (
+            PhononNum.calc_force_from_damping(v, damping, masses)
+            + PhononNum.calc_force_from_spring(
+                np.r_[np.diff(x), 0],
+                np.r_[0, np.diff(x)],
+                spring_consts)
+            + force_from_heat[:, finderb(t, delays)].squeeze()
+            )/masses
+
+        # velocities = derivative of positions
+        X_prime[0:L] = v
+
+        return X_prime
+
+    @staticmethod
+    def calc_force_from_spring(d_X1, d_X2, spring_consts):
+        """calc_force_from_spring
+
+        Calculates the force :math:`F_i^{spring}` acting on each mass due to
+        the displacement between the left and right site of that mass.
+        .. math::
+
+            F_i^{spring} = -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1})
+
+        We introduce-higher order inter-atomic potentials by
+
+        .. math::
+
+            k_i(x_i-x_{i-1}) = \sum_{j=1}^{M-1} k_i^j (x_i-x_{i-1})^j
+
+        where :math:`M-1` is the order of the spring constants.
+
+        """
+        try:
+            spring_order = np.size(spring_consts, 1)
+        except IndexError:
+            spring_order = 1
+
+        spring_consts = np.reshape(spring_consts, [np.size(spring_consts, 0), spring_order])
+
+        coeff1 = np.vstack((-spring_consts[0:-1, :], np.zeros([1, spring_order])))
+        coeff2 = np.vstack((np.zeros([1, spring_order]), -spring_consts[0:-1, :]))
+
+        temp1 = np.zeros([len(d_X1), spring_order])
+        temp2 = np.zeros([len(d_X1), spring_order])
+
+        for i in range(spring_order):
+            temp1[:, i] = d_X1**(i+1)
+            temp2[:, i] = d_X2**(i+1)
+
+        F = np.sum(coeff2*temp2, 1) - np.sum(coeff1*temp1, 1)
+
+        return F
+
+    @staticmethod
+    def calc_force_from_heat(sticks, spring_consts):
+        """calc_force_from_heat
+
+        Calculates the force acting on each mass due to the heat expansion,
+        which is modelled by spacer sticks.
+
+        """
+        M, L = np.shape(sticks)
+        F = np.zeros([L, M])
+        # traverse time
+        for i in range(M):
+            F[:, i] = -PhononNum.calc_force_from_spring(
+                np.hstack((sticks[i, 0:L-1], 0)),
+                np.hstack((0, sticks[i, 0:L-1])),
+                spring_consts
+                )
+
+        return F
+
+    @staticmethod
+    def calc_force_from_damping(v, damping, masses):
+        """calc_force_from_damping
+
+        Calculates the force acting on each mass in a linear spring due to
+        damping (:math:`\gamma_i`) according to the shift velocity difference
+        :math:`v_{i}-v_{i-1}` with :math:`v_i(t) = \dot{x}_i(t)`:
+
+        .. math::
+
+            F_i^{damp} = \gamma_i(\dot{x}_i-\dot{x}_{i-1})
+
+        """
+        F = masses*damping*np.diff(v, 0)
+
+        return F
