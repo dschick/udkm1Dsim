@@ -41,10 +41,12 @@ class Phonon(Simulation):
     Keyword Args:
         only_heat (boolean): true when including only thermal expanison without
             coherent phonon dynamics
+        progress_bar (boolean): enable tqdm progress bar
 
     Attributes:
         S (object): sample to do simulations with
         only_heat (boolean): force recalculation of results
+        progress_bar (boolean): enable tqdm progress bar
 
     """
 

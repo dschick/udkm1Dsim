@@ -45,8 +45,7 @@ class Simulation:
            the simulations
         disp_calc_time (boolean): is true to display the duration of
            certain calculations
-        progress_bar_type (str): type of the progressbar 'none', 'text',
-           'gui'
+        progress_bar (boolean): enable tqdm progress bar
 
     Attributes:
         S (object): sample to do simulations with
@@ -55,8 +54,7 @@ class Simulation:
            the simulations
         disp_calc_time (boolean): is true to display the duration of
            certain calculations
-        progress_bar_type (str): type of the progressbar 'none', 'text',
-           'gui'
+        progress_bar (boolean): enable tqdm progress bar
 
     """
 
@@ -66,7 +64,7 @@ class Simulation:
         self.cache_dir = kwargs.get('cache_dir', './')
         self.disp_messages = kwargs.get('disp_messages', True)
         self.save_data = kwargs.get('save_data', True)
-        self.progress_bar_type = kwargs.get('progress_bar_type', 'none')
+        self.progress_bar = kwargs.get('progress_bar', True)
 
     def __str__(self, output=[]):
         """String representation of this class"""
@@ -74,7 +72,7 @@ class Simulation:
                   ['cache directory', self.cache_dir],
                   ['display messages', self.disp_messages],
                   ['save data', self.save_data],
-                  ['progress bar type', self.progress_bar_type]] + output
+                  ['progress bar', self.progress_bar]] + output
 
         class_str = 'This is the current structure for the simulations:\n\n'
         class_str += self.S.__str__()

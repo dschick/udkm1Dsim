@@ -30,6 +30,7 @@ import numpy as np
 from os import path
 from time import time
 from scipy.integrate import solve_ivp
+from tqdm.notebook import tqdm
 
 
 class PhononNum(Phonon):
@@ -44,10 +45,12 @@ class PhononNum(Phonon):
     Keyword Args:
         only_heat (boolean): true when including only thermal expanison without
             coherent phonon dynamics
+        progress_bar (boolean): enable tqdm progress bar
 
     Attributes:
         S (object): sample to do simulations with
         only_heat (boolean): force recalculation of results
+        progress_bar (boolean): enable tqdm progress bar
         ode_options (dict): options for scipy solve_ivp ode solver, see
         <https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html>
 
@@ -62,7 +65,6 @@ class PhononNum(Phonon):
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-        self.only_heat = kwargs.get('only_heat', False)
         self.ode_options = {
             'method': 'RK23',
             'first_step': None,
@@ -181,17 +183,26 @@ class PhononNum(Phonon):
             damping = self.S.get_layer_property_vector('_phonon_damping')
             force_from_heat = PhononNum.calc_force_from_heat(sticks, spring_consts)
 
-            # apply MATLAB's ode-solver and input also temporal grid
-            # (time) on which the result is extrapolated to and the
-            # initial conditions x0 and the odeOptions
+            # apply scipy's ode-solver together
+            if self.progress_bar:  # with tqdm progressbar
+                pbar = tqdm(total=100, unit='%')
+                pbar.set_description('delay = {:.3f} ps'.format(delays[0]*1e12))
+                state = [delays[0], abs(delays[-1]-delays[0])/100]
+            else:  # without progressbar
+                pbar = None
+                state = None
+
             sol = solve_ivp(
                 PhononNum.ode_func,
                 [delays[0], delays[-1]],
                 x0,
-                args=(delays, force_from_heat, damping, spring_consts, masses, L),
+                args=(delays, force_from_heat, damping, spring_consts, masses, L,
+                      pbar, state),
                 t_eval=delays,
-                **self.ode_options
-                )
+                **self.ode_options)
+
+            if pbar:  # close tqdm progressbar if used
+                pbar.close()
 
             # calculate the strainMap as the second spacial derivative
             # of the layer shift x(t). The result of the ode solver
@@ -209,7 +220,8 @@ class PhononNum(Phonon):
         return strain_map, sticks_sub_systems, velocities
 
     @staticmethod
-    def ode_func(t, X, delays, force_from_heat, damping, spring_consts, masses, L):
+    def ode_func(t, X, delays, force_from_heat, damping, spring_consts, masses, L,
+                 pbar=None, state=None):
         """ode_func
 
         Provides the according ode function for the ode solver which has to be
@@ -224,6 +236,18 @@ class PhononNum(Phonon):
         :math:`x(t)` is the actual shift of each layer.
 
         """
+        if pbar:
+            # set everything for the tqdm progressbar
+            last_t, dt = state
+            n = (t - last_t)/dt
+            if n >= 1:
+                pbar.update(1)
+                pbar.set_description('delay = {:.3f} ps'.format(t*1e12))
+                state[0] = t
+            elif n < 0:
+                state[0] = t
+
+        # start with the actual ode function
         x = X[0:L]
         v = X[L:]
 
