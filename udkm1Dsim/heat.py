@@ -924,33 +924,32 @@ class Heat(Simulation):
         cs = np.zeros(N)
         rhos = np.zeros(N)
         source = np.zeros(N)
-
-        # now for the internal nodes
-        u[0] = 500
-        u[-1] = 300
+        if fluence != []:
+            gauss = Heat.multi_gauss(t, s=pulse_length[0], x0=delay_pump[0], A=fluence[0])
+        else:
+            gauss = 0
 
         for i in range(N):
             idx = indicies[i]
             ks[i] = thermal_conds[idx][0](u[i])
             cs[i] = heat_capacities[idx][0](u[i])
             rhos[i] = densities[idx]
-            if fluence != []:
-                source[i] = dalpha_dz[idx] \
-                    * Heat.multi_gauss(t, s=pulse_length[0], x0=delay_pump[0], A=fluence[0])
-            else:
-                source[i] = 0
+            source[i] = dalpha_dz[i] * gauss
 
-        dudt[0] = 0  # (2*ks[0] * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
-        dudt[-1] = 0  # (2*ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
+        # boundary conditions
+        # u[0] = 500
+        # u[-1] = 300
+        # dudt[0] = 0
+        # dudt[-1] = 0
+        dudt[0] = ((ks[0]+ks[1]) * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
+        dudt[-1] = ((ks[-2]+ks[-1]) * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
 
+        # calculate derivative
         for i in range(1, N-1):
-            # dudt[i] = ks[i]/cs[i]/rhos[i] * (
-            #    (u[i + 1] - u[i])/(d_x_grid[i]) - (u[i] - u[i-1])/(d_x_grid[i-1])
-            # ) / ((d_x_grid[i]+d_x_grid[i-1])/2)
             dudt[i] = ((
                  ks[i+1]*(u[i+1] - u[i])/(d_x_grid[i]) - ks[i]*(u[i] - u[i-1])/(d_x_grid[i-1]))
                 / ((d_x_grid[i]+d_x_grid[i-1])/2) + source[i])/cs[i]/rhos[i]
-        # first and last one
+
         return dudt
 
     @staticmethod
