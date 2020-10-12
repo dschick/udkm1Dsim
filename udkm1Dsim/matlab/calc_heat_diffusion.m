@@ -241,6 +241,9 @@ function handle = lambda_to_handle(lambda, K)
         temp = lambda{i}';
         for j = 1:K
             func_str = strcat(strrep(strrep(strrep(temp{j}, 'lambda T: ', '@(T)('), '[' , '('), ']', '+1)'), ')');
+            func_str = strrep(func_str, '**', '.^');
+            func_str = strrep(func_str, '*', '.*');
+            func_str = strrep(func_str, '/', './');
             handle{i, j} = str2func(func_str);
         end
     end
