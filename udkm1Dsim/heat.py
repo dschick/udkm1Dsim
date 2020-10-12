@@ -853,12 +853,6 @@ class Heat(Simulation):
                 pbar = None
                 state = None
 
-            # print(delays)
-            # print(state)
-            # print(fluence)
-            # print(delay_pump)
-            # print(pulse_width)
-            # print('-----')
             indicies = finderb(distances, d_start)
             N = len(distances)
             ic = np.interp(distances, d_start, init_temp.squeeze())
@@ -867,8 +861,7 @@ class Heat(Simulation):
                 Heat.odefunc,
                 [delays[0], delays[-1]],
                 ic,
-                args=(distances,
-                      d_distances,
+                args=(d_distances,
                       d_start,
                       self.S.get_layer_property_vector('therm_cond'),
                       self.S.get_layer_property_vector('heat_capacity'),
@@ -903,7 +896,7 @@ class Heat(Simulation):
         return res
 
     @staticmethod
-    def odefunc(t, u, x_grid, d_x_grid, x, thermal_conds, heat_capacities, densities,
+    def odefunc(t, u, d_x_grid, x, thermal_conds, heat_capacities, densities,
                 indicies, N, dalpha_dz, fluence, delay_pump, pulse_length, pbar, state):
         # state is a list containing last updated time t:
         # state = [last_t, dt]
@@ -923,26 +916,25 @@ class Heat(Simulation):
         ks = np.zeros(N)
         cs = np.zeros(N)
         rhos = np.zeros(N)
-        source = np.zeros(N)
         if fluence != []:
-            gauss = Heat.multi_gauss(t, s=pulse_length[0], x0=delay_pump[0], A=fluence[0])
+            source = \
+                dalpha_dz * Heat.multi_gauss(t, s=pulse_length[0], x0=delay_pump[0], A=fluence[0])
         else:
-            gauss = 0
+            source = np.zeros(N)
 
         for i in range(N):
             idx = indicies[i]
             ks[i] = thermal_conds[idx][0](u[i])
             cs[i] = heat_capacities[idx][0](u[i])
             rhos[i] = densities[idx]
-            source[i] = dalpha_dz[i] * gauss
 
         # boundary conditions
-        # u[0] = 500
-        # u[-1] = 300
-        # dudt[0] = 0
-        # dudt[-1] = 0
-        dudt[0] = ((ks[0]+ks[1]) * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
-        dudt[-1] = ((ks[-2]+ks[-1]) * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
+        u[0] = 500
+        u[-1] = 300
+        dudt[0] = 0
+        dudt[-1] = 0
+        # dudt[0] = (2*ks[0] * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
+        # dudt[-1] = (2*ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
 
         # calculate derivative
         for i in range(1, N-1):
