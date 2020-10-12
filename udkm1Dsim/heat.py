@@ -49,6 +49,7 @@ class Heat(Simulation):
             calculations
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer
+        backend (str): pde solver backend - either default scipy or matlab
 
     Attributes:
         S (object): sample to do simulations with
@@ -57,6 +58,7 @@ class Heat(Simulation):
             calculations
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer
+        backend (str): pde solver backend - either default scipy or matlab
         boundary_conditions (dict): dictionary of boundary conditions:
             boundary type top/bottom: isolator/temperature/flux
             boundary value top/bottom
@@ -83,6 +85,7 @@ class Heat(Simulation):
         super().__init__(S, force_recalc, **kwargs)
         self.heat_diffusion = kwargs.get('heat_diffusion', False)
         self.intp_at_interface = kwargs.get('intp_at_interface', 11)
+        self.backend = kwargs.get('backend', 'scipy')
         self._excitation = {'fluence': [], 'delay_pump': [0], 'pulse_width': [0],
                             'wavelength': 800e-9, 'theta': np.pi/2,
                             # 'polarization': 'p',
@@ -110,6 +113,7 @@ class Heat(Simulation):
                   ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
                   ['heat diffusion', self.heat_diffusion],
                   ['interpolate at interfaces', self.intp_at_interface],
+                  ['backend', self.backend],
                   ['distances', 'no distance mesh is set for heat diffusion calculations'
                    if self.distances.size == 0 else
                    'a distance mesh is set for heat diffusion calculations.'],
@@ -768,23 +772,6 @@ class Heat(Simulation):
 
         """
         t1 = time()
-        try:
-            import matlab.engine
-        except ImportError:
-            raise Warning('You need to have a working MATLAB installation '
-                          'on your machine with installed matlab.engine for '
-                          'Python.\n'
-                          'See '
-                          'https://de.mathworks.com/help/matlab/matlab-engine-for-python.html '
-                          'for details.')
-
-        # start MATLAB engine if not already done
-        if self.matlab_engine == []:
-            self.matlab_engine = matlab.engine.start_matlab()
-
-        # add path of matlab script to matlab's search path
-        matlab_path = path.join(path.dirname(path.abspath(__file__)), 'matlab')
-        self.matlab_engine.addpath(matlab_path)
 
         K = self.S.num_sub_systems
         init_temp = self.check_initial_temperature(init_temp)
@@ -801,26 +788,51 @@ class Heat(Simulation):
 
         dalpha_dz = self.get_absorption_profile(distances)
 
-        temp_map = self.matlab_engine.calc_heat_diffusion(
-            K,
-            matlab.double(init_temp.tolist()),
-            matlab.double(d_start.tolist()),
-            matlab.double(distances.tolist()),
-            matlab.double(self._excitation['fluence'].tolist()),
-            matlab.double(self._excitation['pulse_width'].tolist()),
-            matlab.double(self._excitation['delay_pump'].tolist()),
-            matlab.double(dalpha_dz.tolist()),
-            matlab.double(delays.tolist()),
-            self.S.get_layer_property_vector('therm_cond_str'),
-            self.S.get_layer_property_vector('heat_capacity_str'),
-            matlab.double(self.S.get_layer_property_vector('_density').tolist()),
-            self.S.get_layer_property_vector('sub_system_coupling_str'),
-            matlab.int32([self._boundary_conditions['top_type']+1]),
-            matlab.double([self._boundary_conditions['top_value'].tolist()]),
-            matlab.int32([self._boundary_conditions['bottom_type']+1]),
-            matlab.double([self._boundary_conditions['bottom_value'].tolist()]),
-            self.ode_options
-        )
+        if self.backend == 'matlab':
+            # use of matlab backend for heat diffusion calculation
+            # first try to import required python-matlab bridge
+            try:
+                import matlab.engine
+            except ImportError:
+                raise Warning('You need to have a working MATLAB installation '
+                              'on your machine with installed matlab.engine for '
+                              'Python.\n'
+                              'See '
+                              'https://de.mathworks.com/help/matlab/matlab-engine-for-python.html '
+                              'for details.')
+
+            # start MATLAB engine if not already done
+            if self.matlab_engine == []:
+                self.matlab_engine = matlab.engine.start_matlab()
+
+            # add path of matlab script to matlab's search path
+            matlab_path = path.join(path.dirname(path.abspath(__file__)), 'matlab')
+            self.matlab_engine.addpath(matlab_path)
+
+            temp_map = self.matlab_engine.calc_heat_diffusion(
+                K,
+                matlab.double(init_temp.tolist()),
+                matlab.double(d_start.tolist()),
+                matlab.double(distances.tolist()),
+                matlab.double(fluence),
+                matlab.double(pulse_width),
+                matlab.double(delay_pump),
+                matlab.double(dalpha_dz.tolist()),
+                matlab.double(delays.tolist()),
+                self.S.get_layer_property_vector('therm_cond_str'),
+                self.S.get_layer_property_vector('heat_capacity_str'),
+                matlab.double(self.S.get_layer_property_vector('_density').tolist()),
+                self.S.get_layer_property_vector('sub_system_coupling_str'),
+                matlab.int32([self._boundary_conditions['top_type']+1]),
+                matlab.double([self._boundary_conditions['top_value'].tolist()]),
+                matlab.int32([self._boundary_conditions['bottom_type']+1]),
+                matlab.double([self._boundary_conditions['bottom_value'].tolist()]),
+                self.ode_options
+            )
+        else:
+            # use python scipy backend
+            temp_map = np.zeros([len(delays), len(distances), K])
+
         temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
         res = np.zeros([len(delays), len(d_mid), K])
         for i in range(K):
@@ -835,6 +847,23 @@ class Heat(Simulation):
                               'excitation(s): {:f} s'.format(len(fluence), time()-t1))
 
         return res
+
+    @property
+    def backend(self):
+        """str: backend"""
+
+        return self._backend
+
+    @backend.setter
+    def backend(self, backend):
+        """set.backend"""
+
+        if backend in ['scipy', 'matlab']:
+            self._backend = backend
+        else:
+            warnings.warn('Backend must be either _scipy_ or _matlab_. '
+                          'Set to _scipy_ default!')
+            self._backend = 'scipy'
 
     @property
     def excitation(self):
