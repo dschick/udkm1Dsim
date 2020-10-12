@@ -94,7 +94,7 @@ def finderb_nest(key, vector):
     # if the key is smaller than the first element of the
     # vector we return 1
     if key < vector[0]:
-        return 1
+        return 0
 
     while (b-a) > 1:  # loop until the intervall is larger than 1
         c = int(np.floor((a+b)/2))  # center of intervall
