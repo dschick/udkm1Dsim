@@ -185,8 +185,8 @@ class PhononNum(Phonon):
 
             # apply scipy's ode-solver together
             if self.progress_bar:  # with tqdm progressbar
-                pbar = tqdm(total=100, unit='%')
-                pbar.set_description('delay = {:.3f} ps'.format(delays[0]*1e12))
+                pbar = tqdm()
+                pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
                 state = [delays[0], abs(delays[-1]-delays[0])/100]
             else:  # without progressbar
                 pbar = None
@@ -201,7 +201,7 @@ class PhononNum(Phonon):
                 t_eval=delays,
                 **self.ode_options)
 
-            if pbar:  # close tqdm progressbar if used
+            if pbar is not None:  # close tqdm progressbar if used
                 pbar.close()
 
             # calculate the strainMap as the second spacial derivative
@@ -236,13 +236,13 @@ class PhononNum(Phonon):
         :math:`x(t)` is the actual shift of each layer.
 
         """
-        if pbar:
+        if pbar is not None:
             # set everything for the tqdm progressbar
             last_t, dt = state
             n = (t - last_t)/dt
             if n >= 1:
                 pbar.update(1)
-                pbar.set_description('delay = {:.3f} ps'.format(t*1e12))
+                pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
                 state[0] = t
             elif n < 0:
                 state[0] = t
