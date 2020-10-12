@@ -950,17 +950,17 @@ class Heat(Simulation):
             if 'top_value' in boundary_conditions:
                 if self._boundary_conditions['top_type'] == 1:
                     self._boundary_conditions['top_value'] = \
-                        boundary_conditions['top_value'].to('K').magnitude
+                        np.array(boundary_conditions['top_value'].to('K').magnitude)
                 elif self._boundary_conditions['top_type'] == 2:
                     self._boundary_conditions['top_value'] = \
-                        boundary_conditions['top_value'].to('W/m**2').magnitude
+                        np.array(boundary_conditions['top_value'].to('W/m**2').magnitude)
             if 'bottom_value' in boundary_conditions:
                 if self._boundary_conditions['bottom_type'] == 1:
                     self._boundary_conditions['bottom_value'] = \
-                        boundary_conditions['bottom_value'].to('K').magnitude
+                        np.array(boundary_conditions['bottom_value'].to('K').magnitude)
                 elif self._boundary_conditions['bottom_type'] == 2:
                     self._boundary_conditions['bottom_value'] = \
-                        boundary_conditions['bottom_value'].to('W/m**2').magnitude
+                        np.array(boundary_conditions['bottom_value'].to('W/m**2').magnitude)
         else:
             raise ValueError('_boundary_conditions_ must be a dict!')
 
@@ -986,5 +986,7 @@ class Heat(Simulation):
 
     def __del__(self):
         # stop matlab engine if exists
-        if self.matlab_engine != []:
+        try:
             self.matlab_engine.quit()
+        except AttributeError:
+            pass
