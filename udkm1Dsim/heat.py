@@ -27,12 +27,14 @@ __docformat__ = "restructuredtext"
 import numpy as np
 from scipy.optimize import brentq
 from scipy.interpolate import interp2d
+from scipy.integrate import solve_ivp
 from time import time
 from os import path
 from .simulation import Simulation
 from . import u, Q_
 from .helpers import make_hash_md5, finderb
 import warnings
+from tqdm.notebook import tqdm
 
 
 class Heat(Simulation):
@@ -45,6 +47,7 @@ class Heat(Simulation):
         force_recalc (boolean): force recalculation of results
 
     Keyword Args:
+        progress_bar (boolean): enable tqdm progress bar
         heat_diffusion (boolean): true when including heat diffusion in the
             calculations
         intp_at_interface (int): number of additional spacial points at the
@@ -54,6 +57,7 @@ class Heat(Simulation):
     Attributes:
         S (object): sample to do simulations with
         force_recalc (boolean): force recalculation of results
+        progress_bar (boolean): enable tqdm progress bar
         heat_diffusion (boolean): true when including heat diffusion in the
             calculations
         intp_at_interface (int): number of additional spacial points at the
@@ -68,8 +72,10 @@ class Heat(Simulation):
         distances (ndarray[float]): array of distances where to calc heat
             diffusion. If not set heat diffusion is calculated at each unit
             cell location or at every angstrom in amorphous layers
-        ode_options (dict): dict with options for the MATLAB pdepe solver, see
-            odeset, used for heat diffusion.
+        ode_options (dict): options for scipy solve_ivp ode solver, see
+            <https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html>
+        ode_options_matlab (dict): dict with options for the MATLAB pdepe solver,
+            see odeset, used for heat diffusion.
         boundary_types (list[str]): description of boundary types
         boundary_conditions (dict): dict of the top and bottom type of the
             boundary conditions for the MATLAB heat diffusion calculation
@@ -98,7 +104,14 @@ class Heat(Simulation):
             'bottom_type': 0,
             'bottom_value': np.array([]),
             }
-        self.ode_options = {'RelTol': 1e-3}
+        self.ode_options = {
+            'method': 'LSODA',
+            # 'first_step': None,
+            # 'max_step': np.inf,
+            # 'rtol': 1e-3,
+            # 'atol': 1e-6,
+            }
+        self.ode_options_matlab = {'RelTol': 1e-3}
         self.matlab_engine = []
 
     def __str__(self, output=[]):
@@ -786,6 +799,7 @@ class Heat(Simulation):
             # indicies for final assignment per layer
             distances = self._distances
 
+        d_distances = np.diff(distances)
         dalpha_dz = self.get_absorption_profile(distances)
 
         if self.backend == 'matlab':
@@ -831,7 +845,47 @@ class Heat(Simulation):
             )
         else:
             # use python scipy backend
-            temp_map = np.zeros([len(delays), len(distances), K])
+            if self.progress_bar:  # with tqdm progressbar
+                pbar = tqdm()
+                pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
+                state = [delays[0], abs(delays[-1]-delays[0])/100]
+            else:  # without progressbar
+                pbar = None
+                state = None
+
+            # print(delays)
+            # print(state)
+            # print(fluence)
+            # print(delay_pump)
+            # print(pulse_width)
+            # print('-----')
+            indicies = finderb(distances, d_start)
+            N = len(distances)
+            ic = np.interp(distances, d_start, init_temp.squeeze())
+            # solve pdepe with method-of-lines
+            sol = solve_ivp(
+                Heat.odefunc,
+                [delays[0], delays[-1]],
+                ic,
+                args=(distances,
+                      d_distances,
+                      d_start,
+                      self.S.get_layer_property_vector('therm_cond'),
+                      self.S.get_layer_property_vector('heat_capacity'),
+                      self.S.get_layer_property_vector('_density'),
+                      indicies,
+                      N,
+                      dalpha_dz,
+                      fluence,
+                      delay_pump,
+                      pulse_width,
+                      pbar, state),
+                t_eval=delays,
+                **self.ode_options)
+
+            if pbar is not None:  # close tqdm progressbar if used
+                pbar.close()
+            temp_map = sol.y.T
 
         temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
         res = np.zeros([len(delays), len(d_mid), K])
@@ -847,6 +901,67 @@ class Heat(Simulation):
                               'excitation(s): {:f} s'.format(len(fluence), time()-t1))
 
         return res
+
+    @staticmethod
+    def odefunc(t, u, x_grid, d_x_grid, x, thermal_conds, heat_capacities, densities,
+                indicies, N, dalpha_dz, fluence, delay_pump, pulse_length, pbar, state):
+        # state is a list containing last updated time t:
+        # state = [last_t, dt]
+        # I used a list because its values can be carried between function
+        # calls throughout the ODE integration
+        last_t, dt = state
+        n = int((t - last_t)/dt)
+
+        if n >= 1:
+            pbar.update(n)
+            pbar.set_description('delay = {:.3f} ps'.format(t*1e12))
+            state[0] = t
+        elif n < 0:
+            state[0] = t
+
+        dudt = np.zeros(N)
+        ks = np.zeros(N)
+        cs = np.zeros(N)
+        rhos = np.zeros(N)
+        source = np.zeros(N)
+
+        # now for the internal nodes
+        u[0] = 500
+        u[-1] = 300
+
+        for i in range(N):
+            idx = indicies[i]
+            ks[i] = thermal_conds[idx][0](u[i])
+            cs[i] = heat_capacities[idx][0](u[i])
+            rhos[i] = densities[idx]
+            if fluence != []:
+                source[i] = dalpha_dz[idx] \
+                    * Heat.multi_gauss(t, s=pulse_length[0], x0=delay_pump[0], A=fluence[0])
+            else:
+                source[i] = 0
+
+        dudt[0] = 0  # (2*ks[0] * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
+        dudt[-1] = 0  # (2*ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
+
+        for i in range(1, N-1):
+            # dudt[i] = ks[i]/cs[i]/rhos[i] * (
+            #    (u[i + 1] - u[i])/(d_x_grid[i]) - (u[i] - u[i-1])/(d_x_grid[i-1])
+            # ) / ((d_x_grid[i]+d_x_grid[i-1])/2)
+            dudt[i] = ((
+                 ks[i+1]*(u[i+1] - u[i])/(d_x_grid[i]) - ks[i]*(u[i] - u[i-1])/(d_x_grid[i-1]))
+                / ((d_x_grid[i]+d_x_grid[i-1])/2) + source[i])/cs[i]/rhos[i]
+        # first and last one
+        return dudt
+
+    @staticmethod
+    def multi_gauss(x, s=1, x0=0, A=1):
+        s = s/(2*np.sqrt(2*np.log(2)))
+        a = A/np.sqrt(2*np.pi*s**2)  # normalize area to 1
+        # a = A
+        # for i in range(s):
+        # y = y + a[i] * np.exp(-((x-x0[i])**2)/(2*s[i]**2))
+        y = a * np.exp(-((x-x0)**2)/(2*s**2))
+        return y
 
     @property
     def backend(self):
