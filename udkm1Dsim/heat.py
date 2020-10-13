@@ -32,7 +32,7 @@ from time import time
 from os import path
 from .simulation import Simulation
 from . import u, Q_
-from .helpers import make_hash_md5, finderb
+from .helpers import make_hash_md5, finderb, multi_gauss
 import warnings
 from tqdm.notebook import tqdm
 
@@ -918,7 +918,7 @@ class Heat(Simulation):
         rhos = np.zeros(N)
         if fluence != []:
             source = \
-                dalpha_dz * Heat.multi_gauss(t, s=pulse_length[0], x0=delay_pump[0], A=fluence[0])
+                dalpha_dz * multi_gauss(t, s=pulse_length[0], x0=delay_pump[0], A=fluence[0])
         else:
             source = np.zeros(N)
 
@@ -929,12 +929,12 @@ class Heat(Simulation):
             rhos[i] = densities[idx]
 
         # boundary conditions
-        u[0] = 500
-        u[-1] = 300
-        dudt[0] = 0
-        dudt[-1] = 0
-        # dudt[0] = (2*ks[0] * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
-        # dudt[-1] = (2*ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
+        # u[0] = 500
+        # u[-1] = 300
+        # dudt[0] = 0
+        # dudt[-1] = 0
+        dudt[0] = (2*ks[0] * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
+        dudt[-1] = (2*ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
 
         # calculate derivative
         for i in range(1, N-1):
@@ -943,16 +943,6 @@ class Heat(Simulation):
                 / ((d_x_grid[i]+d_x_grid[i-1])/2) + source[i])/cs[i]/rhos[i]
 
         return dudt
-
-    @staticmethod
-    def multi_gauss(x, s=1, x0=0, A=1):
-        s = s/(2*np.sqrt(2*np.log(2)))
-        a = A/np.sqrt(2*np.pi*s**2)  # normalize area to 1
-        # a = A
-        # for i in range(s):
-        # y = y + a[i] * np.exp(-((x-x0[i])**2)/(2*s[i]**2))
-        y = a * np.exp(-((x-x0)**2)/(2*s**2))
-        return y
 
     @property
     def backend(self):

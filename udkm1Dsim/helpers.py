@@ -21,7 +21,7 @@
 """A :mod:`helpers` module """
 
 __all__ = ['make_hash_md5', 'make_hashable', 'm_power_x',
-           'm_times_n', 'finderb']
+           'm_times_n', 'finderb', 'multi_gauss']
 
 __docformat__ = "restructuredtext"
 
@@ -106,3 +106,19 @@ def finderb_nest(key, vector):
             a = c
 
     return a
+
+
+def multi_gauss(x, s=1, x0=0, A=1):
+    """multi_gauss
+
+    multiple gauss functions with width given as FWHM and area normalized
+    to one and maximum of gauss at x0.
+
+    """
+    s = s/(2*np.sqrt(2*np.log(2)))
+    a = A/np.sqrt(2*np.pi*s**2)  # normalize area to 1
+    # a = A
+    # for i in range(s):
+    # y = y + a[i] * np.exp(-((x-x0[i])**2)/(2*s[i]**2))
+    y = a * np.exp(-((x-x0)**2)/(2*s**2))
+    return y
