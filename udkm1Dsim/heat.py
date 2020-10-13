@@ -872,6 +872,10 @@ class Heat(Simulation):
                       fluence,
                       delay_pump,
                       pulse_width,
+                      self._boundary_conditions['top_type'],
+                      self._boundary_conditions['top_value'],
+                      self._boundary_conditions['bottom_type'],
+                      self._boundary_conditions['bottom_value'],
                       pbar, state),
                 t_eval=delays,
                 **self.ode_options)
@@ -897,7 +901,9 @@ class Heat(Simulation):
 
     @staticmethod
     def odefunc(t, u, d_x_grid, x, thermal_conds, heat_capacities, densities,
-                indicies, N, dalpha_dz, fluence, delay_pump, pulse_length, pbar, state):
+                indicies, N, dalpha_dz, fluence, delay_pump, pulse_length,
+                bc_top_type, bc_top_value, bc_bottom_type, bc_bottom_value,
+                pbar, state):
         # state is a list containing last updated time t:
         # state = [last_t, dt]
         # I used a list because its values can be carried between function
@@ -929,12 +935,19 @@ class Heat(Simulation):
             rhos[i] = densities[idx]
 
         # boundary conditions
-        # u[0] = 500
-        # u[-1] = 300
-        # dudt[0] = 0
-        # dudt[-1] = 0
-        dudt[0] = (2*ks[0] * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
-        dudt[-1] = (2*ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
+        if bc_top_type == 1:  # temperature
+            u[0] = bc_top_value
+        elif bc_top_type == 2:  # flux
+            dudt[0] = ((ks[0] * (u[1] - u[0]) / d_x_grid[0] + bc_top_value)/d_x_grid[0] + source[0])/cs[0]/rhos[0]
+        else:  # isolator
+            dudt[0] = (ks[0] * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
+
+        if bc_bottom_type == 1:  # temperature
+            u[-1] = bc_bottom_value
+        elif bc_bottom_type == 2:  # flux
+            dudt[-1] = ((bc_bottom_value - ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1])/d_x_grid[-1] + source[-1])/cs[-1]/rhos[-1]
+        else:  # isolator
+            dudt[-1] = (ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
 
         # calculate derivative
         for i in range(1, N-1):
