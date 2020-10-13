@@ -907,7 +907,7 @@ class Heat(Simulation):
 
         if n >= 1:
             pbar.update(n)
-            pbar.set_description('delay = {:.3f} ps'.format(t*1e12))
+            pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
             state[0] = t
         elif n < 0:
             state[0] = t
@@ -918,7 +918,7 @@ class Heat(Simulation):
         rhos = np.zeros(N)
         if fluence != []:
             source = \
-                dalpha_dz * multi_gauss(t, s=pulse_length[0], x0=delay_pump[0], A=fluence[0])
+                dalpha_dz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
         else:
             source = np.zeros(N)
 

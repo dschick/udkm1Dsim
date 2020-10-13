@@ -115,10 +115,11 @@ def multi_gauss(x, s=1, x0=0, A=1):
     to one and maximum of gauss at x0.
 
     """
-    s = s/(2*np.sqrt(2*np.log(2)))
-    a = A/np.sqrt(2*np.pi*s**2)  # normalize area to 1
-    # a = A
-    # for i in range(s):
-    # y = y + a[i] * np.exp(-((x-x0[i])**2)/(2*s[i]**2))
-    y = a * np.exp(-((x-x0)**2)/(2*s**2))
+    s = np.asarray(s)/(2*np.sqrt(2*np.log(2)))
+    a = np.asarray(A)/np.sqrt(2*np.pi*s**2)  # normalize area to 1
+    x0 = np.asarray(x0)
+
+    y = np.zeros_like(x)
+    for i in range(len(s)):
+        y = y + a[i] * np.exp(-((x-x0[i])**2)/(2*s[i]**2))
     return y
