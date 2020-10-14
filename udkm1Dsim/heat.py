@@ -652,7 +652,7 @@ class Heat(Simulation):
             self.save(full_filename, [temp_map, delta_temp_map, checked_excitations], '_temp_map_')
         return temp_map, delta_temp_map, checked_excitations
 
-    def calc_temp_map(self, delays, init_temp):
+    def calc_temp_map(self, delays, input_init_temp):
         """calc_temp_map
 
         Calculates the temp_map and temp_map difference for a given delay
@@ -666,7 +666,8 @@ class Heat(Simulation):
         K = self.S.num_sub_systems
 
         # there is an initial time step for the init_temp - we will remove it later on
-        init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
+        # check the intial temperature
+        input_init_temp = self.check_initial_temperature(input_init_temp)
         checked_excitation, _, _, _ = self.check_excitation(delays)  # check excitation
         _, _, d_mid = self.S.get_distances_of_layers(False)
 
@@ -687,10 +688,10 @@ class Heat(Simulation):
         N = len(distances)
         temp_map = np.zeros([1, N, K])
         # interpolate the initial temperature onto distance grid
-        ic = np.zeros([N, K])
+        init_temp = np.zeros([N, K])
         for iii in range(K):
-            ic[:, iii] = np.interp(distances, d_mid, init_temp[:, iii])
-        temp_map[0, :, :] = ic  # this is initial temperature before the simulation starts
+            init_temp[:, iii] = np.interp(distances, d_mid, input_init_temp[:, iii])
+        temp_map[0, :, :] = init_temp  # this is initial temperature before the simulation starts
 
         num_ex = 1  # excitation counter
         excitation_delays = np.array([])
@@ -765,7 +766,7 @@ class Heat(Simulation):
                 # no excitation and no heat diffusion or not enough time
                 # step to calculate heat difusion, so just repeat the
                 # initial temperature + every unhandled case
-                temp = np.tile(np.reshape(ic, [1, N, K]), [len(sub_delays), 1, 1])
+                temp = np.tile(np.reshape(init_temp, [1, N, K]), [len(sub_delays), 1, 1])
 
             # concat results
             temp_map = np.append(temp_map, temp, axis=0)
