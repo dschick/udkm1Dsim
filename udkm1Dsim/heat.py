@@ -105,11 +105,11 @@ class Heat(Simulation):
             'bottom_value': np.array([]),
             }
         self.ode_options = {
-            'method': 'LSODA',
-            # 'first_step': None,
-            # 'max_step': np.inf,
-            # 'rtol': 1e-3,
-            # 'atol': 1e-6,
+            'method': 'Radau',
+            'first_step': None,
+            'max_step': np.inf,
+            'rtol': 1e-3,
+            'atol': 1e-6,
             }
         self.ode_options_matlab = {'RelTol': 1e-3}
         self.matlab_engine = []
