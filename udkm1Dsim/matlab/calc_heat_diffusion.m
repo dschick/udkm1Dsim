@@ -11,10 +11,10 @@ function temp_map = calc_heat_diffusion(K, init_temp, d_start, distances, ...
     % This is the initial condition function that is necessary to
     % solve the heat equation with the pde solver, it returns the
     % initial temperature at each distance z.
-    ic = @(z)(init_temp(finderb(z, d_start), :)');
+    ic = @(z)(init_temp(finderb(z, distances), :)');
     % Create a  source if the fluence and pulse_width are non-zero
     if ~isempty(fluence) && sum(pulse_width) > 0
-        source = generate_source(dalpha_dz, fluence, delay_pump, pulse_width, distances);
+        source = generate_source(dalpha_dz, fluence, delay_pump, pulse_width, distances-distances(1));
     else
         source = [];
     end
