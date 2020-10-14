@@ -169,7 +169,7 @@ class Heat(Simulation):
 
         return self.S.get_hash(types='heat') + '_' + make_hash_md5(param)
 
-    def check_initial_temperature(self, init_temp):
+    def check_initial_temperature(self, init_temp, distances=[]):
         """check_initial_temperature
 
         An inital temperature for a heat simulation can be either a
@@ -187,7 +187,11 @@ class Heat(Simulation):
         except AttributeError:
             pass
 
-        N = self.S.get_number_of_layers()
+        if distances == []:
+            N = self.S.get_number_of_layers()
+        else:
+            N = len(distances)
+
         K = self.S.num_sub_systems
         # check size of initTemp
         if np.size(init_temp) == 1:
@@ -542,7 +546,7 @@ class Heat(Simulation):
 
         return dAdz, Ints, R_total, T_total
 
-    def get_temperature_after_delta_excitation(self, fluence, init_temp):
+    def get_temperature_after_delta_excitation(self, fluence, init_temp, distances=[]):
         r"""get_temperature_after_delta_excitation
 
         Args:
@@ -583,8 +587,15 @@ class Heat(Simulation):
         """
         # initialize
         t1 = time()
-        # absorption profile from Lambert-Beer's law
-        dalpha_dz = self.get_absorption_profile()
+        if distances == []:
+            # if no distances are set, calculate the extinction on
+            # the middle of each unit cell
+            d_start, _, distances = self.S.get_distances_of_layers(False)
+        else:
+            d_start, _, _ = self.S.get_distances_of_layers(False)
+
+        # absorption profile from Lambert-Beer's law or multilayer absorption
+        dalpha_dz = self.get_absorption_profile(distances)
 
         try:
             fluence = fluence.to('J/m**2').magnitude
@@ -597,17 +608,19 @@ class Heat(Simulation):
         areas = self.S.get_layer_property_vector('_area')
         E0 = np.array(fluence)*areas[1]  # mass are normalized to 1Ang^2
 
-        init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
+        # check the intial temperature
+        init_temp = self.check_initial_temperature(init_temp, distances)
         final_temp = init_temp
         # traverse layers
-        for i, int_heat_capacity in enumerate(int_heat_capacities):
+        for i, dist in enumerate(distances):
+            idx = finderb(dist, d_start)[0]
             if dalpha_dz[i] > 0:
                 # if there is absorption in the current layer
-                del_E = dalpha_dz[i]*E0*thicknesses[i]
+                del_E = dalpha_dz[i]*E0*thicknesses[idx]
 
                 def fun(final_temp):
-                    return (masses[i]*(int_heat_capacity[0](final_temp)
-                                       - int_heat_capacity[0](init_temp[i, 0]))
+                    return (masses[idx]*(int_heat_capacities[idx][0](final_temp)
+                                         - int_heat_capacities[idx][0](init_temp[i, 0]))
                             - del_E)
                 final_temp[i, 0] = brentq(fun, init_temp[i, 0], 1e5)
         delta_T = final_temp - init_temp  # this is the temperature change
@@ -649,14 +662,35 @@ class Heat(Simulation):
         """
         t1 = time()
         # initialize
-        N = self.S.get_number_of_layers()
+        L = self.S.get_number_of_layers()
         K = self.S.num_sub_systems
 
         # there is an initial time step for the init_temp - we will remove it later on
-        temp_map = np.zeros([1, N, K])
         init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
         checked_excitation, _, _, _ = self.check_excitation(delays)  # check excitation
-        temp_map[0, :, :] = init_temp  # this is initial temperature before the simulation starts
+        _, _, d_mid = self.S.get_distances_of_layers(False)
+
+        if self.heat_diffusion:
+            # in case heat diffusion is enabled all calculation are first done
+            # on an interpolated grid at the interfaces (or defined by the user)
+            if len(self.distances) == 0:
+                # no user-defined distaces are given, so calculate heat diffusion
+                # by layer and also interpolate at the interfaces
+                distances, _ = self.S.interp_distance_at_interfaces(self.intp_at_interface, False)
+            else:
+                # a user-defined distances vector is given, so determine the
+                # indicies for final assignment per layer
+                distances = self._distances
+        else:
+            distances = d_mid
+
+        N = len(distances)
+        temp_map = np.zeros([1, N, K])
+        # interpolate the initial temperature onto distance grid
+        ic = np.zeros([N, K])
+        for iii in range(K):
+            ic[:, iii] = np.interp(distances, d_mid, init_temp[:, iii])
+        temp_map[0, :, :] = ic  # this is initial temperature before the simulation starts
 
         num_ex = 1  # excitation counter
         excitation_delays = np.array([])
@@ -705,7 +739,7 @@ class Heat(Simulation):
                     stop = 1
 
                 # calc heat diffusion
-                temp = self.calc_heat_diffusion(init_temp, sub_delays, delay_pump,
+                temp = self.calc_heat_diffusion(init_temp, distances, sub_delays, delay_pump,
                                                 pulse_width, fluence)
 
                 if stop == 1:
@@ -715,7 +749,7 @@ class Heat(Simulation):
                     special_init_temp = temp[-1, :, :]
                     temp = temp[start:-1, :, :]
                 else:
-                    temp = temp[start:, :, :]
+                    temp = temp[start:, :, :].copy()
                 # cut the before added time steps
             elif np.sum(fluence) > 0 and (not self.heat_diffusion or
                                           (self.heat_diffusion and
@@ -723,13 +757,15 @@ class Heat(Simulation):
                 # excitation with no heat diffusion -> only delta excitation
                 # possible in this case OR excitation with heat diffusion and
                 # pulse_width equal to 0
-                temp, _ = self.get_temperature_after_delta_excitation(fluence, init_temp)
+                temp, _ = self.get_temperature_after_delta_excitation(fluence,
+                                                                      init_temp,
+                                                                      distances)
                 temp = np.reshape(temp, [1, np.size(temp, 0), np.size(temp, 1)])
             else:
                 # no excitation and no heat diffusion or not enough time
                 # step to calculate heat difusion, so just repeat the
                 # initial temperature + every unhandled case
-                temp = np.tile(np.reshape(init_temp, [1, N, K]), [len(sub_delays), 1, 1])
+                temp = np.tile(np.reshape(ic, [1, N, K]), [len(sub_delays), 1, 1])
 
             # concat results
             temp_map = np.append(temp_map, temp, axis=0)
@@ -742,18 +778,17 @@ class Heat(Simulation):
             if np.sum(fluence) > 0:
                 num_ex += len(fluence)
 
-        if not np.all(excitation_delays == delays.to('s').magnitude):
+        if not np.all(excitation_delays == delays.to('s').magnitude) or self.heat_diffusion:
             # if the time grid for the calculation is not the same as
             # the grid to return the results on. Then extrapolate the
             # results on the original delay array but keep the first
             # element in time for the deltaTempMap calculation.
-            x = np.arange(N)
             temp = temp_map.copy()
-            temp_map = np.zeros([len(delays)+1, N, K])
-            for i in range(K):
-                f = interp2d(x, excitation_delays, temp[1:, :, i], kind='linear')
-                temp_map[:, :, i] = np.append(temp[0:1, :, i],
-                                              f(x, delays.to('s').magnitude), axis=0)
+            temp_map = np.zeros([len(delays)+1, L, K])
+            for iii in range(K):
+                init = np.interp(d_mid, distances, temp[0, :, iii]).reshape([1, L])
+                f = interp2d(distances, excitation_delays, temp[1:, :, iii], kind='linear')
+                temp_map[:, :, iii] = np.append(init, f(d_mid, delays.to('s').magnitude), axis=0)
 
         # calculate the difference temperature map
         delta_temp_map = np.diff(temp_map, axis=0)
@@ -763,7 +798,7 @@ class Heat(Simulation):
                           ' {:f} s'.format(time()-t1))
         return np.squeeze(temp_map), np.squeeze(delta_temp_map), checked_excitation
 
-    def calc_heat_diffusion(self, init_temp, delays, delay_pump, pulse_width, fluence):
+    def calc_heat_diffusion(self, init_temp, distances, delays, delay_pump, pulse_width, fluence):
         r""" calc_heat_diffusion
 
         Returns a temp_map that is calculated by heat diffusion for a
@@ -785,21 +820,13 @@ class Heat(Simulation):
 
         """
         t1 = time()
-
+        M = len(delays)
         K = self.S.num_sub_systems
-        init_temp = self.check_initial_temperature(init_temp)
+        init_temp = self.check_initial_temperature(init_temp, distances)
         d_start, _, d_mid = self.S.get_distances_of_layers(False)
 
-        if len(self.distances) == 0:
-            # no user-defined distaces are given, so calculate heat diffusion
-            # by layer and also interpolate at the interfaces
-            distances, _ = self.S.interp_distance_at_interfaces(self.intp_at_interface, False)
-        else:
-            # a user-defined distances vector is given, so determine the
-            # indicies for final assignment per layer
-            distances = self._distances
-
         d_distances = np.diff(distances)
+        N = len(distances)
         dalpha_dz = self.get_absorption_profile(distances)
 
         if self.backend == 'matlab':
@@ -854,13 +881,11 @@ class Heat(Simulation):
                 state = None
 
             indicies = finderb(distances, d_start)
-            N = len(distances)
-            ic = np.interp(distances, d_start, init_temp.squeeze())
             # solve pdepe with method-of-lines
             sol = solve_ivp(
                 Heat.odefunc,
                 [delays[0], delays[-1]],
-                ic,
+                init_temp[:, 0],
                 args=(d_distances,
                       d_start,
                       self.S.get_layer_property_vector('therm_cond'),
@@ -878,26 +903,21 @@ class Heat(Simulation):
                       self._boundary_conditions['bottom_value'],
                       pbar, state),
                 t_eval=delays,
+                dense_output=True,
                 **self.ode_options)
 
             if pbar is not None:  # close tqdm progressbar if used
                 pbar.close()
             temp_map = sol.y.T
 
-        temp_map = np.array(temp_map).reshape([len(delays), len(distances), K])
-        res = np.zeros([len(delays), len(d_mid), K])
-        for i in range(K):
-            f = interp2d(distances, delays,
-                         temp_map[:, :, i], kind='linear')
-            res[:, :, i] = f(d_mid, delays)
-
+        temp_map = np.array(temp_map).reshape([M, N, K])
         if fluence == []:
             self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
         else:
             self.disp_message('Elapsed time for _heat_diffusion_ with {:d} '
                               'excitation(s): {:f} s'.format(len(fluence), time()-t1))
 
-        return res
+        return temp_map
 
     @staticmethod
     def odefunc(t, u, d_x_grid, x, thermal_conds, heat_capacities, densities,
@@ -938,16 +958,18 @@ class Heat(Simulation):
         if bc_top_type == 1:  # temperature
             u[0] = bc_top_value
         elif bc_top_type == 2:  # flux
-            dudt[0] = ((ks[0] * (u[1] - u[0]) / d_x_grid[0] + bc_top_value)/d_x_grid[0] + source[0])/cs[0]/rhos[0]
+            dudt[0] = ((ks[0]*(u[1] - u[0])/d_x_grid[0] + bc_top_value)/d_x_grid[0]
+                       + source[0])/cs[0]/rhos[0]
         else:  # isolator
-            dudt[0] = (ks[0] * (u[1] - u[0]) / d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
+            dudt[0] = (ks[0]*(u[1] - u[0])/d_x_grid[0]**2 + source[0])/cs[0]/rhos[0]
 
         if bc_bottom_type == 1:  # temperature
             u[-1] = bc_bottom_value
         elif bc_bottom_type == 2:  # flux
-            dudt[-1] = ((bc_bottom_value - ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1])/d_x_grid[-1] + source[-1])/cs[-1]/rhos[-1]
+            dudt[-1] = ((bc_bottom_value - ks[-1]*(u[-1] - u[-2])/d_x_grid[-1])/d_x_grid[-1]
+                        + source[-1])/cs[-1]/rhos[-1]
         else:  # isolator
-            dudt[-1] = (ks[-1] * (u[-1] - u[-2]) / d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
+            dudt[-1] = (ks[-1]*(u[-1] - u[-2])/d_x_grid[-1]**2 + source[-1])/cs[-1]/rhos[-1]
 
         # calculate derivative
         for i in range(1, N-1):
