@@ -412,11 +412,11 @@ class Structure:
             indb = inda-1  # this is the index of a layer before the interface
 
             # interpolate linearly N new distances at the interface
-            if indb == 0:  # this is the surface interface
-                dist_interp = np.append(dist_interp, np.linspace(0, d_mid[inda], 2+(N-1)/2))
-            elif inda >= len(d_mid):  # this is the bottom interface
+            if indb == -1:  # this is the surface interface
+                dist_interp = np.append(dist_interp, np.linspace(0, d_mid[inda], int(2+(N-1)/2)))
+            elif inda >= (len(d_mid)-1):  # this is the bottom interface
                 dist_interp = np.append(dist_interp,
-                                        np.linspace(d_mid[inda], d_end[-1], 2+(N-1)/2))
+                                        np.linspace(d_mid[inda], d_end[-1], int(2+(N-1)/2)))
             else:  # this is a surface inside the structure
                 dist_interp = np.append(dist_interp, np.linspace(d_mid[indb], d_mid[inda], 2+N))
 
