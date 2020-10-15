@@ -946,44 +946,46 @@ class Heat(Simulation):
 
         # reshape input temperature
         u = np.array(u).reshape([N, K], order='F')
-        
+        # initialize arrays
         dudt = np.zeros([N, K])
         ks = np.zeros([N, K])
         cs = np.zeros([N, K])
         rhos = densities
-        
+
+        # calculate external source
         source = np.zeros([N, K])
         if fluence != []:
             source[:, 0] = \
-                dalpha_dz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)      
+                dalpha_dz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
 
+        # calculate temperature-dependent parameters
         for ii in range(N):
             idx = indicies[ii]
             for iii in range(K):
                 ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
                 cs[ii, iii] = heat_capacities[idx][iii](u[ii, iii])
-                source[ii, iii] = source[ii, iii]  + sub_system_coupling[idx][iii](u[ii, :])
+                source[ii, iii] = source[ii, iii] + sub_system_coupling[idx][iii](u[ii, :])
 
         # boundary conditions
         if bc_top_type == 1:  # temperature
             u[0, :] = bc_top_value[:]
         elif bc_top_type == 2:  # flux
             dudt[0, :] = ((ks[0, :]*(u[1, :] - u[0, :])/d_x_grid[0]
-                             + bc_top_value[:])/d_x_grid[0]
-                            + source[0, :])/cs[0, :]/rhos[0]
+                           + bc_top_value[:])/d_x_grid[0]
+                          + source[0, :])/cs[0, :]/rhos[0]
         else:  # isolator
             dudt[0, :] = (ks[0, :]*(u[1, :] - u[0, :])/d_x_grid[0]**2
-                            + source[0, :])/cs[0, :]/rhos[0]
+                          + source[0, :])/cs[0, :]/rhos[0]
 
         if bc_bottom_type == 1:  # temperature
             u[-1, :] = bc_bottom_value[:]
         elif bc_bottom_type == 2:  # flux
-            dudt[-1, :] = ((bc_bottom_value[:] -
-                              ks[-1, :]*(u[-1, :] - u[-2, :])/d_x_grid[-1])/d_x_grid[-1]
-                             + source[-1, :])/cs[-1, :]/rhos[-1]
+            dudt[-1, :] = ((bc_bottom_value[:]
+                            - ks[-1, :]*(u[-1, :] - u[-2, :])/d_x_grid[-1])/d_x_grid[-1]
+                           + source[-1, :])/cs[-1, :]/rhos[-1]
         else:  # isolator
             dudt[-1, :] = (ks[-1, :]*(u[-1, :] - u[-2, :])/d_x_grid[-1]**2
-                             + source[-1, :])/cs[-1, :]/rhos[-1]
+                           + source[-1, :])/cs[-1, :]/rhos[-1]
 
         # calculate derivative
         for ii in range(1, N-1):
