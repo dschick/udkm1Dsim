@@ -289,7 +289,7 @@ class Atom:
 
     @property
     def mag_gamma(self):
-        """float: gamma angle of magnetization [deg]"""        
+        """float: gamma angle of magnetization [deg]"""
         return Q_(self._mag_gamma, u.rad).to('deg')
 
     @mag_gamma.setter
