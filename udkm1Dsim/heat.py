@@ -888,7 +888,8 @@ class Heat(Simulation):
                 Heat.odefunc,
                 [delays[0], delays[-1]],
                 np.reshape(init_temp, K*N, order='F'),
-                args=(K,
+                args=(N,
+                      K,
                       d_distances,
                       d_start,
                       self.S.get_layer_property_vector('therm_cond'),
@@ -896,7 +897,6 @@ class Heat(Simulation):
                       self.S.get_layer_property_vector('sub_system_coupling'),
                       densities[indicies],
                       indicies,
-                      N,
                       dalpha_dz,
                       fluence,
                       delay_pump,
@@ -923,8 +923,8 @@ class Heat(Simulation):
         return temp_map
 
     @staticmethod
-    def odefunc(t, u, K, d_x_grid, x, thermal_conds, heat_capacities,
-                sub_system_coupling, densities, indicies, N, dalpha_dz, fluence,
+    def odefunc(t, u, N, K, d_x_grid, x, thermal_conds, heat_capacities,
+                sub_system_coupling, densities, indicies, dalpha_dz, fluence,
                 delay_pump, pulse_length, bc_top_type, bc_top_value,
                 bc_bottom_type, bc_bottom_value, pbar, state):
         # state is a list containing last updated time t:
@@ -944,61 +944,55 @@ class Heat(Simulation):
         elif n < 0:
             state[0] = t
 
-        NK = N*K
-        dudt = np.zeros(NK)
-        ks = np.zeros(NK)
-        cs = np.zeros(NK)
+        # reshape input temperature
+        u = np.array(u).reshape([N, K], order='F')
+        
+        dudt = np.zeros([N, K])
+        ks = np.zeros([N, K])
+        cs = np.zeros([N, K])
         rhos = densities
         
-        source = np.zeros(NK)
+        source = np.zeros([N, K])
         if fluence != []:
-            source[0:N] = \
+            source[:, 0] = \
                 dalpha_dz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)      
 
-        for iii in range(K):
-            iN = iii*N
-            ipN = (iii+1)*N
-            for i in range(N):
-                idx = indicies[i]
-                i_NK = i + iN
-                ks[i_NK] = thermal_conds[idx][iii](u[i_NK])
-                cs[i_NK] = heat_capacities[idx][iii](u[i_NK])
-                source[i_NK] = source[i_NK] + 1e6 #sub_system_coupling[idx][iii](u[i_NK])
+        for ii in range(N):
+            idx = indicies[ii]
+            for iii in range(K):
+                ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
+                cs[ii, iii] = heat_capacities[idx][iii](u[ii, iii])
+                source[ii, iii] = source[ii, iii]  # + sub_system_coupling[idx][iii](u[i_NK])        
 
-        
+        # boundary conditions
+        if bc_top_type == 1:  # temperature
+            u[0, :] = bc_top_value[:]
+        elif bc_top_type == 2:  # flux
+            dudt[0, :] = ((ks[0, :]*(u[1, :] - u[0, :])/d_x_grid[0]
+                             + bc_top_value[:])/d_x_grid[0]
+                            + source[0, :])/cs[0, :]/rhos[0]
+        else:  # isolator
+            dudt[0, :] = (ks[0, :]*(u[1, :] - u[0, :])/d_x_grid[0]**2
+                            + source[0, :])/cs[0, :]/rhos[0]
 
-        for iii in range(K):
-            iN = iii*N
-            ipN = (iii+1)*N
-            # boundary conditions
-            if bc_top_type == 1:  # temperature
-                u[0 + iN] = bc_top_value[iii]
-            elif bc_top_type == 2:  # flux
-                dudt[0 + iN] = ((ks[0 + iN]*(u[1 + iN] - u[0 + iN])/d_x_grid[0]
-                                 + bc_top_value[iii])/d_x_grid[0]
-                                + source[0 + iN])/cs[0 + iN]/rhos[0]
-            else:  # isolator
-                dudt[0 + iN] = (ks[0 + iN]*(u[1 + iN] - u[0 + iN])/d_x_grid[0]**2
-                                + source[0 + iN])/cs[0 + iN]/rhos[0]
+        if bc_bottom_type == 1:  # temperature
+            u[-1, :] = bc_bottom_value[:]
+        elif bc_bottom_type == 2:  # flux
+            dudt[-1, :] = ((bc_bottom_value[:] -
+                              ks[-1, :]*(u[-1, :] - u[-2, :])/d_x_grid[-1])/d_x_grid[-1]
+                             + source[-1, :])/cs[-1, :]/rhos[-1]
+        else:  # isolator
+            dudt[-1, :] = (ks[-1, :]*(u[-1, :] - u[-2, :])/d_x_grid[-1]**2
+                             + source[-1, :])/cs[-1, :]/rhos[-1]
 
-            if bc_bottom_type == 1:  # temperature
-                u[ipN - 1] = bc_bottom_value[iii]
-            elif bc_bottom_type == 2:  # flux
-                dudt[ipN - 1] = ((bc_bottom_value[iii] -
-                                  ks[ipN - 1]*(u[ipN - 1] - u[ipN - 2])/d_x_grid[-1])/d_x_grid[-1]
-                                 + source[ipN - 1])/cs[ipN - 1]/rhos[-1]
-            else:  # isolator
-                dudt[ipN - 1] = (ks[ipN - 1]*(u[ipN - 1] - u[ipN - 2])/d_x_grid[-1]**2
-                                 + source[ipN - 1])/cs[ipN - 1]/rhos[-1]
+        # calculate derivative
+        for i in range(1, N-1):
+            dudt[i, :] = ((
+                 ks[i+1, :]*(u[i+1, :] - u[i, :])/(d_x_grid[i])
+                 - ks[i, :]*(u[i, :] - u[i-1, :])/(d_x_grid[i-1]))
+                / ((d_x_grid[i]+d_x_grid[i-1])/2) + source[i, :])/cs[i, :]/rhos[i]
 
-            # calculate derivative
-            for i in range(1, N-1):
-                dudt[i + iN] = ((
-                     ks[i + 1 + iN]*(u[i + 1 + iN] - u[i + iN])/(d_x_grid[i])
-                     - ks[i + iN]*(u[i + iN] - u[i - 1 + iN])/(d_x_grid[i - 1]))
-                    / ((d_x_grid[i]+d_x_grid[i - 1])/2) + source[i + iN])/cs[i + iN]/rhos[i]
-
-        return dudt
+        return np.reshape(dudt, K*N, order='F')
 
     @property
     def backend(self):
