@@ -962,7 +962,7 @@ class Heat(Simulation):
             for iii in range(K):
                 ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
                 cs[ii, iii] = heat_capacities[idx][iii](u[ii, iii])
-                source[ii, iii] = source[ii, iii]  # + sub_system_coupling[idx][iii](u[i_NK])        
+                source[ii, iii] = source[ii, iii]  + sub_system_coupling[idx][iii](u[ii, :])
 
         # boundary conditions
         if bc_top_type == 1:  # temperature
@@ -986,11 +986,11 @@ class Heat(Simulation):
                              + source[-1, :])/cs[-1, :]/rhos[-1]
 
         # calculate derivative
-        for i in range(1, N-1):
-            dudt[i, :] = ((
-                 ks[i+1, :]*(u[i+1, :] - u[i, :])/(d_x_grid[i])
-                 - ks[i, :]*(u[i, :] - u[i-1, :])/(d_x_grid[i-1]))
-                / ((d_x_grid[i]+d_x_grid[i-1])/2) + source[i, :])/cs[i, :]/rhos[i]
+        for ii in range(1, N-1):
+            dudt[ii, :] = ((
+                 ks[ii+1, :]*(u[ii+1, :] - u[ii, :])/(d_x_grid[ii])
+                 - ks[ii, :]*(u[ii, :] - u[ii-1, :])/(d_x_grid[ii-1]))
+                / ((d_x_grid[ii]+d_x_grid[ii-1])/2) + source[ii, :])/cs[ii, :]/rhos[ii]
 
         return np.reshape(dudt, K*N, order='F')
 
