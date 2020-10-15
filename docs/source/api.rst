@@ -12,11 +12,23 @@ AtomMixed
 
 .. autoclass:: udkm1Dsim.AtomMixed
     :members:
-    
+
+Layer
+^^^^^
+
+.. autoclass:: udkm1Dsim.Layer
+    :members:
+
 UnitCell
 ^^^^^^^^
 
 .. autoclass:: udkm1Dsim.UnitCell
+    :members:
+
+AmorphousLayer
+^^^^^^^^^^^^^^
+
+.. autoclass:: udkm1Dsim.AmorphousLayer
     :members:
 
 Structure
@@ -36,7 +48,19 @@ Heat
 
 .. autoclass:: udkm1Dsim.Heat
     :members:
-    
+
+Phonon
+^^^^^^
+
+.. autoclass:: udkm1Dsim.Phonon
+    :members:
+
+PhononNum
+^^^^^^^^^
+
+.. autoclass:: udkm1Dsim.PhononNum
+    :members:
+
 Magnetization
 ^^^^^^^^^^^^^
 

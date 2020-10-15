@@ -3,7 +3,7 @@ u = UnitRegistry()
 u.default_format = '~P'
 Q_ = u.Quantity
 from .atoms import Atom, AtomMixed
-from .layer import AmorphousLayer, UnitCell
+from .layer import Layer, AmorphousLayer, UnitCell
 from .structure import Structure
 from .simulation import Simulation
 from .heat import Heat
@@ -15,6 +15,6 @@ from .xrayKin import XrayKin
 from .xrayDyn import XrayDyn
 from .xrayDynMag import XrayDynMag
 
-__all__ = ['Atom', 'AtomMixed', 'AmorphousLayer', 'UnitCell', 'Structure', 'Simulation',
-           'Heat', 'Phonon', 'PhononNum', 'Magnetization', 'Xray', 'XrayKin', 'XrayDyn',
-           'XrayDynMag', 'u', 'Q_']
+__all__ = ['Atom', 'AtomMixed', 'Layer', 'AmorphousLayer', 'UnitCell', 'Structure',
+           'Simulation', 'Heat', 'Phonon', 'PhononNum', 'Magnetization', 'Xray',
+           'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']

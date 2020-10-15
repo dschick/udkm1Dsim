@@ -109,7 +109,7 @@ class PhononNum(Phonon):
 
         Calculates the _strain_map_ of the sample structure for a given
         _temp_map_ and _delta_temp_map_ and _delay_ vector. Further details
-        are given in Ref. [5]. The coupled differential equations are solved
+        are given in Ref. [5]_. The coupled differential equations are solved
         for each oscillator in a linear chain of masses and springs:
 
        .. math::

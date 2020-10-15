@@ -40,11 +40,6 @@ class Xray(Simulation):
         force_recalc (boolean): force recalculation of results
 
     Attributes:
-        energy (ndarray[float]): photon energies :math:`E` of scattering light
-        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
-        k (ndarray[float]): wavenumber :math:`k` of scattering light
-        theta (ndarray[float]): incidence angles :math:`\theta` of scattering light
-        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         polarizations (dict): polarization states and according names
         pol_in_state (int): incoming polarization state as defined in polarizations dict
         pol_out_state (int): outgoing polarization state as defined in polarizations dict
@@ -178,45 +173,41 @@ class Xray(Simulation):
 
     @property
     def energy(self):
-        """ndarray[float]: photon energy(s) [eV]"""
+        """ndarray[float]: photon energies :math:`E` of scattering light"""
         return Q_(self._energy, u.eV)
 
     @energy.setter
     def energy(self, energy):
-        """set.energy"""
         self._energy = np.array(energy.to('eV').magnitude, ndmin=1)
         self.update_experiment('energy')
 
     @property
     def wl(self):
-        """ndarray[float]: photon wavelength(s) [nm]"""
+        """ndarray[float]: wavelengths :math:`\lambda` of scattering light"""
         return Q_(self._wl, u.m).to('nm')
 
     @wl.setter
     def wl(self, wl):
-        """set.wl"""
         self._wl = np.array(wl.to_base_units().magnitude, ndmin=1)
         self.update_experiment('wl')
 
     @property
     def k(self):
-        """ndarray[float]: photon wavevector(s) [1/nm]"""
+        """ndarray[float]: wavenumber :math:`k` of scattering light"""
         return Q_(self._k, 1/u.m).to('1/nm')
 
     @k.setter
     def k(self, k):
-        """set.k"""
         self._k = np.array(k.to_base_units().magnitude, ndmin=1)
         self.update_experiment('k')
 
     @property
     def theta(self):
-        """ndarray[float]: incoming xray angle(s) :math:`\theta` [deg]"""
+        """ndarray[float]: incidence angles :math:`\theta` of scattering light"""
         return Q_(self._theta, u.rad).to('deg')
 
     @theta.setter
     def theta(self, theta):
-        """set.theta"""
         self._theta = np.array(theta.to_base_units().magnitude, ndmin=1)
         if self._theta.ndim < 2:
             self._theta = np.tile(self._theta, (len(self._energy), 1))
@@ -224,12 +215,11 @@ class Xray(Simulation):
 
     @property
     def qz(self):
-        """ndarray[float]: scattering vector(s) :math:`q_z` [1/nm]"""
+        """ndarray[float]: sscattering vector :math:`q_z` of scattering light"""
         return Q_(self._qz, 1/u.m).to('1/nm')
 
     @qz.setter
     def qz(self, qz):
-        """set.qz"""
         self._qz = np.array(qz.to_base_units().magnitude, ndmin=1)
         if self._qz.ndim < 2:
             self._qz = np.tile(self._qz, (len(self._energy), 1))

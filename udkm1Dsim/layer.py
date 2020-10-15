@@ -508,7 +508,6 @@ class AmorphousLayer(Layer):
         sub_system_coupling (float): sub-system coupling
 
     Attributes:
-        atom (object): Atom or AtomMixed in the layer
         magnetization (dict[float]): magnetization amplitude, phi and
            gamma angle inherited from the atom
 
@@ -558,9 +557,9 @@ class AmorphousLayer(Layer):
 
     @property
     def atom(self):
-        """get atom
+        """ object(atom): Atom or AtomMixed in the layer
 
-        Returns the atom of the layer.
+        Check if its type is of Atom or AtomMixed when set.
 
         """
 
@@ -568,11 +567,6 @@ class AmorphousLayer(Layer):
 
     @atom.setter
     def atom(self, atom):
-        """set atom
-
-        Set the atom of the layer and check if its of type Atom or AtomMixed.
-
-        """
         if atom == []:  # no atom is set
             self.magnetization = {'amplitude': 0,
                                   'phi': 0*u.deg,

@@ -180,13 +180,13 @@ class Phonon(Simulation):
 
         .. math::
 
-            \alpha(T) = \frac{1}{L} \frac{d L}{d T}
+            \\alpha(T) = \\frac{1}{L} \\frac{d L}{d T}
 
         which results after integration in
 
         .. math::
 
-            l = \Delta L = L_1 \exp(A(T_2) - A(T_1)) - L_1 $$
+            l = \\Delta L = L_1 \\exp(A(T_2) - A(T_1)) - L_1 $$
 
         where :math:`A(T)` is the integrated lin. therm. expansion coefficient
         in respect to the temperature :math:`T`. The indices 1 and 2 indicate

@@ -62,26 +62,11 @@ class Heat(Simulation):
             calculations
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer
-        backend (str): pde solver backend - either default scipy or matlab
-        boundary_conditions (dict): dictionary of boundary conditions:
-            boundary type top/bottom: isolator/temperature/flux
-            boundary value top/bottom
-        excitation (dict): dictionary of excitation parameters: fluence,
-            delay_pump, pulse_width, wavelength, theta, polarization,
-            multilayer_absorption
-        distances (ndarray[float]): array of distances where to calc heat
-            diffusion. If not set heat diffusion is calculated at each unit
-            cell location or at every angstrom in amorphous layers
         ode_options (dict): options for scipy solve_ivp ode solver, see
             <https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html>
         ode_options_matlab (dict): dict with options for the MATLAB pdepe solver,
             see odeset, used for heat diffusion.
         boundary_types (list[str]): description of boundary types
-        boundary_conditions (dict): dict of the top and bottom type of the
-            boundary conditions for the MATLAB heat diffusion calculation
-            1: isolator - 2: temperature - 3: flux
-            For the last two cases the corresponding value has to be set as
-            Kx1 array, where K is the number of sub-systems
         matlab_engine (module): MATLAB to Python API engine required for
             calculating heat diffusion
 
@@ -657,7 +642,7 @@ class Heat(Simulation):
 
         Calculates the temp_map and temp_map difference for a given delay
         vector, exciation and initial temperature. Heat diffusion can be
-        included if _heat_diffusion = true_.
+        included if ``heat_diffusion = true``.
 
         """
         t1 = time()
@@ -998,14 +983,11 @@ class Heat(Simulation):
 
     @property
     def backend(self):
-        """str: backend"""
-
+        """str: backend for the pde solver - either default scipy or matlab"""
         return self._backend
 
     @backend.setter
     def backend(self, backend):
-        """set.backend"""
-
         if backend in ['scipy', 'matlab']:
             self._backend = backend
         else:
@@ -1015,7 +997,8 @@ class Heat(Simulation):
 
     @property
     def excitation(self):
-        """dict: excitation parameters
+        """dict: dictionary of excitation parameters: fluence, delay_pump,
+        pulse_width, wavelength, theta, polarization, multilayer_absorption
 
         Convert to from default SI units to real quantities
 
@@ -1076,9 +1059,20 @@ class Heat(Simulation):
 
     @property
     def boundary_conditions(self):
-        """dict: boundary_conditions
+        """dict: boundary conditons of the top and bottom boundary for the
+        heat diffusion calculation.
 
-        Convert to from default SI units to real quantities
+        ``top_type`` or ``bottom_type`` can be one of
+
+        * isolator
+        * temperature
+        * flux
+
+        For the last two cases the corresponding value, ``top_value`` and
+        ``bottom_value`` have to be set as :math:`K \\times 1` array, where
+        :math:`K` is the number of sub-systems.
+
+        Return is converted from default SI units to real quantities.
 
         """
         boundary_conditions = {'top_type':
@@ -1153,12 +1147,11 @@ class Heat(Simulation):
 
     @property
     def distances(self):
-        """float: distances for heat diffusion [m]"""
+        """ndarray[float]: distance gird for heat diffusion [m]"""
         return Q_(self._distances, u.meter).to('nm')
 
     @distances.setter
     def distances(self, distances):
-        """set.distances"""
         self._distances = distances.to_base_units().magnitude
 
     def __del__(self):
