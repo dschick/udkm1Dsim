@@ -52,7 +52,7 @@ class PhononNum(Phonon):
         only_heat (boolean): force recalculation of results
         progress_bar (boolean): enable tqdm progress bar
         ode_options (dict): options for scipy solve_ivp ode solver, see
-        <https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html>
+            <https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html>
 
     References:
 

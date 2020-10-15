@@ -57,7 +57,7 @@ class Phonon(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        output = [['only heat', self.heat_diffusion],
+        output = [['only heat', self.only_heat],
                   ] + output
 
         class_str = 'Phonon simulation properties:\n\n'
