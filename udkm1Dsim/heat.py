@@ -893,6 +893,7 @@ class Heat(Simulation):
                       d_start,
                       self.S.get_layer_property_vector('therm_cond'),
                       self.S.get_layer_property_vector('heat_capacity'),
+                      self.S.get_layer_property_vector('sub_system_coupling'),
                       densities[indicies],
                       indicies,
                       N,
@@ -922,10 +923,10 @@ class Heat(Simulation):
         return temp_map
 
     @staticmethod
-    def odefunc(t, u, K, d_x_grid, x, thermal_conds, heat_capacities, densities,
-                indicies, N, dalpha_dz, fluence, delay_pump, pulse_length,
-                bc_top_type, bc_top_value, bc_bottom_type, bc_bottom_value,
-                pbar, state):
+    def odefunc(t, u, K, d_x_grid, x, thermal_conds, heat_capacities,
+                sub_system_coupling, densities, indicies, N, dalpha_dz, fluence,
+                delay_pump, pulse_length, bc_top_type, bc_top_value,
+                bc_bottom_type, bc_bottom_value, pbar, state):
         # state is a list containing last updated time t:
         # state = [last_t, dt]
         # I used a list because its values can be carried between function
@@ -948,10 +949,11 @@ class Heat(Simulation):
         ks = np.zeros(NK)
         cs = np.zeros(NK)
         rhos = densities
+        
         source = np.zeros(NK)
         if fluence != []:
             source[0:N] = \
-                dalpha_dz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
+                dalpha_dz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)      
 
         for iii in range(K):
             iN = iii*N
@@ -961,6 +963,9 @@ class Heat(Simulation):
                 i_NK = i + iN
                 ks[i_NK] = thermal_conds[idx][iii](u[i_NK])
                 cs[i_NK] = heat_capacities[idx][iii](u[i_NK])
+                source[i_NK] = source[i_NK] + 1e6 #sub_system_coupling[idx][iii](u[i_NK])
+
+        
 
         for iii in range(K):
             iN = iii*N
