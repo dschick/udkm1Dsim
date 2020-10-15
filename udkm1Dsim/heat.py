@@ -869,7 +869,7 @@ class Heat(Simulation):
                 matlab.double([self._boundary_conditions['top_value'].tolist()]),
                 matlab.int32([self._boundary_conditions['bottom_type']+1]),
                 matlab.double([self._boundary_conditions['bottom_value'].tolist()]),
-                self.ode_options
+                self.ode_options_matlab
             )
         else:
             # use python scipy backend
