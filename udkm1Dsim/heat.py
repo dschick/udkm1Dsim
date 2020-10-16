@@ -151,7 +151,8 @@ class Heat(Simulation):
 
         """
         param = [delays, init_temp, self.heat_diffusion,
-                 self.intp_at_interface, self.excitation, self.distances]
+                 self.intp_at_interface, self._excitation,
+                 self._boundary_conditions, self.distances]
 
         for key, value in kwargs.items():
             param.append(value)
@@ -593,9 +594,9 @@ class Heat(Simulation):
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
-        masses = self.S.get_layer_property_vector('_mass')
-        areas = self.S.get_layer_property_vector('_area')
-        E0 = np.array(fluence)*areas[1]  # mass are normalized to 1Ang^2
+        masses = self.S.get_layer_property_vector('_mass_unit_area')
+        # masses are normalized to 1Ang^2
+        E0 = np.array(fluence)*(1*u.angstrom**2).to_base_units().magnitude
 
         # check the intial temperature
         init_temp = self.check_initial_temperature(init_temp, distances)
