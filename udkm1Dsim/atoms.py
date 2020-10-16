@@ -92,7 +92,7 @@ class Atom:
 
         try:
             filename = os.path.join(os.path.dirname(__file__),
-                                    'parameters/elements/elements.dat')
+                                    'parameters/elements.dat')
             symbols = np.genfromtxt(filename, dtype='U2', usecols=(0))
             elements = np.genfromtxt(filename, dtype='U15, i8, f8', usecols=(1, 2, 3))
             [rowidx] = np.where(symbols == self.symbol)
@@ -136,7 +136,7 @@ class Atom:
         """
         if not filename:
             filename = os.path.join(os.path.dirname(__file__),
-                                    'parameters/atomicFormFactors/chantler/{:s}.cf'.format(
+                                    'parameters/atomic_form_factors/chantler/{:s}.cf'.format(
                                             self.symbol.lower()))
         try:
             f = np.genfromtxt(filename, skip_header=0)
@@ -177,7 +177,7 @@ class Atom:
 
         """
         filename = os.path.join(os.path.dirname(__file__),
-                                'parameters/atomicFormFactors/cromermann.txt')
+                                'parameters/atomic_form_factors/cromermann.txt')
         try:
             cm = np.genfromtxt(filename, skip_header=1,
                                usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
@@ -249,7 +249,7 @@ class Atom:
         """
         if not filename:
             filename = os.path.join(os.path.dirname(__file__),
-                                    'parameters/magneticFormFactors/{:s}.mf'.format(
+                                    'parameters/magnetic_form_factors/{:s}.mf'.format(
                                             self.symbol))
         try:
             f = np.genfromtxt(filename)
