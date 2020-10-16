@@ -177,7 +177,7 @@ class PhononNum(Phonon):
             self.disp_message('Calculating coherent dynamics with ODE solver ...')
 
             L = self.S.get_number_of_layers()
-            masses = self.S.get_layer_property_vector('_mass')
+            masses = self.S.get_layer_property_vector('_mass_unit_area')
             thicknesses = self.S.get_layer_property_vector('_thickness')
             spring_consts = self.S.get_layer_property_vector('spring_const')
             damping = self.S.get_layer_property_vector('_phonon_damping')
