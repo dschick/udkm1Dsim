@@ -424,7 +424,7 @@ class AtomMixed(Atom):
         """get_cm_atomic_form_factor
 
         Averaged energy and qz-dependent atomic form factors.
-        
+
         Args:
             energy (ndarray[float]): photon energy [eV]
             qz (ndarray[float]): scattering vector [1/m]

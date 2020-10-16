@@ -63,7 +63,7 @@ class Layer:
         id (str): id of the layer
         name (str): name of the layer
         thickness (float): thickness of the layer [m]
-        mass (float): mass of the layer [kg]        
+        mass (float): mass of the layer [kg]
         roughness (float): gaussian width of the top roughness of a layer [m]
         spring_const (ndarray[float]): spring constant of the layer
            [kg/s²] and higher orders
