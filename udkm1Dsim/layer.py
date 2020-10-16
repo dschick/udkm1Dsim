@@ -46,10 +46,10 @@ class Layer:
         name (str): name of the layer
 
     Keyword Args:
+        roughness (float): gaussian width of the top roughness of a layer
         deb_wal_fac (float): Debye Waller factor
         sound_vel (float): sound velocity
         phonon_damping (float): phonon damping
-        roughness (float): gaussian width of the top roughness of a layer
         opt_pen_depth (float): optical penetration depth
         opt_ref_index (float): refractive index
         opt_ref_index_per_strain (float): change of refractive index per
@@ -62,8 +62,9 @@ class Layer:
     Attributes:
         id (str): id of the layer
         name (str): name of the layer
-        thickness (float): thickness of the layer
-        roughness (float): gaussian width of the top roughness of a layer
+        thickness (float): thickness of the layer [m]
+        mass (float): mass of the layer [kg]        
+        roughness (float): gaussian width of the top roughness of a layer [m]
         spring_const (ndarray[float]): spring constant of the layer
            [kg/s²] and higher orders
         opt_ref_index (ndarray[float]): optical refractive index - real
@@ -212,15 +213,138 @@ class Layer:
 
         return R
 
+    def get_acoustic_impedance(self):
+        """get_acoustic_impedance"""
+        Z = np.sqrt(self.spring_const[0] * self.mass/self.area**2)
+        return Z
+
+    def set_ho_spring_constants(self, HO):
+        """set_ho_spring_constants
+
+        Set the higher orders of the spring constant for anharmonic
+        phonon simulations.
+
+        """
+        # reset old higher order spring constants
+        self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
+        self.spring_const = np.hstack((self.spring_const, HO))
+
+    def set_opt_pen_depth_from_ref_index(self, wavelength):
+        """set_opt_pen_depth_from_ref_index
+
+        Set the optical penetration depth from the optical referactive index
+        for a given wavelength
+
+        """
+        self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
+
     @property
     def thickness(self):
-        """float: out-of-plane thickness [m]"""
         return Q_(self._thickness, u.meter).to('nm')
 
     @thickness.setter
     def thickness(self, thickness):
-        """set.thickness"""
         self._thickness = thickness.to_base_units().magnitude
+
+    @property
+    def mass(self):
+        return Q_(self._mass, u.kg)
+
+    @mass.setter
+    def mass(self, mass):
+        self._mass = mass.to_base_units().magnitude
+
+    @property
+    def density(self):
+        """float: density of the unitCell [kg/m³]"""
+        return Q_(self._density, u.kg/u.m**3)
+
+    @density.setter
+    def density(self, density):
+        """set.density"""
+        self._density = density.to_base_units().magnitude
+
+    @property
+    def area(self):
+        """
+        float: area of epitaxial unit cells need for normation for
+        correct intensities) [m²]
+
+        """
+        return Q_(self._area, u.m**2)
+
+    @area.setter
+    def area(self, area):
+        """set.area"""
+        self._area = area.to_base_units().magnitude
+
+    @property
+    def volume(self):
+        """float: volume of unit cell [m³]"""
+        return Q_(self._volume, u.m**3)
+
+    @volume.setter
+    def volume(self, volume):
+        """set.volume"""
+        self._volume = volume.to_base_units().magnitude
+
+    @property
+    def deb_wal_fac(self):
+        """float: Debye-Waller factor [m²]"""
+        return Q_(self._deb_wal_fac, u.m**2)
+
+    @deb_wal_fac.setter
+    def deb_wal_fac(self, deb_wal_fac):
+        """set.deb_wal_fac"""
+        self._deb_wal_fac = deb_wal_fac.to_base_units().magnitude
+
+    @property
+    def sound_vel(self):
+        """float: sound velocity in the unit cell [m/s]"""
+        return Q_(self._sound_vel, u.m/u.s)
+
+    @sound_vel.setter
+    def sound_vel(self, sound_vel):
+        """set.sound_vel
+        If the sound velocity is set, the spring constant is
+        (re)calculated.
+        """
+        self._sound_vel = sound_vel.to_base_units().magnitude
+        self.calc_spring_const()
+
+    @property
+    def phonon_damping(self):
+        """float: damping constant of phonon propagation [kg/s]"""
+        return Q_(self._phonon_damping, u.kg/u.s)
+
+    @phonon_damping.setter
+    def phonon_damping(self, phonon_damping):
+        """set.phonon_damping"""
+        self._phonon_damping = phonon_damping.to_base_units().magnitude
+
+    @property
+    def opt_pen_depth(self):
+        """
+        float: penetration depth for pump always for 1st subsystem
+        light in the unit cell [m]
+
+        """
+        return Q_(self._opt_pen_depth, u.meter).to('nanometer')
+
+    @opt_pen_depth.setter
+    def opt_pen_depth(self, opt_pen_depth):
+        """set.opt_pen_depth"""
+        self._opt_pen_depth = opt_pen_depth.to_base_units().magnitude
+
+    @property
+    def roughness(self):
+        """float: roughness of the top of layer [m]"""
+        return Q_(self._roughness, u.meter).to('nm')
+
+    @roughness.setter
+    def roughness(self, roughness):
+        """set.roughness"""
+        self._roughness = roughness.to_base_units().magnitude
 
     @property
     def heat_capacity(self):
@@ -354,133 +478,6 @@ class Layer:
         """
         self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_input(
                 int_lin_therm_exp)
-
-    def get_acoustic_impedance(self):
-        """get_acoustic_impedance"""
-        Z = np.sqrt(self.spring_const[0] * self.mass/self.area**2)
-        return Z
-
-    def set_ho_spring_constants(self, HO):
-        """set_ho_spring_constants
-
-        Set the higher orders of the spring constant for anharmonic
-        phonon simulations.
-
-        """
-        # reset old higher order spring constants
-        self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
-        self.spring_const = np.hstack((self.spring_const, HO))
-
-    def set_opt_pen_depth_from_ref_index(self, wavelength):
-        """set_opt_pen_depth_from_ref_index
-
-        Set the optical penetration depth from the optical referactive index
-        for a given wavelength
-
-        """
-        self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
-
-    @property
-    def mass(self):
-        """float: mass of unit cell normalized to area of 1 Å² [kg]"""
-        return Q_(self._mass, u.kg)
-
-    @mass.setter
-    def mass(self, mass):
-        """set.mass"""
-        self._mass = mass.to_base_units().magnitude
-
-    @property
-    def density(self):
-        """float: density of the unitCell [kg/m³]"""
-        return Q_(self._density, u.kg/u.m**3)
-
-    @density.setter
-    def density(self, density):
-        """set.density"""
-        self._density = density.to_base_units().magnitude
-
-    @property
-    def area(self):
-        """
-        float: area of epitaxial unit cells need for normation for
-        correct intensities) [m²]
-
-        """
-        return Q_(self._area, u.m**2)
-
-    @area.setter
-    def area(self, area):
-        """set.area"""
-        self._area = area.to_base_units().magnitude
-
-    @property
-    def volume(self):
-        """float: volume of unit cell [m³]"""
-        return Q_(self._volume, u.m**3)
-
-    @volume.setter
-    def volume(self, volume):
-        """set.volume"""
-        self._volume = volume.to_base_units().magnitude
-
-    @property
-    def deb_wal_fac(self):
-        """float: Debye-Waller factor [m²]"""
-        return Q_(self._deb_wal_fac, u.m**2)
-
-    @deb_wal_fac.setter
-    def deb_wal_fac(self, deb_wal_fac):
-        """set.deb_wal_fac"""
-        self._deb_wal_fac = deb_wal_fac.to_base_units().magnitude
-
-    @property
-    def sound_vel(self):
-        """float: sound velocity in the unit cell [m/s]"""
-        return Q_(self._sound_vel, u.m/u.s)
-
-    @sound_vel.setter
-    def sound_vel(self, sound_vel):
-        """set.sound_vel
-        If the sound velocity is set, the spring constant is
-        (re)calculated.
-        """
-        self._sound_vel = sound_vel.to_base_units().magnitude
-        self.calc_spring_const()
-
-    @property
-    def phonon_damping(self):
-        """float: damping constant of phonon propagation [kg/s]"""
-        return Q_(self._phonon_damping, u.kg/u.s)
-
-    @phonon_damping.setter
-    def phonon_damping(self, phonon_damping):
-        """set.phonon_damping"""
-        self._phonon_damping = phonon_damping.to_base_units().magnitude
-
-    @property
-    def opt_pen_depth(self):
-        """
-        float: penetration depth for pump always for 1st subsystem
-        light in the unit cell [m]
-
-        """
-        return Q_(self._opt_pen_depth, u.meter).to('nanometer')
-
-    @opt_pen_depth.setter
-    def opt_pen_depth(self, opt_pen_depth):
-        """set.opt_pen_depth"""
-        self._opt_pen_depth = opt_pen_depth.to_base_units().magnitude
-
-    @property
-    def roughness(self):
-        """float: roughness of the top of layer [m]"""
-        return Q_(self._roughness, u.meter).to('nm')
-
-    @roughness.setter
-    def roughness(self, roughness):
-        """set.roughness"""
-        self._roughness = roughness.to_base_units().magnitude
 
 
 class AmorphousLayer(Layer):
