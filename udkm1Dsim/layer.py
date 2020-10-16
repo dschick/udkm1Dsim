@@ -100,10 +100,10 @@ class Layer:
         self.opt_ref_index = kwargs.get('opt_ref_index', 0)
         self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0)
         self.heat_capacity = kwargs.get('heat_capacity', 0)
-        self.therm_cond, self.therm_cond_str = self.check_cell_array_input(
+        self.therm_cond, self.therm_cond_str = self.check_input(
                 kwargs.get('therm_cond', 0))
         self.lin_therm_exp = kwargs.get('lin_therm_exp', 0)
-        self.sub_system_coupling, self.sub_system_coupling_str = self.check_cell_array_input(
+        self.sub_system_coupling, self.sub_system_coupling_str = self.check_input(
                 kwargs.get('sub_system_coupling', 0))
 
         if len(self.heat_capacity) == len(self.therm_cond) \
@@ -136,12 +136,11 @@ class Layer:
 
         return output
 
-    def check_cell_array_input(self, inputs):
-        """ check_cell_array_input
+    def check_input(self, inputs):
+        """ check_input
 
-        Checks the input for inputs which are cell arrays of function
-        handles, such as the heat capacity which is a cell array of N
-        function handles.
+        Checks the input and create a list of function handle strings with T as
+        argument. Inputs can be strings, floats, ints, or pint quantaties.
 
         """
         output = []
@@ -160,7 +159,7 @@ class Layer:
                     output.append(eval(input))
                     outputStrs.append(input)
                 except Exception as e:
-                    print('String input for unit cell property ' + input + ' \
+                    print('String input for layer property ' + input + ' \
                         cannot be converted to function handle!')
                     print(e)
             elif isinstance(input, (int, float)):
@@ -170,9 +169,9 @@ class Layer:
                 output.append(eval('lambda T: {:f}'.format(input.to_base_units().magnitude)))
                 outputStrs.append('lambda T: {:f}'.format(input.to_base_units().magnitude))
             else:
-                raise ValueError('Unit cell property input has to be a single or '
-                                 'cell array of numerics, function handles or strings which can be'
-                                 'converted into a function handle!')
+                raise ValueError('Layer property input has to be a single or '
+                                 'list of numerics, function handle strings '
+                                 'which can be converted into a lambda function!')
 
         return(output, outputStrs)
 
@@ -242,7 +241,7 @@ class Layer:
 
         """
 
-        self._heat_capacity, self.heat_capacity_str = self.check_cell_array_input(heat_capacity)
+        self._heat_capacity, self.heat_capacity_str = self.check_input(heat_capacity)
         # delete last anti-derivative
         self._int_heat_capacity = None
         # recalculate the anti-derivative
@@ -287,7 +286,7 @@ class Layer:
         installed.
 
         """
-        self._int_heat_capacity, self.int_heat_capacity_str = self.check_cell_array_input(
+        self._int_heat_capacity, self.int_heat_capacity_str = self.check_input(
                 int_heat_capacity)
 
     @property
@@ -309,7 +308,7 @@ class Layer:
 
         """
 
-        self._lin_therm_exp, self.lin_therm_exp_str = self.check_cell_array_input(lin_therm_exp)
+        self._lin_therm_exp, self.lin_therm_exp_str = self.check_input(lin_therm_exp)
         # delete last anti-derivative
         self._int_lin_therm_exp = None
         # recalculate the anti-derivative
@@ -353,7 +352,7 @@ class Layer:
         when no sympy installed.
 
         """
-        self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_cell_array_input(
+        self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_input(
                 int_lin_therm_exp)
 
     def get_acoustic_impedance(self):
