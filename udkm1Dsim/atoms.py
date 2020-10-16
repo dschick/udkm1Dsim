@@ -183,7 +183,7 @@ class Atom:
         return f1 - f2*1j
 
     def read_cromer_mann_coeff(self):
-        """read_cromer_mann_coeff
+        r"""read_cromer_mann_coeff
 
         The Cromer-Mann coefficients (Ref. [1]_) are read from a parameter file
         and are returned in the following order:
@@ -207,7 +207,7 @@ class Atom:
 
     @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
-        """get_cm_atomic_form_factor
+        r"""get_cm_atomic_form_factor
 
         The atomic form factor :math:`f` is calculated in dependence of the
         photon energy :math:`E` [eV] and the :math:`z`-component of the
@@ -229,12 +229,12 @@ class Atom:
 
         .. math::
 
-            \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\\right)
+            \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\right)
 
         Thus:
 
         .. math:: f(q_z,E) = \sum(a_i \, \exp(-b_i \, q_z/2\pi))
-           + c + f_1(E)-i f_2(E) - \left(\sum(a_i) + c\\right)
+           + c + f_1(E)-i f_2(E) - \left(\sum(a_i) + c\right)
 
         .. math:: f(q_z,E) = \sum(a_i \, \exp(-b_i \, q_z/2\pi))
            + f_1(E) -i f_2(E) - \sum(a_i)
