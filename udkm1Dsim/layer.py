@@ -211,6 +211,17 @@ class Layer:
 
         return R
 
+    def calc_spring_const(self):
+        """calc_spring_const
+
+        Calculates the spring constant of the layer from the mass per unit area,
+        sound velocity and thickness
+
+        .. math:: k = m \, \left(\\frac{v}{c}\\right)^2
+
+        """
+        self.spring_const[0] = (self._mass_unit_area * (self._sound_vel/self._thickness)**2)
+
     @property
     def thickness(self):
         """float: out-of-plane thickness [m]"""
@@ -390,6 +401,16 @@ class Layer:
         self._mass = mass.to_base_units().magnitude
 
     @property
+    def mass_unit_area(self):
+        """float: mass of layer normalized to unit area of 1 Å² [kg]"""
+        return Q_(self._mass_unit_area, u.kg)
+
+    @mass_unit_area.setter
+    def mass_unit_area(self, mass_unit_area):
+        """set.mass"""
+        self._mass_unit_area = mass_unit_area.to_base_units().magnitude
+
+    @property
     def density(self):
         """float: density of the unitCell [kg/m³]"""
         return Q_(self._density, u.kg/u.m**3)
@@ -547,17 +568,6 @@ class AmorphousLayer(Layer):
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
 
-    def calc_spring_const(self):
-        """calc_spring_const
-
-        Calculates the spring constant of the layer from the mass,
-        sound velocity and thickness
-
-        .. math:: k = m \, \left(\\frac{v}{c}\\right)^2
-
-        """
-        self.spring_const[0] = (self._mass * (self._sound_vel/self._thickness)**2)
-
     @property
     def atom(self):
         """get atom
@@ -637,6 +647,7 @@ class UnitCell(Layer):
         self.a_axis = kwargs.get('a_axis', self.c_axis)
         self.b_axis = kwargs.get('b_axis', self.a_axis)
         self.mass = 0*u.kg
+        self.mass_unit_area = 0*u.kg
         self.density = 0*u.kg/u.m**2
 
         super().__init__(id, name, **kwargs)
@@ -657,6 +668,7 @@ class UnitCell(Layer):
                   ['area', '{:.4~P}'.format(self.area.to('nm**2'))],
                   ['volume', '{:.4~P}'.format(self.volume.to('nm**3'))],
                   ['mass', '{:.4~P}'.format(self.mass)],
+                  ['mass per unit area', '{:.4~P}'.format(self.mass_unit_area)],
                   ]
         output += super().__str__()
 
@@ -779,8 +791,8 @@ class UnitCell(Layer):
             self.mass = self.mass + self.atoms[i][0].mass
 
         self.density = self.mass / self.volume
-        # set mass per unit area (do not know if necessary)
-        # self.mass = self.mass * 1*u.angstrom**2 / self.area
+        # set mass per unit area
+        self.mass_unit_area = self.mass * 1*u.angstrom**2 / self.area
         self.calc_spring_const()
 
     def add_multiple_atoms(self, atom, position, Nb):
@@ -823,17 +835,6 @@ class UnitCell(Layer):
             res[i] = atom[1](strain)
 
         return res
-
-    def calc_spring_const(self):
-        """calc_spring_const
-
-        Calculates the spring constant of the unit cell from the mass,
-        sound velocity and c-axis
-
-        .. math:: k = m \, \left(\\frac{v}{c}\\right)^2
-
-        """
-        self.spring_const[0] = (self._mass * (self._sound_vel/self._c_axis)**2)
 
     @property
     def a_axis(self):
