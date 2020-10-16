@@ -116,6 +116,7 @@ class Layer:
                   ['area', '{:.4~P}'.format(self.area.to('nm**2'))],
                   ['volume', '{:.4~P}'.format(self.volume.to('nm**3'))],
                   ['mass', '{:4~P}'.format(self.mass)],
+                  ['mass per unit area', '{:4~P}'.format(self.mass_unit_area)],
                   ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
                   ['roughness', '{:.4~P}'.format(self.roughness.to('nm'))],
                   ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
@@ -181,13 +182,14 @@ class Layer:
 
         """
         # initialize input parser and define defaults and validators
-        properties_by_types = {'heat': ['_thickness', '_area', '_volume', '_opt_pen_depth',
+        properties_by_types = {'heat': ['_thickness', '_area', '_mass', '_density',
+                                        '_opt_pen_depth', 'opt_ref_index',
                                         'therm_cond_str', 'heat_capacity_str',
                                         'int_heat_capacity_str', 'sub_system_coupling_str',
                                         'num_sub_systems'],
                                'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
                                           '_mass', 'spring_const', '_phonon_damping'],
-                               'xray': ['num_atoms', '_area', '_deb_wal_fac', '_thickness'],
+                               'xray': ['num_atoms', '_area', '_mass', '_deb_wal_fac', '_thickness'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
                                'magnetic': ['_thickness', 'magnetization'],

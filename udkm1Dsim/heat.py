@@ -162,7 +162,8 @@ class Heat(Simulation):
 
         """
         param = [delays, init_temp, self.heat_diffusion,
-                 self.intp_at_interface, self.excitation, self.distances]
+                 self.intp_at_interface, self._excitation,
+                 self._boundary_conditions, self.distances]
 
         for key, value in kwargs.items():
             param.append(value)
