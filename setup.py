@@ -23,7 +23,7 @@ setup(
                       'sympy>=1.5.1',
                       'tabulate'],
     extras_require={
-        'parallel':  ['dask>=2.12.0'],
+        'parallel':  ['dask>=2.6.0'],
         'testing': ['flake8', 'pytest'],
         'documentation': ['sphinx', 'nbsphinx', 'sphinxcontrib-napoleon'],
     },
