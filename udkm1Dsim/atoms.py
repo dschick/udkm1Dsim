@@ -38,14 +38,15 @@ class Atom:
 
     The atom class is the smallest structural unit of which one can
     build larger structures. It holds real physical properties of atoms
-    defined in the attrubutes section and can return parameters and data
+    defined in the attributes section and can return parameters and data
     necessary for different simulation types.
 
     Args:
         symbol (str): symbol of the atom
 
     Keyword Args:
-        id (str): id of the atom
+        id (str): id of the atom, may differ from symbol and/or
+           name
         ionicity (int): ionicity of the atom
         atomic_form_factor_path (str): path to atomic form factor coeffs
         magnetic_form_factor_path (str): path to magnetic form factor coeffs
@@ -64,6 +65,8 @@ class Atom:
         cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
            angular-dependent atomic form factor
         mag_amplitude (float): magnetization amplitude -1 .. 1
+        mag_phi (float): phi angle of magnetization [deg]
+        mag_gamma (float): gamma angle of magnetization [deg]
 
     References:
 
@@ -130,8 +133,15 @@ class Atom:
     def read_atomic_form_factor_coeff(self, filename=''):
         """read_atomic_form_factor_coeff
 
-        The atomic form factor :math:`f` in dependence from the energy
-        :math:`E` is read from a parameter file given by [3]_.
+        The coefficients for the atomic form factor :math:`f` in dependence of
+        the photon energy :math:`E` is read from a parameter file given by [3]_.
+
+        Args:
+            filename (str): optional full path and filenameto the atomic form
+                factor coefficients
+
+        Returns:
+            ndarray[float]: atomic form factor coefficients
 
         """
         if not filename:
@@ -150,13 +160,18 @@ class Atom:
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
-        Returns the complex atomic form factor
+        The complex atomic form factor for the photon energy :math:`E` [eV] is
+        calculated by:
 
-        .. math:: f(E)=f_1-i f_2
+        .. math:: f(E)=f_1 - i f_2
 
-        for the energy :math:`E` [eV].
+        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`.
 
-        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`
+        Args:
+            energy (ndarray[float]): photon energy [eV]
+
+        Returns:
+            ndarray[complex]: energy-dependent atomic form factors
 
         """
         # interpolate the real and imaginary part in dependence of E
@@ -170,10 +185,13 @@ class Atom:
     def read_cromer_mann_coeff(self):
         """read_cromer_mann_coeff
 
-        The Cromer-Mann coefficients (Ref. [1]_) are read from a
-        parameter file and are returned in the following order:
+        The Cromer-Mann coefficients (Ref. [1]_) are read from a parameter file
+        and are returned in the following order:
 
         .. math:: a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c
+
+        Returns:
+            ndarray[float]: Cromer-Mann coefficients
 
         """
         filename = os.path.join(os.path.dirname(__file__),
@@ -191,11 +209,11 @@ class Atom:
     def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
-        Returns the atomic form factor :math:`f` in dependence of the
-        energy :math:`E` [J] and the :math:`z`-component of the
+        The atomic form factor :math:`f` is calculated in dependence of the
+        photon energy :math:`E` [eV] and the :math:`z`-component of the
         scattering vector :math:`q_z` [Å :math:`^{-1}`] (Ref. [1]_).
-        Since the CM coefficients are fitted for :math:`q_z` in
-        [Å :math:`^{-1}`] we have to convert it before!
+        Note that the Cromer-Mann coefficients are fitted for :math:`q_z` in
+        [Å :math:`^{-1}`]!
 
         See Ref. [2]_ (p. 235).
 
@@ -221,6 +239,13 @@ class Atom:
         .. math:: f(q_z,E) = \sum(a_i \, \exp(-b_i \, q_z/2\pi))
            + f_1(E) -i f_2(E) - \sum(a_i)
 
+        Args:
+            energy (ndarray[float]): photon energy [eV]
+            qz (ndarray[float]): scattering vector [1/m]
+
+        Returns:
+            ndarray[complex]: energy- and qz-dependent Cromer-Mann atomic form factors
+
         """
         # convert from 1/nm to 1/Å and to a real column vector
         qz = np.array(qz*1e10, ndmin=2)
@@ -243,8 +268,15 @@ class Atom:
     def read_magnetic_form_factor_coeff(self, filename=''):
         """read_magnetic_form_factor_coeff
 
-        The magnetic form factor :math:`m` in dependence from the energy
-        :math:`E` is read from a parameter file.
+        The coefficients for the magnetic form factor :math:`m` in dependence
+        of the photon energy :math:`E` is read from a parameter file.
+
+        Args:
+            filename (str): optional full path and filename to the magnetic form
+                factor coefficients
+
+        Returns:
+            ndarray[float]: magnetic form factor coefficients
 
         """
         if not filename:
@@ -265,13 +297,19 @@ class Atom:
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
-        Returns the complex magnetic form factor
+        The complex magnetic form factor is claculated by:
 
-        .. math:: m(E)=m_1-i m_2
+        .. math:: m(E)=m_1 - i m_2
 
-        for the energy :math:`E` [eV].
+        for the photon energy :math:`E` [eV].
 
-        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`
+        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`m_2`
+
+        Args:
+            energy (ndarray[float]): photon energy [eV]
+
+        Returns:
+            ndarray[complex]: energy-dependent magnetic form factors
 
         """
         # interpolate the real and imaginary part in dependence of E
@@ -284,7 +322,6 @@ class Atom:
 
     @property
     def mag_phi(self):
-        """float: phi angle of magnetization [deg]"""
         return Q_(self._mag_phi, u.rad).to('deg')
 
     @mag_phi.setter
@@ -293,7 +330,6 @@ class Atom:
 
     @property
     def mag_gamma(self):
-        """float: gamma angle of magnetization [deg]"""
         return Q_(self._mag_gamma, u.rad).to('deg')
 
     @mag_gamma.setter
@@ -304,31 +340,29 @@ class Atom:
 class AtomMixed(Atom):
     """AtomMixed
 
-    The AtomMixed class is sub class of Atom and enables mixed atoms for
-    certain alloys and stochiometric mixtures. All properties of the
-    included sub-atoms of class atomBase are averaged and weighted with
-    their stochiometric ratio
+    The AtomMixed class inherits from Atom and enables mixed atoms for certain
+    alloys and stochiometric mixtures. All properties of the included sub-atoms
+    of class Atom are averaged and weighted with their stochiometric ratio.
 
     Args:
         symbol (str): symbol of the atom
 
     Keyword Args:
-        id (str): id of the atom
-        ionicity (int): ionicity of the atom
+        id (str): identifier of the atom, may differ from symbol and/or
+           name
+        name (str): name of the mixed atom, default is symbol
 
     Attributes:
         symbol (str): symbol of the element
         id (str): identifier of the atom, may differ from symbol and/or
            name
-        name (str): name of the element (generic)
+        name (str): name of the mixed atom, default is symbol
         atomic_number_z (int): Z atomic number
         mass_number_a (float): A atomic mass number
         ionicity (int): ionicity of the atom
         mass (float): mass of the atom [kg]
-        atomic_form_factor_coeff (ndarray[float]): atomic form factor
-           coefficients for energy-dependent atomic form factor
-        cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
-           angular-dependent atomic form factor
+        atoms (list[Atoms]): list of Atoms
+        num_atoms (int): number of atoms
 
     """
 
@@ -342,10 +376,6 @@ class AtomMixed(Atom):
         self.mass = 0
         self.atoms = []
         self.num_atoms = 0
-        self.cromer_mann_coeff = np.array([])
-        self.mag_amplitude = kwargs.get('mag_amplitude', 0)
-        self.mag_phi = kwargs.get('mag_phi', 0*u.deg)
-        self.mag_gamma = kwargs.get('mag_gamma', 0*u.deg)
 
     def __str__(self):
         """String representation of this class"""
@@ -360,7 +390,9 @@ class AtomMixed(Atom):
     def add_atom(self, atom, fraction):
         """add_atom
 
-        Add an Atom instance with its stochiometric fraction to the AtomMixed instance.
+        Add an Atom instance with its stochiometric fraction and recalculate
+        averaged properties.
+
         """
         self.atoms.append([atom, fraction])
         self.num_atoms = self.num_atoms + 1
@@ -373,7 +405,14 @@ class AtomMixed(Atom):
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
-        Returns the mixed energy dependent atomic form factor.
+        Averaged energy dependent atomic form factor.
+
+        Args:
+            energy (ndarray[float]): photon energy [eV]
+
+        Returns:
+            ndarray[complex]: energy-dependent atomic form factors
+
         """
         f = 0
         for i in range(self.num_atoms):
@@ -384,7 +423,15 @@ class AtomMixed(Atom):
     def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
-        Returns the mixed energy and angle dependent atomic form factor.
+        Averaged energy and qz-dependent atomic form factors.
+        
+        Args:
+            energy (ndarray[float]): photon energy [eV]
+            qz (ndarray[float]): scattering vector [1/m]
+
+        Returns:
+            ndarray[complex]: energy- and qz-dependent Cromer-Mann atomic form factors
+
         """
         f = 0
         for i in range(self.num_atoms):
@@ -395,7 +442,14 @@ class AtomMixed(Atom):
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
-        Returns the mixed energy dependent magnetic form factor.
+        Mixed energy dependent magnetic form factors.
+
+        Args:
+            energy (ndarray[float]): photon energy [eV]
+
+        Returns:
+            ndarray[complex]: energy-dependent magnetic form factors
+
         """
         f = 0
         for i in range(self.num_atoms):
