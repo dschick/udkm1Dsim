@@ -182,14 +182,15 @@ class Layer:
 
         """
         # initialize input parser and define defaults and validators
-        properties_by_types = {'heat': ['_thickness', '_area', '_mass', '_density',
+        properties_by_types = {'heat': ['_thickness', '_mass_unit_area', '_density',
                                         '_opt_pen_depth', 'opt_ref_index',
                                         'therm_cond_str', 'heat_capacity_str',
                                         'int_heat_capacity_str', 'sub_system_coupling_str',
                                         'num_sub_systems'],
                                'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
-                                          '_mass', 'spring_const', '_phonon_damping'],
-                               'xray': ['num_atoms', '_area', '_mass', '_deb_wal_fac', '_thickness'],
+                                          '_mass_unit_area', 'spring_const', '_phonon_damping'],
+                               'xray': ['num_atoms', '_area', '_mass', '_deb_wal_fac',
+                                        '_thickness'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
                                'magnetic': ['_thickness', 'magnetization'],
@@ -543,6 +544,7 @@ class AmorphousLayer(Layer):
         self.area = 1*u.angstrom**2  # set as unit area
         self.volume = self.area*self.thickness
         self.mass = self.density*self.volume
+        self.mass_unit_area = self.mass
         self.atom = kwargs.get('atom', [])
         super().__init__(id, name, **kwargs)
 

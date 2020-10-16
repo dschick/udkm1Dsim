@@ -605,9 +605,8 @@ class Heat(Simulation):
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
-        masses = self.S.get_layer_property_vector('_mass')
-        areas = self.S.get_layer_property_vector('_area')
-        E0 = np.array(fluence)*areas[1]  # mass are normalized to 1Ang^2
+        masses = self.S.get_layer_property_vector('_mass_unit_area')
+        E0 = np.array(fluence)*(1*u.angstrom**2)  # mass are normalized to 1Ang^2
 
         # check the intial temperature
         init_temp = self.check_initial_temperature(init_temp, distances)
