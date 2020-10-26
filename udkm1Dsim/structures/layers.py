@@ -22,17 +22,17 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ["Layer", "AmorphousLayer", "UnitCell"]
+__all__ = ['Layer', 'AmorphousLayer', 'UnitCell']
 
-__docformat__ = "restructuredtext"
+__docformat__ = 'restructuredtext'
 
-import numpy as np
 from .atoms import Atom, AtomMixed
+from .. import u, Q_
+import numpy as np
 from inspect import isfunction
 from sympy import integrate, Symbol
 from sympy.utilities.lambdify import lambdify
 from tabulate import tabulate
-from . import u, Q_
 
 
 class Layer:
