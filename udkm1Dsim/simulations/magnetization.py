@@ -22,17 +22,15 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""A :mod:`Magnetization` module """
+__all__ = ['Magnetization']
 
-__all__ = ["Magnetization"]
+__docformat__ = 'restructuredtext'
 
-__docformat__ = "restructuredtext"
-
+from .simulation import Simulation
+from ..helpers import make_hash_md5
 import numpy as np
 from time import time
 from os import path
-from .simulation import Simulation
-from .helpers import make_hash_md5
 
 
 class Magnetization(Simulation):

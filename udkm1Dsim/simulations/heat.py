@@ -22,21 +22,19 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""A :mod:`Heat` module """
+__all__ = ['Heat']
 
-__all__ = ["Heat"]
+__docformat__ = 'restructuredtext'
 
-__docformat__ = "restructuredtext"
-
+from .simulation import Simulation
+from .. import u, Q_
+from ..helpers import make_hash_md5, finderb, multi_gauss
 import numpy as np
 from scipy.optimize import brentq
 from scipy.interpolate import interp2d
 from scipy.integrate import solve_ivp
 from time import time
 from os import path
-from .simulation import Simulation
-from . import u, Q_
-from .helpers import make_hash_md5, finderb, multi_gauss
 import warnings
 from tqdm.notebook import tqdm
 

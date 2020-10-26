@@ -22,17 +22,15 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""A :mod:`Structure` module """
+__all__ = ['Structure']
 
-__all__ = ["Structure"]
+__docformat__ = 'restructuredtext'
 
-__docformat__ = "restructuredtext"
-
+from .layers import AmorphousLayer, UnitCell
+from .. import u, Q_
+from ..helpers import make_hash_md5, finderb
 import itertools
 import numpy as np
-from .layer import AmorphousLayer, UnitCell
-from . import u, Q_
-from .helpers import make_hash_md5, finderb
 
 
 class Structure:

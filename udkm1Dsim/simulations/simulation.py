@@ -22,11 +22,9 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""A :mod:`Simulation` module """
+__all__ = ['Simulation']
 
-__all__ = ["Simulation"]
-
-__docformat__ = "restructuredtext"
+__docformat__ = 'restructuredtext'
 
 from tabulate import tabulate
 import numpy as np
