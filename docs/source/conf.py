@@ -159,11 +159,16 @@ texinfo_documents = [
      'Miscellaneous'),
 ]
 
-
+todo_include_todos = True
 # -- Extension configuration -------------------------------------------------
 # increase timeout of nbsphinx from 30 to 3000s
 nbsphinx_execute = 'never'
 nbsphinx_timeout = 3000
+
+# Autodoc setting
+autodoc_default_options = {
+    'member-order': 'bysource',
+}
 
 # Napoleon settings
 napoleon_google_docstring = True
