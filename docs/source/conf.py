@@ -165,6 +165,11 @@ texinfo_documents = [
 nbsphinx_execute = 'never'
 nbsphinx_timeout = 3000
 
+# Autodoc setting
+autodoc_default_options = {
+    'member-order': 'bysource',
+}
+
 # Napoleon settings
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
