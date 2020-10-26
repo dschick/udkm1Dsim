@@ -159,7 +159,7 @@ texinfo_documents = [
      'Miscellaneous'),
 ]
 
-
+todo_include_todos = True
 # -- Extension configuration -------------------------------------------------
 # increase timeout of nbsphinx from 30 to 3000s
 nbsphinx_execute = 'never'
