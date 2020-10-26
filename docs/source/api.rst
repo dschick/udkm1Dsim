@@ -132,3 +132,10 @@ API Documentation
     :show-inheritance:
     :members:    
     :inherited-members:
+    
+:mod:`~udkm1Dsim.helpers`
+-----------------------------
+
+.. automodule:: udkm1Dsim.helpers
+    :members:
+    :undoc-members:
