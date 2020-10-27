@@ -231,7 +231,7 @@ class Structure:
         """get_thickness
 
         Args:
-            units (bool, optional): whether units should be returned or not.
+            units (boolean, optional): whether units should be returned or not.
                 Defaults to True.
 
         Returns:
@@ -392,7 +392,7 @@ class Structure:
         layer (dEnd) and from the center of each layer (dMid).
 
         Args:
-            units (bool, optional): whether units should be returned or not.
+            units (boolean, optional): whether units should be returned or not.
                 Defaults to True.
 
         Returns:
@@ -418,7 +418,7 @@ class Structure:
         """get_distances_of_interfaces
 
         Args:
-            units (bool, optional): whether units should be returned or not.
+            units (boolean, optional): whether units should be returned or not.
                 Defaults to True.
 
         Returns:
@@ -440,7 +440,7 @@ class Structure:
 
         Args:
             N (int): number of point of interpolation at interface
-            units (bool, optional): whether units should be returned or not.
+            units (boolean, optional): whether units should be returned or not.
                 Defaults to True.
 
         Returns:

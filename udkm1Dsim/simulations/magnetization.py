@@ -39,8 +39,24 @@ class Magnetization(Simulation):
     Base class for all magnetization simulatuons.
 
     Args:
-        S (object): sample to do simulations with
+        S (Structure): sample to do simulations with
         force_recalc (boolean): force recalculation of results
+
+    Keyword Args:
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
+
+    Attributes:
+        S (Structure): sample structure to calculate simulations on
+        force_recalc (boolean): force recalculation of results
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
 
     """
 

@@ -45,10 +45,24 @@ class Xray(Simulation):
     Base class for all xray simulatuons.
 
     Args:
-        S (object): sample to do simulations with
+        S (Structure): sample to do simulations with
         force_recalc (boolean): force recalculation of results
 
+    Keyword Args:
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
+
     Attributes:
+        S (Structure): sample structure to calculate simulations on
+        force_recalc (boolean): force recalculation of results
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
         polarizations (dict): polarization states and according names
         pol_in_state (int): incoming polarization state as defined in polarizations dict
         pol_out_state (int): outgoing polarization state as defined in polarizations dict
@@ -241,10 +255,29 @@ class XrayKin(Xray):
     Kinetic Xray simulations
 
     Args:
-        S (object): sample to do simulations with
+        S (Structure): sample to do simulations with
         force_recalc (boolean): force recalculation of results
 
+    Keyword Args:
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
+
     Attributes:
+        S (Structure): sample structure to calculate simulations on
+        force_recalc (boolean): force recalculation of results
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
+        polarizations (dict): polarization states and according names
+        pol_in_state (int): incoming polarization state as defined in polarizations dict
+        pol_out_state (int): outgoing polarization state as defined in polarizations dict
+        pol_in (float): incoming polarization factor (can be a complex ndarray)
+        pol_out (float): outgoing polarization factor (can be a complex ndarray)
 
     """
 
@@ -514,10 +547,29 @@ class XrayDyn(Xray):
     Dynamical Xray simulations
 
     Args:
-        S (object): sample to do simulations with
+        S (Structure): sample to do simulations with
         force_recalc (boolean): force recalculation of results
 
+    Keyword Args:
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
+
     Attributes:
+        S (Structure): sample structure to calculate simulations on
+        force_recalc (boolean): force recalculation of results
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
+        polarizations (dict): polarization states and according names
+        pol_in_state (int): incoming polarization state as defined in polarizations dict
+        pol_out_state (int): outgoing polarization state as defined in polarizations dict
+        pol_in (float): incoming polarization factor (can be a complex ndarray)
+        pol_out (float): outgoing polarization factor (can be a complex ndarray)
         last_atom_ref_trans_matrices (list): remember last result of
            atom ref_trans_matrices to speed up calculation
 
@@ -1169,7 +1221,7 @@ class XrayDyn(Xray):
 class XrayDynMag(Xray):
     """XrayDynMag
 
-    Dynamical magnetic Xray simulations adapted from Elzo et.al. [4]_.
+    Dynamical magnetic Xray simulations adapted from Elzo et.al. [6]_.
     Initially realized in `Project Dyna
     <http://neel.cnrs.fr/spip.php?rubrique1008>`_.
 
@@ -1193,16 +1245,35 @@ class XrayDynMag(Xray):
     - Stéphane Grenier, stephane.grenier@neel.cnrs.fr
 
     Args:
-        S (object): sample to do simulations with
+        S (Structure): sample to do simulations with
         force_recalc (boolean): force recalculation of results
 
+    Keyword Args:
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
+
     Attributes:
+        S (Structure): sample structure to calculate simulations on
+        force_recalc (boolean): force recalculation of results
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
+        polarizations (dict): polarization states and according names
+        pol_in_state (int): incoming polarization state as defined in polarizations dict
+        pol_out_state (int): outgoing polarization state as defined in polarizations dict
+        pol_in (float): incoming polarization factor (can be a complex ndarray)
+        pol_out (float): outgoing polarization factor (can be a complex ndarray)
         last_atom_ref_trans_matrices (list): remember last result of
            atom ref_trans_matrices to speed up calculation
 
     References:
 
-        .. [4] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
+        .. [6] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
            Ramos, H. C. N. Tolentino, J. M. Tonnerre, and N. Jaouen,
            `J. Magn. Magn. Mater. 324, 105 (2012).
            <http://www.doi.org/10.1016/j.jmmm.2011.07.019>`_

@@ -38,24 +38,23 @@ class Simulation:
     displaying option
 
     Args:
-        S (object): sample to do simulations with
+        S (Structure): sample to do simulations with
         force_recalc (boolean): force recalculation of results
 
     Keyword Args:
+        save_data (boolean): true to save simulation results
         cache_dir (str): path to cached data
-        disp_messages (boolean): is true to display messages from within
-           the simulations
-        disp_calc_time (boolean): is true to display the duration of
-           certain calculations
+        disp_messages (boolean): true to display messages from within the
+            simulations
         progress_bar (boolean): enable tqdm progress bar
 
     Attributes:
-        S (object): sample to do simulations with
+        S (Structure): sample structure to calculate simulations on
         force_recalc (boolean): force recalculation of results
-        disp_messages (boolean): is true to display messages from within
-           the simulations
-        disp_calc_time (boolean): is true to display the duration of
-           certain calculations
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
         progress_bar (boolean): enable tqdm progress bar
 
     """
@@ -63,9 +62,9 @@ class Simulation:
     def __init__(self, S, force_recalc, **kwargs):
         self.S = S
         self.force_recalc = force_recalc
+        self.save_data = kwargs.get('save_data', True)
         self.cache_dir = kwargs.get('cache_dir', './')
         self.disp_messages = kwargs.get('disp_messages', True)
-        self.save_data = kwargs.get('save_data', True)
         self.progress_bar = kwargs.get('progress_bar', True)
 
     def __str__(self, output=[]):

@@ -41,18 +41,28 @@ class Phonon(Simulation):
     Base class for phonon simulatuons.
 
     Args:
-        S (object): sample to do simulations with
+        S (Structure): sample to do simulations with
         force_recalc (boolean): force recalculation of results
 
     Keyword Args:
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
         only_heat (boolean): true when including only thermal expanison without
             coherent phonon dynamics
-        progress_bar (boolean): enable tqdm progress bar
 
     Attributes:
-        S (object): sample to do simulations with
-        only_heat (boolean): force recalculation of results
+        S (Structure): sample structure to calculate simulations on
+        force_recalc (boolean): force recalculation of results
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
         progress_bar (boolean): enable tqdm progress bar
+        only_heat (boolean): true when including only thermal expanison without
+            coherent phonon dynamics
 
     """
 
@@ -253,18 +263,28 @@ class PhononNum(Phonon):
     Base class for numerical phonon simulatuons.
 
     Args:
-        S (object): sample to do simulations with
+        S (Structure): sample to do simulations with
         force_recalc (boolean): force recalculation of results
 
     Keyword Args:
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
+        progress_bar (boolean): enable tqdm progress bar
         only_heat (boolean): true when including only thermal expanison without
             coherent phonon dynamics
-        progress_bar (boolean): enable tqdm progress bar
 
     Attributes:
-        S (object): sample to do simulations with
-        only_heat (boolean): force recalculation of results
+        S (Structure): sample structure to calculate simulations on
+        force_recalc (boolean): force recalculation of results
+        save_data (boolean): true to save simulation results
+        cache_dir (str): path to cached data
+        disp_messages (boolean): true to display messages from within the
+            simulations
         progress_bar (boolean): enable tqdm progress bar
+        only_heat (boolean): true when including only thermal expanison without
+            coherent phonon dynamics
         ode_options (dict): options for scipy solve_ivp ode solver, see
             <https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html>
 
