@@ -38,7 +38,7 @@ from tqdm.notebook import tqdm
 class Phonon(Simulation):
     """Phonon
 
-    Base class for phonon simulatuons.
+    Base class for phonon simulations.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -303,7 +303,7 @@ class Phonon(Simulation):
 class PhononNum(Phonon):
     """PhononNum
 
-    Base class for numerical phonon simulatuons.
+    Base class for numerical phonon simulations.
 
     Args:
         S (Structure): sample to do simulations with.

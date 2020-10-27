@@ -42,7 +42,7 @@ from tqdm.notebook import tqdm
 class Heat(Simulation):
     """Heat
 
-    Base class for heat simulatuons.
+    Base class for heat simulations.
 
     Args:
         S (Structure): sample to do simulations with.

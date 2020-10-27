@@ -36,27 +36,27 @@ from os import path
 class Magnetization(Simulation):
     """Magnetization
 
-    Base class for all magnetization simulatuons.
+    Base class for all magnetization simulations.
 
     Args:
-        S (Structure): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
 
     Keyword Args:
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
     Attributes:
-        S (Structure): sample structure to calculate simulations on
-        force_recalc (boolean): force recalculation of results
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
     """
 
@@ -72,9 +72,17 @@ class Magnetization(Simulation):
     def get_hash(self, delays, **kwargs):
         """get_hash
 
-        Returns a unique hash given by the delays as well as the sample
+        Calculates an unique hash given by the delays as well as the sample
         structure hash for relevant magnetic parameters.
-        Optionally, part of the strain_map and temp_map are used.
+        Optionally, part of the ``strain_map`` and ``temp_map`` are used.
+
+        Args:
+            delays (ndarray[float]): delay grid for the simulation.
+            **kwargs (ndarray[float], optional): optional strain and
+                temperature profile.
+
+        Returns:
+            hash (str): unique hash.
 
         """
         param = [delays]
@@ -102,8 +110,17 @@ class Magnetization(Simulation):
         """get_magnetization_map
 
         Returns an absolute `magnetization_map` for the sample structure.
-        The `magnetization_map` can depend on the `temp_map` and `strain_map`
-        that can be also calculated for the sample structure.
+        The `magnetization_map` can depend on the ``temp_map`` and
+        ``strain_map`` that can be also calculated for the sample structure.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            **kwargs (ndarray[float], optional): optional strain and
+                temperature profile.
+
+        Returns:
+            magnetization_map (ndarray[float]): spatio-temporal absolute
+            magnetization profile.
 
         """
         # create a hash of all simulation parameters
@@ -138,12 +155,21 @@ class Magnetization(Simulation):
     def calc_magnetization_map(self, delays, **kwargs):
         """calc_magnetization_map
 
-        Calculates an absolute `magnetization_map` for the sample structure.
-        The `magnetization_map` can depend on the `temp_map` and `strain_map`
-        that can be also calculated for the sample structure.
+        Calculates an absolute ``magnetization_map`` for the sample structure.
+        The ``magnetization_map`` can depend on the ``temp_map`` and
+        ``strain_map`` that can be also calculated for the sample structure.
 
         This method is just an interface and should be overwritten for the
         actual simulations.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            **kwargs (ndarray[float], optional): optional strain and
+                temperature profile.
+
+        Returns:
+            magnetization_map (ndarray[float]): spatio-temporal absolute
+            magnetization profile.
 
         """
 

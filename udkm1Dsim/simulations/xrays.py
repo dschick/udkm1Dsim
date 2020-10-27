@@ -42,7 +42,7 @@ r_0 = constants.physical_constants['classical electron radius'][0]
 class Xray(Simulation):
     """Xray
 
-    Base class for all xray simulatuons.
+    Base class for all xray simulations.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -63,9 +63,17 @@ class Xray(Simulation):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): incidence angles :math:`\theta` of scattering
+            light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         polarizations (dict): polarization states and according names.
-        pol_in_state (int): incoming polarization state as defined in polarizations dict.
-        pol_out_state (int): outgoing polarization state as defined in polarizations dict.
+        pol_in_state (int): incoming polarization state as defined in
+            polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in
+            polarizations dict.
         pol_in (float): incoming polarization factor (can be a complex ndarray).
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
 
@@ -196,7 +204,6 @@ class Xray(Simulation):
 
     @property
     def energy(self):
-        """ndarray[float]: photon energies :math:`E` of scattering light"""
         return Q_(self._energy, u.eV)
 
     @energy.setter
@@ -206,7 +213,6 @@ class Xray(Simulation):
 
     @property
     def wl(self):
-        """ndarray[float]: wavelengths :math:`\lambda` of scattering light"""
         return Q_(self._wl, u.m).to('nm')
 
     @wl.setter
@@ -216,7 +222,6 @@ class Xray(Simulation):
 
     @property
     def k(self):
-        """ndarray[float]: wavenumber :math:`k` of scattering light"""
         return Q_(self._k, 1/u.m).to('1/nm')
 
     @k.setter
@@ -226,7 +231,6 @@ class Xray(Simulation):
 
     @property
     def theta(self):
-        """ndarray[float]: incidence angles :math:`\theta` of scattering light"""
         return Q_(self._theta, u.rad).to('deg')
 
     @theta.setter
@@ -238,7 +242,6 @@ class Xray(Simulation):
 
     @property
     def qz(self):
-        """ndarray[float]: sscattering vector :math:`q_z` of scattering light"""
         return Q_(self._qz, 1/u.m).to('1/nm')
 
     @qz.setter
@@ -252,7 +255,7 @@ class Xray(Simulation):
 class XrayKin(Xray):
     """XrayKin
 
-    Kinetic Xray simulations
+    Kinetic Xray simulations.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -273,9 +276,17 @@ class XrayKin(Xray):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): incidence angles :math:`\theta` of scattering
+            light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         polarizations (dict): polarization states and according names.
-        pol_in_state (int): incoming polarization state as defined in polarizations dict.
-        pol_out_state (int): outgoing polarization state as defined in polarizations dict.
+        pol_in_state (int): incoming polarization state as defined in
+            polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in
+            polarizations dict.
         pol_in (float): incoming polarization factor (can be a complex ndarray).
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
 
@@ -544,7 +555,7 @@ class XrayKin(Xray):
 class XrayDyn(Xray):
     """XrayDyn
 
-    Dynamical Xray simulations
+    Dynamical Xray simulations.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -565,9 +576,17 @@ class XrayDyn(Xray):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): incidence angles :math:`\theta` of scattering
+            light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         polarizations (dict): polarization states and according names.
-        pol_in_state (int): incoming polarization state as defined in polarizations dict.
-        pol_out_state (int): outgoing polarization state as defined in polarizations dict.
+        pol_in_state (int): incoming polarization state as defined in
+            polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in
+            polarizations dict.
         pol_in (float): incoming polarization factor (can be a complex ndarray).
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
         last_atom_ref_trans_matrices (list): remember last result of
@@ -1263,9 +1282,17 @@ class XrayDynMag(Xray):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): incidence angles :math:`\theta` of scattering
+            light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         polarizations (dict): polarization states and according names.
-        pol_in_state (int): incoming polarization state as defined in polarizations dict.
-        pol_out_state (int): outgoing polarization state as defined in polarizations dict.
+        pol_in_state (int): incoming polarization state as defined in
+            polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in
+            polarizations dict.
         pol_in (float): incoming polarization factor (can be a complex ndarray).
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
         last_atom_ref_trans_matrices (list): remember last result of
