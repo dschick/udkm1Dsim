@@ -167,8 +167,16 @@ class Heat(Simulation):
     def get_hash(self, delays, init_temp, **kwargs):
         """get_hash
 
-        Returns a unique hash given by the delays, and init_temp as
+        Returns a unique hash given by the ``delays`` and ``init_temp`` as
         well as the sample structure hash for relevant thermal parameters.
+
+        Args:
+            delays (ndarray[float]): delay grid for the simulation.
+            init_temp (ndarray[float]): initial spatial temperature profile.
+            **kwargs (float, optional): optional parameters.
+
+        Returns:
+            hash (str): unique hash.
 
         """
         param = [delays, init_temp, self.heat_diffusion,
@@ -876,7 +884,7 @@ class Heat(Simulation):
         return np.squeeze(temp_map), np.squeeze(delta_temp_map), checked_excitation
 
     def calc_heat_diffusion(self, init_temp, distances, delays, delay_pump, pulse_width, fluence):
-        r""" calc_heat_diffusion
+        r"""calc_heat_diffusion
 
         Calculates a temperature profile including heat diffusion for a given
         delay array and initial temperature profile. Here we have to solve the

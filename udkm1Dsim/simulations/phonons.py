@@ -84,8 +84,19 @@ class Phonon(Simulation):
     def get_hash(self, delays, temp_map, delta_temp_map, **kwargs):
         """get_hash
 
-        Returns an unique hash given by the delays, and temp- and delta_temp_map
-        as well as the sample structure hash for relevant thermal parameters.
+        Calculates an unique hash given by the ``delays``, and ``temp_map``
+        and ``delta_temp_map`` as well as the sample structure hash for
+        relevant lattice parameters.
+
+        Args:
+            delays (ndarray[float]): delay grid for the simulation.
+            temp_map (ndarray[float]): spatio-temporal temperature profile.
+            delta_temp_map (ndarray[float]): spatio-temporal temperature
+                difference profile.
+            **kwargs (float, optional): optional parameters.
+
+        Returns:
+            hash (str): unique hash.
 
         """
         param = [delays, self.only_heat]
@@ -104,8 +115,11 @@ class Phonon(Simulation):
     def get_all_strains_per_unique_layer(self, strain_map):
         """get_all_strains_per_unique_layer
 
-        Returns a dict with all strains per unique layer that
-        are given by the input _strain_map_.
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+
+        Returns:
+            strains (dict{ndarray[float]}: all strains per unique layer.
 
         """
         # get the position indices of all unique layers in the sample structure
@@ -118,13 +132,20 @@ class Phonon(Simulation):
         return strains
 
     def get_reduced_strains_per_unique_layer(self, strain_map, N=100):
-        """ get_reduced_strains_per_unique_layer
+        """get_reduced_strains_per_unique_layer
 
-        Returns a dict with all strains per unique layer that are given by the
-        input _strain_map_, BUT with a reduced number. The reduction is done
-        by equally spacing the strains between the min and max strain with a
-        given number :math:`N`, which can be also a vector of the
+        Calculates all strains per unique layer that are given by the
+        input ``strain_map``, but with a reduced number. The reduction is done
+        by equally spacing the strains between the ``min`` and ``max`` strain
+        with a given number :math:`N`, which can be also an array of the
         :math:`len(N) = L`, where :math:`L` is the number of unique layers.
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            N (int, optional): number of reduced strains. Defaults to 100.
+
+        Returns:
+            strains (dict{ndarray[float]}: reduced strains per unique layer.
 
         """
         # initialize
@@ -147,11 +168,22 @@ class Phonon(Simulation):
         return strains
 
     def check_temp_maps(self, temp_map, delta_temp_map, delays):
-        """ check_temp_maps
+        """check_temp_maps
 
-        Returns the corrected _delta_temp_map_ for the _strain_map_
-        calculation and checks _temp_map_ and _delta_temp_map_ for the
-        correct dimensions.
+        Check temperature profiles for correct dimensions.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature profile.
+            delta_temp_map (ndarray[float]): spatio-temporal temperature
+                difference profile.
+            delays (ndarray[float]): delay grid for the simulation.
+
+        Returns:
+            (tuple):
+            - *temp_map (ndarray[float])* - checked spatio-temporal temperature
+              profile.
+            - *delta_temp_map (ndarray[float])* - checked spatio-temporal
+              differential temperature profile.
 
         """
         M = len(delays)
@@ -187,7 +219,7 @@ class Phonon(Simulation):
         return temp_map, delta_temp_map
 
     def calc_sticks_from_temp_map(self, temp_map, delta_temp_map):
-        """calc_sticks_from_temp_map
+        r"""calc_sticks_from_temp_map
 
         Calculates the sticks to insert into the layer springs which model the
         external force (thermal stress). The length of :math:`l_i` of the
@@ -196,17 +228,28 @@ class Phonon(Simulation):
 
         .. math::
 
-            \\alpha(T) = \\frac{1}{L} \\frac{d L}{d T}
+            \alpha(T) = \frac{1}{L} \frac{d L}{d T}
 
         which results after integration in
 
         .. math::
 
-            l = \\Delta L = L_1 \\exp(A(T_2) - A(T_1)) - L_1 $$
+            l = \Delta L = L_1 \exp(A(T_2) - A(T_1)) - L_1
 
         where :math:`A(T)` is the integrated lin. therm. expansion coefficient
         in respect to the temperature :math:`T`. The indices 1 and 2 indicate
         the initial and final state.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature profile.
+            delta_temp_map (ndarray[float]): spatio-temporal temperature
+                difference profile.
+
+        Returns:
+            (tuple):
+            - *sticks (ndarray[float])* - summed spacer sticks.
+            - *sticks_sub_systems (ndarray[float])* - spacer sticks per
+              sub-system.
 
         """
         M = np.size(temp_map, 0)  # nb of delay steps
@@ -292,7 +335,7 @@ class PhononNum(Phonon):
         .. [6] A. Bojahr, M. Herzog, D. Schick, I. Vrejoiu, & M. Bargheer,
            *Calibrated real-time detection of nonlinearly propagating
            strain waves*, `Phys. Rev. B, 86(14), 144306 (2012).
-           <http://www.doi.org/10.1103/PhysRevB.86.144306>`
+           <http://www.doi.org/10.1103/PhysRevB.86.144306>`_
 
     """
 
@@ -321,6 +364,15 @@ class PhononNum(Phonon):
         profile. The result can be saved using an unique hash of the sample
         and the simulation parameters in order to reuse it.
 
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            delta_temp_map (ndarray[float]): spatio-temporal differential
+            temperature map.
+
+        Returns:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+
         """
         filename = 'strain_map_num_' \
                    + self.get_hash(delays, temp_map, delta_temp_map) \
@@ -338,18 +390,17 @@ class PhononNum(Phonon):
         return strain_map
 
     def calc_strain_map(self, delays, temp_map, delta_temp_map):
-        """calc_strain_map
+        r"""calc_strain_map
 
-        Calculates the _strain_map_ of the sample structure for a given
-        _temp_map_ and _delta_temp_map_ and _delay_ vector. Further details
-        are given in Ref. [6]_. The coupled differential equations are solved
-        for each oscillator in a linear chain of masses and springs:
+        Calculates the ``strain_map`` of the sample structure for a given
+        ``temp_map`` and ``delta_temp_map`` and ``delay`` array. Further
+        details are given in Ref. [6]_. The coupled differential equations are
+        solved for each oscillator in a linear chain of masses and springs:
 
-       .. math::
+        .. math::
 
-            m_i\ddot{x}_i = -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1})
-            + m_i\gamma_i(\dot{x}_i-\dot{x}_{i-1})
-            + F_i^{heat}(t)
+            m_i\ddot{x}_i = & -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1}) \\
+            & + m_i\gamma_i(\dot{x}_i-\dot{x}_{i-1}) + F_i^{heat}(t)
 
         where :math:`x_i(t) = z_{i}(t) - z_i^0` is the shift of each layer.
         :math:`m_i` is the mass and :math:`k_i = m_i\, v_i^2/c_i^2` is the
@@ -366,7 +417,7 @@ class PhononNum(Phonon):
 
         The numerical solution also allows for non-harmonic inter-atomic
         potentials of up to the order :math:`M`. Accordingly
-        :math:`k_i = (k_i^1 \ldots k_i^{M-1})` can be a vector accounting for
+        :math:`k_i = (k_i^1 \ldots k_i^{M-1})` can be an array accounting for
         higher orders of the potential which is in the harmonic case purely
         quadratic (:math:`k_i = k_i^1`). The resulting force from the
         displacement of the springs
@@ -379,7 +430,20 @@ class PhononNum(Phonon):
 
         .. math::
 
-        k_i(x_i-x_{i-1}) = \sum_{j=1}^{M-1} k_i^j (x_i-x_{i-1})^j
+            k_i(x_i-x_{i-1}) = \sum_{j=1}^{M-1} k_i^j (x_i-x_{i-1})^j
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            delta_temp_map (ndarray[float]): spatio-temporal differential
+                temperature map.
+
+        Returns:
+            (tuple):
+            - *strain_map (ndarray[float])* - spatio-temporal strain profile.
+            - *sticks_sub_systems (ndarray[float])* - spacer sticks per
+              sub-system.
+            - *velocities (ndarray[float])* - spatio-temporal velocity profile.
 
         """
         t1 = time()
@@ -437,14 +501,10 @@ class PhononNum(Phonon):
             if pbar is not None:  # close tqdm progressbar if used
                 pbar.close()
 
-            # calculate the strainMap as the second spacial derivative
+            # calculate the strain_map as the second spacial derivative
             # of the layer shift x(t). The result of the ode solver
             # contains x(t) = X(:,1:N) and v(t) = X(:,N+1:end) the
             # positions and velocities of the layers, respectively.
-            # temp = np.diff(X[:, 0:L], 0, 2)
-            # temp[:, :+1] = 0
-            # strain_map = temp/np.tile(thicknesses, np.size(temp, 0), 1)
-            # velocities = X[:, L+1:]
             temp = np.diff(sol.y[0:L, :].T, 1, 1)
             strain_map = temp/np.tile(thicknesses[:-1], [np.size(temp, 0), 1])
             velocities = sol.y[L:, :].T
@@ -467,6 +527,21 @@ class PhononNum(Phonon):
             \dot{X}(t) = [\dot{x}(t) \; \ddot{x}(t)] .
 
         :math:`x(t)` is the actual shift of each layer.
+
+        Args:
+            t (ndarray[float]): internal time steps of the ode solver.
+            X (ndarray[float]): internal variable of the ode solver.
+            delays (ndarray[float]): delays range of simulation [s].
+            force_from_heat (ndarray[float]): force due to thermal expansion.
+            damping (ndarray[float]): phonon damping.
+            spring_consts (ndarray[float]): spring constants of masses.
+            masses (ndarray[float]): masses of layers.
+            L (int): number of layers.
+            pbar (tqdm): tqdm progressbar.
+            state (list[float]): state variables for progress bar.
+
+        Returns:
+            X_prime (ndarray[float]): velocities and accelerations of masses.
 
         """
         if pbar is not None:
@@ -508,6 +583,7 @@ class PhononNum(Phonon):
 
         Calculates the force :math:`F_i^{spring}` acting on each mass due to
         the displacement between the left and right site of that mass.
+
         .. math::
 
             F_i^{spring} = -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1})
@@ -516,9 +592,17 @@ class PhononNum(Phonon):
 
         .. math::
 
-            k_i(x_i-x_{i-1}) = \sum_{j=1}^{M-1} k_i^j (x_i-x_{i-1})^j
+            k_i(x_i-x_{i-1}) = \sum_{j=1}^{M} k_i^j (x_i-x_{i-1})^j
 
-        where :math:`M-1` is the order of the spring constants.
+        where :math:`M` is the order of the spring constants.
+
+        Args:
+            d_X1 (ndarray[float]): left displacements.
+            d_X2 (ndarray[float]): right displacements.
+            spring_consts (ndarray[float]): spring constants of masses.
+
+        Returns:
+            F (ndarray[float]): force from springs.
 
         """
         try:
@@ -547,7 +631,14 @@ class PhononNum(Phonon):
         """calc_force_from_heat
 
         Calculates the force acting on each mass due to the heat expansion,
-        which is modelled by spacer sticks.
+        which is modeled by spacer sticks.
+
+        Args:
+            stciks (ndarray[float]): spacer sticks.
+            spring_consts (ndarray[float]): spring constants of masses.
+
+        Returns:
+            F (ndarray[float]): force from thermal expansion.
 
         """
         M, L = np.shape(sticks)
@@ -573,6 +664,14 @@ class PhononNum(Phonon):
         .. math::
 
             F_i^{damp} = \gamma_i(\dot{x}_i-\dot{x}_{i-1})
+
+        Args:
+            v (ndarray[float]): velocity of masses.
+            damping (ndarray[float]): phonon damping.
+            masses (ndarray[float]): masses.
+
+        Returns:
+            F (ndarray[float]): force from damping.
 
         """
         F = masses*damping*np.diff(v, 0)
