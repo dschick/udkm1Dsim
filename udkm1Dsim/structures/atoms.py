@@ -70,17 +70,17 @@ class Atom:
 
     References:
 
-        .. [1] B. L. Henke, E. M. Gullikson & J. C. Davis (1993).
-           X-Ray Interactions: Photoabsorption, Scattering,
-           Transmission, and Reflection at E = 50-30,000 eV, Z = 1-92.
-           `Atomic Data and Nuclear Data Tables, 54(2), 181–342.
+        .. [1] B. L. Henke, E. M. Gullikson & J. C. Davis,
+           *X-Ray Interactions: Photoabsorption, Scattering,
+           Transmission, and Reflection at E = 50-30,000 eV, Z = 1-92*,
+           `Atomic Data and Nuclear Data Tables, 54(2), 181–342, (1993).
            <http://www.doi.org/10.1006/adnd.1993.1013>`_
-        .. [2] J. Als-Nielson, & D. McMorrow (2001).
+        .. [2] J. Als-Nielson, & D. McMorrow,
            `Elements of Modern X-Ray Physics. New York: John Wiley &
-           Sons, Ltd. <http://www.doi.org/10.1002/9781119998365>`_
-        .. [3] D. T. Cromer & J. B. Mann (1968). X-ray scattering
-           factors computed from numerical Hartree–Fock wave functions.
-           `Acta Crystallographica Section A, 24(2), 321–324.
+           Sons, Ltd. (2001) <http://www.doi.org/10.1002/9781119998365>`_
+        .. [3] D. T. Cromer & J. B. Mann, *X-ray scattering
+           factors computed from numerical Hartree–Fock wave functions*,
+           `Acta Crystallographica Section A, 24(2), 321–324 (1968).
            <http://www.doi.org/10.1107/S0567739468000550>`_
 
     """

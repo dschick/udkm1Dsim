@@ -1221,7 +1221,7 @@ class XrayDyn(Xray):
 class XrayDynMag(Xray):
     """XrayDynMag
 
-    Dynamical magnetic Xray simulations adapted from Elzo et.al. [6]_.
+    Dynamical magnetic Xray simulations adapted from Elzo et.al. [7]_.
     Initially realized in `Project Dyna
     <http://neel.cnrs.fr/spip.php?rubrique1008>`_.
 
@@ -1273,8 +1273,10 @@ class XrayDynMag(Xray):
 
     References:
 
-        .. [6] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
-           Ramos, H. C. N. Tolentino, J. M. Tonnerre, and N. Jaouen,
+        .. [7] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
+           Ramos, H. C. N. Tolentino, J. M. Tonnerre & N. Jaouen, *X-ray
+           resonant magnetic reflectivity of stratified magnetic structures:
+           Eigenwave formalism and application to a W/Fe/W trilayer*,
            `J. Magn. Magn. Mater. 324, 105 (2012).
            <http://www.doi.org/10.1016/j.jmmm.2011.07.019>`_
 

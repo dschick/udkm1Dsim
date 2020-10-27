@@ -34,28 +34,28 @@ import os
 class Simulation:
     """Simulation
 
-    Base class for all simulations. Handles the caching and some
-    displaying option
+    Base class for all simulations. Handles the caching and some displaying
+    option.
 
     Args:
-        S (Structure): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
 
     Keyword Args:
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
     Attributes:
-        S (Structure): sample structure to calculate simulations on
-        force_recalc (boolean): force recalculation of results
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
     """
 
@@ -83,11 +83,28 @@ class Simulation:
         return class_str
 
     def disp_message(self, message):
-        """wrapper to display messages for that class"""
+        """disp_message
+
+        Wrapper to display messages for that class.
+
+        Args:
+            message (str): message to display.
+
+        """
         if self.disp_messages:
             print(message)
 
     def save(self, full_filename, data, *args):
+        """save
+
+        Save data to file. The variable name can be handed as variable argument.
+
+        Args:
+            full_filename (str): full file name to data file.
+            data (ndarray): actual data to save.
+            *args (str, optional): variable name within the data file.
+
+        """
         if len(args) == 1:
             var_name = args[0]
         else:
@@ -100,8 +117,16 @@ class Simulation:
     def conv_with_function(self, y, x, handle):
         """conv_with_function
 
-        Convolutes the array :math;`y(x)` with a function given by the
-        handle on the argument vector :math:`x`.
+        Convolutes the array :math:`y(x)` with a function given by the handle
+        on the argument array :math:`x`.
+
+        Args:
+            y (ndarray[float]): y data.
+            x (ndarray[float]): x data.
+            handle (@lamdba): convolution function.
+
+        Returns:
+            y_conv (ndarray[float]): convoluted data.
 
         """
         dx = np.min(np.diff(x))
@@ -119,12 +144,10 @@ class Simulation:
 
     @property
     def cache_dir(self):
-        """str: path to cached data"""
         return self._cache_dir
 
     @cache_dir.setter
     def cache_dir(self, cache_dir):
-        """set.cache_dir"""
         import os.path as path
         if path.exists(cache_dir):
             self._cache_dir = cache_dir
