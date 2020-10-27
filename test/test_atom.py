@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from udkm1Dsim import Atom, AtomMixed
+from udkm1Dsim.structures.atoms import Atom, AtomMixed
 import numpy as np
 import pytest
 

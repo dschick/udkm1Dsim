@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from udkm1Dsim import Atom
-from udkm1Dsim import UnitCell
+from udkm1Dsim.structures.atoms import Atom
+from udkm1Dsim.structures.layers import UnitCell
 from udkm1Dsim import u
 u.default_format = '~P'
 
