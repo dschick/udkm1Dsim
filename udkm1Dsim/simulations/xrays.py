@@ -45,29 +45,29 @@ class Xray(Simulation):
     Base class for all xray simulatuons.
 
     Args:
-        S (Structure): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
 
     Keyword Args:
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
     Attributes:
-        S (Structure): sample structure to calculate simulations on
-        force_recalc (boolean): force recalculation of results
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
-        polarizations (dict): polarization states and according names
-        pol_in_state (int): incoming polarization state as defined in polarizations dict
-        pol_out_state (int): outgoing polarization state as defined in polarizations dict
-        pol_in (float): incoming polarization factor (can be a complex ndarray)
-        pol_out (float): outgoing polarization factor (can be a complex ndarray)
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        polarizations (dict): polarization states and according names.
+        pol_in_state (int): incoming polarization state as defined in polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in polarizations dict.
+        pol_in (float): incoming polarization factor (can be a complex ndarray).
+        pol_out (float): outgoing polarization factor (can be a complex ndarray).
 
     """
 
@@ -255,29 +255,29 @@ class XrayKin(Xray):
     Kinetic Xray simulations
 
     Args:
-        S (Structure): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
 
     Keyword Args:
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
     Attributes:
-        S (Structure): sample structure to calculate simulations on
-        force_recalc (boolean): force recalculation of results
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
-        polarizations (dict): polarization states and according names
-        pol_in_state (int): incoming polarization state as defined in polarizations dict
-        pol_out_state (int): outgoing polarization state as defined in polarizations dict
-        pol_in (float): incoming polarization factor (can be a complex ndarray)
-        pol_out (float): outgoing polarization factor (can be a complex ndarray)
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        polarizations (dict): polarization states and according names.
+        pol_in_state (int): incoming polarization state as defined in polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in polarizations dict.
+        pol_in (float): incoming polarization factor (can be a complex ndarray).
+        pol_out (float): outgoing polarization factor (can be a complex ndarray).
 
     """
 
@@ -547,31 +547,31 @@ class XrayDyn(Xray):
     Dynamical Xray simulations
 
     Args:
-        S (Structure): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
 
     Keyword Args:
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
     Attributes:
-        S (Structure): sample structure to calculate simulations on
-        force_recalc (boolean): force recalculation of results
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
-        polarizations (dict): polarization states and according names
-        pol_in_state (int): incoming polarization state as defined in polarizations dict
-        pol_out_state (int): outgoing polarization state as defined in polarizations dict
-        pol_in (float): incoming polarization factor (can be a complex ndarray)
-        pol_out (float): outgoing polarization factor (can be a complex ndarray)
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        polarizations (dict): polarization states and according names.
+        pol_in_state (int): incoming polarization state as defined in polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in polarizations dict.
+        pol_in (float): incoming polarization factor (can be a complex ndarray).
+        pol_out (float): outgoing polarization factor (can be a complex ndarray).
         last_atom_ref_trans_matrices (list): remember last result of
-           atom ref_trans_matrices to speed up calculation
+           atom ref_trans_matrices to speed up calculation.
 
     """
 
@@ -1245,31 +1245,31 @@ class XrayDynMag(Xray):
     - Stéphane Grenier, stephane.grenier@neel.cnrs.fr
 
     Args:
-        S (Structure): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
 
     Keyword Args:
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
     Attributes:
-        S (Structure): sample structure to calculate simulations on
-        force_recalc (boolean): force recalculation of results
-        save_data (boolean): true to save simulation results
-        cache_dir (str): path to cached data
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
         disp_messages (boolean): true to display messages from within the
-            simulations
-        progress_bar (boolean): enable tqdm progress bar
-        polarizations (dict): polarization states and according names
-        pol_in_state (int): incoming polarization state as defined in polarizations dict
-        pol_out_state (int): outgoing polarization state as defined in polarizations dict
-        pol_in (float): incoming polarization factor (can be a complex ndarray)
-        pol_out (float): outgoing polarization factor (can be a complex ndarray)
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        polarizations (dict): polarization states and according names.
+        pol_in_state (int): incoming polarization state as defined in polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in polarizations dict.
+        pol_in (float): incoming polarization factor (can be a complex ndarray).
+        pol_out (float): outgoing polarization factor (can be a complex ndarray).
         last_atom_ref_trans_matrices (list): remember last result of
-           atom ref_trans_matrices to speed up calculation
+           atom ref_trans_matrices to speed up calculation.
 
     References:
 
