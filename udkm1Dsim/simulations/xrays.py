@@ -119,7 +119,11 @@ class Xray(Simulation):
     def set_polarization(self, pol_in_state, pol_out_state):
         """set_polarization
 
-        Sets the incoming and analyzer (outgoing) polarization
+        Sets the incoming and analyzer (outgoing) polarization.
+
+        Args:
+            pol_in_state (int): incoming polarization state id.
+            pol_out_state (int): outgoing polarization state id.
 
         """
         self.set_incoming_polarization(pol_in_state)
@@ -128,10 +132,18 @@ class Xray(Simulation):
     def get_hash(self, strain_vectors, **kwargs):
         """get_hash
 
-        Returns a unique hash given by the energy :math:`E`,
+        Calculates an unique hash given by the energy :math:`E`,
         :math:`q_z` range, polarization states and the strain vectors as
         well as the sample structure hash for relevant xray parameters.
         Optionally, part of the strain_map is used.
+
+        Args:
+            strain_vectors (dict{ndarray[float]}): reduced strains per unique
+                layer.
+            **kwargs (ndarray[float]): spatio-temporal strain profile.
+
+        Returns:
+            hash (str): unique hash.
 
         """
         param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy, strain_vectors]
@@ -145,38 +157,42 @@ class Xray(Simulation):
         return self.S.get_hash(types='xray') + '_' + make_hash_md5(param)
 
     def get_polarization_factor(self, theta):
-        """get_polarization_factor
+        r"""get_polarization_factor
 
-        Returns the polarization factor :math:`P(\\vartheta)` for a
-        given incident angle :math:`\\vartheta` for the case of
-        s-polarization (pol = 0), or p-polarization (pol = 1), or
-        unpolarized X-rays (pol = 0.5):
+        Calculates the polarization factor :math:`P(\vartheta)` for a given
+        incident angle :math:`\vartheta` for the case of `s`-polarization
+        (pol = 0), or `p`-polarization (pol = 1), or unpolarized X-rays
+        (pol = 0.5):
 
         .. math::
 
-            P(\\vartheta) = \sqrt{(1-\mbox{pol}) + \mbox{pol} \cdot \cos(2\\vartheta)}
+            P(\vartheta) = \sqrt{(1-\mbox{pol}) + \mbox{pol} \cdot \cos(2\vartheta)}
+
+        Args:
+            theta (ndarray[float]): incidence angle.
+
+        Returns:
+            P (ndarray[float]): polarization factor.
 
         """
-
         return np.sqrt((1-self.pol_in) + self.pol_in*np.cos(2*theta)**2)
 
     def update_experiment(self, caller):
-        """update experimental parameters
+        r"""update_experiment
 
         Recalculate energy, wavelength, and wavevector as well as theta
         and the scattering vector in case any of these has changed.
 
         .. math::
 
-            \lambda = \\frac {hc} {E}
+            \lambda & = \frac{hc}{E} \\
+            E & = \frac{hc}{\lambda} \\
+            k & = \frac{2\pi}{\lambda} \\
+            \vartheta & = \arcsin{\frac{\lambda q_z}{4\pi}} \\
+            q_z & = 2k \sin{\vartheta}
 
-            E = \\frac {hc} {\lambda}
-
-            k = \\frac {2\pi} {\lambda}
-
-            \\vartheta = \\arcsin{ \\frac{\lambda q_z}{4\pi}}
-
-            q_z = 2k\\sin{\\vartheta}
+        Args:
+            caller (str): name of calling method.
 
         """
         from scipy import constants
@@ -290,6 +306,10 @@ class XrayKin(Xray):
         pol_in (float): incoming polarization factor (can be a complex ndarray).
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
 
+    References:
+        .. [7] B. E. Warren (1990). *X-ray diffraction*.
+           New York: Dover Publications
+
     """
 
     def __init__(self, S, force_recalc, **kwargs):
@@ -307,8 +327,10 @@ class XrayKin(Xray):
         Sets the incoming polarization factor for sigma, pi, and unpolarized
         polarization.
 
-        """
+        Args:
+            pol_in_state (int): incoming polarization state id.
 
+        """
         self.pol_in_state = pol_in_state
         if (self.pol_in_state == 1):  # circ +
             self.disp_message('incoming polarizations {:s} not implemented'.format(
@@ -336,8 +358,10 @@ class XrayKin(Xray):
 
         For kinematical X-ray simulation only "no analyzer polarization" is allowed.
 
-        """
+        Args:
+            pol_out_state (int): outgoing polarization state id.
 
+        """
         self.pol_out_state = pol_out_state
         if self.pol_out_state == 0:
             self.disp_message('analyzer polarizations set to: {:s}'.format(
@@ -353,9 +377,17 @@ class XrayKin(Xray):
         Returns the energy- and angle-dependent atomic form factors
         :math: `f(q_z, E)` of all atoms in the unit cell as a vector.
 
+        Args:
+            energy (float, Quantity): photon energy.
+            qz (ndarray[float, Quantity]): scattering vectors.
+            uc (UnitCell): unit cell object.
+
+        Returns:
+            f (ndarray[complex]): unit cell atomic form factors.
+
         """
         if (not np.isscalar(energy)) and (not isinstance(energy, object)):
-            raise TypeError('Only scalars or pint quantities for the energy are allowd!')
+            raise TypeError('Only scalars or Quantities are allowed for the energy!')
         f = np.zeros([uc.num_atoms, len(qz)], dtype=complex)
         for i in range(uc.num_atoms):
             f[i, :] = uc.atoms[i][0].get_cm_atomic_form_factor(energy, qz)
@@ -365,16 +397,26 @@ class XrayKin(Xray):
     def get_uc_structure_factor(self, energy, qz, uc, strain=0):
         """get_uc_structure_factor
 
-        Returns the energy-, angle-, and strain-dependent structure
-        factor .. math: `S(E,q_z,\epsilon)` of the unit cell
+        Calculates the energy-, angle-, and strain-dependent structure factor
+        .. math: `S(E,q_z,\epsilon)` of the unit cell:
 
         .. math::
 
             S(E,q_z,\epsilon) = \sum_i^N f_i \, \exp(-i q_z z_i(\epsilon))
 
+        Args:
+            energy (float, Quantity): photon energy.
+            qz (ndarray[float, Quantity]): scattering vectors.
+            uc (UnitCell): unit cell object.
+            strain (float, optional): strain of the unit cell 0 .. 1.
+                Defaults to 0.
+
+        Returns:
+            S (ndarray[complex]): unit cell structure factor.
+
         """
         if (not np.isscalar(energy)) and (not isinstance(energy, object)):
-            raise TypeError('Only scalars or pint quantities for the energy are allowd!')
+            raise TypeError('Only scalars or Quantities for the energy are allowd!')
 
         if np.isscalar(qz):
             qz = np.array([qz])
@@ -387,9 +429,18 @@ class XrayKin(Xray):
     def homogeneous_reflectivity(self, strains=0):
         """homogeneous_reflectivity
 
-        Returns the reflectivity :math:`R = E_p^t\,(E_p^t)^*` of a
+        Calculates the reflectivity :math:`R = E_p^t\,(E_p^t)^*` of a
         homogeneous sample structure as well as the reflected field
         :math:`E_p^N` of all substructures.
+
+        Args:
+            strains (ndarray[float], optional): strains of each sub-structure
+                0 .. 1. Defaults to 0.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - homogeneous reflectivity.
+            - *A (ndarray[complex])* - reflected fields of substructures.
 
         """
         if strains == 0:
@@ -410,28 +461,26 @@ class XrayKin(Xray):
 
     @u.wraps((None, None), (None, None, 'eV', 'm**-1', 'rad', None), strict=False)
     def homogeneous_reflected_field(self, S, energy, qz, theta, strains=0):
-        """homogeneous_reflected_field
+        r"""homogeneous_reflected_field
 
-        Calculates the reflected field :math:`E_p^t` of the whole
-        sample structure as well as for each sub structure
-        (:math:`E_p^N`). The reflected wave field :math:`E_p` from a
-        single layer of unit cells at the detector is calculated as
-        follows:[Ref. 1]
+        Calculates the reflected field :math:`E_p^t` of the whole sample
+        structure as well as for each sub-structure (:math:`E_p^N`). The
+        reflected wave field :math:`E_p` from a single layer of unit cells at
+        the detector is calculated according to  Ref. [7]_:
 
         .. math::
 
-            E_p = \\frac{i}{\\varepsilon_0}\\frac{e^2}{m_e c_0^2}
-                  \\frac{P(\\vartheta)  S(E,q_z,\\epsilon)}{A q_z}
+            E_p = \frac{i}{\varepsilon_0}\frac{e^2}{m_e c_0^2}
+                  \frac{P(\vartheta)  S(E,q_z,\epsilon)}{A q_z}
 
-        For the case of :math:`N` similar planes of unit cells one can
-        write:
+        For the case of :math:`N` similar planes of unit cells one can write:
 
         .. math::
 
             E_p^N = \sum_{n=0}^{N-1} E_p \exp(i q_z z n )
 
-        where :math:`z` is the distance between the planes (c-axis).
-        The above equation can be simplified to
+        where :math:`z` is the distance between the planes (c-axis). The above
+        equation can be simplified to:
 
         .. math::
 
@@ -441,19 +490,32 @@ class XrayKin(Xray):
 
         .. math::
 
-            \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(i q_z z n)
-           = \\frac{1- \exp(i q_z  z  N)}{1- \exp(i q_z z)}
+            \psi(q_z,z,N) & = \sum_{n=0}^{N-1} \exp(i q_z z n) \\
+              & = \frac{1- \exp(i q_z  z  N)}{1- \exp(i q_z z)}
 
-        The total reflected wave field of all :math:`i = 1\ldots M`
-        homogeneous layers (:math:`E_p^t`) is the phase-correct
-        summation of all individual :math:`E_p^{N,i}`:
+        The total reflected wave field of all :math:`i = 1\ldots M` homogeneous
+        layers (:math:`E_p^t`) is the phase-correct summation of all individual
+        :math:`E_p^{N,i}`:
 
         .. math::
 
             E_p^t = \sum_{i=1}^M E_p^{N,i} \exp(i q_z Z_i)
 
-        where :math:`Z_i = \sum_{j=1}^{i-1} N_j z_j` is the distance
-        of the i-th layer from the surface.
+        where :math:`Z_i = \sum_{j=1}^{i-1} N_j z_j` is the distance of the
+        :math:`i`-th layer from the surface.
+
+        Args:
+            S (Structure, UnitCell): structure or sub-structure to calculate on.
+            energy (float, Quantity): photon energy.
+            qz (ndarray[float, Quantity]): scattering vectors.
+            theta (ndarray[float, Quantity]): scattering incidence angle.
+            strains (ndarray[float], optional): strains of each sub-structure
+                0 .. 1. Defaults to 0.
+
+        Returns:
+            (tuple):
+            - *Ept (ndarray[complex])* - reflected field.
+            - *A (ndarray[complex])* - reflected fields of substructures.
 
         """
         # if no strains are given we assume no strain (1)
@@ -510,15 +572,23 @@ class XrayKin(Xray):
 
     @u.wraps(None, (None, 'm**-1', 'm', None), strict=False)
     def get_interference_function(self, qz, z, N):
-        """get_interference_function
+        r"""get_interference_function
 
-        Calculates the interferece function for :math:`N`
-        repetitions of the structure with the length :math:`z`:
+        Calculates the interferece function for :math:`N` repetitions of the
+        structure with the length :math:`z`:
 
         .. math::
 
-            \psi(q_z,z,N) = \sum_{n=0}^{N-1} \exp(i q_z z n)
-             = \\frac{1- \exp(i q_z z N)}{1- \exp(i q_z z)}
+            \psi(q_z,z,N) & = \sum_{n=0}^{N-1} \exp(i q_z z n) \\
+              & = \frac{1- \exp(i q_z z N)}{1- \exp(i q_z z)}
+
+        Args:
+            qz (ndarray[float, Quantity]): scattering vectors.
+            z (float): thickness/length of the structure.
+            N (int): repetitions of the structure.
+
+        Returns:
+            psi (ndarray[complex]): interference function.
 
         """
         psi = (1-np.exp(1j*qz*z*N)) / (1 - np.exp(1j*qz*z))
@@ -526,22 +596,33 @@ class XrayKin(Xray):
 
     @u.wraps(None, (None, 'eV', 'm**-1', 'rad', None, None), strict=False)
     def get_Ep(self, energy, qz, theta, uc, strain):
-        """get_Ep
+        r"""get_Ep
 
         Calculates the reflected field :math:`E_p` for one unit cell
         with a given strain :math:`\epsilon`:
 
         .. math::
 
-            E_p = \\frac{i}{\\varepsilon_0} \\frac{e^2}{m_e c_0^2}
-                  \\frac{P S(E,q_z,\epsilon)}{A q_z}
+            E_p = \frac{i}{\varepsilon_0} \frac{e^2}{m_e c_0^2}
+                  \frac{P S(E,q_z,\epsilon)}{A q_z}
 
         with :math:`e` as electron charge, :math:`m_e` as electron
         mass, :math:`c_0` as vacuum light velocity,
-        :math:`\\varepsilon_0` as vacuum permittivity,
+        :math:`\varepsilon_0` as vacuum permittivity,
         :math:`P` as polarization factor and :math:`S(E,q_z,\sigma)`
         as energy-, angle-, and strain-dependent unit cell structure
         factor.
+
+        Args:
+            energy (float, Quantity): photon energy.
+            qz (ndarray[float, Quantity]): scattering vectors.
+            theta (ndarray[float, Quantity]): scattering incidence angle.
+            uc (UnitCell): unit cell object.
+            strain (float, optional): strain of the unit cell 0 .. 1.
+                Defaults to 0.
+
+        Returns:
+            Ep (ndarray[complex]): reflected field.
 
         """
         import scipy.constants as c
@@ -1240,7 +1321,7 @@ class XrayDyn(Xray):
 class XrayDynMag(Xray):
     """XrayDynMag
 
-    Dynamical magnetic Xray simulations adapted from Elzo et.al. [7]_.
+    Dynamical magnetic Xray simulations adapted from Elzo et.al. [8]_.
     Initially realized in `Project Dyna
     <http://neel.cnrs.fr/spip.php?rubrique1008>`_.
 
@@ -1300,7 +1381,7 @@ class XrayDynMag(Xray):
 
     References:
 
-        .. [7] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
+        .. [8] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
            Ramos, H. C. N. Tolentino, J. M. Tonnerre & N. Jaouen, *X-ray
            resonant magnetic reflectivity of stratified magnetic structures:
            Eigenwave formalism and application to a W/Fe/W trilayer*,
