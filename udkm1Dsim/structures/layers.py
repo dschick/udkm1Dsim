@@ -767,7 +767,7 @@ class UnitCell(Layer):
     def add_atom(self, atom, position):
         """add_atom
 
-        Adds an atomBase/atomMixed at a relative position of the unit cell.
+        Adds an AtomBase/AtomMixed at a relative position of the unit cell.
 
         Sort the list of atoms by the position at zero strain.
 
@@ -822,7 +822,7 @@ class UnitCell(Layer):
     def add_multiple_atoms(self, atom, position, Nb):
         """add_multiple_atoms
 
-        Adds multiple atomBase/atomMixed at a relative position of the
+        Adds multiple AtomBase/AtomMixed at a relative position of the
         unit cell.
 
         Args:
