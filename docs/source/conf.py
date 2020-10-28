@@ -20,8 +20,8 @@ sys.path.insert(0, os.path.abspath('../../'))
 # -- Project information -----------------------------------------------------
 
 project = 'udkm1Dsim'
-copyright = '2019, Daniel Schick, et.al.'
-author = 'Daniel Schick, et.al.'
+copyright = '2020, Daniel Schick'
+author = 'Daniel Schick'
 
 # The short X.Y version
 version = '0.1.4'
@@ -33,7 +33,7 @@ release = '0.1.4'
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
-# needs_sphinx = '1.0'
+needs_sphinx = '3.2'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
