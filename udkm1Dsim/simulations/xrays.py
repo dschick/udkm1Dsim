@@ -40,7 +40,7 @@ r_0 = constants.physical_constants['classical electron radius'][0]
 
 
 class Xray(Simulation):
-    """Xray
+    r"""Xray
 
     Base class for all xray simulations.
 
@@ -269,7 +269,7 @@ class Xray(Simulation):
 
 
 class XrayKin(Xray):
-    """XrayKin
+    r"""XrayKin
 
     Kinetic Xray simulations.
 
@@ -634,7 +634,7 @@ class XrayKin(Xray):
 
 
 class XrayDyn(Xray):
-    """XrayDyn
+    r"""XrayDyn
 
     Dynamical Xray simulations.
 
@@ -1319,7 +1319,7 @@ class XrayDyn(Xray):
 
 
 class XrayDynMag(Xray):
-    """XrayDynMag
+    r"""XrayDynMag
 
     Dynamical magnetic Xray simulations adapted from Elzo et.al. [8]_.
     Initially realized in `Project Dyna
