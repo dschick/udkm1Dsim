@@ -1,9 +1,9 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='udkm1Dsim',
     version='0.1.4',
-    packages=['udkm1Dsim'],
+    packages=find_packages(),
     package_data={
         'udkm1Dsim': ['parameters/atomic_form_factors/chantler/*.cf',
                       'parameters/atomic_form_factors/chantler/*.md',

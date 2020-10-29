@@ -1,86 +1,98 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# This file is part of the udkm1Dsimpy module.
+# The MIT License (MIT)
+# Copyright (c) 2020 Daniel Schick
 #
-# udkm1Dsimpy is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, see <http://www.gnu.org/licenses/>.
-#
-# Copyright (C) 2019 Daniel Schick
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+# OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+# OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ["Layer", "AmorphousLayer", "UnitCell"]
+__all__ = ['Layer', 'AmorphousLayer', 'UnitCell']
 
-__docformat__ = "restructuredtext"
+__docformat__ = 'restructuredtext'
 
-import numpy as np
 from .atoms import Atom, AtomMixed
+from .. import u, Q_
+import numpy as np
 from inspect import isfunction
 from sympy import integrate, Symbol
 from sympy.utilities.lambdify import lambdify
 from tabulate import tabulate
-from . import u, Q_
 
 
 class Layer:
     """Layer
 
-    The layer class hold different structural properties of real
-    physical layers, such as amorphous layers and unit cells.
+    The layer class hold different structural properties of real physical
+    layers, such as amorphous layers and unit cells.
 
     Args:
-        id (str): id of the layer
-        name (str): name of the layer
+        id (str): id of the layer.
+        name (str): name of the layer.
 
     Keyword Args:
-        deb_wal_fac (float): Debye Waller factor
-        sound_vel (float): sound velocity
-        phonon_damping (float): phonon damping
-        roughness (float): gaussian width of the top roughness of a layer
-        opt_pen_depth (float): optical penetration depth
-        opt_ref_index (float): refractive index
-        opt_ref_index_per_strain (float): change of refractive index per
-           strain
-        heat_capacity (float): heat capacity
-        therm_cond (float): thermal conductivity
-        lin_therm_exp (float): linear thermal expansion
-        sub_system_coupling (float): sub-system coupling
+        roughness (float): gaussian width of the top roughness of a layer.
+        deb_wal_fac (float): Debye Waller factor.
+        sound_vel (float): sound velocity.
+        phonon_damping (float): phonon damping.
+        opt_pen_depth (float): optical penetration depth.
+        opt_ref_index (float): refractive index.
+        opt_ref_index_per_strain (float): change of refractive index per strain.
+        heat_capacity (float): heat capacity.
+        therm_cond (float): thermal conductivity.
+        lin_therm_exp (float): linear thermal expansion.
+        sub_system_coupling (float): sub-system coupling.
 
     Attributes:
-        id (str): id of the layer
-        name (str): name of the layer
-        thickness (float): thickness of the layer
-        roughness (float): gaussian width of the top roughness of a layer
-        spring_const (ndarray[float]): spring constant of the layer
-           [kg/s²] and higher orders
+        id (str): id of the layer.
+        name (str): name of the layer.
+        thickness (float): thickness of the layer [m].
+        mass (float): mass of the layer [kg].
+        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² [kg].
+        density (float): density of the layer [kg/m³].
+        area (float): area of layer [m²].
+        volume (float): volume of layer [m³].
+        roughness (float): gaussian width of the top roughness of a layer [m].
+        deb_wal_fac (float): Debye-Waller factor [m²].
+        sound_vel (float): longitudinal sound velocity in the layer [m/s].
+        spring_const (ndarray[float]): spring constant of the layer [kg/s²]
+            and higher orders.
+        phonon_damping (float): damping constant of phonon propagation [kg/s].
+        opt_pen_depth (float): optical penetration depth of the layer [m].
         opt_ref_index (ndarray[float]): optical refractive index - real
-           and imagenary part :math:`n + i\kappa`
+           and imagenary part :math:`n + i\kappa`.
         opt_ref_index_per_strain (ndarray[float]): optical refractive
            index change per strain - real and imagenary part
-           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`
+           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`.
         therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
-           conductivity [W/(m K)]
-        lin_therm_exp (list[@lambda]): list of HANDLES T-dependent
-           linear thermal expansion coefficient (relative)
-        int_lin_therm_exp (list[@lambda]): list of HANDLES T-dependent
-           integrated linear thermal expansion coefficient
-        heat_capacity (list[@lambda]): list of HANDLES T-dependent heat
-           capacity function [J/(kg K)]
-        int_heat_capacity (list[@lambda]): list of HANDLES T-dependent
-           integrated heat capacity function
-        sub_system_coupling (list[@lambda]): list of HANDLES of coupling
-           functions of different subsystems [W/m³]
+           conductivity [W/(m K)].
+        lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
+           expansion coefficient (relative).
+        int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
+           linear thermal expansion coefficient.
+        heat_capacity (list[@lambda]): list of T-dependent heat capacity
+           function [J/(kg K)].
+        int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
+           capacity function.
+        sub_system_coupling (list[@lambda]): list of of coupling functions of
+           different subsystems [W/m³].
         num_sub_systems (int): number of subsystems for heat and phonons
-           (electrons, lattice, spins, ...)
+           (electrons, lattice, spins, ...).
 
     """
 
@@ -96,10 +108,10 @@ class Layer:
         self.opt_ref_index = kwargs.get('opt_ref_index', 0)
         self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0)
         self.heat_capacity = kwargs.get('heat_capacity', 0)
-        self.therm_cond, self.therm_cond_str = self.check_cell_array_input(
+        self.therm_cond, self.therm_cond_str = self.check_input(
                 kwargs.get('therm_cond', 0))
         self.lin_therm_exp = kwargs.get('lin_therm_exp', 0)
-        self.sub_system_coupling, self.sub_system_coupling_str = self.check_cell_array_input(
+        self.sub_system_coupling, self.sub_system_coupling_str = self.check_input(
                 kwargs.get('sub_system_coupling', 0))
 
         if len(self.heat_capacity) == len(self.therm_cond) \
@@ -133,16 +145,24 @@ class Layer:
 
         return output
 
-    def check_cell_array_input(self, inputs):
-        """ check_cell_array_input
+    def check_input(self, inputs):
+        """check_input
 
-        Checks the input for inputs which are cell arrays of function
-        handles, such as the heat capacity which is a cell array of N
-        function handles.
+        Checks the input and create a list of function handle strings with T as
+        argument. Inputs can be strings, floats, ints, or pint quantaties.
+
+        Args:
+            inputs (list[str, float, Quantity]): list of strings, floats, or
+                Pint quantities.
+
+        Returns:
+            (tuple):
+            - *output (list[@lambda])* - list of lambda functions.
+            - *output_strs (list[str])* - list of string-representations.
 
         """
         output = []
-        outputStrs = []
+        output_strs = []
         # if the input is not a list, we convert it to one
         if not isinstance(inputs, list):
             inputs = [inputs]
@@ -151,27 +171,27 @@ class Layer:
             if isfunction(input):
                 raise ValueError('Please use string representation of function!')
                 output.append(input)
-                outputStrs.append('no str representation available')
+                output_strs.append('no str representation available')
             elif isinstance(input, str):
                 try:
                     output.append(eval(input))
-                    outputStrs.append(input)
+                    output_strs.append(input)
                 except Exception as e:
-                    print('String input for unit cell property ' + input + ' \
+                    print('String input for layer property ' + input + ' \
                         cannot be converted to function handle!')
                     print(e)
             elif isinstance(input, (int, float)):
                 output.append(eval('lambda T: {:f}'.format(input)))
-                outputStrs.append('lambda T: {:f}'.format(input))
+                output_strs.append('lambda T: {:f}'.format(input))
             elif isinstance(input, object):
                 output.append(eval('lambda T: {:f}'.format(input.to_base_units().magnitude)))
-                outputStrs.append('lambda T: {:f}'.format(input.to_base_units().magnitude))
+                output_strs.append('lambda T: {:f}'.format(input.to_base_units().magnitude))
             else:
-                raise ValueError('Unit cell property input has to be a single or '
-                                 'cell array of numerics, function handles or strings which can be'
-                                 'converted into a function handle!')
+                raise ValueError('Layer property input has to be a single or '
+                                 'list of numerics, function handle strings '
+                                 'which can be converted into a lambda function!')
 
-        return(output, outputStrs)
+        return output, output_strs
 
     def get_property_dict(self, **kwargs):
         """get_property_dict
@@ -179,6 +199,12 @@ class Layer:
         Returns a dictionary with all parameters. objects or dicts and
         objects are converted to strings. if a type is given, only these
         properties are returned.
+
+        Args:
+            **kwargs (list[str]): types of requested properties.
+
+        Returns:
+            R (dict): dictionary with requested properties.
 
         """
         # initialize input parser and define defaults and validators
@@ -212,6 +238,42 @@ class Layer:
 
         return R
 
+    def get_acoustic_impedance(self):
+        """get_acoustic_impedance
+
+        Returns:
+            Z (float): acoustic impedance.
+
+        """
+        Z = np.sqrt(self.spring_const[0] * self.mass/self.area**2)
+        return Z
+
+    def set_ho_spring_constants(self, HO):
+        """set_ho_spring_constants
+
+        Set the higher orders of the spring constant for anharmonic
+        phonon simulations.
+
+        Args:
+            HO (ndarray[float]): higher order spring constants.
+
+        """
+        # reset old higher order spring constants
+        self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
+        self.spring_const = np.hstack((self.spring_const, HO))
+
+    def set_opt_pen_depth_from_ref_index(self, wavelength):
+        """set_opt_pen_depth_from_ref_index
+
+        Set the optical penetration depth from the optical referactive index
+        for a given wavelength.
+
+        Args:
+            wavelength (Quantity): wavelength as Pint Quantitiy.
+
+        """
+        self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
+
     def calc_spring_const(self):
         """calc_spring_const
 
@@ -225,34 +287,102 @@ class Layer:
 
     @property
     def thickness(self):
-        """float: out-of-plane thickness [m]"""
         return Q_(self._thickness, u.meter).to('nm')
 
     @thickness.setter
     def thickness(self, thickness):
-        """set.thickness"""
         self._thickness = thickness.to_base_units().magnitude
 
     @property
+    def mass(self):
+        return Q_(self._mass, u.kg)
+
+    @mass.setter
+    def mass(self, mass):
+        self._mass = mass.to_base_units().magnitude
+
+    @property
+    def mass_unit_area(self):
+        return Q_(self._mass_unit_area, u.kg)
+
+    @mass_unit_area.setter
+    def mass_unit_area(self, mass_unit_area):
+        self._mass_unit_area = mass_unit_area.to_base_units().magnitude
+
+    @property
+    def density(self):
+        return Q_(self._density, u.kg/u.m**3)
+
+    @density.setter
+    def density(self, density):
+        self._density = density.to_base_units().magnitude
+
+    @property
+    def area(self):
+        return Q_(self._area, u.m**2)
+
+    @area.setter
+    def area(self, area):
+        self._area = area.to_base_units().magnitude
+
+    @property
+    def volume(self):
+        return Q_(self._volume, u.m**3)
+
+    @volume.setter
+    def volume(self, volume):
+        self._volume = volume.to_base_units().magnitude
+
+    @property
+    def deb_wal_fac(self):
+        return Q_(self._deb_wal_fac, u.m**2)
+
+    @deb_wal_fac.setter
+    def deb_wal_fac(self, deb_wal_fac):
+        self._deb_wal_fac = deb_wal_fac.to_base_units().magnitude
+
+    @property
+    def sound_vel(self):
+        return Q_(self._sound_vel, u.m/u.s)
+
+    @sound_vel.setter
+    def sound_vel(self, sound_vel):
+        # spring constants are (re)calculated on setting the sound velocity
+        self._sound_vel = sound_vel.to_base_units().magnitude
+        self.calc_spring_const()
+
+    @property
+    def phonon_damping(self):
+        return Q_(self._phonon_damping, u.kg/u.s)
+
+    @phonon_damping.setter
+    def phonon_damping(self, phonon_damping):
+        self._phonon_damping = phonon_damping.to_base_units().magnitude
+
+    @property
+    def opt_pen_depth(self):
+        return Q_(self._opt_pen_depth, u.meter).to('nanometer')
+
+    @opt_pen_depth.setter
+    def opt_pen_depth(self, opt_pen_depth):
+        self._opt_pen_depth = opt_pen_depth.to_base_units().magnitude
+
+    @property
+    def roughness(self):
+        return Q_(self._roughness, u.meter).to('nm')
+
+    @roughness.setter
+    def roughness(self, roughness):
+        self._roughness = roughness.to_base_units().magnitude
+
+    @property
     def heat_capacity(self):
-        """get heat_capacity
-
-        Returns the temperature-dependent heat capactity function.
-
-        """
-
         return self._heat_capacity
 
     @heat_capacity.setter
     def heat_capacity(self, heat_capacity):
-        """set heat_capacity
-
-        Set the heat_capacity (and its string representation)
-        and calls setting its anti-derivative.
-
-        """
-
-        self._heat_capacity, self.heat_capacity_str = self.check_cell_array_input(heat_capacity)
+        # (re)calculate the integrated heat capacity
+        self._heat_capacity, self.heat_capacity_str = self.check_input(heat_capacity)
         # delete last anti-derivative
         self._int_heat_capacity = None
         # recalculate the anti-derivative
@@ -260,13 +390,6 @@ class Layer:
 
     @property
     def int_heat_capacity(self):
-        """get int_heat_capacity
-
-        Returns the anti-derrivative of the temperature-dependent heat
-        :math:`c(T)` capacity function. If the int_heat_capacity
-        property is not set, the symbolic integration is performed.
-
-        """
         if hasattr(self, '_int_heat_capacity') and isinstance(self._int_heat_capacity, list):
             return self._int_heat_capacity
         else:
@@ -291,35 +414,17 @@ class Layer:
 
     @int_heat_capacity.setter
     def int_heat_capacity(self, int_heat_capacity):
-        """set int_heat_capacity
-
-        Set the integrated heat capacity manually when no sympy is
-        installed.
-
-        """
-        self._int_heat_capacity, self.int_heat_capacity_str = self.check_cell_array_input(
+        self._int_heat_capacity, self.int_heat_capacity_str = self.check_input(
                 int_heat_capacity)
 
     @property
     def lin_therm_exp(self):
-        """get lin_therm_exp
-
-        Returns the temperature-dependent linear thermal expansion function.
-
-        """
-
         return self._lin_therm_exp
 
     @lin_therm_exp.setter
     def lin_therm_exp(self, lin_therm_exp):
-        """set lin_therm_exp
-
-        Set the linear thermal expansion coefficient (and string representation)
-        and calls setting its anti-derivative.
-
-        """
-
-        self._lin_therm_exp, self.lin_therm_exp_str = self.check_cell_array_input(lin_therm_exp)
+        # (re)calculate the integrated linear thermal expansion coefficient
+        self._lin_therm_exp, self.lin_therm_exp_str = self.check_input(lin_therm_exp)
         # delete last anti-derivative
         self._int_lin_therm_exp = None
         # recalculate the anti-derivative
@@ -327,15 +432,6 @@ class Layer:
 
     @property
     def int_lin_therm_exp(self):
-        """get int_lin_therm_exp
-
-        Returns the anti-derrivative of the integrated
-        temperature-dependent linear thermal expansion function. If the
-        int_lin_therm_exp property is not set, the symbolic integration
-        is performed.
-
-        """
-
         self._int_lin_therm_exp = []
         self.int_lin_therm_exp_str = []
         try:
@@ -357,151 +453,8 @@ class Layer:
 
     @int_lin_therm_exp.setter
     def int_lin_therm_exp(self, int_lin_therm_exp):
-        """set int_lin_therm_exp
-
-        Set the integrated linear thermal expansion coefficient manually
-        when no sympy installed.
-
-        """
-        self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_cell_array_input(
+        self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_input(
                 int_lin_therm_exp)
-
-    def get_acoustic_impedance(self):
-        """get_acoustic_impedance"""
-        Z = np.sqrt(self.spring_const[0] * self.mass/self.area**2)
-        return Z
-
-    def set_ho_spring_constants(self, HO):
-        """set_ho_spring_constants
-
-        Set the higher orders of the spring constant for anharmonic
-        phonon simulations.
-
-        """
-        # reset old higher order spring constants
-        self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
-        self.spring_const = np.hstack((self.spring_const, HO))
-
-    def set_opt_pen_depth_from_ref_index(self, wavelength):
-        """set_opt_pen_depth_from_ref_index
-
-        Set the optical penetration depth from the optical referactive index
-        for a given wavelength
-
-        """
-        self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
-
-    @property
-    def mass(self):
-        """float: mass of unit cell normalized to area of 1 Å² [kg]"""
-        return Q_(self._mass, u.kg)
-
-    @mass.setter
-    def mass(self, mass):
-        """set.mass"""
-        self._mass = mass.to_base_units().magnitude
-
-    @property
-    def mass_unit_area(self):
-        """float: mass of layer normalized to unit area of 1 Å² [kg]"""
-        return Q_(self._mass_unit_area, u.kg)
-
-    @mass_unit_area.setter
-    def mass_unit_area(self, mass_unit_area):
-        """set.mass"""
-        self._mass_unit_area = mass_unit_area.to_base_units().magnitude
-
-    @property
-    def density(self):
-        """float: density of the unitCell [kg/m³]"""
-        return Q_(self._density, u.kg/u.m**3)
-
-    @density.setter
-    def density(self, density):
-        """set.density"""
-        self._density = density.to_base_units().magnitude
-
-    @property
-    def area(self):
-        """
-        float: area of epitaxial unit cells need for normation for
-        correct intensities) [m²]
-
-        """
-        return Q_(self._area, u.m**2)
-
-    @area.setter
-    def area(self, area):
-        """set.area"""
-        self._area = area.to_base_units().magnitude
-
-    @property
-    def volume(self):
-        """float: volume of unit cell [m³]"""
-        return Q_(self._volume, u.m**3)
-
-    @volume.setter
-    def volume(self, volume):
-        """set.volume"""
-        self._volume = volume.to_base_units().magnitude
-
-    @property
-    def deb_wal_fac(self):
-        """float: Debye-Waller factor [m²]"""
-        return Q_(self._deb_wal_fac, u.m**2)
-
-    @deb_wal_fac.setter
-    def deb_wal_fac(self, deb_wal_fac):
-        """set.deb_wal_fac"""
-        self._deb_wal_fac = deb_wal_fac.to_base_units().magnitude
-
-    @property
-    def sound_vel(self):
-        """float: sound velocity in the unit cell [m/s]"""
-        return Q_(self._sound_vel, u.m/u.s)
-
-    @sound_vel.setter
-    def sound_vel(self, sound_vel):
-        """set.sound_vel
-        If the sound velocity is set, the spring constant is
-        (re)calculated.
-        """
-        self._sound_vel = sound_vel.to_base_units().magnitude
-        self.calc_spring_const()
-
-    @property
-    def phonon_damping(self):
-        """float: damping constant of phonon propagation [kg/s]"""
-        return Q_(self._phonon_damping, u.kg/u.s)
-
-    @phonon_damping.setter
-    def phonon_damping(self, phonon_damping):
-        """set.phonon_damping"""
-        self._phonon_damping = phonon_damping.to_base_units().magnitude
-
-    @property
-    def opt_pen_depth(self):
-        """
-        float: penetration depth for pump always for 1st subsystem
-        light in the unit cell [m]
-
-        """
-        return Q_(self._opt_pen_depth, u.meter).to('nanometer')
-
-    @opt_pen_depth.setter
-    def opt_pen_depth(self, opt_pen_depth):
-        """set.opt_pen_depth"""
-        self._opt_pen_depth = opt_pen_depth.to_base_units().magnitude
-
-    @property
-    def roughness(self):
-        """float: roughness of the top of layer [m]"""
-        return Q_(self._roughness, u.meter).to('nm')
-
-    @roughness.setter
-    def roughness(self, roughness):
-        """set.roughness"""
-        self._roughness = roughness.to_base_units().magnitude
 
 
 class AmorphousLayer(Layer):
@@ -511,30 +464,65 @@ class AmorphousLayer(Layer):
     physical amorphous layers and also an array of atoms in the layer.
 
     Args:
-        id (str): id of the AmorphousLayer
-        name (str): name of AmorphousLayer
-        thickness (float): thickness of the layer
-        density (float): density of the layer
+        id (str): id of the layer.
+        name (str): name of layer.
+        thickness (float): thickness of the layer.
+        density (float): density of the layer.
 
     Keyword Args:
-        atom (object): Atom or AtomMixed in the layer
-        deb_wal_fac (float): Debye Waller factor
-        sound_vel (float): sound velocity
-        phonon_damping (float): phonon damping
-        roughness (float): gaussian width of the top roughness of a layer
-        opt_pen_depth (float): optical penetration depth
-        opt_ref_index (float): refractive index
+        atom (object): Atom or AtomMixed in the layer.
+        roughness (float): gaussian width of the top roughness of a layer.
+        deb_wal_fac (float): Debye Waller factor.
+        sound_vel (float): sound velocity.
+        phonon_damping (float): phonon damping.
+        roughness (float): gaussian width of the top roughness of a layer.
+        opt_pen_depth (float): optical penetration depth.
+        opt_ref_index (float): refractive index.
         opt_ref_index_per_strain (float): change of refractive index per
-           strain
-        heat_capacity (float): heat capacity
-        therm_cond (float): thermal conductivity
-        lin_therm_exp (float): linear thermal expansion
-        sub_system_coupling (float): sub-system coupling
+           strain.
+        heat_capacity (float): heat capacity.
+        therm_cond (float): thermal conductivity.
+        lin_therm_exp (float): linear thermal expansion.
+        sub_system_coupling (float): sub-system coupling.
 
     Attributes:
-        atom (object): Atom or AtomMixed in the layer
+        id (str): id of the layer.
+        name (str): name of the layer.
+        thickness (float): thickness of the layer [m].
+        mass (float): mass of the layer [kg].
+        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² [kg].
+        density (float): density of the layer [kg/m³].
+        area (float): area of layer [m²].
+        volume (float): volume of layer [m³].
+        roughness (float): gaussian width of the top roughness of a layer [m].
+        deb_wal_fac (float): Debye-Waller factor [m²].
+        sound_vel (float): longitudinal sound velocity in the layer [m/s].
+        spring_const (ndarray[float]): spring constant of the layer [kg/s²]
+            and higher orders.
+        phonon_damping (float): damping constant of phonon propagation [kg/s].
+        opt_pen_depth (float): optical penetration depth of the layer [m].
+        opt_ref_index (ndarray[float]): optical refractive index - real
+           and imagenary part :math:`n + i\kappa`.
+        opt_ref_index_per_strain (ndarray[float]): optical refractive
+           index change per strain - real and imagenary part
+           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`.
+        therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
+           conductivity [W/(m K)].
+        lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
+           expansion coefficient (relative).
+        int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
+           linear thermal expansion coefficient.
+        heat_capacity (list[@lambda]): list of T-dependent heat capacity
+           function [J/(kg K)].
+        int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
+           capacity function.
+        sub_system_coupling (list[@lambda]): list of of coupling functions of
+           different subsystems [W/m³].
+        num_sub_systems (int): number of subsystems for heat and phonons
+           (electrons, lattice, spins, ...).
         magnetization (dict[float]): magnetization amplitude, phi and
-           gamma angle inherited from the atom
+           gamma angle inherited from the atom.
+        atom (object): Atom or AtomMixed in the layer.
 
     """
 
@@ -572,21 +560,10 @@ class AmorphousLayer(Layer):
 
     @property
     def atom(self):
-        """get atom
-
-        Returns the atom of the layer.
-
-        """
-
         return self._atom
 
     @atom.setter
     def atom(self, atom):
-        """set atom
-
-        Set the atom of the layer and check if its of type Atom or AtomMixed.
-
-        """
         if atom == []:  # no atom is set
             self.magnetization = {'amplitude': 0,
                                   'phi': 0*u.deg,
@@ -614,32 +591,69 @@ class UnitCell(Layer):
     in the unit cell.
 
     Args:
-        id (str): id of the UnitCell
-        name (str): name of the UnitCell
-        c_axis (float): c-axis of the UnitCell
+        id (str): id of the UnitCell.
+        name (str): name of the UnitCell.
+        c_axis (float): c-axis of the UnitCell.
 
     Keyword Args:
-        a_axis (float): a-axis of the UnitCell
-        b_axis (float): b-axis of the UnitCell
-        deb_wal_fac (float): Debye Waller factor
-        sound_vel (float): sound velocity
-        phonon_damping (float): phonon damping
-        roughness (float): gaussian width of the top roughness of a layer
-        opt_pen_depth (float): optical penetration depth
-        opt_ref_index (float): refractive index
+        a_axis (float): a-axis of the UnitCell.
+        b_axis (float): b-axis of the UnitCell.
+        deb_wal_fac (float): Debye Waller factor.
+        sound_vel (float): sound velocity.
+        phonon_damping (float): phonon damping.
+        roughness (float): gaussian width of the top roughness of a layer.
+        opt_pen_depth (float): optical penetration depth.
+        opt_ref_index (float): refractive index.
         opt_ref_index_per_strain (float): change of refractive index per
-           strain
-        heat_capacity (float): heat capacity
-        therm_cond (float): thermal conductivity
-        lin_therm_exp (float): linear thermal expansion
-        sub_system_coupling (float): sub-system coupling
+           strain.
+        heat_capacity (float): heat capacity.
+        therm_cond (float): thermal conductivity.
+        lin_therm_exp (float): linear thermal expansion.
+        sub_system_coupling (float): sub-system coupling.
 
     Attributes:
+        id (str): id of the layer.
+        name (str): name of the layer.
+        c_axis (float): out-of-plane c-axis [m].
+        a_axis (float): in-plane a-axis [m].
+        b_axis (float): in-plane b-axis [m].
+        thickness (float): thickness of the layer [m].
+        mass (float): mass of the layer [kg].
+        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² [kg].
+        density (float): density of the layer [kg/m³].
+        area (float): area of layer [m²].
+        volume (float): volume of layer [m³].
+        roughness (float): gaussian width of the top roughness of a layer [m].
+        deb_wal_fac (float): Debye-Waller factor [m²].
+        sound_vel (float): longitudinal sound velocity in the layer [m/s].
+        spring_const (ndarray[float]): spring constant of the layer [kg/s²]
+            and higher orders.
+        phonon_damping (float): damping constant of phonon propagation [kg/s].
+        opt_pen_depth (float): optical penetration depth of the layer [m].
+        opt_ref_index (ndarray[float]): optical refractive index - real
+           and imagenary part :math:`n + i\kappa`.
+        opt_ref_index_per_strain (ndarray[float]): optical refractive
+           index change per strain - real and imagenary part
+           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`.
+        therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
+           conductivity [W/(m K)].
+        lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
+           expansion coefficient (relative).
+        int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
+           linear thermal expansion coefficient.
+        heat_capacity (list[@lambda]): list of T-dependent heat capacity
+           function [J/(kg K)].
+        int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
+           capacity function.
+        sub_system_coupling (list[@lambda]): list of of coupling functions of
+           different subsystems [W/m³].
+        num_sub_systems (int): number of subsystems for heat and phonons
+           (electrons, lattice, spins, ...).
         atoms (list[atom, @lambda]): list of atoms and funtion handle
-           for strain dependent displacement
-        num_atoms (int): number of atoms in unit cell
+           for strain dependent displacement.
+        num_atoms (int): number of atoms in unit cell.
         magnetization (list[foat]): magnetization amplitutes, phi, and
-           gamma angle of each atom in the unit cell
+           gamma angle of each atom in the unit cell.
 
     """
 
@@ -701,9 +715,14 @@ class UnitCell(Layer):
         coordinate of atoms.
         Also add magnetization per atom.
 
-        Todo: use the avogadro project as plugin
-        Todo: create unit cell from CIF file e.g. by xrayutilities
-        plugin.
+        Todo:
+            use the avogadro project as plugin
+        Todo:
+            create unit cell from CIF file e.g. by xrayutilities plugin.
+
+        Args:
+            **kwargs (str): strain or magnetization for manipulating unit cell
+                visualization.
 
         """
         import matplotlib.pyplot as plt
@@ -746,10 +765,9 @@ class UnitCell(Layer):
             plt.show()
 
     def add_atom(self, atom, position):
-        """ add_atom
+        """add_atom
 
-        Adds an atomBase/atomMixed at a relative position of the unit
-        cell.
+        Adds an AtomBase/AtomMixed at a relative position of the unit cell.
 
         Sort the list of atoms by the position at zero strain.
 
@@ -757,6 +775,10 @@ class UnitCell(Layer):
         automatically:
 
         .. math:: \kappa = m \cdot (v_s / c)^2
+
+        Args:
+            atom (Atom, AtomMixed): Atom or AtomMixed added to unit cell.
+            position (float): relative position within unit cel [0 .. 1].
 
         """
         position_str = ''
@@ -800,17 +822,23 @@ class UnitCell(Layer):
     def add_multiple_atoms(self, atom, position, Nb):
         """add_multiple_atoms
 
-        Adds multiple atomBase/atomMixed at a relative position of the
+        Adds multiple AtomBase/AtomMixed at a relative position of the
         unit cell.
 
+        Args:
+            atom (Atom, AtomMixed): Atom or AtomMixed added to unit cell.
+            position (float): relative position within unit cel [0 .. 1].
+            Nb (int): repetition of atoms.
+
         """
-        for i in range(Nb):
+        for i in range(int(Nb)):
             self.addAtom(atom, position)
 
     def get_atom_ids(self):
         """get_atom_ids
 
-        Returns a cell array of all atom ids in the unit cell.
+        Returns:
+            ids (list[str]): list of atom ids within unit cell
 
         """
         ids = []
@@ -823,8 +851,9 @@ class UnitCell(Layer):
     def get_atom_positions(self, *args):
         """get_atom_positions
 
-        Returns a vector of all relative postion of the atoms in the
-        unit cell.
+        Returns:
+            res (ndarray[float]): relative postion of the atoms within the unit
+            cell.
 
         """
         if args:
@@ -840,30 +869,24 @@ class UnitCell(Layer):
 
     @property
     def a_axis(self):
-        """float: in-plane a-axis [m]"""
         return Q_(self._a_axis, u.meter).to('nm')
 
     @a_axis.setter
     def a_axis(self, a_axis):
-        """set.a_axis"""
         self._a_axis = a_axis.to_base_units().magnitude
 
     @property
     def b_axis(self):
-        """float: in-plane b-axis [m]"""
         return Q_(self._b_axis, u.meter).to('nm')
 
     @b_axis.setter
     def b_axis(self, b_axis):
-        """set.a_axis"""
         self._b_axis = b_axis.to_base_units().magnitude
 
     @property
     def c_axis(self):
-        """float: out-of-plane c-axis [m]"""
         return Q_(self._c_axis, u.meter).to('nm')
 
     @c_axis.setter
     def c_axis(self, c_axis):
-        """set.c_axis"""
         self._c_axis = c_axis.to_base_units().magnitude

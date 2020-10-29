@@ -1,38 +1,40 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# This file is part of the udkm1Dsimpy module.
+# The MIT License (MIT)
+# Copyright (c) 2020 Daniel Schick
 #
-# udkm1Dsimpy is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, see <http://www.gnu.org/licenses/>.
-#
-# Copyright (C) 2017 Daniel Schick
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+# OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+# OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""A :mod:`Heat` module """
+__all__ = ['Heat']
 
-__all__ = ["Heat"]
+__docformat__ = 'restructuredtext'
 
-__docformat__ = "restructuredtext"
-
+from .simulation import Simulation
+from .. import u, Q_
+from ..helpers import make_hash_md5, finderb, multi_gauss
 import numpy as np
 from scipy.optimize import brentq
 from scipy.interpolate import interp2d
 from scipy.integrate import solve_ivp
 from time import time
 from os import path
-from .simulation import Simulation
-from . import u, Q_
-from .helpers import make_hash_md5, finderb, multi_gauss
 import warnings
 from tqdm.notebook import tqdm
 
@@ -40,50 +42,58 @@ from tqdm.notebook import tqdm
 class Heat(Simulation):
     """Heat
 
-    Base class for heat simulatuons.
+    Base class for heat simulations.
 
     Args:
-        S (object): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
 
     Keyword Args:
-        progress_bar (boolean): enable tqdm progress bar
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
         heat_diffusion (boolean): true when including heat diffusion in the
-            calculations
+            calculations.
         intp_at_interface (int): number of additional spacial points at the
-            interface of each layer
-        backend (str): pde solver backend - either default scipy or matlab
+            interface of each layer.
+        backend (str): pde solver backend - either default scipy or matlab.
 
     Attributes:
-        S (object): sample to do simulations with
-        force_recalc (boolean): force recalculation of results
-        progress_bar (boolean): enable tqdm progress bar
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
         heat_diffusion (boolean): true when including heat diffusion in the
-            calculations
+            calculations.
         intp_at_interface (int): number of additional spacial points at the
-            interface of each layer
-        backend (str): pde solver backend - either default scipy or matlab
-        boundary_conditions (dict): dictionary of boundary conditions:
-            boundary type top/bottom: isolator/temperature/flux
-            boundary value top/bottom
-        excitation (dict): dictionary of excitation parameters: fluence,
-            delay_pump, pulse_width, wavelength, theta, polarization,
+            interface of each layer.
+        backend (str): pde solver backend - either default scipy or matlab.
+        excitation (dict{ndarray[float, Quantity]}): excitation parameters
+            fluence, delay_pump, pulse_width, wavelength, theta, polarization,
             multilayer_absorption
-        distances (ndarray[float]): array of distances where to calc heat
-            diffusion. If not set heat diffusion is calculated at each unit
-            cell location or at every angstrom in amorphous layers
-        ode_options (dict): options for scipy solve_ivp ode solver, see
-            <https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html>
-        ode_options_matlab (dict): dict with options for the MATLAB pdepe solver,
-            see odeset, used for heat diffusion.
-        boundary_types (list[str]): description of boundary types
-        boundary_conditions (dict): dict of the top and bottom type of the
-            boundary conditions for the MATLAB heat diffusion calculation
-            1: isolator - 2: temperature - 3: flux
-            For the last two cases the corresponding value has to be set as
-            Kx1 array, where K is the number of sub-systems
+        boundary_conditions (dict{str, float, Quantity}): boundary conditons of
+            the top and bottom boundary for the heat diffusion calculation.
+            ``top_type`` or ``bottom_type`` must be one of ``boundary_types``.
+            For the last two types the corresponding value, ``top_value`` and
+            ``bottom_value`` have to be set as :math:`K \\times 1` array, where
+            :math:`K` is the number of sub-systems.
+        boundary_types (list[str]): description of boundary types.
+
+            * isolator
+            * temperature
+            * flux
+
+        distances (ndarray[float, Quantity]): spatial grid for heat diffusion [m]
+        ode_options (dict): options for scipy solve_ivp ode solver
+        ode_options_matlab (dict): dict with options for the MATLAB pdepe
+            solver.
         matlab_engine (module): MATLAB to Python API engine required for
-            calculating heat diffusion
+            calculating heat diffusion.
 
     """
 
@@ -157,8 +167,16 @@ class Heat(Simulation):
     def get_hash(self, delays, init_temp, **kwargs):
         """get_hash
 
-        Returns a unique hash given by the delays, and init_temp as
+        Returns a unique hash given by the ``delays`` and ``init_temp`` as
         well as the sample structure hash for relevant thermal parameters.
+
+        Args:
+            delays (ndarray[float]): delay grid for the simulation.
+            init_temp (ndarray[float]): initial spatial temperature profile.
+            **kwargs (float, optional): optional parameters.
+
+        Returns:
+            hash (str): unique hash.
 
         """
         param = [delays, init_temp, self.heat_diffusion,
@@ -173,13 +191,21 @@ class Heat(Simulation):
     def check_initial_temperature(self, init_temp, distances=[]):
         """check_initial_temperature
 
-        An inital temperature for a heat simulation can be either a
-        single temperature which is assumed to be valid for all layers
-        in the structure or a temeprature profile is given with one
-        temperature for each layer in the structure and for each subsystem.
+        Inital temperature for heat simulations can be either a scalar
+        temperature which is assumed to be valid for all layers in the
+        structure or a temeprature profile is given with one temperature for
+        each layer in the structure and for each subsystem.
+        Alternatively a spatial grid can be provided.
 
         Args:
-            init_temp (float, ndarray): initial temperature
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+            distances (ndarray[float, Quantity], optional): spatial grid of the
+                inital temperatrue.
+
+        Returns:
+            init_temp (ndarray[float]): checked inital temperature as array on
+            the according spatial grid.
 
         """
 
@@ -213,15 +239,26 @@ class Heat(Simulation):
         :math:`F` [J/m²], delays :math:`t` [s] of the pump events, and pulse
         width :math:`\tau` [s]. :math:`N` is the number of pump events.
 
-        Traverse excitation vector to update the `delay_pump` :math:`t_p`
+        Traverse excitation vector to update the ``delay_pump`` :math:`t_p`
         vector for finite pulse durations :math:`w(i)` as follows
 
         .. math::
 
-            t_p(i)-\mbox{window}\cdot w(i):t_p(i)+\mbox{window}\cdot w(i):
-            w(i)/\mbox{intp}
+            [t_p(i)-\mbox{window}\cdot w(i)]:[t_p(i)+\mbox{window}\cdot w(i)]:
+            [w(i)/\mbox{intp}]
 
         and to combine excitations which have overlapping intervalls.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+
+        Returns:
+            (tuple):
+            - *res (list[ndarray[float]])* - resulting list of excitations with
+              interpolated delay density around excitations.
+            - *fluence (ndarray[float])* - excitation fluences.
+            - *delay_pump (ndarray[float])* - delays of the excitations.
+            - *pulse_width (ndarray[float])* - pulse widths of the excitations.
 
         """
         delays = delays.to('s').magnitude
@@ -275,8 +312,6 @@ class Heat(Simulation):
                 intervall = np.r_[(delay_pump[i] - window*pulse_width[i]):
                                   (delay_pump[k] + window*pulse_width[k]):
                                   delta_delay]
-            # print(delay_pump[k] + window*pulse_width[k])
-            # print(intervall)
             # update the new excitation list
             n_excitation.append([intervall,
                                  [t[0] for t in temp],
@@ -318,10 +353,11 @@ class Heat(Simulation):
         """get_absorption_profile
 
         Args:
-            distances (ndarray[float]): spatial grid for calculation
+            distances (ndarray[float], optional): spatial grid for calculation.
 
-        Returns a vector of the absorption profile calculated either by
-        Lambert-Beers law or by a mulitlayer absorption formalism
+        Returns:
+            absorption_profile (ndarray[float]): absorption profile calculated
+            either by Lambert-Beers law or by a mulitlayer absorption formalism.
 
         """
         if self._excitation['multilayer_absorption']:
@@ -333,11 +369,7 @@ class Heat(Simulation):
     def get_Lambert_Beer_absorption_profile(self, distances=[]):
         r"""get_Lambert_Beer_absorption_profile
 
-        Args:
-            distances (ndarray[float]): spatial grid for calculation
-
-        Returns a vector of the absorption profile derived from Lambert-Beer's
-        law. The transmission is given by:
+        The transmission is given by:
 
         .. math:: \tau = \frac{I}{I_0} =  \exp(-z/ \zeta)
 
@@ -351,6 +383,13 @@ class Heat(Simulation):
 
             \frac{\mbox{d}\alpha(z)}{\mbox{d}z} = \frac{1}{\zeta}
             \exp(-z/\zeta)
+
+        Args:
+            distances (ndarray[float], optional): spatial grid for calculation.
+
+        Returns:
+            absorption_profile (ndarray[float]): absorption profile calculated
+            by Lambert-Beers law.
 
         """
         if distances == []:
@@ -399,20 +438,35 @@ class Heat(Simulation):
         Calculation of intensity, absorption and temperature increase profiles
         in multilayers.
 
-        Calculation based on the method by K. Ohta and H. Ishida, Appl. Opt. 29,
-        2466 (1990).
-        Code developed Matlab for L. Le Guyader & al., Phys. Rev. B 87, 054437 (2013).
+        Calculation based on the method in Ref [4]_ and code developed Matlab
+        by L. Le Guyader, see Ref [5]_.
 
         Copyright (2012-2014) Loïc Le Guyader <loic.le_guyader@helmholtz-berlin.de>
 
         Args:
-            distances (ndarray[float]): spatial grid for calculation
+            distances (ndarray[float], optional): spatial grid for calculation.
 
         Returns:
-            dAdz (ndarray[float]): differential absorption within each layer
-            Ints (ndarray[float]): intensity profiles within each layer
-            R_total (float): total amount of reflection from the multilayer
-            T_total (float): total transmission in the last layer of the multilayer
+            (tuple):
+            - *dAdz (ndarray[float])* - differential absorption within each
+              layer.
+            - *Ints (ndarray[float])* - intensity profiles within each layer.
+            - *R_total (float)* - total amount of reflection from the
+              multilayer.
+            - *T_total (float)* - total transmission in the last layer of the
+              multilayer.
+
+        References:
+
+        .. [4] K. Ohta & H. Ishida, *Matrix formalism for calculation of the
+           light beam intensity in stratified multilayered films, and its use
+           in the analysis of emission spectra*, `Appl. Opt. 29, 2466 (1990).
+           <https://doi.org/10.1364/AO.29.002466>`_
+        .. [5] L. Le Guyader, A. Kleibert, F. Nolting, L. Joly, P.M. Derlet,
+           R.V. Pisarev, A. Kirilyuk, Th. Rasing & A.V. Kimel, *Dynamics of
+           laser-induced spin reorientation in Co/SmFeO_3 heterostructure*,
+           `Phys. Rev. B 87, 054437 (2013).
+           <https://doi.org/10.1103/PhysRevB.87.054437>`_
 
         """
 
@@ -550,17 +604,9 @@ class Heat(Simulation):
     def get_temperature_after_delta_excitation(self, fluence, init_temp, distances=[]):
         r"""get_temperature_after_delta_excitation
 
-        Args:
-            fluence (float/pint quantity): incident fluence in J/m² as float
-                or as pint quantity
-            init_temp (float): initial temperature of the sample either
-                homogeneous temperature across the whole sample or as array
-                for every layer of the sample structure
-
-        Returns a vector of the end temperature and temperature change
-        for each layer of the sample structure after an optical
-        exciation with a fluence :math:`F` [J/m^2] and an inital temperature
-        :math:`T_1` [K]:
+        Calculate the final temperature and temperature change for each layer
+        of the sample structure after an optical exciation with a fluence
+        :math:`F` [J/m^2] and an inital temperature :math:`T_1` [K]:
 
         .. math:: \Delta E = \int_{T_1}^{T_2} m \, c(T)\, \mbox{d}T
 
@@ -568,14 +614,14 @@ class Heat(Simulation):
         :math:`c(T)` is the temperature-dependent heat capacity [J/kg K] and
         :math:`m` is the mass [kg].
 
-        The absorbed energy per layer can be linearized from the
-        absorption profile :math:`\mbox{d} \alpha / \mbox{d}z` as
+        The absorbed energy per layer can be linearized from the absorption
+        profile :math:`\mbox{d} \alpha / \mbox{d}z` as
 
         .. math:: \Delta E = \frac{\mbox{d} \alpha}{\mbox{d}z} E_0 \Delta z
 
         where :math:`E_0` is the initial energy impinging on the first layer
-        given by the fluence :math:`F = E / A`.
-        :math:`\Delta z` is equal to the thickness of each layer.
+        given by the fluence :math:`F = E / A`. :math:`\Delta z` is equal to
+        the thickness of each layer.
 
         Finally, one has to minimize the following modulus to obtain the
         final temperature :math:`T_2` of each layer:
@@ -584,6 +630,18 @@ class Heat(Simulation):
 
              \left| \int_{T_1}^{T_2} m c(T)\, temp_mapT - \frac{\mbox{d}\alpha}
              {\mbox{d}z} E_0 \Delta z \right| \stackrel{!}{=} 0
+
+        Args:
+            fluence (float, Quantity): incident fluence [J/m²].
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+            distances (ndarray[float], optional): spatial grid for calculation.
+
+        Returns:
+            (tuple):
+            - *final_temp (ndarray[float])* - final temperature after delta
+              excitation.
+            - *delta_T (ndarray[float])* - temperature change.
 
         """
         # initialize
@@ -632,9 +690,22 @@ class Heat(Simulation):
     def get_temp_map(self, delays, init_temp):
         """get_temp_map
 
-        Returns a tempperature profile for the sample structure after optical
+        Returns a temperature profile for the sample structure after optical
         excitation. The result can be saved using an unique hash of the sample
         and the simulation parameters in order to reuse it.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+
+        Returns:
+            (tuple):
+            - *temp_map (ndarray[float])* - spatio-temporal temperature map.
+            - *delta_temp_map (ndarray[float])* - spatio-temporal temperature
+              change map.
+            - *checked_excitations (list[ndarray[float]])* - resulting list of
+              checked excitations.
 
         """
         init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
@@ -656,9 +727,21 @@ class Heat(Simulation):
     def calc_temp_map(self, delays, input_init_temp):
         """calc_temp_map
 
-        Calculates the temp_map and temp_map difference for a given delay
-        vector, exciation and initial temperature. Heat diffusion can be
-        included if _heat_diffusion = true_.
+        Calculates the temperature profile for the sample structure after optical
+        excitation. Heat diffusion can be included if ``heat_diffusion = true``.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            input_init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+
+        Returns:
+            (tuple):
+            - *temp_map (ndarray[float])* - spatio-temporal temperature map.
+            - *delta_temp_map (ndarray[float])* - spatio-temporal temperature
+              change map.
+            - *checked_excitations (list[ndarray[float]])* - resulting list of
+              checked excitations.
 
         """
         t1 = time()
@@ -801,11 +884,11 @@ class Heat(Simulation):
         return np.squeeze(temp_map), np.squeeze(delta_temp_map), checked_excitation
 
     def calc_heat_diffusion(self, init_temp, distances, delays, delay_pump, pulse_width, fluence):
-        r""" calc_heat_diffusion
+        r"""calc_heat_diffusion
 
-        Returns a temp_map that is calculated by heat diffusion for a
-        given delay array and initial temperature profile.
-        Here we have to solve the 1D heat equation:
+        Calculates a temperature profile including heat diffusion for a given
+        delay array and initial temperature profile. Here we have to solve the
+        1D heat diffusion equation:
 
         .. math::
 
@@ -819,6 +902,21 @@ class Heat(Simulation):
         capacity [J/kg K], :math:`\rho` the density [kg/m^3] and :math:`k(T)`
         is the temperature-dependent thermal conductivity [W/m K] and
         :math:`S(z,t)` is a source term [W/m^3].
+
+        The 1D heat diffusion equation can be either solved with SciPy or
+        Matlab as backend.
+
+        Args:
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+            distances (ndarray[float]): spatial grid for calculation.
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            delay_pump (ndarray[float]): delays of the excitations.
+            pulse_width (ndarray[float]): pulse widths of the excitations.
+            fluence (ndarray[float]): excitation fluences.
+
+        Returns:
+            temp_map (ndarray[float]): spatio-temporal temperature map.
 
         """
         t1 = time()
@@ -928,6 +1026,41 @@ class Heat(Simulation):
                 sub_system_coupling, densities, indicies, dalpha_dz, fluence,
                 delay_pump, pulse_length, bc_top_type, bc_top_value,
                 bc_bottom_type, bc_bottom_value, pbar, state):
+        """odefunc
+
+        Ordinary differential equation that is solved for 1D heat diffusion.
+
+        Args:
+            t (ndarray[float]): internal time steps of the ode solver.
+            u (ndarray[float]): internal variable of the ode solver.
+            N (int): number of spatial grid points.
+            K (int): number of sub-systems.
+            d_x_grid (ndarray[float]): derivative of spatial grid.
+            x (ndarray[float]): start point of actual layers.
+            thermal_conds (ndarray[@lambda]): T-dependent thermal conductivity
+                function handles.
+            heat_capacities (ndarray[@lambda]): T-dependent heat capacity
+                function handles.
+            sub_system_coupling (ndarray[@lambda]): T-dependent sub-system
+                coupling.
+            densities (ndarray[float]): density of layers.
+            indicies (ndarray[int]): indicies of actual layers in respect to
+                interpolated spatial grid.
+            dalpha_dz (ndarray[float]): absorption profile.
+            fluence (ndarray[float]): excitation fluences.
+            delay_pump (ndarray[float]): delay of excitations.
+            pulse_length (ndarray[float]): pulse widths of excitations.
+            bc_top_type (int): top boundary type.
+            bc_top_value (ndarray[float]): top bondary value.
+            bc_bottom_type (int): bottom boundary type.
+            bc_bottom_value (ndarray[float]): bottom boundary value.
+            pbar (tqdm): tqdm progressbar.
+            state (list[float]): state variables for progress bar.
+
+        Returns:
+            dudt (ndarray[float]): temporal derivative of internal variable.
+
+        """
         # state is a list containing last updated time t:
         # state = [last_t, dt]
         # I used a list because its values can be carried between function
@@ -999,14 +1132,10 @@ class Heat(Simulation):
 
     @property
     def backend(self):
-        """str: backend"""
-
         return self._backend
 
     @backend.setter
     def backend(self, backend):
-        """set.backend"""
-
         if backend in ['scipy', 'matlab']:
             self._backend = backend
         else:
@@ -1016,11 +1145,7 @@ class Heat(Simulation):
 
     @property
     def excitation(self):
-        """dict: excitation parameters
-
-        Convert to from default SI units to real quantities
-
-        """
+        # Convert to from default SI units to real quantities
         excitation = {'fluence': Q_(self._excitation['fluence'], u.J/u.m**2).to('mJ/cm**2'),
                       'delay_pump': Q_(self._excitation['delay_pump'], u.s).to('ps'),
                       'pulse_width': Q_(self._excitation['pulse_width'], u.s).to('ps'),
@@ -1033,8 +1158,6 @@ class Heat(Simulation):
 
     @excitation.setter
     def excitation(self, excitation):
-        """set.excitation"""
-
         # check the size of excitation, if we have a multipulse excitation
         if isinstance(excitation, Q_):
             # just a fluence is given
@@ -1077,11 +1200,7 @@ class Heat(Simulation):
 
     @property
     def boundary_conditions(self):
-        """dict: boundary_conditions
-
-        Convert to from default SI units to real quantities
-
-        """
+        # Converted from default SI units to real quantities.
         boundary_conditions = {'top_type':
                                self.boundary_types[self._boundary_conditions['top_type']],
                                }
@@ -1106,8 +1225,6 @@ class Heat(Simulation):
 
     @boundary_conditions.setter
     def boundary_conditions(self, boundary_conditions):
-        """set.boundary_conditions"""
-
         if isinstance(boundary_conditions, dict):
             if 'top_type' in boundary_conditions:
                 try:
@@ -1154,12 +1271,10 @@ class Heat(Simulation):
 
     @property
     def distances(self):
-        """float: distances for heat diffusion [m]"""
         return Q_(self._distances, u.meter).to('nm')
 
     @distances.setter
     def distances(self, distances):
-        """set.distances"""
         self._distances = distances.to_base_units().magnitude
 
     def __del__(self):

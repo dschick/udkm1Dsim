@@ -1,82 +1,87 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# This file is part of the udkm1Dsimpy module.
+# The MIT License (MIT)
+# Copyright (c) 2020 Daniel Schick
 #
-# udkm1Dsimpy is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, see <http://www.gnu.org/licenses/>.
-#
-# Copyright (C) 2019 Daniel Schick
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+# OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+# OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ["Atom", "AtomMixed"]
+__all__ = ['Atom', 'AtomMixed']
 
-__docformat__ = "restructuredtext"
+__docformat__ = 'restructuredtext'
 
+from .. import u, Q_
 import os
 import numpy as np
 import scipy.constants as constants
 from tabulate import tabulate
-from . import u, Q_
 
 
 class Atom:
     """Atom
 
-    The atom class is the smallest structural unit of which one can
-    build larger structures. It holds real physical properties of atoms
-    defined in the attrubutes section and can return parameters and data
-    necessary for different simulation types.
+    The atom class is the smallest structural unit of which one can build
+    larger structures. It holds real physical properties of atoms defined in
+    the attributes section and can return parameters and data necessary for
+    different simulation types.
 
     Args:
-        symbol (str): symbol of the atom
+        symbol (str): symbol of the atom.
 
     Keyword Args:
-        id (str): id of the atom
-        ionicity (int): ionicity of the atom
-        atomic_form_factor_path (str): path to atomic form factor coeffs
-        magnetic_form_factor_path (str): path to magnetic form factor coeffs
+        id (str): id of the atom, may differ from symbol and/or name.
+        ionicity (int): ionicity of the atom.
+        atomic_form_factor_path (str): path to atomic form factor coeffs.
+        magnetic_form_factor_path (str): path to magnetic form factor coeffs.
 
     Attributes:
-        symbol (str): symbol of the element
-        id (str): identifier of the atom, may differ from symbol and/or
-           name
-        name (str): name of the element (generic)
-        atomic_number_z (int): Z atomic number
-        mass_number_a (float): A atomic mass number
-        ionicity (int): ionicity of the atom
-        mass (float): mass of the atom [kg]
-        atomic_form_factor_coeff (ndarray[float]): atomic form factor
-           coefficients for energy-dependent atomic form factor
+        symbol (str): symbol of the element.
+        id (str): id of the atom, may differ from symbol and/or name.
+        name (str): name of the element (generic).
+        atomic_number_z (int): Z atomic number.
+        mass_number_a (float): A atomic mass number.
+        ionicity (int): ionicity of the atom.
+        mass (float): mass of the atom [kg].
+        atomic_form_factor_coeff (ndarray[float]): atomic form factor.
+           coefficients for energy-dependent atomic form factor.
         cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
-           angular-dependent atomic form factor
-        mag_amplitude (float): magnetization amplitude 0 .. 1
-        mag_phi (float): phi angle of the magnetization [deg]
-        mag_gamma (float): gamma angle of the magnetization [deg]
+           angular-dependent atomic form factor.
+        magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
+           coefficients for energy-dependent magnetic form factor.
+        mag_amplitude (float): magnetization amplitude -1 .. 1.
+        mag_phi (float): phi angle of magnetization [deg].
+        mag_gamma (float): gamma angle of magnetization [deg].
 
     References:
 
-        .. [1] D. T. Cromer & J. B. Mann (1968). X-ray scattering
-           factors computed from numerical Hartree–Fock wave functions.
-           `Acta Crystallographica Section A, 24(2), 321–324.
-           <http://www.doi.org/10.1107/S0567739468000550>`_
-        .. [2] J. Als-Nielson, & D. McMorrow (2001).
-           `Elements of Modern X-Ray Physics. New York: John Wiley &
-           Sons, Ltd. <http://www.doi.org/10.1002/9781119998365>`_
-        .. [3] B. L. Henke, E. M. Gullikson & J. C. Davis (1993).
-           X-Ray Interactions: Photoabsorption, Scattering,
-           Transmission, and Reflection at E = 50-30,000 eV, Z = 1-92.
-           `Atomic Data and Nuclear Data Tables, 54(2), 181–342.
+        .. [1] B. L. Henke, E. M. Gullikson & J. C. Davis,
+           *X-Ray Interactions: Photoabsorption, Scattering,
+           Transmission, and Reflection at E = 50-30,000 eV, Z = 1-92*,
+           `Atomic Data and Nuclear Data Tables, 54(2), 181–342, (1993).
            <http://www.doi.org/10.1006/adnd.1993.1013>`_
+        .. [2] J. Als-Nielson, & D. McMorrow,
+           `Elements of Modern X-Ray Physics. New York: John Wiley &
+           Sons, Ltd. (2001) <http://www.doi.org/10.1002/9781119998365>`_
+        .. [3] D. T. Cromer & J. B. Mann, *X-ray scattering
+           factors computed from numerical Hartree–Fock wave functions*,
+           `Acta Crystallographica Section A, 24(2), 321–324 (1968).
+           <http://www.doi.org/10.1107/S0567739468000550>`_
 
     """
 
@@ -90,7 +95,7 @@ class Atom:
 
         try:
             filename = os.path.join(os.path.dirname(__file__),
-                                    'parameters/elements.dat')
+                                    '../parameters/elements.dat')
             symbols = np.genfromtxt(filename, dtype='U2', usecols=(0))
             elements = np.genfromtxt(filename, dtype='U15, i8, f8', usecols=(1, 2, 3))
             [rowidx] = np.where(symbols == self.symbol)
@@ -128,13 +133,20 @@ class Atom:
     def read_atomic_form_factor_coeff(self, filename=''):
         """read_atomic_form_factor_coeff
 
-        The atomic form factor :math:`f` in dependence from the energy
-        :math:`E` is read from a parameter file given by [3]_.
+        The coefficients for the atomic form factor :math:`f` in dependence of
+        the photon energy :math:`E` is read from a parameter file given by [1]_.
+
+        Args:
+            filename (str): optional full path and filenameto the atomic form
+                factor coefficients.
+
+        Returns:
+            f (ndarray[float]): atomic form factor coefficients.
 
         """
         if not filename:
             filename = os.path.join(os.path.dirname(__file__),
-                                    'parameters/atomic_form_factors/chantler/{:s}.cf'.format(
+                                    '../parameters/atomic_form_factors/chantler/{:s}.cf'.format(
                                             self.symbol.lower()))
         try:
             f = np.genfromtxt(filename, skip_header=0)
@@ -148,13 +160,18 @@ class Atom:
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
-        Returns the complex atomic form factor
+        The complex atomic form factor for the photon energy :math:`E` [eV] is
+        calculated by:
 
-        .. math:: f(E)=f_1-i f_2
+        .. math:: f(E)=f_1 - i f_2
 
-        for the energy :math:`E` [eV].
+        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`.
 
-        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`
+        Args:
+            energy (ndarray[float]): photon energy [eV].
+
+        Returns:
+            f (ndarray[complex]): energy-dependent atomic form factors.
 
         """
         # interpolate the real and imaginary part in dependence of E
@@ -166,16 +183,19 @@ class Atom:
         return f1 - f2*1j
 
     def read_cromer_mann_coeff(self):
-        """read_cromer_mann_coeff
+        r"""read_cromer_mann_coeff
 
-        The Cromer-Mann coefficients (Ref. [1]_) are read from a
-        parameter file and are returned in the following order:
+        The Cromer-Mann coefficients (Ref. [3]_) are read from a parameter file
+        and are returned in the following order:
 
         .. math:: a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c
 
+        Returns:
+            cm (ndarray[float]): Cromer-Mann coefficients.
+
         """
         filename = os.path.join(os.path.dirname(__file__),
-                                'parameters/atomic_form_factors/cromermann.txt')
+                                '../parameters/atomic_form_factors/cromermann.txt')
         try:
             cm = np.genfromtxt(filename, skip_header=1,
                                usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
@@ -187,19 +207,19 @@ class Atom:
 
     @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
-        """get_cm_atomic_form_factor
+        r"""get_cm_atomic_form_factor
 
-        Returns the atomic form factor :math:`f` in dependence of the
-        energy :math:`E` [J] and the :math:`z`-component of the
-        scattering vector :math:`q_z` [Å :math:`^{-1}`] (Ref. [1]_).
-        Since the CM coefficients are fitted for :math:`q_z` in
-        [Å :math:`^{-1}`] we have to convert it before!
+        The atomic form factor :math:`f` is calculated in dependence of the
+        photon energy :math:`E` [eV] and the :math:`z`-component of the
+        scattering vector :math:`q_z` [Å :math:`^{-1}`] (Ref. [3]_).
+        Note that the Cromer-Mann coefficients are fitted for :math:`q_z` in
+        [Å :math:`^{-1}`]!
 
         See Ref. [2]_ (p. 235).
 
         .. math:: f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -i f_2(E)
 
-        :math:`f_{CM}(q_z)` is given in Ref. 1:
+        :math:`f_{CM}(q_z)` is given in Ref. [3]_:
 
         .. math::
 
@@ -209,15 +229,23 @@ class Atom:
 
         .. math::
 
-            \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\\right)
+            \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\right)
 
         Thus:
 
         .. math:: f(q_z,E) = \sum(a_i \, \exp(-b_i \, q_z/2\pi))
-           + c + f_1(E)-i f_2(E) - \left(\sum(a_i) + c\\right)
+           + c + f_1(E)-i f_2(E) - \left(\sum(a_i) + c\right)
 
         .. math:: f(q_z,E) = \sum(a_i \, \exp(-b_i \, q_z/2\pi))
            + f_1(E) -i f_2(E) - \sum(a_i)
+
+        Args:
+            energy (ndarray[float]): photon energy [eV].
+            qz (ndarray[float]): scattering vector [1/m].
+
+        Returns:
+            f (ndarray[complex]): energy- and qz-dependent Cromer-Mann atomic form
+            factors.
 
         """
         # convert from 1/nm to 1/Å and to a real column vector
@@ -241,35 +269,48 @@ class Atom:
     def read_magnetic_form_factor_coeff(self, filename=''):
         """read_magnetic_form_factor_coeff
 
-        The magnetic form factor :math:`m` in dependence from the energy
-        :math:`E` is read from a parameter file.
+        The coefficients for the magnetic form factor :math:`m` in dependence
+        of the photon energy :math:`E` is read from a parameter file.
+
+        Args:
+            filename (str): optional full path and filename to the magnetic
+                form factor coefficients.
+
+        Returns:
+            m (ndarray[float]): magnetic form factor coefficients.
 
         """
         if not filename:
             filename = os.path.join(os.path.dirname(__file__),
-                                    'parameters/magnetic_form_factors/{:s}.mf'.format(
+                                    '../parameters/magnetic_form_factors/{:s}.mf'.format(
                                             self.symbol))
         try:
-            f = np.genfromtxt(filename)
+            m = np.genfromtxt(filename)
         except Exception as e:
             print('File {:s} not found!'.format(filename))
             print(e)
             # return zero array
-            f = np.zeros([1, 3])
+            m = np.zeros([1, 3])
 
-        return f
+        return m
 
     @u.wraps(None, (None, 'eV'), strict=False)
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
-        Returns the complex magnetic form factor
+        The complex magnetic form factor is claculated by:
 
-        .. math:: m(E)=m_1-i m_2
+        .. math:: m(E) = m_1 - i m_2
 
-        for the energy :math:`E` [eV].
+        for the photon energy :math:`E` [eV].
 
-        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`f_2`
+        Convention of Ref. [2]_ (p. 11, footnote) is a negative :math:`m_2`
+
+        Args:
+            energy (ndarray[float]): photon energy [eV].
+
+        Returns:
+            m (ndarray[complex]): energy-dependent magnetic form factors.
 
         """
         # interpolate the real and imaginary part in dependence of E
@@ -282,53 +323,48 @@ class Atom:
 
     @property
     def mag_phi(self):
-        """float: phi angle of magnetization [deg]"""
         return Q_(self._mag_phi, u.rad).to('deg')
 
     @mag_phi.setter
     def mag_phi(self, mag_phi):
-        """set.mag_phi"""
         self._mag_phi = mag_phi.to_base_units().magnitude
 
     @property
     def mag_gamma(self):
-        """float: gamma angle of magnetization [deg]"""
         return Q_(self._mag_gamma, u.rad).to('deg')
 
     @mag_gamma.setter
     def mag_gamma(self, mag_gamma):
-        """set.mag_gamma"""
         self._mag_gamma = mag_gamma.to_base_units().magnitude
 
 
 class AtomMixed(Atom):
     """AtomMixed
 
-    The AtomMixed class is sub class of Atom and enables mixed atoms for
-    certain alloys and stochiometric mixtures. All properties of the
-    included sub-atoms of class atomBase are averaged and weighted with
-    their stochiometric ratio
+    The AtomMixed class inherits from Atom and enables mixed atoms for certain
+    alloys and stochiometric mixtures. All properties of the included sub-atoms
+    of class Atom are averaged and weighted with their stochiometric ratio.
 
     Args:
-        symbol (str): symbol of the atom
+        symbol (str): symbol of the atom.
 
     Keyword Args:
-        id (str): id of the atom
-        ionicity (int): ionicity of the atom
+        id (str): id of the atom, may differ from symbol and/or name.
+        name (str): name of the mixed atom, default is symbol.
 
     Attributes:
-        symbol (str): symbol of the element
-        id (str): identifier of the atom, may differ from symbol and/or
-           name
-        name (str): name of the element (generic)
-        atomic_number_z (int): Z atomic number
-        mass_number_a (float): A atomic mass number
-        ionicity (int): ionicity of the atom
-        mass (float): mass of the atom [kg]
-        atomic_form_factor_coeff (ndarray[float]): atomic form factor
-           coefficients for energy-dependent atomic form factor
-        cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
-           angular-dependent atomic form factor
+        symbol (str): symbol of the element.
+        id (str): id of the atom, may differ from symbol and/or name.
+        name (str): name of the mixed atom, default is symbol.
+        atomic_number_z (int): Z atomic number.
+        mass_number_a (float): A atomic mass number.
+        ionicity (int): ionicity of the atom.
+        mass (float): mass of the atom [kg].
+        mag_amplitude (float): magnetization amplitude -1 .. 1.
+        mag_phi (float): phi angle of magnetization [deg].
+        mag_gamma (float): gamma angle of magnetization [deg].
+        atoms (list[Atoms]): list of Atoms.
+        num_atoms (int): number of atoms.
 
     """
 
@@ -342,10 +378,6 @@ class AtomMixed(Atom):
         self.mass = 0
         self.atoms = []
         self.num_atoms = 0
-        self.cromer_mann_coeff = np.array([])
-        self.mag_amplitude = kwargs.get('mag_amplitude', 0)
-        self.mag_phi = kwargs.get('mag_phi', 0*u.deg)
-        self.mag_gamma = kwargs.get('mag_gamma', 0*u.deg)
 
     def __str__(self):
         """String representation of this class"""
@@ -360,7 +392,14 @@ class AtomMixed(Atom):
     def add_atom(self, atom, fraction):
         """add_atom
 
-        Add an Atom instance with its stochiometric fraction to the AtomMixed instance.
+        Add an Atom instance with its stochiometric fraction and recalculate
+        averaged properties.
+
+        Args:
+            atom (Atom): atom to add.
+            fraction (float): fraction of the atom - sum of all fractions must
+                be 1.
+
         """
         self.atoms.append([atom, fraction])
         self.num_atoms = self.num_atoms + 1
@@ -373,7 +412,14 @@ class AtomMixed(Atom):
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
-        Returns the mixed energy dependent atomic form factor.
+        Averaged energy dependent atomic form factor.
+
+        Args:
+            energy (ndarray[float]): photon energy [eV].
+
+        Returns:
+            f (ndarray[complex]): energy-dependent atomic form factors.
+
         """
         f = 0
         for i in range(self.num_atoms):
@@ -384,7 +430,16 @@ class AtomMixed(Atom):
     def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
-        Returns the mixed energy and angle dependent atomic form factor.
+        Averaged energy and qz-dependent atomic form factors.
+
+        Args:
+            energy (ndarray[float]): photon energy [eV].
+            qz (ndarray[float]): scattering vector [1/m].
+
+        Returns:
+            f (ndarray[complex]): energy- and qz-dependent Cromer-Mann atomic
+            form factors.
+
         """
         f = 0
         for i in range(self.num_atoms):
@@ -395,7 +450,14 @@ class AtomMixed(Atom):
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
-        Returns the mixed energy dependent magnetic form factor.
+        Mixed energy dependent magnetic form factors.
+
+        Args:
+            energy (ndarray[float]): photon energy [eV].
+
+        Returns:
+            f (ndarray[complex]): energy-dependent magnetic form factors.
+
         """
         f = 0
         for i in range(self.num_atoms):

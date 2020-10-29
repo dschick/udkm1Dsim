@@ -1,53 +1,56 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# This file is part of the udkm1Dsimpy module.
+# The MIT License (MIT)
+# Copyright (c) 2020 Daniel Schick
 #
-# udkm1Dsimpy is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 #
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, see <http://www.gnu.org/licenses/>.
-#
-# Copyright (C) 2017 Daniel Schick
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+# OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+# OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""A :mod:`Structure` module """
+__all__ = ['Structure']
 
-__all__ = ["Structure"]
+__docformat__ = 'restructuredtext'
 
-__docformat__ = "restructuredtext"
-
+from .layers import AmorphousLayer, UnitCell
+from .. import u, Q_
+from ..helpers import make_hash_md5, finderb
 import itertools
 import numpy as np
-from .layer import AmorphousLayer, UnitCell
-from . import u, Q_
-from .helpers import make_hash_md5, finderb
 
 
 class Structure:
     """Structure
 
-    The structure class can hold various sub_structures. Each
-    sub_structure can be either a layer of N UnitCell or AmorphousLayer
-    objects or a structure by itself.
-    Thus it is possible to recursively build up 1D structures.
+    The structure class can hold various sub_structures. Each sub_structure can
+    be either a layer of :math:`N` UnitCell or AmorphousLayer objects or a
+    structure by itself. Thus it is possible to recursively build up 1D
+    structures.
 
     Args:
-        name (str): name of the sample
+        name (str): name of the sample.
 
     Attributes:
-        name (str): name of sample
-        sub_structures (list): list of structures in sample
-        substrate (object): structure of the substrate
+        name (str): name of sample.
+        sub_structures (list[AmorphousLayer, UnitCell, Structure]): list of
+            structures in sample.
+        substrate (Structure): structure of the substrate.
         num_sub_systems (int): number of subsystems for heat and phonons
-           (electronic, lattice, spins, ...)
+           (electronic, lattice, spins, ...).
 
     """
 
@@ -100,8 +103,15 @@ class Structure:
     def get_hash(self, **kwargs):
         """get_hash
 
-        Returns a unique hash from all layer IDs in the correct order
-        in the structure.
+        Create an unique hash from all layer IDs in the correct order in the
+        structure as well as the corresponding material properties which are
+        given by the `kwargs`.
+
+        Args:
+            **kwargs (list[str]): types of requested properties..
+
+        Returns:
+            hash (str): unique hash.
 
         """
         param = []
@@ -116,14 +126,13 @@ class Structure:
     def add_sub_structure(self, sub_structure, N=1):
         """add_sub_structure
 
-        Add a sub_structure of N layers or N structures to the
+        Add a sub_structure of :math:`N` layers or sub-structures to the
         structure.
 
         Args:
             sub_structure (AmorphousLayer, UnitCell, Structure):
-               amorphous layer, unit cell, or structure
-               to add as sub structure
-            N (int): number or repetitions
+               amorphous layer, unit cell, or structure to add as sub-structure.
+            N (int): number or repetitions.
 
         """
         # check of the sub_structure is an instance of the unitCell or
@@ -156,10 +165,10 @@ class Structure:
     def add_substrate(self, sub_structure):
         """add_substrate
 
-        Add a structure as static substrate to the structure
+        Add a structure as static substrate to the structure.
 
         Args:
-            sub_structure (Structure): substrate structure
+            sub_structure (Structure): substrate structure.
 
         """
         if not isinstance(sub_structure, Structure):
@@ -173,9 +182,11 @@ class Structure:
     def get_number_of_sub_structures(self):
         """get_number_of_sub_structures
 
-        Returns the number of all sub structures.
         This methods does not return the number of all layers in the
-        structure, see get_number_of_layers().
+        structure, see :meth:`.get_number_of_layers`.
+
+        Returns:
+            N (int): number of all sub structures.
 
         """
         N = 0
@@ -189,7 +200,8 @@ class Structure:
     def get_number_of_layers(self):
         """get_number_of_layers
 
-        Returns the number of all layers in the structure.
+        Returns:
+            N (int): number of all layers in the structure.
 
         """
         N = 0
@@ -208,7 +220,8 @@ class Structure:
     def get_number_of_unique_layers(self):
         """get_number_of_unique_layers
 
-        Returns the number of unique layers in the structure.
+        Returns:
+            N (int): number of unique layers in the structure.
 
         """
         N = len(self.get_unique_layers()[0])
@@ -217,7 +230,13 @@ class Structure:
     def get_thickness(self, units=True):
         """get_thickness
 
-        Returns the thickness from surface to bottom of the structure
+        Args:
+            units (boolean, optional): whether units should be returned or not.
+                Defaults to True.
+
+        Returns:
+            thickness (float, Quantitiy): the thickness from surface to bottom
+            of the structure.
 
         """
         _, d_end, _ = self.get_distances_of_layers(units)
@@ -226,10 +245,14 @@ class Structure:
     def get_unique_layers(self):
         """get_unique_layers
 
-        Returns a list of ids and handles of all unique layers
-        instances in the structure.
-        The uniqueness is determined by the handle of each layer
-        instance.
+        The uniqueness is determined by the handle of each layer instance.
+
+        Returns:
+            (tuple):
+            - *layer_ids (list[str])* - ids of all unique layers instances in
+              the structure.
+            - *layer_handles (list[AmorphousLayer, UnitCell, Structure])* -
+              handles of all unique layers instances in the structure.
 
         """
         layer_ids = []
@@ -289,6 +312,15 @@ class Structure:
             layers (Optional[list]): list of unique layers including
                ids and handles
 
+        Returns:
+            (tuple):
+            - *indices (list[int])* - numeric index of all layers in a
+              structure.
+            - *layer_ids (list[str])* - ids of all unique layers instances in
+              the structure.
+            - *layer_handles (list[AmorphousLayer, UnitCell, Structure])* -
+              handles of all unique layers instances in the structure.
+
         """
         indices = []
         layer_ids = []
@@ -339,8 +371,9 @@ class Structure:
     def get_all_positions_per_unique_layer(self):
         """get_all_positions_per_unique_layer
 
-        Returns a list with one vector of position indices for
-        each unique layer in the structure.
+        Returns:
+            pos (dict{ndarray[int]}): position indices for each unique layer in
+            the structure.
 
         """
         layers = self.get_unique_layers()
@@ -358,8 +391,18 @@ class Structure:
         starting at 0 (dStart) and starting at the end of the first
         layer (dEnd) and from the center of each layer (dMid).
 
-        ToDo: add argument to return distances in according unit or only
-        numbers.
+        Args:
+            units (boolean, optional): whether units should be returned or not.
+                Defaults to True.
+
+        Returns:
+            (tuple):
+            - *d_start (ndarray[float, Quantity])* - distances from the surface
+              of each layer starting at 0.
+            - *d_end (ndarray[float, Quantity])* - distances from the bottom
+              of each layer.
+            - *d_mid (ndarray[float, Quantity])*: distance from the middle of
+              each layer.
 
         """
         thickness = self.get_layer_property_vector('_thickness')
@@ -374,8 +417,13 @@ class Structure:
     def get_distances_of_interfaces(self, units=True):
         """get_distances_of_interfaces
 
-        Returns the distances from the surface of each interface of the
-        structure.
+        Args:
+            units (boolean, optional): whether units should be returned or not.
+                Defaults to True.
+
+        Returns:
+            res (ndarray[float, Quantity]): distances from the surface of each
+            interface of the structure.
 
         """
 
@@ -388,10 +436,20 @@ class Structure:
             return res
 
     def interp_distance_at_interfaces(self, N, units=True):
-        """ interpDistanceAtInterfaces
+        """ interp_distance_at_interfaces
 
-        Returns a distance array of the center of layers interpolated by an
-        odd number N at the interface of sturctures.
+        Args:
+            N (int): number of point of interpolation at interface
+            units (boolean, optional): whether units should be returned or not.
+                Defaults to True.
+
+        Returns:
+            (tuple):
+            - *dist_interp (ndarray[float, Quantity])* - distance array of the
+              middle of each layer interpolated by an odd number :math:`N` at
+              the interfaces
+            - *original_indicies (ndarray[int])* - indicies of the original
+              distances in the interpolated array
 
         """
 
@@ -436,7 +494,11 @@ class Structure:
         returns a scalar value or a function handle.
 
         Args:
-            property_name (str): type of property to return as vector
+            property_name (str): name of property to return as array
+
+        Returns:
+            prop (ndarray[float, @lambda]): array of a property for all layers
+            in the structure.
 
         """
         # get the Handle to all layers in the Structure
@@ -494,8 +556,12 @@ class Structure:
     def get_layer_handle(self, i):
         """get_layer_handle
 
-        Returns the handle to the layer at position i in the
-        structure.
+        Args:
+            i (int): index of the layer to return.
+
+        Returns:
+            handle (AmorphousLayer, UnitCell): handle to the layer at position
+            `i` in the structure.
 
         """
         handles = self.get_layer_vectors()[2]

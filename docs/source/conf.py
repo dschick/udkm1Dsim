@@ -20,8 +20,8 @@ sys.path.insert(0, os.path.abspath('../../'))
 # -- Project information -----------------------------------------------------
 
 project = 'udkm1Dsim'
-copyright = '2019, Daniel Schick, et.al.'
-author = 'Daniel Schick, et.al.'
+copyright = '2020, Daniel Schick'
+author = 'Daniel Schick'
 
 # The short X.Y version
 version = '0.1.4'
@@ -33,7 +33,7 @@ release = '0.1.4'
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
-# needs_sphinx = '1.0'
+needs_sphinx = '3.2'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -159,7 +159,66 @@ texinfo_documents = [
      'Miscellaneous'),
 ]
 
-
+todo_include_todos = True
 # -- Extension configuration -------------------------------------------------
 # increase timeout of nbsphinx from 30 to 3000s
+nbsphinx_execute = 'never'
 nbsphinx_timeout = 3000
+
+# Autodoc setting
+autodoc_default_options = {
+    'member-order': 'bysource',
+}
+
+# Napoleon settings
+napoleon_google_docstring = True
+napoleon_numpy_docstring = False
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = False
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = True
+napoleon_use_admonition_for_references = True
+napoleon_use_ivar = True
+napoleon_use_param = True
+napoleon_use_rtype = False
+napoleon_use_keyword = True
+napoleon_custom_sections = None
+
+# -- Extensions to the  Napoleon GoogleDocstring class ---------------------
+
+from sphinx.ext.napoleon.docstring import GoogleDocstring
+
+
+# first, we define new methods for any new sections and add them to the class
+def parse_keys_section(self, section):
+    return self._format_fields('Keys', self._consume_fields())
+
+
+GoogleDocstring._parse_keys_section = parse_keys_section
+
+
+def parse_attributes_section(self, section):
+    return self._format_fields('Attributes', self._consume_fields())
+
+
+GoogleDocstring._parse_attributes_section = parse_attributes_section
+
+
+def parse_class_attributes_section(self, section):
+    return self._format_fields('Class Attributes', self._consume_fields())
+
+
+GoogleDocstring._parse_class_attributes_section = parse_class_attributes_section
+
+
+# we now patch the parse method to guarantee that the the above methods are
+# assigned to the _section dict
+def patched_parse(self):
+    self._sections['keys'] = self._parse_keys_section
+    self._sections['class attributes'] = self._parse_class_attributes_section
+    self._unpatched_parse()
+
+
+GoogleDocstring._unpatched_parse = GoogleDocstring._parse
+GoogleDocstring._parse = patched_parse
