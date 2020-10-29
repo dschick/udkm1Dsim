@@ -133,8 +133,8 @@ class Xray(Simulation):
         """get_hash
 
         Calculates an unique hash given by the energy :math:`E`,
-        :math:`q_z` range, polarization states and the strain vectors as
-        well as the sample structure hash for relevant xray parameters.
+        :math:`q_z` range, polarization states and the ``strain_vectors`` as
+        well as the sample structure hash for relevant x-ray parameters.
         Optionally, part of the strain_map is used.
 
         Args:
@@ -395,7 +395,7 @@ class XrayKin(Xray):
 
     @u.wraps(None, (None, 'eV', 'm**-1', None, None), strict=False)
     def get_uc_structure_factor(self, energy, qz, uc, strain=0):
-        """get_uc_structure_factor
+        r"""get_uc_structure_factor
 
         Calculates the energy-, angle-, and strain-dependent structure factor
         .. math: `S(E,q_z,\epsilon)` of the unit cell:
@@ -427,7 +427,7 @@ class XrayKin(Xray):
         return S
 
     def homogeneous_reflectivity(self, strains=0):
-        """homogeneous_reflectivity
+        r"""homogeneous_reflectivity
 
         Calculates the reflectivity :math:`R = E_p^t\,(E_p^t)^*` of a
         homogeneous sample structure as well as the reflected field
@@ -440,7 +440,7 @@ class XrayKin(Xray):
         Returns:
             (tuple):
             - *R (ndarray[complex])* - homogeneous reflectivity.
-            - *A (ndarray[complex])* - reflected fields of substructures.
+            - *A (ndarray[complex])* - reflected fields of sub-structures.
 
         """
         if strains == 0:
@@ -693,8 +693,10 @@ class XrayDyn(Xray):
         Sets the incoming polarization factor for sigma, pi, and unpolarized
         polarization.
 
-        """
+        Args:
+            pol_in_state (int): incoming polarization state id.
 
+        """
         self.pol_in_state = pol_in_state
         if (self.pol_in_state == 1):  # circ +
             self.disp_message('incoming polarizations {:s} not implemented'.format(
@@ -722,8 +724,10 @@ class XrayDyn(Xray):
 
         For dynamical X-ray simulation only "no analyzer polarization" is allowed.
 
-        """
+        Args:
+            pol_out_state (int): outgoing polarization state id.
 
+        """
         self.pol_out_state = pol_out_state
         if self.pol_out_state == 0:
             self.disp_message('analyzer polarizations set to: {:s}'.format(
@@ -733,14 +737,23 @@ class XrayDyn(Xray):
             self.set_outgoing_polarization(0)
 
     def homogeneous_reflectivity(self, *args):
-        """homogeneous_reflectivity
+        r"""homogeneous_reflectivity
 
-        Returns the reflectivity :math:`R` of the whole sample structure
+        Calculates the reflectivity :math:`R` of the whole sample structure
         and the reflectivity-transmission matrices :math:`M_{RT}` for
-        each substructure. The reflectivity of the :math:`2\\times 2`
+        each substructure. The reflectivity of the :math:`2\times 2`
         matrices for each :math:`q_z` is calculates as follow:
 
-        .. math:: R = \left|M_{RT}^t(0,1)/M_{RT}^t(1,1)\\right|^2
+        .. math:: R = \left|M_{RT}^t(0,1)/M_{RT}^t(1,1)\right|^2
+
+        Args:
+            *args (ndarray[float], optional): strains for each substructure.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - homogeneous reflectivity.
+            - *A (ndarray[complex])* - reflectivity-transmission matrices of
+              sub-structures.
 
         """
         # if no strains are given we assume no strain
@@ -758,10 +771,10 @@ class XrayDyn(Xray):
         return R, A
 
     def homogeneous_ref_trans_matrix(self, S, *args):
-        """homogeneous_ref_trans_matrix
+        r"""homogeneous_ref_trans_matrix
 
-        Returns the reflectivity-transmission matrices :math:`M_{RT}` of
-        the whole sample structure as well as for each sub structure.
+        Calculates the reflectivity-transmission matrices :math:`M_{RT}` of
+        the whole sample structure as well as for each sub-structure.
         The reflectivity-transmission matrix of a single unit cell is
         calculated from the reflection-transmission matrices :math:`H_i`
         of each atom and the phase matrices between the atoms :math:`L_i`:
@@ -769,12 +782,22 @@ class XrayDyn(Xray):
         .. math:: M_{RT} = \prod_i H_i \ L_i
 
         For :math:`N` similar layers of unit cells one can calculate the
-        N-th power of the unit cell :math:`\left(M_{RT}\\right)^N`. The
+        N-th power of the unit cell :math:`\left(M_{RT}\right)^N`. The
         reflection-transmission matrix for the whole sample
         :math:`M_{RT}^t` consisting of :math:`j = 1\ldots M`
-        substructures is then again:
+        sub-structures is then again:
 
-        .. math::  M_{RT}^t = \prod_{j=1}^M \left(M_{RT^,j}\\right)^{N_j}
+        .. math::  M_{RT}^t = \prod_{j=1}^M \left(M_{RT^,j}\right)^{N_j}
+
+        Args:
+            S (Structure, UnitCell): structure or sub-structure to calculate on.
+            *args (ndarray[float], optional): strains for each substructure.
+
+        Returns:
+            (tuple):
+            - *RT (ndarray[complex])* - reflectivity-transmission matrix.
+            - *A (ndarray[complex])* - reflectivity-transmission matrices of
+              sub-structures.
 
         """
         # if no strains are given we assume no strain (1)
@@ -824,30 +847,35 @@ class XrayDyn(Xray):
 
         return RT, A
 
-    """
-    Inhomogenous Sample Structure
-    All unit cells in the sample are inhomogeneously
-    strained. This is generally the case when calculating the
-    transient rocking curves for coherent phonon dynamics in the
-    sample structure.
-    """
-
     def inhomogeneous_reflectivity(self, strain_map, strain_vectors, **kwargs):
         """inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogenously strained sample
-        structure for a given _strain_map_ in position and time, as well
+        structure for a given ``strain_map`` in position and time, as well
         as for a given set of possible strains for each unit cell in the
         sample structure (``strain_vectors``).
         If no reflectivity is saved in the cache it is caluclated.
-        Providing the _type_ (parallel [default], sequential,
-        distributed) for the calculation the corresponding subroutines
-        for the reflectivity computation are called:
+        Providing the ``calc_type`` for the calculation the corresponding
+        sub-routines for the reflectivity computation are called:
 
         * ``parallel`` parallelization over the time steps utilizing
-          Dask
-        * ``distributed`` not implemented in Python, yet
+          `Dask <https://dask.org/>`_
+        * ``distributed`` not implemented in Python, but should be possible
+          with `Dask <https://dask.org/>`_ as well
         * ``sequential`` no parallelization at all
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            strain_vectors (list[ndarray[float]]): reduced strains per unique
+                layer.
+            **kwargs:
+                - *calc_type (str)* - type of calculation.
+                - *dask_client (Dask.Client)* - Dask client.
+                - *job (Dask.job)* - Dask job.
+                - *num_workers (int)* - Dask number of workers.
+
+        Returns:
+            R (ndarray[float]): inhomogeneous reflectivity.
 
         """
         # create a hash of all simulation parameters
@@ -907,12 +935,21 @@ class XrayDyn(Xray):
     def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM):
         """sequential_inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogenously strained sample
-        structure for a given ``strain_map`` in position and time, as
-        well as for a given set of possible strains for each unit cell
-        in the sample structure (``strain_vectors``).
-        The function calculates the results sequentially without
-        parallelization.
+        Returns the reflectivity of an inhomogenously strained sample structure
+        for a given ``strain_map`` in position and time, as well as for a given
+        set of possible strains for each unit cell in the sample structure
+        (``strain_vectors``). The function calculates the results sequentially
+        without parallelization.
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            strain_vectors (list[ndarray[float]]): reduced strains per unique
+                layer.
+            RTM (list[ndarray[complex]]): reflection-transmission matricies for
+                all given strains per unique layer.
+
+        Returns:
+            R (ndarray[float]): inhomogeneous reflectivity.
 
         """
         # initialize
@@ -930,12 +967,22 @@ class XrayDyn(Xray):
                                             RTM, dask_client):
         """parallel_inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogenously strained sample
-        structure for a given ``strain_map`` in position and time, as
-        well as for a given set of possible strains for each unit cell
-        in the sample structure (``strain_vectors``).
-        The function tries to parallize the calculation over the time
-        steps, since the results do not depent on each other.
+        Returns the reflectivity of an inhomogenously strained sample structure
+        for a given ``strain_map`` in position and time, as well as for a given
+        set of possible strains for each unit cell in the sample structure
+        (``strain_vectors``). The function parallizes the calculation over the
+        time steps, since the results do not depent on each other.
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            strain_vectors (list[ndarray[float]]): reduced strains per unique
+                layer.
+            RTM (list[ndarray[complex]]): reflection-transmission matricies for
+                all given strains per unique layer.
+            dask_client (Dask.Client): Dask client.
+
+        Returns:
+            R (ndarray[float]): inhomogeneous reflectivity.
 
         """
         if not dask_client:
@@ -985,38 +1032,60 @@ class XrayDyn(Xray):
 
         return R
 
-    def distributed_inhomogeneous_reflectivity(self, job, num_worker,
-                                               strain_map, strain_vectors, RTM):
+    def distributed_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM,
+                                               job, num_worker):
         """distributed_inhomogeneous_reflectivity
 
         This is a stub. Not yet implemented in python.
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            strain_vectors (list[ndarray[float]]): reduced strains per unique
+                layer.
+            RTM (list[ndarray[complex]]): reflection-transmission matricies for
+                all given strains per unique layer.
+            job (Dask.job): Dask job.
+            num_workers (int): Dask number of workers.
+
+        Returns:
+            R (ndarray[float]): inhomogeneous reflectivity.
 
         """
         return
 
     def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM):
-        """calc_inhomogeneous_reflectivity
+        r"""calc_inhomogeneous_reflectivity
 
-        Calculates the reflectivity of a inhomogenous sample structure
-        for a given strain vector for a single time step. Similar to the
-        homogeneous sample structure, the reflectivity of an unit cell
-        is calculated from the reflection-transmission matrices
-        :math:`H_i` of each atom and the phase matrices between the
-        atoms :math:`L_i`:
+        Calculates the reflectivity of a inhomogenous sample structure for
+        given ``strain_vectors`` for a single time step. Similar to the
+        homogeneous sample structure, the reflectivity of an unit cell is
+        calculated from the reflection-transmission matrices :math:`H_i` of
+        each atom and the phase matrices between the atoms :math:`L_i` in the
+        unit cell:
 
         .. math:: M_{RT} = \prod_i H_i \ L_i
 
-        Since all layers are generally inhomogeneously strained we have
-        to traverse all individual unit cells (:math:`j = 1\ldots M`) in
-        the sample to calculate the total reflection-transmission matrix
+        Since all layers are generally inhomogeneously strained we have to
+        traverse all individual unit cells (:math:`j = 1\ldots M`) in the
+        sample to calculate the total reflection-transmission matrix
         :math:`M_{RT}^t`:
 
         .. math:: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
 
-        The reflectivity of the :math:`2\\times 2` matrices for each
-        :math:`q_z` is calculates as follow:
+        The reflectivity of the :math:`2\times 2` matrices for each :math:`q_z`
+        is calculates as follow:
 
-        .. math:: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\\right|^2
+        .. math:: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\right|^2
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            strain_vectors (list[ndarray[float]]): reduced strains per unique
+                layer.
+            RTM (list[ndarray[complex]]): reflection-transmission matricies for
+                all given strains per unique layer.
+
+        Returns:
+            R (ndarray[float]): inhomogeneous reflectivity.
 
         """
         # initialize ref_trans_matrix
@@ -1044,13 +1113,26 @@ class XrayDyn(Xray):
     @staticmethod
     def calc_inhomogeneous_ref_trans_matrix(uc_indicies, RT, strains,
                                             strain_vectors, RTM):
-        """calc_inhomogeneous_ref_trans_matrix
+        r"""calc_inhomogeneous_ref_trans_matrix
 
-        Sub-function of ``calc_inhomogeneous_reflectivity`` and for
+        Sub-function of :meth:`calc_inhomogeneous_reflectivity` and for
         parallel computing (needs to be static) only for calculating the
         total reflection-transmission matrix :math:`M_{RT}^t`:
 
         .. math:: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
+
+        Args:
+            uc_indicies (ndarray[float]): unit cell indicies.
+            RT (ndarray[complex]): reflection-transmission matrix.
+            strains (ndarray[float]): spatial strain profile for single time
+                step.
+            strain_vectors (list[ndarray[float]]): reduced strains per unique
+                layer.
+            RTM (list[ndarray[complex]]): reflection-transmission matricies for
+                all given strains per unique layer.
+
+        Returns:
+            RT (ndarray[complex]): reflection-transmission matrix.
 
         """
         # traverse all unit cells in the sample structure
@@ -1070,11 +1152,19 @@ class XrayDyn(Xray):
     def get_all_ref_trans_matrices(self, *args):
         """get_all_ref_trans_matrices
 
-        Returns a list of all reflection-transmission matrices for
-        each unique unit cell in the sample structure for a given set of
-        applied strains for each unique unit cell given by the
-        ``strain_vectors`` input. If this data was saved on disk before,
-        it is loaded, otherwise it is calculated.
+        Returns a list of all reflection-transmission matrices for each
+        unique unit cell in the sample structure for a given set of applied
+        strains for each unique unit cell given by the ``strain_vectors``
+        input. If this data was saved on disk before, it is loaded, otherwise
+        it is calculated.
+
+        Args:
+            args (list[ndarray[float]], optional): reduced strains per unique
+                layer.
+
+        Returns:
+            RTM (list[ndarray[complex]]): reflection-transmission matricies for
+            all given strains per unique layer.
 
         """
         if len(args) == 0:
@@ -1099,10 +1189,17 @@ class XrayDyn(Xray):
     def calc_all_ref_trans_matrices(self, *args):
         """calc_all_ref_trans_matrices
 
-        Calculates a list of all reflection-transmission matrices
-        for each unique unit cell in the sample structure for a given
-        set of applied strains to each unique unit cell given by the
-        ``strainVectors`` input.
+        Calculates a list of all reflection-transmission matrices for each
+        unique unit cell in the sample structure for a given set of applied
+        strains to each unique unit cell given by the ``strain_vectors`` input.
+
+        Args::
+            args (list[ndarray[float]], optional): reduced strains per unique
+                layer.
+
+        Returns:
+            RTM (list[ndarray[complex]]): reflection-transmission matricies for
+            all given strains per unique layer.
 
         """
         t1 = time()
@@ -1134,15 +1231,23 @@ class XrayDyn(Xray):
         return RTM
 
     def get_uc_ref_trans_matrix(self, uc, *args):
-        """get_uc_ref_trans_matrix
+        r"""get_uc_ref_trans_matrix
 
         Returns the reflection-transmission matrix of a unit cell:
 
         .. math:: M_{RT} = \prod_i H_i \  L_i
 
         where :math:`H_i` and :math:`L_i` are the atomic reflection-
-        transmission matrix and the phase matrix for the atomic
-        distances, respectively.
+        transmission matrix and the phase matrix for the atomic distances,
+        respectively.
+
+        Args:
+            uc (UnitCell): unit cell object.
+            args (float, optional): strain of unit cell.
+
+        Returns:
+            RTM (list[ndarray[complex]]): reflection-transmission matricies for
+                all given strains per unique layer.
 
         """
         if len(args) == 0:
@@ -1179,17 +1284,25 @@ class XrayDyn(Xray):
         return RTM
 
     def get_atom_ref_trans_matrix(self, atom, area, deb_wal_fac):
-        """get_atom_ref_trans_matrix
+        r"""get_atom_ref_trans_matrix
 
-        Returns the reflection-transmission matrix of an atom from
-        dynamical xray theory:
+        Calculates the reflection-transmission matrix of an atom from dynamical
+        x-ray theory:
 
         .. math::
 
-            H = \\frac{1}{\\tau} \\begin{bmatrix}
-            \left(\\tau^2 - \\rho^2\\right) & \\rho \\\\
-            -\\rho & 1
-            \\end{bmatrix}
+            H = \frac{1}{\tau} \begin{bmatrix}
+            \left(\tau^2 - \rho^2\right) & \rho \\
+            -\rho & 1
+            \end{bmatrix}
+
+        Args:
+            atom (Atom, AtomMixed): atom or mixed atom
+            area (float): area of the unit cell [m²]
+            deb_wal_fac (float): Debye-Waller factor for unit cell
+
+        Returns:
+            H (ndarray[complex]): reflection-transmission matrix
 
         """
         # check for already calculated data
@@ -1228,11 +1341,11 @@ class XrayDyn(Xray):
         return H
 
     def get_atom_reflection_factor(self, atom, area, deb_wal_fac):
-        """get_atom_reflection_factor
+        r"""get_atom_reflection_factor
 
-        Returns the reflection factor from dynamical xray theory:
+        Calculates the reflection factor from dynamical x-ray theory:
 
-        .. math::  \\rho = \\frac{-i 4 \pi \ r_e \ f(E,q_z) \ P(\\theta)
+        .. math::  \rho = \frac{-i 4 \pi \ r_e \ f(E,q_z) \ P(\theta)
                    \exp(-M)}{q_z \ A}
 
         - :math:`r_e` is the electron radius
@@ -1241,9 +1354,17 @@ class XrayDyn(Xray):
         - :math:`P(q_z)` is the polarization factor
         - :math:`A` is the area in :math:`x-y` plane on which the atom
           is placed
-        - :math:`M = 0.5(\mbox{deb_wal_fac} \ q_z)^2)` where
-          :math:`\mbox{dbf}^2 = \\langle u^2\\rangle` is the average
+        - :math:`M = 0.5(\mbox{dbf} \ q_z)^2)` where
+          :math:`\mbox{dbf}^2 = \langle u^2\rangle` is the average
           thermal vibration of the atoms - Debye-Waller factor
+
+        Args:
+            atom (Atom, AtomMixed): atom or mixed atom
+            area (float): area of the unit cell [m²]
+            deb_wal_fac (float): Debye-Waller factor for unit cell
+
+        Returns:
+            rho (complex): reflection factor
 
         """
         rho = (-4j*np.pi*r_0
@@ -1253,11 +1374,11 @@ class XrayDyn(Xray):
         return rho
 
     def get_atom_transmission_factor(self, atom, area, deb_wal_fac):
-        """get_atom_transmission_factor
+        r"""get_atom_transmission_factor
 
-        Returns the transmission factor from dynamical xray theory:
+        Calculates the transmission factor from dynamical x-ray theory:
 
-        .. math:: \\tau = 1 - \\frac{i 4 \pi r_e f(E,0) \exp(-M)}{q_z A}
+        .. math:: \tau = 1 - \frac{i 4 \pi r_e f(E,0) \exp(-M)}{q_z A}
 
         - :math:`r_e` is the electron radius
         - :math:`f(E,0)` is the energy dispersive atomic form factor
@@ -1265,8 +1386,16 @@ class XrayDyn(Xray):
         - :math:`A` is the area in :math:`x-y` plane on which the atom
           is placed
         - :math:`M = 0.5(\mbox{dbf} \ q_z)^2` where
-          :math:`\mbox{dbf}^2 = \\langle u^2\\rangle` is the average
+          :math:`\mbox{dbf}^2 = \langle u^2\rangle` is the average
           thermal vibration of the atoms - Debye-Waller factor
+
+        Args:
+            atom (Atom, AtomMixed): atom or mixed atom
+            area (float): area of the unit cell [m²]
+            deb_wal_fac (float): Debye-Waller factor for unit cell
+
+        Returns:
+            tau (complex): transmission factor
 
         """
         tau = 1 - (4j*np.pi*r_0
@@ -1275,16 +1404,22 @@ class XrayDyn(Xray):
         return tau
 
     def get_atom_phase_matrix(self, distance):
-        """get_atom_phase_matrix
+        r"""get_atom_phase_matrix
 
-        Returns the phase matrix from dynamical xray theory:
+        Calculates the phase matrix from dynamical x-ray theory:
 
         .. math::
 
-            L = \\begin{bmatrix}
-            \exp(i \phi) & 0 \\\\
+            L = \begin{bmatrix}
+            \exp(i \phi) & 0 \\
             0            & \exp(-i \phi)
             \end{bmatrix}
+
+        Args:
+            distance (float): distance between atomic planes
+
+        Returns:
+            L (ndarray[complex]): phase matrix
 
         """
         phi = self.get_atom_phase_factor(distance)
@@ -1294,12 +1429,18 @@ class XrayDyn(Xray):
         return L
 
     def get_atom_phase_factor(self, distance):
-        """get_atom_phase_factor
+        r"""get_atom_phase_factor
 
-        Returns the phase factor :math:`\phi` for a distance :math:`d`
-        from dynamical xray theory:
+        Calculates the phase factor :math:`\phi` for a distance :math:`d`
+        from dynamical x-ray theory:
 
-        .. math:: \phi = \\frac{d \ q_z}{2}
+        .. math:: \phi = \frac{d \ q_z}{2}
+
+        Args:
+            distance (float): distance between atomic planes
+
+        Returns:
+            phi (float): phase factor
 
         """
         phi = distance * self._qz/2
@@ -1307,12 +1448,18 @@ class XrayDyn(Xray):
 
     @staticmethod
     def calc_reflectivity_from_matrix(M):
-        """calc_reflectivity_from_matrix
+        r"""calc_reflectivity_from_matrix
 
-        Returns the physical reflectivity from an 2x2 matrix of
+        Calculates the reflectivity from an :math:`2\times2` matrix of
         transmission and reflectifity factors:
 
-        .. math:: R = \\left|M(0,1)/M(1,1)\\right|^2
+        .. math:: R = \left|M(0,1)/M(1,1)\right|^2
+
+        Args:
+            M (ndarray[complex]): reflection-transmission matrix
+
+        Returns:
+            R (ndarray[float]): reflectivity
 
         """
         return np.abs(M[:, :, 0, 1]/M[:, :, 1, 1])**2
@@ -1411,11 +1558,17 @@ class XrayDynMag(Xray):
     def get_hash(self, **kwargs):
         """get_hash
 
-        Returns a unique hash given by the energy :math:`E`,
-        :math:`q_z` range, polarization states and the strain vectors as
-        well as the sample structure hash for relevant xray and magnetic
-        parameters. Optionally, part of the strain_map and magnetization_map
-        are used.
+        Calculates an unique hash given by the energy :math:`E`, :math:`q_z`
+        range, polarization states as well as the sample structure hash for
+        relevant x-ray and magnetic parameters. Optionally, part of the
+        ``strain_map`` and ``magnetization_map`` are used.
+
+        Args:
+            **kwargs (ndarray[float]): spatio-temporal strain and magnetization
+                profile.
+
+        Returns:
+            hash (str): unique hash.
 
         """
         param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy]
@@ -1436,8 +1589,11 @@ class XrayDynMag(Xray):
     def set_incoming_polarization(self, pol_in_state):
         """set_incoming_polarization
 
-        Sets the incoming polarization factor for circular +, circular -, sigma, pi,
-        and unpolarized polarization.
+        Sets the incoming polarization factor for circular +, circular -, sigma,
+        pi, and unpolarized polarization.
+
+        Args:
+            pol_in_state (int): incoming polarization state id.
 
         """
 
@@ -1460,8 +1616,11 @@ class XrayDynMag(Xray):
     def set_outgoing_polarization(self, pol_out_state):
         """set_outgoing_polarization
 
-        Sets the outgoing polarization factor for circular +, circular -, sigma, pi,
-        and unpolarized polarization.
+        Sets the outgoing polarization factor for circular +, circular -, sigma,
+        pi, and unpolarized polarization.
+
+        Args:
+            pol_out_state (int): outgoing polarization state id.
 
         """
 
@@ -1482,21 +1641,30 @@ class XrayDynMag(Xray):
             self.polarizations[self.pol_out_state]))
 
     def homogeneous_reflectivity(self, *args):
-        """homogeneous_reflectivity
+        r"""homogeneous_reflectivity
 
-        Returns the reflectivity :math:`R` of the whole sample structure
-        allowing only no or homogeneous strain and magnetization.
+        Calculates the reflectivity :math:`R` of the whole sample structure
+        allowing only for homogeneous strain and magnetization.
 
         The reflection-transmission matrices
 
-        .. math:: RT = A_f^{-1} \\prod_m \\left( A_m P_m A_m^{-1} \\right) A_0
+        .. math:: RT = A_f^{-1} \prod_m \left( A_m P_m A_m^{-1} \right) A_0
 
         are calculated for every substructure :math:`m` before post-processing
         the incoming and analyzer polarizations and calculating the actual
         reflectivities as function of energy and :math:`q_z`.
 
-        """
+        Args:
+            args (ndarray[float], optional): strains and magnetization for each
+                sub-structure.
 
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - homogeneous reflectivity.
+            - *R_phi (ndarray[float])* - homogeneous reflectivity for opposite
+              magnetization.
+
+        """
         t1 = time()
         self.disp_message('Calculating _homogeneous_reflectivity_ ...')
         # vacuum boundary
@@ -1523,19 +1691,42 @@ class XrayDynMag(Xray):
         return R, R_phi
 
     def calc_homogeneous_matrix(self, S, last_A, last_A_phi, last_k_z, *args):
-        """calc_homogeneous_matrix
+        r"""calc_homogeneous_matrix
 
         Calculates the product of all reflection-transmission matrices of the
         sample structure
 
-        .. math:: RT = \\prod_m \\left(P_m A_m^{-1} A_{m-1} \\right)
+        .. math:: RT = \prod_m \left(P_m A_m^{-1} A_{m-1} \right)
 
         If the sub-structure :math:`m` consists of :math:`N` unit cells
         the matrix exponential rule is applied:
 
-        .. math:: RT_m = \\left( P_{UC} A_{UC}^{-1} A_{UC} \\right)^N
+        .. math:: RT_m = \left( P_{UC} A_{UC}^{-1} A_{UC} \right)^N
 
         Roughness is also included by a gaussian width
+
+        Args:
+            S (Structure, UnitCell, AmorphousLayer): structure, sub-structure,
+                unit cell or amorphous layer to calculate on.
+            last_A (ndarray[complex]): last atom boundary matrix.
+            last_A_phi (ndarray[complex]): last atom boundary matrix for opposite
+                magnetization.
+            last_k_z (ndarray[float]): last internal wave vector
+            args (ndarray[float], optional): strains and magnetization for each
+                sub-structure.
+
+        Return:
+            (tuple):
+            - *RT (ndarray[complex])* - reflection-transmission matrix.
+            - *RT_phi (ndarray[complex])* - reflection-transmission matrix for
+              opposite magnetization.
+            - *A (ndarray[complex])* - atom boundary matrix.
+            - *A_phi (ndarray[complex])* - atom boundary matrix for opposite
+              magnetization.
+            - *A_inv (ndarray[complex])* - inversed atom boundary matrix.
+            - *A_inv_phi (ndarray[complex])* - inversed atom boundary matrix for
+              opposite magnetization.
+            - *k_z (ndarray[float])* - internal wave vector.
 
         """
         # if no strains are given we assume no strain (1)
@@ -1652,30 +1843,37 @@ class XrayDynMag(Xray):
 
         return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
-    """
-    Inhomogeneous Sample Structure
-    All unit cells in the sample are inhomogeneously
-    strained. This is generally the case when calculating the
-    transient rocking curves for coherent phonon dynamics in the
-    sample structure.
-    """
-
     def inhomogeneous_reflectivity(self, strain_map, magnetization_map, **kwargs):
         """inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogeneously strained and
-        magnetized sample structure for a given _strain_map_ and
-        _magnetization_map_ in position and time for each unit cell or
-        amorphous layer in the sample structure.
-        If no reflectivity is saved in the cache it is caluclated.
-        Providing the _type_ (parallel [default], sequential,
-        distributed) for the calculation the corresponding subroutines
-        for the reflectivity computation are called:
+        Returns the reflectivity of an inhomogeneously strained and magnetized
+        sample structure for a given _strain_map_ and _magnetization_map_ in
+        space and time for each unit cell or amorphous layer in the sample
+        structure. If no reflectivity is saved in the cache it is caluclated.
+        Providing the ``calc_type`` for the calculation the corresponding
+        sub-routines for the reflectivity computation are called:
 
         * ``parallel`` parallelization over the time steps utilizing
-          Dask
-        * ``distributed`` not yet implemented
+          `Dask <https://dask.org/>`_
+        * ``distributed`` not implemented in Python, but should be possible
+          with `Dask <https://dask.org/>`_ as well
         * ``sequential`` no parallelization at all
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            magnetization_map (ndarray[float]): spatio-temporal magnetization
+                profile.
+            **kwargs:
+                - *calc_type (str)* - type of calculation.
+                - *dask_client (Dask.Client)* - Dask client.
+                - *job (Dask.job)* - Dask job.
+                - *num_workers (int)* - Dask number of workers.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - inhomogeneous reflectivity.
+            - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
+              magnetization.
 
         """
         # create a hash of all simulation parameters
@@ -1727,12 +1925,21 @@ class XrayDynMag(Xray):
     def sequential_inhomogeneous_reflectivity(self, strain_map, magnetization_map):
         """sequential_inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogeneously strained sample
-        structure for a given ``strain_map`` in position and time, as
-        well as for a given set of possible strains for each unit cell
-        in the sample structure (``strain_vectors``).
-        The function calculates the results sequentially without
-        parallelization for every atomic layer.
+        Returns the reflectivity of an inhomogeneously strained sample structure
+        for a given ``strain_map`` and ``magnetization_map`` in space and time.
+        The function calculates the results sequentially for every atomic layer
+        without parallelization.
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            magnetization_map (ndarray[float]): spatio-temporal magnetization
+                profile.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - inhomogeneous reflectivity.
+            - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
+              magnetization.
 
         """
         # initialize
@@ -1771,12 +1978,22 @@ class XrayDynMag(Xray):
     def parallel_inhomogeneous_reflectivity(self, strain_map, magnetization_map, dask_client):
         """parallel_inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogeneously strained sample
-        structure for a given ``strain_map`` in position and time, as
-        well as for a given set of possible strains for each unit cell
-        in the sample structure (``strain_vectors``).
-        The function tries to parallize the calculation over the time
-        steps, since the results do not depent on each other.
+        Returns the reflectivity of an inhomogeneously strained sample structure
+        for a given ``strain_map`` and ``magnetization_map`` in space and time.
+        The function tries to parallize the calculation over the time steps,
+        since the results do not depent on each other.
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            magnetization_map (ndarray[float]): spatio-temporal magnetization
+                profile.
+            dask_client (Dask.Client): Dask client.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - inhomogeneous reflectivity.
+            - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
+              magnetization.
 
         """
         if not dask_client:
@@ -1850,22 +2067,58 @@ class XrayDynMag(Xray):
 
         return R, R_phi
 
-    def distributed_inhomogeneous_reflectivity(self, job, num_worker,
-                                               strain_map, magnetization_map):
+    def distributed_inhomogeneous_reflectivity(self, strain_map, magnetization_map,
+                                               job, num_worker,):
         """distributed_inhomogeneous_reflectivity
 
         This is a stub. Not yet implemented in python.
+
+        Args:
+            strain_map (ndarray[float]): spatio-temporal strain profile.
+            magnetization_map (ndarray[float]): spatio-temporal magnetization
+                profile.
+            job (Dask.job): Dask job.
+            num_workers (int): Dask number of workers.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - inhomogeneous reflectivity.
+            - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
+              magnetization.
 
         """
         return
 
     def calc_inhomogeneous_matrix(self, last_A, last_A_phi, last_k_z, strains, magnetizations):
-        """calc_inhomogeneous_matrix
+        r"""calc_inhomogeneous_matrix
 
         Calculates the product of all reflection-transmission matrices of the
         sample structure for every atomic layer.
 
-        .. math:: RT = \\prod_m \\left( P_m A_m^{-1} A_{m-1}  \\right)
+        .. math:: RT = \prod_m \left( P_m A_m^{-1} A_{m-1}  \right)
+
+        Args:
+            last_A (ndarray[complex]): last atom boundary matrix.
+            last_A_phi (ndarray[complex]): last atom boundary matrix for opposite
+              magnetization.
+            last_k_z (ndarray[float]): last internal wave vector
+            strains (ndarray[float]): spatial strain profile for single time
+                step.
+            magnetizations (ndarray[float]): spatial magnetization profile for
+                single time step.
+
+        Returns:
+            (tuple):
+            - *RT (ndarray[complex])* - reflection-transmission matrix.
+            - *RT_phi (ndarray[complex])* - reflection-transmission matrix for
+              opposite magnetization.
+            - *A (ndarray[complex])* - atom boundary matrix.
+            - *A_phi (ndarray[complex])* - atom boundary matrix for opposite
+              magnetization.
+            - *A_inv (ndarray[complex])* - inversed atom boundary matrix.
+            - *A_inv_phi (ndarray[complex])* - inversed atom boundary matrix for
+              opposite magnetization.
+            - *k_z (ndarray[float])* - internal wave vector.
 
         """
         L = self.S.get_number_of_layers()  # number of unit cells
@@ -1909,14 +2162,38 @@ class XrayDynMag(Xray):
 
     def calc_uc_boundary_phase_matrix(self, uc, last_A, last_A_phi, last_k_z, strain,
                                       magnetization):
-        """calc_uc_boundary_phase_matrix
+        r"""calc_uc_boundary_phase_matrix
 
         Calculates the product of all reflection-transmission matrices of
         a single unit cell for a given strain:
 
-        .. math:: RT = \\prod_m \\left( P_m A_m^{-1} A_{m-1}\\right)
+        .. math:: RT = \prod_m \left( P_m A_m^{-1} A_{m-1}\right)
 
         and returns also the last matrices :math:`A, A^{-1}, k_z`.
+
+        Args:
+            uc (UnitCell): unit cell
+            last_A (ndarray[complex]): last atom boundary matrix.
+            last_A_phi (ndarray[complex]): last atom boundary matrix for opposite
+              magnetization.
+            last_k_z (ndarray[float]): last internal wave vector
+            strains (ndarray[float]): spatial strain profile for single time
+                step.
+            magnetizations (ndarray[float]): spatial magnetization profile for
+                single time step.
+
+        Returns:
+            (tuple):
+            - *RT (ndarray[complex])* - reflection-transmission matrix.
+            - *RT_phi (ndarray[complex])* - reflection-transmission matrix for
+              opposite magnetization.
+            - *A (ndarray[complex])* - atom boundary matrix.
+            - *A_phi (ndarray[complex])* - atom boundary matrix for opposite
+              magnetization.
+            - *A_inv (ndarray[complex])* - inversed atom boundary matrix.
+            - *A_inv_phi (ndarray[complex])* - inversed atom boundary matrix for
+              opposite magnetization.
+            - *k_z (ndarray[float])* - internal wave vector.
 
         """
         K = uc.num_atoms  # number of atoms
@@ -1965,10 +2242,28 @@ class XrayDynMag(Xray):
     def get_atom_boundary_phase_matrix(self, atom, density, distance, *args):
         """get_atom_boundary_phase_matrix
 
-        Returns the boundary and phase matrices of an atom from
-        Elzo formalism. The results for a given atom, energy, :math:`q_z`,
-        polarization, and magnetization are stored to RAM to avoid
-        recalculation.
+        Returns the boundary and phase matrices of an atom from Elzo
+        formalism [8]_. The results for a given atom, energy, :math:`q_z`,
+        polarization, and magnetization are stored to RAM to avoid recalculation.
+
+        Args:
+            atom (Atom, AtomMixed): atom or mixed atom.
+            density (float): density around the atom [kg/m³].
+            distance (float): distance towards the next atomic [m].
+            args (ndarray[float]): magnetization vector.
+
+        Returns:
+            (tuple):
+            - *A (ndarray[complex])* - atom boundary matrix.
+            - *A_phi (ndarray[complex])* - atom boundary matrix for opposite
+              magnetization.
+            - *P (ndarray[complex])* - atom phase matrix.
+            - *P_phi (ndarray[complex])* - atom phase matrix for opposite
+              magnetization.
+            - *A_inv (ndarray[complex])* - inversed atom boundary matrix.
+            - *A_inv_phi (ndarray[complex])* - inversed atom boundary matrix for
+              opposite magnetization.
+            - *k_z (ndarray[float])* - internal wave vector.
 
         """
         try:
@@ -2031,11 +2326,29 @@ class XrayDynMag(Xray):
     def calc_atom_boundary_phase_matrix(self, atom, density, distance, *args):
         """calc_atom_boundary_phase_matrix
 
-        Calculates the boundary and phase matrices of an atom from
-        Elzo formalism.
+        Calculates the boundary and phase matrices of an atom from Elzo
+        formalism [8]_.
+
+        Args:
+            atom (Atom, AtomMixed): atom or mixed atom.
+            density (float): density around the atom [kg/m³].
+            distance (float): distance towards the next atomic [m].
+            args (ndarray[float]): magnetization vector.
+
+        Returns:
+            (tuple):
+            - *A (ndarray[complex])* - atom boundary matrix.
+            - *A_phi (ndarray[complex])* - atom boundary matrix for opposite
+              magnetization.
+            - *P (ndarray[complex])* - atom phase matrix.
+            - *P_phi (ndarray[complex])* - atom phase matrix for opposite
+              magnetization.
+            - *A_inv (ndarray[complex])* - inversed atom boundary matrix.
+            - *A_inv_phi (ndarray[complex])* - inversed atom boundary matrix for
+              opposite magnetization.
+            - *k_z (ndarray[float])* - internal wave vector.
 
         """
-
         try:
             magnetization = args[0]
             mag_amplitude = magnetization[0]
@@ -2216,7 +2529,16 @@ class XrayDynMag(Xray):
         """calc_reflectivity_from_matrix
 
         Calculates the actual reflectivity from the reflectivity-transmission
-        matrix for a given incoming and analyzer polarization.
+        matrix for a given incoming and analyzer polarization from Elzo
+        formalism [8]_.
+
+        Args:
+            RT (ndarray[complex]): reflection-transmission matrix.
+            pol_in (ndarray[complex]): incoming polarization factor.
+            pol_out (ndarray[complex]): outgoing polarization factor.
+
+        Returns:
+            R (ndarray[float]): reflectivity.
 
         """
 
@@ -2247,7 +2569,15 @@ class XrayDynMag(Xray):
         """calc_roughness_matrix
 
         Calculates the roughness matrix for an interface with a gaussian
-        roughness for the Elzo formalism.
+        roughness for the Elzo formalism [8]_.
+
+        Args:
+            roughness (float): gaussian rougness of the interface [m].
+            k_z (ndarray[float)]: internal wave vector.
+            last_k_z (ndarray[float)]: last internal wave vector.
+
+        Returns:
+            W (ndarray[float]): roughness matrix.
 
         """
         W = np.zeros([k_z.shape[0], k_z.shape[1], 4, 4], dtype=np.cfloat)
