@@ -376,17 +376,18 @@ class PhononNum(Phonon):
         """
         filename = 'strain_map_num_' \
                    + self.get_hash(delays, temp_map, delta_temp_map) \
-                   + '.npy'
+                   + '.npz'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
-            strain_map = np.load(full_filename)
+            tmp = np.load(full_filename)
+            strain_map = tmp['strain_map']
             self.disp_message('_strain_map_ loaded from file:\n\t' + filename)
         else:
             # file does not exist so calculate and save
             strain_map, sticks_sub_systems, velocities = \
                 self.calc_strain_map(delays, temp_map, delta_temp_map)
-            self.save(full_filename, [strain_map], '_strain_map_num_')
+            self.save(full_filename, {'strain_map': strain_map}, '_strain_map_num_')
         return strain_map
 
     def calc_strain_map(self, delays, temp_map, delta_temp_map):

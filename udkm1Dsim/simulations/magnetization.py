@@ -126,12 +126,13 @@ class Magnetization(Simulation):
         # create a hash of all simulation parameters
         filename = 'magnetization_map_' \
                    + self.get_hash(delays, **kwargs) \
-                   + '.npy'
+                   + '.npz'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
-            magnetization_map = np.load(full_filename)
+            tmp = np.load(full_filename)
+            magnetization_map = tmp['magnetization_map']
             self.disp_message('_magnetization_map_ loaded from file:\n\t' + filename)
         else:
             t1 = time()
@@ -149,7 +150,8 @@ class Magnetization(Simulation):
 
             self.disp_message('Elapsed time for _magnetization_map_:'
                               ' {:f} s'.format(time()-t1))
-            self.save(full_filename, magnetization_map, '_magnetization_map_')
+            self.save(full_filename, {'magnetization_map': magnetization_map},
+                      '_magnetization_map_')
         return magnetization_map
 
     def calc_magnetization_map(self, delays, **kwargs):

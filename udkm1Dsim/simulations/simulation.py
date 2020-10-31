@@ -110,7 +110,7 @@ class Simulation:
         else:
             var_name = '_data_'
         if self.save_data:
-            np.save(full_filename, data)
+            np.savez(full_filename, **data)
             filename = os.path.basename(full_filename)
             self.disp_message('{:s} saved to file:\n\t {:s}'.format(var_name, filename))
 

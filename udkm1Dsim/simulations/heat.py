@@ -704,25 +704,27 @@ class Heat(Simulation):
             - *temp_map (ndarray[float])* - spatio-temporal temperature map.
             - *delta_temp_map (ndarray[float])* - spatio-temporal temperature
               change map.
-            - *checked_excitations (list[ndarray[float]])* - resulting list of
-              checked excitations.
 
         """
         init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
         filename = 'temp_map_' \
                    + self.get_hash(delays, init_temp) \
-                   + '.npy'
+                   + '.npz'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
-            temp_map, delta_temp_map, checked_excitations = np.load(full_filename)
+            tmp = np.load(full_filename)
+            temp_map = tmp['temp_map']
+            delta_temp_map = tmp['delta_temp_map']
             self.disp_message('_temp_map_ loaded from file:\n\t' + filename)
         else:
             # file does not exist so calculate and save
             temp_map, delta_temp_map, checked_excitations = \
                 self.calc_temp_map(delays, init_temp)
-            self.save(full_filename, [temp_map, delta_temp_map, checked_excitations], '_temp_map_')
-        return temp_map, delta_temp_map, checked_excitations
+            self.save(full_filename, {'temp_map': temp_map,
+                                      'delta_temp_map': delta_temp_map},
+                      '_temp_map_')
+        return temp_map, delta_temp_map
 
     def calc_temp_map(self, delays, input_init_temp):
         """calc_temp_map
