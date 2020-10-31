@@ -956,9 +956,13 @@ class XrayDyn(Xray):
         # initialize
         N = np.size(strain_map, 0)  # delay steps
         R = np.zeros([N, np.size(self._qz, 0), np.size(self._qz, 1)])
-        for i in trange(N, desc='Progress', leave=True):
-            # get the inhomogenous reflectivity of the sample
-            # structure for each time step of the strain map
+        if self.progress_bar:
+            iterator = trange(N, desc='Progress', leave=True)
+        else:
+            iterator = range(N)
+        # get the inhomogenous reflectivity of the sample
+        # structure for each time step of the strain map
+        for i in iterator:
             R[i, :, :] = self.calc_inhomogeneous_reflectivity(strain_map[i, :],
                                                               strain_vectors,
                                                               RTM)
@@ -1951,7 +1955,12 @@ class XrayDynMag(Xray):
         R = np.zeros([N, np.size(self._qz, 0), np.size(self._qz, 1)])
         R_phi = np.zeros_like(R)
 
-        for i in trange(N, desc='Progress', leave=True):
+        if self.progress_bar:
+            iterator = trange(N, desc='Progress', leave=True)
+        else:
+            iterator = range(N)
+
+        for i in iterator:
             # get the inhomogeneous reflectivity of the sample
             # structure for each time step of the strain map
 
