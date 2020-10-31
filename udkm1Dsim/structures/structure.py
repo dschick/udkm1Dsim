@@ -201,21 +201,21 @@ class Structure:
         """get_number_of_layers
 
         Returns:
-            N (int): number of all layers in the structure.
+            L (int): number of all layers in the structure.
 
         """
-        N = 0
+        L = 0
         # traverse the substructres
         for i in range(len(self.sub_structures)):
             if isinstance(self.sub_structures[i][0], AmorphousLayer) or \
                     isinstance(self.sub_structures[i][0], UnitCell):
-                N = N + self.sub_structures[i][1]
+                L = L + self.sub_structures[i][1]
             else:
                 # its a sturcture, so call the method recursively
-                N = N + self.sub_structures[i][0].get_number_of_layers() \
+                L = L + self.sub_structures[i][0].get_number_of_layers() \
                     * self.sub_structures[i][1]
 
-        return N
+        return L
 
     def get_number_of_unique_layers(self):
         """get_number_of_unique_layers

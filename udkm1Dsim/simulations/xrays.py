@@ -522,8 +522,8 @@ class XrayKin(Xray):
         if np.isscalar(strains) and strains == 0:
             strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
 
-        K = len(qz)  # nb of qz
-        Ept = np.zeros([1, K])  # total reflected field
+        N = len(qz)  # nb of qz
+        Ept = np.zeros([1, N])  # total reflected field
         Z = 0  # total length of the substructure from the surface
         A = list([0, 2])  # cell matrix of reflected fields EpN of substructures
         strainCounter = 0  # the is the index of the strain vector if applied
@@ -954,12 +954,12 @@ class XrayDyn(Xray):
 
         """
         # initialize
-        N = np.size(strain_map, 0)  # delay steps
-        R = np.zeros([N, np.size(self._qz, 0), np.size(self._qz, 1)])
+        M = np.size(strain_map, 0)  # delay steps
+        R = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
         if self.progress_bar:
-            iterator = trange(N, desc='Progress', leave=True)
+            iterator = trange(M, desc='Progress', leave=True)
         else:
-            iterator = range(N)
+            iterator = range(M)
         # get the inhomogenous reflectivity of the sample
         # structure for each time step of the strain map
         for i in iterator:
@@ -1951,14 +1951,14 @@ class XrayDynMag(Xray):
 
         """
         # initialize
-        N = np.size(strain_map, 0)  # delay steps
-        R = np.zeros([N, np.size(self._qz, 0), np.size(self._qz, 1)])
+        M = np.size(strain_map, 0)  # delay steps
+        R = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
         R_phi = np.zeros_like(R)
 
         if self.progress_bar:
-            iterator = trange(N, desc='Progress', leave=True)
+            iterator = trange(M, desc='Progress', leave=True)
         else:
-            iterator = range(N)
+            iterator = range(M)
 
         for i in iterator:
             # get the inhomogeneous reflectivity of the sample
