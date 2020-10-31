@@ -881,12 +881,13 @@ class XrayDyn(Xray):
         # create a hash of all simulation parameters
         filename = 'inhomogeneous_reflectivity_dyn_' \
                    + self.get_hash(strain_vectors, strain_map=strain_map) \
-                   + '.npy'
+                   + '.npz'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
-            R = np.load(full_filename)
+            tmp = np.load(full_filename)
+            R = tmp['R']
             self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
         else:
             t1 = time()
@@ -929,7 +930,7 @@ class XrayDyn(Xray):
 
             self.disp_message('Elapsed time for _inhomogenous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
-            self.save(full_filename, R, '_inhomogeneous_reflectivity_')
+            self.save(full_filename, {'R': R}, '_inhomogeneous_reflectivity_')
         return R
 
     def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM):
@@ -1173,17 +1174,18 @@ class XrayDyn(Xray):
             strain_vectors = args[0]
         # create a hash of all simulation parameters
         filename = 'all_ref_trans_matrices_dyn_' \
-            + self.get_hash(strain_vectors) + '.npy'
+            + self.get_hash(strain_vectors) + '.npz'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
-            RTM = np.load(full_filename)
+            tmp = np.load(full_filename)
+            RTM = tmp['RTM']
             self.disp_message('_all_ref_trans_matrices_dyn_ loaded from file:\n\t' + filename)
         else:
             # nothing found so calculate it and save it
             RTM = self.calc_all_ref_trans_matrices(strain_vectors)
-            self.save(full_filename, RTM, '_all_ref_trans_matrices_dyn_')
+            self.save(full_filename, {'RTM': RTM}, '_all_ref_trans_matrices_dyn_')
         return RTM
 
     def calc_all_ref_trans_matrices(self, *args):
@@ -1879,12 +1881,14 @@ class XrayDynMag(Xray):
         # create a hash of all simulation parameters
         filename = 'inhomogeneous_reflectivity_dynMag_' \
                    + self.get_hash(strain_map=strain_map, magnetization_map=magnetization_map) \
-                   + '.npy'
+                   + '.npz'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
-            R, R_phi = np.load(full_filename)
+            tmp = np.load(full_filename)
+            R = tmp['R']
+            R_phi = tmp['R_phi']
             self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
         else:
             t1 = time()
@@ -1919,7 +1923,7 @@ class XrayDynMag(Xray):
 
             self.disp_message('Elapsed time for _inhomogeneous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
-            self.save(full_filename, [R, R_phi], '_inhomogeneous_reflectivity_')
+            self.save(full_filename, {'R': R, 'R_phi': R_phi}, '_inhomogeneous_reflectivity_')
         return R, R_phi
 
     def sequential_inhomogeneous_reflectivity(self, strain_map, magnetization_map):
