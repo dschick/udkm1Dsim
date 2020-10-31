@@ -188,7 +188,7 @@ class Layer:
                 output_strs.append('lambda T: {:f}'.format(input.to_base_units().magnitude))
             else:
                 raise ValueError('Layer property input has to be a single or '
-                                 'list of numerics, function handle strings '
+                                 'list of numerics, Quantities, or function handle strings '
                                  'which can be converted into a lambda function!')
 
         return output, output_strs
