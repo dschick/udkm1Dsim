@@ -507,7 +507,9 @@ class PhononNum(Phonon):
             # contains x(t) = X(:,1:N) and v(t) = X(:,N+1:end) the
             # positions and velocities of the layers, respectively.
             temp = np.diff(sol.y[0:L, :].T, 1, 1)
-            strain_map = temp/np.tile(thicknesses[:-1], [np.size(temp, 0), 1])
+            strain_map = np.zeros([temp.shape[0], temp.shape[1]+1])
+            strain_map[:, :-1] = temp
+            strain_map = strain_map/np.tile(thicknesses[:], [np.size(temp, 0), 1])
             velocities = sol.y[L:, :].T
         self.disp_message('Elapsed time for _strain_map_:'
                           ' {:f} s'.format(time()-t1))
