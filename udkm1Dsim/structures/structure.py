@@ -100,6 +100,54 @@ class Structure:
             class_str += tab_str + 'no substrate\n'
         return class_str
 
+    def visualize(self, unit='nm', fig_size=[20, 1]):
+        """visualize
+
+        Simple visualization of the structure.
+
+        Args:
+            unit (str): SI unit of the distance of the Structure. Defaults to
+                'nm'.
+            fig_size (list[float]): figure size of the visualization plot.
+                Defaults to [20, 1].
+
+        """
+        import matplotlib.pyplot as plt
+        from matplotlib import patches
+        from matplotlib import cm
+
+        d_start, d_end, _ = self.get_distances_of_layers(True)  # distance vector of all layers
+        layer_interfaces = np.append(0, d_end.to(unit).magnitude)  # Append zero at the start
+        thickness = np.max(layer_interfaces)
+
+        layer_ids = self.get_unique_layers()[0]
+        N = len(layer_ids)  # number of unique layers
+
+        colortable = {}
+        for i in range(N):
+            colortable[layer_ids[i]] = cm.Set1(i)
+
+        plt.figure(figsize=fig_size)
+        ax = plt.axes()
+
+        for i, name in enumerate(self.get_layer_vectors()[1]):
+            col = colortable.get(name, 'k')
+            rect = patches.Rectangle((layer_interfaces[i], 0), np.diff(layer_interfaces)[i], 1,
+                                     linewidth=0.25, facecolor=col, edgecolor='k')
+            ax.add_patch(rect)
+
+        plt.xlim(0, thickness)
+        plt.ylim(0, 1)
+        plt.xlabel('distance [{:s}]'.format(unit))
+        plt.yticks([], [])
+
+        # add labels for legend
+        for layer_id, col in colortable.items():
+            plt.plot(0, 0, color=col, label=layer_id)
+
+        plt.legend(bbox_to_anchor=(0., 1.08, 1, .102), frameon=False, ncol=8)
+        plt.show()
+
     def get_hash(self, **kwargs):
         """get_hash
 
