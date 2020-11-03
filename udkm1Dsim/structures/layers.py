@@ -108,11 +108,9 @@ class Layer:
         self.opt_ref_index = kwargs.get('opt_ref_index', 0)
         self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0)
         self.heat_capacity = kwargs.get('heat_capacity', 0)
-        self.therm_cond, self.therm_cond_str = self.check_input(
-                kwargs.get('therm_cond', 0))
+        self.therm_cond = kwargs.get('therm_cond', 0)
         self.lin_therm_exp = kwargs.get('lin_therm_exp', 0)
-        self.sub_system_coupling, self.sub_system_coupling_str = self.check_input(
-                kwargs.get('sub_system_coupling', 0))
+        self.sub_system_coupling = kwargs.get('sub_system_coupling', 0)
 
         if len(self.heat_capacity) == len(self.therm_cond) \
                 == len(self.lin_therm_exp) == len(self.sub_system_coupling):
@@ -389,6 +387,14 @@ class Layer:
         self.int_heat_capacity
 
     @property
+    def therm_cond(self):
+        return self._therm_cond
+
+    @therm_cond.setter
+    def therm_cond(self, therm_cond):
+        self._therm_cond, self.therm_cond_str = self.check_input(therm_cond)
+
+    @property
     def int_heat_capacity(self):
         if hasattr(self, '_int_heat_capacity') and isinstance(self._int_heat_capacity, list):
             return self._int_heat_capacity
@@ -455,6 +461,15 @@ class Layer:
     def int_lin_therm_exp(self, int_lin_therm_exp):
         self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_input(
                 int_lin_therm_exp)
+
+    @property
+    def sub_system_coupling(self):
+        return self._sub_system_coupling
+
+    @sub_system_coupling.setter
+    def sub_system_coupling(self, sub_system_coupling):
+        self._sub_system_coupling, self.sub_system_coupling_str = \
+            self.check_input(sub_system_coupling)
 
 
 class AmorphousLayer(Layer):
