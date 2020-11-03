@@ -438,8 +438,8 @@ class Heat(Simulation):
         Calculation of intensity, absorption and temperature increase profiles
         in multilayers.
 
-        Calculation based on the method in Ref [4]_ and code developed Matlab
-        by L. Le Guyader, see Ref [5]_.
+        Calculation based on the method in Ref [5]_ and code developed Matlab
+        by L. Le Guyader, see Ref [6]_.
 
         Copyright (2012-2014) Loïc Le Guyader <loic.le_guyader@helmholtz-berlin.de>
 
@@ -458,11 +458,11 @@ class Heat(Simulation):
 
         References:
 
-        .. [4] K. Ohta & H. Ishida, *Matrix formalism for calculation of the
+        .. [5] K. Ohta & H. Ishida, *Matrix formalism for calculation of the
            light beam intensity in stratified multilayered films, and its use
            in the analysis of emission spectra*, `Appl. Opt. 29, 2466 (1990).
            <https://doi.org/10.1364/AO.29.002466>`_
-        .. [5] L. Le Guyader, A. Kleibert, F. Nolting, L. Joly, P.M. Derlet,
+        .. [6] L. Le Guyader, A. Kleibert, F. Nolting, L. Joly, P.M. Derlet,
            R.V. Pisarev, A. Kirilyuk, Th. Rasing & A.V. Kimel, *Dynamics of
            laser-induced spin reorientation in Co/SmFeO_3 heterostructure*,
            `Phys. Rev. B 87, 054437 (2013).

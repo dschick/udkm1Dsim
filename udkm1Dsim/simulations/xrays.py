@@ -307,7 +307,7 @@ class XrayKin(Xray):
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
 
     References:
-        .. [7] B. E. Warren (1990). *X-ray diffraction*.
+        .. [8] B. E. Warren (1990). *X-ray diffraction*.
            New York: Dover Publications
 
     """
@@ -466,7 +466,7 @@ class XrayKin(Xray):
         Calculates the reflected field :math:`E_p^t` of the whole sample
         structure as well as for each sub-structure (:math:`E_p^N`). The
         reflected wave field :math:`E_p` from a single layer of unit cells at
-        the detector is calculated according to  Ref. [7]_:
+        the detector is calculated according to  Ref. [8]_:
 
         .. math::
 
@@ -1474,7 +1474,7 @@ class XrayDyn(Xray):
 class XrayDynMag(Xray):
     r"""XrayDynMag
 
-    Dynamical magnetic Xray simulations adapted from Elzo et.al. [8]_.
+    Dynamical magnetic Xray simulations adapted from Elzo et.al. [9]_.
     Initially realized in `Project Dyna
     <http://neel.cnrs.fr/spip.php?rubrique1008>`_.
 
@@ -1534,7 +1534,7 @@ class XrayDynMag(Xray):
 
     References:
 
-        .. [8] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
+        .. [9] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
            Ramos, H. C. N. Tolentino, J. M. Tonnerre & N. Jaouen, *X-ray
            resonant magnetic reflectivity of stratified magnetic structures:
            Eigenwave formalism and application to a W/Fe/W trilayer*,
@@ -2256,7 +2256,7 @@ class XrayDynMag(Xray):
         """get_atom_boundary_phase_matrix
 
         Returns the boundary and phase matrices of an atom from Elzo
-        formalism [8]_. The results for a given atom, energy, :math:`q_z`,
+        formalism [9]_. The results for a given atom, energy, :math:`q_z`,
         polarization, and magnetization are stored to RAM to avoid recalculation.
 
         Args:
@@ -2340,7 +2340,7 @@ class XrayDynMag(Xray):
         """calc_atom_boundary_phase_matrix
 
         Calculates the boundary and phase matrices of an atom from Elzo
-        formalism [8]_.
+        formalism [9]_.
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
@@ -2543,7 +2543,7 @@ class XrayDynMag(Xray):
 
         Calculates the actual reflectivity from the reflectivity-transmission
         matrix for a given incoming and analyzer polarization from Elzo
-        formalism [8]_.
+        formalism [9]_.
 
         Args:
             RT (ndarray[complex]): reflection-transmission matrix.
@@ -2582,7 +2582,7 @@ class XrayDynMag(Xray):
         """calc_roughness_matrix
 
         Calculates the roughness matrix for an interface with a gaussian
-        roughness for the Elzo formalism [8]_.
+        roughness for the Elzo formalism [9]_.
 
         Args:
             roughness (float): gaussian rougness of the interface [m].

@@ -332,7 +332,7 @@ class PhononNum(Phonon):
 
     References:
 
-        .. [6] A. Bojahr, M. Herzog, D. Schick, I. Vrejoiu, & M. Bargheer,
+        .. [7] A. Bojahr, M. Herzog, D. Schick, I. Vrejoiu, & M. Bargheer,
            *Calibrated real-time detection of nonlinearly propagating
            strain waves*, `Phys. Rev. B, 86(14), 144306 (2012).
            <http://www.doi.org/10.1103/PhysRevB.86.144306>`_
@@ -395,7 +395,7 @@ class PhononNum(Phonon):
 
         Calculates the ``strain_map`` of the sample structure for a given
         ``temp_map`` and ``delta_temp_map`` and ``delay`` array. Further
-        details are given in Ref. [6]_. The coupled differential equations are
+        details are given in Ref. [7]_. The coupled differential equations are
         solved for each oscillator in a linear chain of masses and springs:
 
         .. math::
