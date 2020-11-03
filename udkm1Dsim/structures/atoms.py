@@ -391,6 +391,9 @@ class AtomMixed(Atom):
         self.symbol = symbol
         self.id = kwargs.get('id', symbol)
         self.name = kwargs.get('name', symbol)
+        self.mag_amplitude = kwargs.get('mag_amplitude', 0)
+        self.mag_phi = kwargs.get('mag_phi', 0*u.deg)
+        self.mag_gamma = kwargs.get('mag_gamma', 0*u.deg)
         self.ionicity = 0
         self.atomic_number_z = 0
         self.mass_number_a = 0
@@ -400,13 +403,21 @@ class AtomMixed(Atom):
 
     def __str__(self):
         """String representation of this class"""
-        output = []
-        for i in range(self.num_atoms):
-            output.append([self.atoms[i][0].name, '{:.1f} %'.format(self.atoms[i][1]*100)])
+        
+        output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
+                                'ionicity', 'magn. amplitude', 'magn. phi', 'magn. gamma'],
+                  'value': [self.id, self.symbol, self.name, self.atomic_number_z,
+                            self.mass_number_a, '{:.4~P}'.format(self.mass), self.ionicity,
+                            self.mag_amplitude, self.mag_phi, self.mag_gamma]}
 
-        return (super().__str__()
+        output_atom = []
+        for i in range(self.num_atoms):
+            output_atom.append([self.atoms[i][0].name, '{:.1f} %'.format(self.atoms[i][1]*100)])
+
+        return ('AtomMixed with the following properties\n'
+                + tabulate(output, colalign=('right',), tablefmt="rst", floatfmt=('.2f', '.2f'))
                 + '\n{:d} Constituents:\n'.format(self.num_atoms)
-                + tabulate(output, colalign=('right',), floatfmt=('.2f', '.2f')))
+                + tabulate(output_atom, colalign=('right',), floatfmt=('.2f', '.2f')))
 
     def add_atom(self, atom, fraction):
         """add_atom
@@ -483,3 +494,19 @@ class AtomMixed(Atom):
             f += self.atoms[i][0].get_magnetic_form_factor(energy) * self.atoms[i][1]
 
         return f
+
+    @property
+    def mag_phi(self):
+        return Q_(self._mag_phi, u.rad).to('deg')
+
+    @mag_phi.setter
+    def mag_phi(self, mag_phi):
+        self._mag_phi = mag_phi.to_base_units().magnitude
+
+    @property
+    def mag_gamma(self):
+        return Q_(self._mag_gamma, u.rad).to('deg')
+
+    @mag_gamma.setter
+    def mag_gamma(self, mag_gamma):
+        self._mag_gamma = mag_gamma.to_base_units().magnitude
