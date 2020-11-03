@@ -119,15 +119,15 @@ class Phonon(Simulation):
             strain_map (ndarray[float]): spatio-temporal strain profile.
 
         Returns:
-            strains (dict{ndarray[float]}: all strains per unique layer.
+            strains (list[ndarray[float]]: all strains per unique layer.
 
         """
         # get the position indices of all unique layers in the sample structure
         positions = self.S.get_all_positions_per_unique_layer()
-        strains = {}
+        strains = []
 
         for key, value in positions.items():
-            strains[key] = np.sort(np.unique(strain_map[:, value].flatten()))
+            strains.append(np.sort(np.unique(strain_map[:, value].flatten())))
 
         return strains
 
@@ -145,13 +145,13 @@ class Phonon(Simulation):
             N (int, optional): number of reduced strains. Defaults to 100.
 
         Returns:
-            strains (dict{ndarray[float]}: reduced strains per unique layer.
+            strains (list[ndarray[float]]: reduced strains per unique layer.
 
         """
         # initialize
         all_strains = self.get_all_strains_per_unique_layer(strain_map)
         L = len(all_strains)  # Nb. of unique layers
-        strains = {}
+        strains = []
 
         if np.size(N) == 1:
             N = N*np.ones([L, 1])
@@ -159,11 +159,11 @@ class Phonon(Simulation):
             raise ValueError('The dimension of N must be either 1 or the number '
                              'of unique layers the structure!')
 
-        for i, (key, value) in enumerate(all_strains.items()):
+        for i, value in enumerate(all_strains):
             min_strain = np.min(value)
             max_strain = np.max(value)
-            strains[key] = np.sort(np.unique(
-                np.r_[0, np.linspace(min_strain, max_strain, int(N[i]))]))
+            strains.append(np.sort(np.unique(
+                np.r_[0, np.linspace(min_strain, max_strain, int(N[i]))])))
 
         return strains
 
