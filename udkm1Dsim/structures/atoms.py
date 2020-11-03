@@ -403,7 +403,7 @@ class AtomMixed(Atom):
 
     def __str__(self):
         """String representation of this class"""
-        
+
         output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
                                 'ionicity', 'magn. amplitude', 'magn. phi', 'magn. gamma'],
                   'value': [self.id, self.symbol, self.name, self.atomic_number_z,
