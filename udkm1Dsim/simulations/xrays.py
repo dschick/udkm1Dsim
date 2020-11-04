@@ -2045,7 +2045,10 @@ class XrayDynMag(Xray):
         remote_k_z_0 = dask_client.scatter(k_z_0)
         remote_pol_in = dask_client.scatter(self.pol_in)
         remote_pol_out = dask_client.scatter(self.pol_out)
-        remote_substrate = dask_client.scatter(self.S.substrate)
+        if self.S.substrate != []:
+            remote_substrate = dask_client.scatter(self.S.substrate)
+        else:
+            remote_substrate = dask_client.scatter(-1)
 
         # create dask.delayed tasks for all delay steps
         for i in range(M):
@@ -2062,7 +2065,7 @@ class XrayDynMag(Xray):
             last_A_inv = t[4]
             last_A_inv_phi = t[5]
             last_k_z = t[6]
-            if remote_substrate != []:
+            if remote_substrate != -1:
                 t2 = delayed(self.calc_homogeneous_matrix)(
                     remote_substrate, last_A, last_A_phi, last_k_z)
                 RT_sub = t2[0]
