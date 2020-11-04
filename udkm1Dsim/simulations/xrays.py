@@ -1849,7 +1849,8 @@ class XrayDynMag(Xray):
 
         return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
-    def inhomogeneous_reflectivity(self, strain_map, magnetization_map, **kwargs):
+    def inhomogeneous_reflectivity(self, strain_map=np.array([]),
+                                   magnetization_map=np.array([]), **kwargs):
         """inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogeneously strained and magnetized
@@ -1866,9 +1867,10 @@ class XrayDynMag(Xray):
         * ``sequential`` no parallelization at all
 
         Args:
-            strain_map (ndarray[float]): spatio-temporal strain profile.
-            magnetization_map (ndarray[float]): spatio-temporal magnetization
+            strain_map (ndarray[float], optional): spatio-temporal strain
                 profile.
+            magnetization_map (ndarray[float], optional): spatio-temporal
+                magnetization profile.
             **kwargs:
                 - *calc_type (str)* - type of calculation.
                 - *dask_client (Dask.Client)* - Dask client.
@@ -1910,6 +1912,20 @@ class XrayDynMag(Xray):
                                 '_sequential_, or _distributed_!')
             job = kwargs.get('job')
             num_workers = kwargs.get('num_workers', 1)
+
+            M = np.size(strain_map, 0)
+            N = np.size(magnetization_map, 0)
+
+            if (M == 0) and (N > 0):
+                strain_map = np.zeros([np.size(magnetization_map, 0), np.size(magnetization_map, 1)])
+            elif (M > 0) and (N == 0):
+                magnetization_map = np.zeros_like(strain_map)
+            elif (M == 0) and (N == 0):
+                raise ValueError('At least a strain_map or magnetzation_map must be given!')
+            else:
+                if M != N:
+                    raise ValueError('The strain_map and magnetzation_map must be '
+                                     'have the same number of delay steps!')
 
             # select the type of computation
             if calc_type == 'parallel':
@@ -2190,10 +2206,10 @@ class XrayDynMag(Xray):
             last_A_phi (ndarray[complex]): last atom boundary matrix for opposite
               magnetization.
             last_k_z (ndarray[float]): last internal wave vector
-            strains (ndarray[float]): spatial strain profile for single time
+            strain (float): strain of unit cell for a single time
                 step.
-            magnetizations (ndarray[float]): spatial magnetization profile for
-                single time step.
+            magnetization (ndarray[float]): magnetization of unit cell for
+                a single time step.
 
         Returns:
             (tuple):
