@@ -1917,7 +1917,8 @@ class XrayDynMag(Xray):
             N = np.size(magnetization_map, 0)
 
             if (M == 0) and (N > 0):
-                strain_map = np.zeros([np.size(magnetization_map, 0), np.size(magnetization_map, 1)])
+                strain_map = np.zeros([np.size(magnetization_map, 0),
+                                       np.size(magnetization_map, 1)])
             elif (M > 0) and (N == 0):
                 magnetization_map = np.zeros_like(strain_map)
             elif (M == 0) and (N == 0):
