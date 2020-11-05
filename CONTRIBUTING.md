@@ -1,6 +1,6 @@
-# Guidelines for Contributing to udmkm1Dsimpy
+# Guidelines for Contributing to udmkm1Dsim
 
-The udmkm1Dsimpy repository uses nvie's branching model, known as 
+The udmkm1Dsim repository uses nvie's branching model, known as 
 [GitFlow][].
 
 In this model, there are two long-lived branches:
@@ -13,31 +13,31 @@ In this model, there are two long-lived branches:
 
 For the contributions, we use the [Fork & Pull Model][]:
 
-1. the contributor first [forks][] the official udmkm1Dsimpy repository
+1. the contributor first [forks][] the official udmkm1Dsim repository
 2. the contributor commits changes to a branch based on the 
    `develop` branch and pushes it to the forked repository.
 3. the contributor creates a [Pull Request][] against the `develop` 
-   branch of the official udmkm1Dsimpy repository.
+   branch of the official udmkm1Dsim repository.
 4. anybody interested may review and comment on the Pull Request, and 
    suggest changes to it (even doing Pull Requests against the Pull
    Request branch). At this point more changes can be committed on the 
    requestor's branch until the result is satisfactory.
-5. once the proposed code is considered ready by an appointed udmkm1Dsimpy 
+5. once the proposed code is considered ready by an appointed udmkm1Dsim 
    integrator, the integrator merges the pull request into `develop`.
 6. In order to keep your fork up to date with the official repository do 
    the following within your local copy of the repository::
 ```
-    git remote add upstream git://github.com/dschick/udkm1Dsimpy.git
+    git remote add upstream git://github.com/dschick/udkm1Dsim.git
     git fetch upstream
     git pull upstream develop
 ```   
    
 ## Important considerations:
 
-In general, the contributions to udmkm1Dsimpy should consider following:
+In general, the contributions to udmkm1Dsim should consider following:
 
-- The code must comply with the udmkm1Dsimpy coding conventions, see below.
-  [udmkm1Dsimpy travis-ci][] will check it for each Pull Request (PR) using
+- The code must comply with the udmkm1Dsim coding conventions, see below.
+  [udmkm1Dsim travis-ci][] will check it for each Pull Request (PR) using
   the latest version of [flake8 available on PyPI][].
   In case the check fails, please correct the errors and commit
   to the PR branch again. You may consider running the check locally
@@ -51,7 +51,7 @@ In general, the contributions to udmkm1Dsimpy should consider following:
 - Commit messages  should follow the [commit message guidelines][]. 
   Contributions may be rejected if their commit messages are poor.
 - The licensing terms for the contributed code must be compatible 
-  with (and preferably the same as) the license chosen for the udmkm1Dsimpy 
+  with (and preferably the same as) the license chosen for the udmkm1Dsim 
   project (at the time of writing this file, it is the [LGPL][], 
   version 3 *or later*).
 
@@ -60,7 +60,7 @@ In general, the contributions to udmkm1Dsimpy should consider following:
   
 - These contribution guidelines are very similar but not identical to 
   those for the [GithubFlow][] workflow. Basically, most of what the 
-  GitHubFlow recommends can be applied for udmkm1Dsimpy except that the 
+  GitHubFlow recommends can be applied for udmkm1Dsim except that the 
   role of the `master` branch in GithubFlow is done by `develop` in our 
   case.  
 - If the contributor wants to explicitly bring the attention of some 
@@ -92,32 +92,41 @@ In general, the contributions to udmkm1Dsimpy should consider following:
 - document all code using [Sphinx][] extension to [reStructuredText][]
 
 The following code can serve as a template for writing new python modules to
-udmkm1Dsimpy:
+udmkm1Dsim:
 
     #!/usr/bin/env python
     # -*- coding: utf-8 -*-
+    
+    # The MIT License (MIT)
+    # Copyright (c) 2020 Daniel Schick
+    #
+    # Permission is hereby granted, free of charge, to any person obtaining a copy
+    # of this software and associated documentation files (the "Software"), to deal
+    # in the Software without restriction, including without limitation the rights
+    # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    # copies of the Software, and to permit persons to whom the Software is
+    # furnished to do so, subject to the following conditions:
+    #
+    # The above copyright notice and this permission notice shall be included in all
+    # copies or substantial portions of the Software.
+    #
+    # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    # EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    # MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    # IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    # DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+    # OR OTHER DEALINGS IN THE SOFTWARE.
 
-    ##############################################################################
-    ##
-    ## This file is part of udmkm1Dsimpy
-    ## 
-    ## http://www.tango-controls.org/static/sardana/latest/doc/html/index.html
-    ##
-    ## add Licence and Copyright here ** TODO* **
-    ##
-    ##############################################################################
-
-    """A :mod:`udmkm1Dsimpy` module written for template purposes only"""
-
-    __all__ = ["udmkm1DsimpyDemo"]
+    __all__ = ["udmkm1DsimDemo"]
     
     __docformat__ = "restructuredtext"
     
-    class udmkm1DsimpyDemo(object):
+    class udmkm1DsimDemo(object):
         """This class is written for template purposes only"""
         
     def main():
-        print "udmkm1DsimpyDemo"s
+        print "udmkm1DsimDemo"s
     
     if __name__ == "__main__":
         main()
@@ -132,7 +141,7 @@ udmkm1Dsimpy:
 [mentions]: https://github.com/blog/821-mention-somebody-they-re-notified
 [tag_issue_closing]: https://help.github.com/articles/closing-issues-via-commit-messages/
 [LGPL]: http://www.gnu.org/licenses/lgpl.html
-[udmkm1Dsimpy travis-ci]: https://travis-ci.com/dschick/udkm1Dsimpy/
+[udmkm1Dsim travis-ci]: https://travis-ci.com/dschick/udkm1Dsimpy/
 [flake8 available on PyPI]: https://pypi.org/project/flake8
 [reStructuredText]:  http://docutils.sourceforge.net/rst.html
 [Sphinx]: http://sphinx.pocoo.org/

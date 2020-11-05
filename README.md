@@ -1,33 +1,42 @@
 # udkm1Dsim
 
-The udkm1Dsim toolbox is a collection of Python classes and routines 
-to simulate the structural dynamics and the according X-ray 
-diffraction response in one-dimensional sample structures after 
-ultrafast excitation. 
-The toolbox provides the capabilities to define arbitrary layered 
-structures on the atomic level including a rich database of 
-element-specific physical properties. 
-The excitation of ultrafast dynamics is represented by an 
-N-temperature-model which is commonly applied for ultrafast 
-optical excitations. 
-Structural dynamics due to thermal stresses are calculated by 
-a linear-chain model of masses and springs. 
-The resulting X-ray diffraction response is computed by dynamical 
-X-ray theory. 
-The udkm1Dsim toolbox is highly modular and allows to introduce 
-user-defined results at any step in the simulation procedure.
+The udkm1Dsim toolbox is a collection of Python classes and routines to
+simulate the thermal, structural, and magnetic dynamics after laser excitation
+as well as the according X-ray scattering response in one-dimensional sample
+structures after ultrafast excitation.
 
-The udkm1Dsim toolbox was developed in the Ultrafast Dynamics 
-in Condensed Matter group of Prof. Matias Bargheer at the 
-University of Potsdam, Germany. 
-The toolbox is currently maintained by Daniel Schick.
+The toolbox provides the capabilities to define arbitrary layered structures
+on the atomic level including a rich database of element-specific physical
+properties. 
+The excitation of ultrafast dynamics is represented by an N-temperature-model
+which is commonly applied for ultrafast optical excitations. 
+Structural dynamics due to thermal stresses are calculated by a linear-chain
+model of masses and springs.
+The implementation of magnetic dynamics can be easily accomplished by the user
+for the individual problem.
+
+The resulting X-ray diffraction response is computed by kinematical or
+dynamical X-ray theory which can also include magnetic scattering.
+
+The udkm1Dsim toolbox is highly modular and allows to introduce user-defined
+results at any step in the simulation procedure.
+
+The udkm1Dsim toolbox was initially developed for MATLAB® in the
+*Ultrafast Dynamics in Condensed Matter* group of Prof. Matias Bargheer at the
+*University of Potsdam*, Germany.
+The MATLAB® source code is still available at
+<https://github.com/dschick/udkm1DsimML>.
+
+The current toolbox, written in Python, is maintained by Daniel Schick at the
+*Max-Born-Institute*, Berlin, Germany.
 
 ## Documentation
 The documentation can be found at [readthedocs.io](http://udkm1Dsim.readthedocs.io).
 
 ## Citation
 
-Please cite the following article if you use the udkm1Dsim toolbox for your own publications:
+Please cite the original publication if you use the udkm1Dsim toolbox for your
+own publications:
 
 D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Bargheer,
 *udkm1Dsim - A Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter*,
@@ -52,3 +61,11 @@ but not copied to the python site-packages), just do:
 Or to do a normal install with
 
     pip install ./udkm1Dsim
+
+You can have the following optional installation to enable parallel
+computations, unit tests, as well as building the documentation:
+
+    pip install udkm1Dsim[parallel]
+    pip install udkm1Dsim[testing]
+    pip install udkm1Dsim[documentation]
+    
