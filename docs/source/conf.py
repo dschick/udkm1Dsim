@@ -24,9 +24,9 @@ copyright = '2020, Daniel Schick'
 author = 'Daniel Schick'
 
 # The short X.Y version
-version = '0.1.4'
+version = '1.0.0'
 # The full version, including alpha/beta/rc tags
-release = '0.1.4'
+release = '1.0.0'
 
 
 # -- General configuration ---------------------------------------------------

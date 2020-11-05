@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='udkm1Dsim',
-    version='0.1.4',
+    version='1.0.0',
     packages=find_packages(),
     package_data={
         'udkm1Dsim': ['parameters/atomic_form_factors/chantler/*.cf',
@@ -28,7 +28,7 @@ setup(
         'documentation': ['sphinx', 'nbsphinx', 'sphinxcontrib-napoleon'],
     },
     license='MIT',
-    author='Daniel Schick, et. al.',
+    author='Daniel Schick',
     author_email='schick.daniel@gmail.com',
     description='A Python Simulation Toolkit for 1D Ultrafast Dynamics '
                 + 'in Condensed Matter',
