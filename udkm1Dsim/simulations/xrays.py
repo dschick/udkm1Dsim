@@ -2154,18 +2154,20 @@ class XrayDynMag(Xray):
         """
         L = self.S.get_number_of_layers()  # number of unit cells
         _, _, layer_handles = self.S.get_layer_vectors()
-
+        # for inhomogeneous results we do not store results and force a re-calc
+        force_recalc = True
         for i in range(L):
             layer = layer_handles[i]
             if isinstance(layer, UnitCell):
                 RT_layer, RT_layer_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
-                        layer, last_A, last_A_phi, last_k_z, strains[i], magnetizations[i])
+                        layer, last_A, last_A_phi, last_k_z, strains[i],
+                        magnetizations[i], force_recalc)
             elif isinstance(layer, AmorphousLayer):
                 A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                     self.get_atom_boundary_phase_matrix(
                         layer.atom, layer._density, layer._thickness*(strains[i]+1),
-                        magnetizations[i])
+                        force_recalc, magnetizations[i])
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
                 F_phi = m_times_n(A_inv_phi, last_A_phi)
@@ -2192,7 +2194,7 @@ class XrayDynMag(Xray):
         return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
     def calc_uc_boundary_phase_matrix(self, uc, last_A, last_A_phi, last_k_z, strain,
-                                      magnetization):
+                                      magnetization, force_recalc=False):
         r"""calc_uc_boundary_phase_matrix
 
         Calculates the product of all reflection-transmission matrices of
@@ -2212,6 +2214,8 @@ class XrayDynMag(Xray):
                 step.
             magnetization (ndarray[float]): magnetization of unit cell for
                 a single time step.
+            force_recalc (boolean, optional): force recalculation of boundary
+                phase matrix if True. Defaults to False.
 
         Returns:
             (tuple):
@@ -2270,7 +2274,8 @@ class XrayDynMag(Xray):
 
         return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
-    def get_atom_boundary_phase_matrix(self, atom, density, distance, *args):
+    def get_atom_boundary_phase_matrix(self, atom, density, distance,
+                                       force_recalc=False, *args):
         """get_atom_boundary_phase_matrix
 
         Returns the boundary and phase matrices of an atom from Elzo
@@ -2281,6 +2286,8 @@ class XrayDynMag(Xray):
             atom (Atom, AtomMixed): atom or mixed atom.
             density (float): density around the atom [kg/m³].
             distance (float): distance towards the next atomic [m].
+            force_recalc (boolean, optional): force recalculation of boundary
+                phase matrix if True. Defaults to False.
             args (ndarray[float]): magnetization vector.
 
         Returns:
@@ -2307,51 +2314,58 @@ class XrayDynMag(Xray):
                 self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
             return A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z
 
-        # check for already calculated data
-        _hash = make_hash_md5([self._energy, self._qz, self.pol_in, self.pol_out,
-                               density, distance,
-                               atom.mag_amplitude,
-                               atom.mag_gamma,
-                               atom.mag_phi,
-                               *args])
-
-        if (index >= 0) and (_hash == self.last_atom_ref_trans_matrices['hashes'][index]):
-            # These are the same X-ray parameters as last time so we
-            # can use the same matrix again for this atom
-            A = self.last_atom_ref_trans_matrices['A'][index]
-            A_phi = self.last_atom_ref_trans_matrices['A_phi'][index]
-            P = self.last_atom_ref_trans_matrices['P'][index]
-            P_phi = self.last_atom_ref_trans_matrices['P_phi'][index]
-            A_inv = self.last_atom_ref_trans_matrices['A_inv'][index]
-            A_inv_phi = self.last_atom_ref_trans_matrices['A_inv_phi'][index]
-            k_z = self.last_atom_ref_trans_matrices['k_z'][index]
-        else:
-            # These are new parameters so we have to calculate.
-            # Get the reflection-transmission-factors
+        if force_recalc:
+            # just calculate and and do not remember the results to save
+            # computational time
             A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                 self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
-            # remember this matrix for next use with the same
-            # parameters for this atom
-            if index >= 0:
-                self.last_atom_ref_trans_matrices['atom_ids'][index] = atom.id
-                self.last_atom_ref_trans_matrices['hashes'][index] = _hash
-                self.last_atom_ref_trans_matrices['A'][index] = A
-                self.last_atom_ref_trans_matrices['A_phi'][index] = A_phi
-                self.last_atom_ref_trans_matrices['P'][index] = P
-                self.last_atom_ref_trans_matrices['P_phi'][index] = P_phi
-                self.last_atom_ref_trans_matrices['A_inv'][index] = A_inv
-                self.last_atom_ref_trans_matrices['A_inv_phi'][index] = A_inv_phi
-                self.last_atom_ref_trans_matrices['k_z'][index] = k_z
+        else:
+            # check for already calculated data
+            _hash = make_hash_md5([self._energy, self._qz, self.pol_in, self.pol_out,
+                                   density, distance,
+                                   atom.mag_amplitude,
+                                   atom.mag_gamma,
+                                   atom.mag_phi,
+                                   *args])
+
+            if (index >= 0) and (_hash == self.last_atom_ref_trans_matrices['hashes'][index]):
+                # These are the same X-ray parameters as last time so we
+                # can use the same matrix again for this atom
+                A = self.last_atom_ref_trans_matrices['A'][index]
+                A_phi = self.last_atom_ref_trans_matrices['A_phi'][index]
+                P = self.last_atom_ref_trans_matrices['P'][index]
+                P_phi = self.last_atom_ref_trans_matrices['P_phi'][index]
+                A_inv = self.last_atom_ref_trans_matrices['A_inv'][index]
+                A_inv_phi = self.last_atom_ref_trans_matrices['A_inv_phi'][index]
+                k_z = self.last_atom_ref_trans_matrices['k_z'][index]
             else:
-                self.last_atom_ref_trans_matrices['atom_ids'].append(atom.id)
-                self.last_atom_ref_trans_matrices['hashes'].append(_hash)
-                self.last_atom_ref_trans_matrices['A'].append(A)
-                self.last_atom_ref_trans_matrices['A_phi'].append(A_phi)
-                self.last_atom_ref_trans_matrices['P'].append(P)
-                self.last_atom_ref_trans_matrices['P_phi'].append(P_phi)
-                self.last_atom_ref_trans_matrices['A_inv'].append(A_inv)
-                self.last_atom_ref_trans_matrices['A_inv_phi'].append(A_inv_phi)
-                self.last_atom_ref_trans_matrices['k_z'].append(k_z)
+                # These are new parameters so we have to calculate.
+                # Get the reflection-transmission-factors
+                A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                    self.calc_atom_boundary_phase_matrix(atom, density, distance, *args)
+                # remember this matrix for next use with the same
+                # parameters for this atom
+                if index >= 0:
+                    self.last_atom_ref_trans_matrices['atom_ids'][index] = atom.id
+                    self.last_atom_ref_trans_matrices['hashes'][index] = _hash
+                    self.last_atom_ref_trans_matrices['A'][index] = A
+                    self.last_atom_ref_trans_matrices['A_phi'][index] = A_phi
+                    self.last_atom_ref_trans_matrices['P'][index] = P
+                    self.last_atom_ref_trans_matrices['P_phi'][index] = P_phi
+                    self.last_atom_ref_trans_matrices['A_inv'][index] = A_inv
+                    self.last_atom_ref_trans_matrices['A_inv_phi'][index] = A_inv_phi
+                    self.last_atom_ref_trans_matrices['k_z'][index] = k_z
+                else:
+                    self.last_atom_ref_trans_matrices['atom_ids'].append(atom.id)
+                    self.last_atom_ref_trans_matrices['hashes'].append(_hash)
+                    self.last_atom_ref_trans_matrices['A'].append(A)
+                    self.last_atom_ref_trans_matrices['A_phi'].append(A_phi)
+                    self.last_atom_ref_trans_matrices['P'].append(P)
+                    self.last_atom_ref_trans_matrices['P_phi'].append(P_phi)
+                    self.last_atom_ref_trans_matrices['A_inv'].append(A_inv)
+                    self.last_atom_ref_trans_matrices['A_inv_phi'].append(A_inv_phi)
+                    self.last_atom_ref_trans_matrices['k_z'].append(k_z)
+
         return A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z
 
     def calc_atom_boundary_phase_matrix(self, atom, density, distance, *args):
