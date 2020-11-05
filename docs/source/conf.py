@@ -49,6 +49,7 @@ extensions = [
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
+
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
@@ -101,6 +102,11 @@ html_static_path = ['_static']
 # 'searchbox.html']``.
 #
 # html_sidebars = {}
+
+html_theme_options = {
+    "navigation_depth": 5,
+    "collapse_navigation": False
+}
 
 
 # -- Options for HTMLHelp output ---------------------------------------------
