@@ -117,9 +117,9 @@ class Atom:
         self._mass = self.mass_number_a*constants.atomic_mass
         self.mass = self._mass*u.kg
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
-            filename=kwargs.get('atomic_form_factor_path', ''))
+            source = kwargs.get('atomic_form_factor_source', ''), filename = kwargs.get('atomic_form_factor_path', ''))
         self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
-            filename=kwargs.get('magnetic_form_factor_path', ''))
+            filename = kwargs.get('magnetic_form_factor_path', ''))
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
     def __str__(self):
