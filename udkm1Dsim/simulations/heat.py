@@ -392,6 +392,7 @@ class Heat(Simulation):
             by Lambert-Beers law.
 
         """
+        self.disp_message('Absorption profile is calculated by Lambert-Beer\'s law.')
         if distances == []:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
@@ -469,7 +470,7 @@ class Heat(Simulation):
            <https://doi.org/10.1103/PhysRevB.87.054437>`_
 
         """
-
+        self.disp_message('Absorption profile is calculated by multilayer formalism.')
         if distances == []:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
@@ -599,6 +600,9 @@ class Heat(Simulation):
 
             k = k+m  # set the counter
 
+        self.disp_message('Total reflectivity of {:0.1f} % and transmission '
+                          'of {:0.1f} %.'.format(np.round(R_total*100, 1),
+                                                 np.round(T_total*100, 1)))
         return dAdz, Ints, R_total, T_total
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp, distances=[]):
