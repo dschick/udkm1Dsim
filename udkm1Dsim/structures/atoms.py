@@ -81,7 +81,7 @@ class Atom:
            Absorption and Scattering Cross Section, and Mass Attenuation
            Coefficients for Z = 1-92 from E = 1-10 eV to E = 0.4-1.0 MeV*,
            `NIST Standard Reference Database 66.
-           < https://dx.doi.org/10.18434/T4HS32>`_
+           <https://dx.doi.org/10.18434/T4HS32>`_
         .. [3] J. Als-Nielson, & D. McMorrow,
            `Elements of Modern X-Ray Physics. New York: John Wiley &
            Sons, Ltd. (2001) <http://www.doi.org/10.1002/9781119998365>`_
