@@ -632,7 +632,7 @@ class Heat(Simulation):
 
         .. math::
 
-             \left| \int_{T_1}^{T_2} m c(T)\, temp_mapT - \frac{\mbox{d}\alpha}
+             \left| \int_{T_1}^{T_2} m c(T)\, \mbox{d}T - \frac{\mbox{d}\alpha}
              {\mbox{d}z} E_0 \Delta z \right| \stackrel{!}{=} 0
 
         Args:
