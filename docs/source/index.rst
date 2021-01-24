@@ -44,7 +44,7 @@ The current toolbox, written in Python, is maintained by Daniel Schick at the
 Citation
 ========
 
-Please cite the original publication if you use the udkm1Dsim toolbox for your
+Please cite the original publication if you use the *udkm1Dsim* toolbox for your
 own publications:
 
 D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Bargheer,
