@@ -249,6 +249,10 @@ class Heat(Simulation):
 
         and to combine excitations which have overlapping intervalls.
 
+        Moreover the incidence angle :math:`theta` is taken into account for
+        the user-defined incidence fluence in order to project the laser
+        footprint onto the sample surface.
+
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
 
@@ -256,7 +260,7 @@ class Heat(Simulation):
             (tuple):
             - *res (list[ndarray[float]])* - resulting list of excitations with
               interpolated delay density around excitations.
-            - *fluence (ndarray[float])* - excitation fluences.
+            - *fluence (ndarray[float])* - projected excitation fluences.
             - *delay_pump (ndarray[float])* - delays of the excitations.
             - *pulse_width (ndarray[float])* - pulse widths of the excitations.
 
@@ -265,6 +269,11 @@ class Heat(Simulation):
         fluence = self._excitation['fluence']
         delay_pump = self._excitation['delay_pump']
         pulse_width = self._excitation['pulse_width']
+        theta = self._excitation['theta']
+
+        fluence = fluence*np.sin(theta)
+        self.disp_message('Surface incidence fluence scaled by factor {:5.4f}'
+                          ' due to incidence angle theta={:5.2f} deg'.format(np.sin(theta), np.rad2deg(theta)))
 
         # throw warnings if heat diffusion should be enabled
         if (self.S.num_sub_systems > 1) and not self.heat_diffusion:
