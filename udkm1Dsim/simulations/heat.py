@@ -273,7 +273,8 @@ class Heat(Simulation):
 
         fluence = fluence*np.sin(theta)
         self.disp_message('Surface incidence fluence scaled by factor {:5.4f}'
-                          ' due to incidence angle theta={:5.2f} deg'.format(np.sin(theta), np.rad2deg(theta)))
+                          ' due to incidence angle theta={:5.2f} deg'.format(
+                              np.sin(theta), np.rad2deg(theta)))
 
         # throw warnings if heat diffusion should be enabled
         if (self.S.num_sub_systems > 1) and not self.heat_diffusion:
