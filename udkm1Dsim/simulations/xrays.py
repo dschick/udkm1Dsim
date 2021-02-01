@@ -2398,8 +2398,8 @@ class XrayDynMag(Xray):
         try:
             magnetization = args[0]
             mag_amplitude = magnetization[0]
-            mag_phi = magnetization[1].to_base_units().magnitude
-            mag_gamma = magnetization[2].to_base_units().magnitude
+            mag_phi = magnetization[1]
+            mag_gamma = magnetization[2]
         except IndexError:
             # here we catch magnetizations with only one instead of three
             # elements
