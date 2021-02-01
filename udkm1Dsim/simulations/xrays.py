@@ -1925,7 +1925,7 @@ class XrayDynMag(Xray):
                 raise ValueError('At least a strain_map or magnetzation_map must be given!')
             else:
                 if M != N:
-                    raise ValueError('The strain_map and magnetzation_map must be '
+                    raise ValueError('The strain_map and magnetzation_map must '
                                      'have the same number of delay steps!')
 
             # select the type of computation
@@ -2397,8 +2397,8 @@ class XrayDynMag(Xray):
         try:
             magnetization = args[0]
             mag_amplitude = magnetization[0]
-            mag_phi = magnetization[1]
-            mag_gamma = magnetization[2]
+            mag_phi = magnetization[1].to_base_units().magnitude
+            mag_gamma = magnetization[2].to_base_units().magnitude
         except IndexError:
             # here we catch magnetizations with only one instead of three
             # elements
