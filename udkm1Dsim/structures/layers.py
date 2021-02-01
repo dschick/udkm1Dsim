@@ -823,7 +823,7 @@ class UnitCell(Layer):
         # increase the number of atoms
         self.num_atoms = self.num_atoms + 1
 
-        self.magnetization.append([atom.mag_amplitude, atom._mag_phi, atom._mag_gamma])
+        self.magnetization.append([atom.mag_amplitude, atom.mag_phi, atom.mag_gamma])
 
         self.mass = 0*u.kg
         for i in range(self.num_atoms):
