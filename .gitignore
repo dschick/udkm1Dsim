@@ -11,9 +11,6 @@
 project/
 .pytest_cache/
 
-# sphinx documentation
-_build
-
 # docs build
 docs/build
 
@@ -22,3 +19,6 @@ docs/source/**/.ipynb_checkpoints
 
 # dask worker space
 docs/source/**/dask-worker-space
+
+# vscode
+.vscode
