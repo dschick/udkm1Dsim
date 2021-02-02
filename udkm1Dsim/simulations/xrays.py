@@ -2408,11 +2408,11 @@ class XrayDynMag(Xray):
             except AttributeError:
                 mag_amplitude = 0
             try:
-                mag_phi = atom.mag_phi.to_base_units().magnitude
+                mag_phi = atom._mag_phi
             except AttributeError:
                 mag_phi = 0
             try:
-                mag_gamma = atom.mag_gamma.to_base_units().magnitude
+                mag_gamma = atom._mag_gamma
             except AttributeError:
                 mag_gamma = 0
 
