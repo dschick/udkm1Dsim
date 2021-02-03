@@ -32,7 +32,7 @@ import numpy as np
 from os import path
 from time import time
 from scipy.integrate import solve_ivp
-from tqdm.notebook import tqdm
+from tqdm.notebook import tqdm, trange
 
 
 class Phonon(Simulation):
@@ -778,222 +778,243 @@ class PhononAna(Phonon):
                       '_strain_map_ana_')
         return strain_map, X, V, A, B
 
-    # %% calcStrainMap
-    # % Calculates the _strainMap_ of the sample structure for a given 
-    # % _tempMap_ and _deltaTempMap_ and _time_ vector. Further details 
-    # % are given in Ref. [1]. Within the linear chain of $N$ masses 
-    # % ($m_i$) at position $z_i$ coupled with spring constants $k_i$ one 
-    # % can formulate the differential equation of motion as follow:
-    # %
-    # % $$ m_i\ddot{x}_i = -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1}) +
-    # % F_i^{heat}(t) $$
-    # %
-    # % Since we only consider nearest-neighbor interaction one can
-    # % write:
-    # %
-    # % $$ \ddot{x}_i = \sum_{n=1}^N \kappa_{i,n} x_n = \Delta_i(t) $$
-    # %
-    # % Here $x_i(t) = z_i(t)-z_i^0$ is the shift of each unit cell,
-    # % $F_i^{heat}(t)$ is the external force (thermal stress) of each 
-    # % unit cell and $\kappa_{i,i} = -(k_i + k_{i+1})/m_i$, and 
-    # % $\kappa_{i,i+1} = \kappa_{i+1,i} = k_{i+1}/m_i$.
-    # %
-    # % $k_i = m_i\, v_i^2/c_i^2$ is the spring constant and $c_i$ and
-    # % $v_i$ are the lattice $c$-axis and longitudinal sound velocity of
-    # % each unit cell respectively.
-    # % One can rewrite the homogeneous differential equation in matrix 
-    # % form to obtain the general solution
-    # %
-    # % $$ \frac{d^2}{dt^2} X = K\, X $$
-    # %
-    # % Here $X = (x_1 \ldots x_N)$ and $K$ is the
-    # % tri-diagonal matrix of $\kappa$ which is real and symmetric.
-    # % The differential equation can be solved with the ansatz:
-    # %
-    # % $$ X(t) = \sum_j \Xi_j \, (A_j \cos(\omega_j \, t) + B_j \sin(\omega_j \, t)) $$
-    # %
-    # % where $\Xi_j = (\xi_1^j \ldots \xi_N^j)$ are the eigenvectors of
-    # % the matrix $K$. Thus by solving the Eigenproblem for $K$ one 
-    # % gets the eigenvecotrs $\Xi_j$ and the eigenfrequencies $\omega_j$.
-    # % From the initial conditions
-    # %
-    # % $$ X(0) = \sum_j \Xi_j \, A_j = \Xi \, A \qquad V(0) = \dot{X}(0) 
-    # %         = \sum_j \Xi_j \, \omega_j\, B_j = \Xi \, \omega \, B $$
-    # %
-    # % one can determine the real coefficient vecots $A$ and $B$ in 
-    # % order to calculate $X(t)$ and $V(t)$ using the ansatz:
-    # %
-    # % $$ A = \Xi \setminus X(0) \qquad B = (\Xi \setminus V(0)) ./ \omega $$
-    # %
-    # % The external force is implemented as spacer sticks which are
-    # % inserted into the springs and hence the unit cells have a new 
-    # % equillibrium  positions $z_i(\infty) = z_i^\infty$. Thus we can 
-    # % do a coordination transformation:
-    # %
-    # % $$ z_i(t) = z_i^0 + x_i(t) = z_i^\infty + x_i^\infty(t) $$
-    # %
-    # % and
-    # %
-    # % $$ x_i^\infty(t) = z_i^0 - z_i^\infty + x_i(t) $$
-    # %
-    # % with the initial condition $x_i(0) = 0$ the becomes
-    # %
-    # % $$ x_i^\infty(0) = z_i^0 - z_i^\infty = \sum_{j = i+1}^N l_j $$
-    # %
-    # % $x_i^\infty(0)$ is the new initial condition after the excitation
-    # % where $l_i$ is the length of the i-th spacer stick. The spacer 
-    # % sticks are calculated from the temperature change and the linear 
-    # % thermal expansion coefficients. 
-    # % The actual strain $\epsilon_i(t)$ of each unit cell is calculates 
-    # % as follows:
-    # % 
-    # % $$ \epsilon_i(t) = [ \Delta x_i(t) + l_i) ] / c_i $$
-    # %
-    # % with $\Delta x_i = x_i - x_{i-1}$. The stick $l_i$ have to be
-    # % added here, because $x_i$ has been transformed into the new
-    # % coordinate system $x_i^\infty$.
-    # function [strainMap X V A B sticksSubSystems] = calcStrainMap(obj,time,tempMap,deltaTempMap)
-    #     tic
-    #     % initialize
-    #     N = obj.S.getNumberOfUnitCells; % nb of unit cells
-    #     M = length(time);               % nb of time steps
-        
-    #     time0       = time(1); % initial time
-    #     cAxises     = obj.S.getUnitCellPropertyVector('cAxis');
-    #     X           = zeros(M,N); % shifts of the unitCells
-    #     V           = zeros(M,N); % velocities of the unitCells
-    #     A           = zeros(M,N); % coefficient vector for eigenwert solution
-    #     B           = zeros(M,N); % coefficient vector for eigenwert solution
-    #     strainMap   = zeros(M,N); % the restulting strain pattern of the unitCells
-        
-    #     % check tempMaps
-    #     [tempMap, deltaTempMap] = obj.checkTempMaps(tempMap,deltaTempMap,time);
-        
-    #     % calculate the sticks due to heat expansion first for all time
-    #     % steps
-    #     obj.dispMessage('Calculating linear thermal expansion ...');
-    #     [sticks, sticksSubSystems] = obj.calcSticksFromTempMap(tempMap,deltaTempMap);
-                    
-    #     if obj.onlyheat
-    #         % no coherent dynamics so calculate the strain directly
-    #         strainMap = sticks./repmat(cAxises',size(sticks,1),1);
-    #     else
-    #         % solve the eigenproblem for the structure to obtains the
-    #         % eigenvectors Xi and eigenfreqeuencies omega for the N 
-    #         % coupled differential equations
-    #         [Xi, omega] = obj.solveEigenproblem();
-        
-    #         % calculate the actual strain pattern with the solution of the
-    #         % eigenproblem and the external force (sticks, thermal stress) 
-    #         obj.dispMessage('Calculating _strainMap_ ...');
-    #         obj.progressBar('Please wait... ');
-    #         % traverse time
-    #         for i=1:M
-    #             obj.progressBar(i/M*100); % plot the progress
+    def calc_strain_map(self, delays, temp_map, delta_temp_map):
+        r"""calc_strain_map
 
-    #             dt = time(i)-time0; % this is the time step
+        Calculates the ``strain_map`` of the sample structure for a given
+        ``temp_map`` and ``delta_temp_map`` and ``delay`` array. Further
+        details are given in Ref. [8]_. Within the linear chain of :math:`N`
+        masses (:math:`m_i`) at position :math:`z_i` coupled with spring
+        constants :math:`k_i` one can formulate the differential equation
+        of motion as follow:
 
-    #             % calculate the current shift X and velocity V of all 
-    #             % unitCells using the ansatz
-    #             X(i,:)  = Xi*(         A(i,:)'.*cos(omega*dt) + B(i,:)'.*sin(omega*dt));
-    #             V(i,:)  = Xi*(omega.*(-A(i,:)'.*sin(omega*dt) + B(i,:)'.*cos(omega*dt)));
-    #             % remember the velocities and shifts as ic for the next
-    #             % time step
-    #             X0      = X(i,:)';
-    #             V0      = V(i,:)';
+        .. math::
 
-    #             % the strain can only be calculated for N-1 unitCells, so
-    #             % we neglect the last one
-    #             if i > 1
-    #                 strainMap(i,1:N-1) = (diff(X(i,:),1,2)+sticks(i-1,1:N-1))./cAxises(1:N-1)';
-    #             else
-    #                 % initial sticks are zero
-    #                 strainMap(i,1:N-1) =  diff(X(i,:),1,2)./cAxises(1:N-1)';
-    #             end%if
+            m_i\ddot{x}_i = -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1}) + F_i^{heat}(t)
 
-    #             % calculate everything for the next step
-    #             if i < M % check, if there is a next step
-    #                 if find(deltaTempMap(i,:)) % there is a temperature change
-    #                     time0 = time(i); % set new initial time                       
-                        
-    #                     % determining the shifts due to inserted sticks
-    #                     % as new ininital conditions
-    #                     if i > 1
-    #                         temp = flipud(cumsum(flipud(sticks(i,:)'-sticks(i-1,:)')));
-    #                     else
-    #                         % initial sticks are zero
-    #                         temp = flipud(cumsum(flipud(sticks(i,:)')));
-    #                     end%if
-    #                     X0 = X0 + vertcat(temp(2:end),0);
+        Since we only consider nearest-neighbor interaction one can write:
 
-    #                     % determining the cofficient vectors A and B of
-    #                     % the general solution of X(t) using the inital
-    #                     % conditions X0 and V0
-    #                     A(i+1,:) = ( Xi\X0);
-    #                     B(i+1,:) = ((Xi\V0)./omega)';
-    #                 else
-    #                     % no temperature change, so keep the current As,
-    #                     % Bs, and sticks
-    #                     A(i+1,:) = A(i,:);
-    #                     B(i+1,:) = B(i,:);
-    #                 end%if
-    #             end%if
-    #         end%for
-    #         obj.progressBar('');
-    #     end
-    #     obj.dispMessage('Elapsed time for _strainMap_:',toc);
-    # end%function
+        .. math::
 
-    # %% solveEigenproblem
-    # % Creates the real and symmetric $K$ matrix ($N \times N$) of 
-    # % spring constants $k_i$ and masses $m_i$ and calculates the 
-    # % eigenvectors $\Xi_j$ and eigenfrequencies $\omega_j$ for the 
-    # % matrix which are used to calculate the _strainMap_ of the
-    # % structure.
-    # % If the result has been save to file, load it from there.
-    # function [Xi,omega] = solveEigenproblem(obj)
-    #     % create the file name to look for
-    #     filename = fullfile(obj.cacheDir, ['eigenValues_' obj.S.getHash('phonon') '.mat']);
-    #     if exist(filename,'file') && ~obj.forceRecalc
-    #         % file exists so load it 
-    #         load(filename);
-    #         obj.dispMessage(['_eigenValues_ loaded from file ' filename]);
-    #     else
-    #         % no file - so lets calculate everything
-    #         tic
-    #         obj.dispMessage('Calculating _eigenValues_ ...');
-    #         % initialize
-    #         N       = obj.S.getNumberOfUnitCells; % nb of unit cells
-    #         K       = zeros(N,N); %Initializing three-diagonal springs-masses matrix.
-    #         omega   = zeros(N,1); %Initializing a vector for eigenfrequencies
-            
-    #         masses       = obj.S.getUnitCellPropertyVector('mass'); % get masses vector
-    #         springConsts = obj.S.getUnitCellPropertyVector('springConst'); % get the first order springs vector
-    #         springConsts = vertcat(0, springConsts(:,1)); % set the first spring free
-            
-    #         for i=1:N %Defining main diagonal.
-    #             K(i,i)=-(springConsts(i)+springConsts(i+1))/masses(i);
-    #         end%for
+            \ddot{x}_i = \sum_{n=1}^N \kappa_{i,n} x_n = \Delta_i(t)
 
-    #         for i=2:N %Defining the two other diagonals. Nearest neightbour interaction.
-    #             K(i,i-1) = springConsts(i)/masses(i);
-    #             K(i-1,i) = springConsts(i)/masses(i-1);
-    #         end%for
-            
-    #         % Determining the eigenvectors and the eigenvalues
-    #         [Xi,lambda] = eig(K);
+        Here :math:`x_i(t) = z_i(t)-z_i^0` is the shift of each layer,
+        :math:`F_i^{heat}(t)` is the external force (thermal stress) of each
+        layer and :math:`\kappa_{i,i} = -(k_i + k_{i+1})/m_i`, and
+        :math:`\kappa_{i,i+1} = \kappa_{i+1,i} = k_{i+1}/m_i`.
 
-    #         for i=1:N % calculate the eigenfrequencies from the eigenvalues
-    #             omega(i)=sqrt(-lambda(i,i));
-    #         end%for
-            
-    #         obj.dispMessage('Elapsed time for _eigenValues_:',toc);
-    #         % save the result to file
-    #         save(filename,'Xi', 'omega');
-    #         obj.dispMessage(['_eigenValues_ saved to file ' filename]);
-    #     end%if
-    # end%function
-            
+        :math:`k_i = m_i\, v_i^2/c_i^2` is the spring constant and :math:`c_i`
+        and :math:`v_i` are the thickness and longitudinal sound velocity of
+        each layer respectively.
+        One can rewrite the homogeneous differential equation in matrix
+        form to obtain the general solution
+
+        .. math::
+
+        \frac{d^2}{dt^2} X = K\, X
+
+        Here :math:`X = (x_1 \ldots x_N)` and :math:`K` is the
+        tri-diagonal matrix of :math:`\kappa` which is real and symmetric.
+        The differential equation can be solved with the ansatz:
+
+        .. math::
+
+        X(t) = \sum_j \Xi_j \, (A_j \cos(\omega_j \, t) + B_j \sin(\omega_j \, t))
+
+        where :math:`\Xi_j = (\xi_1^j \ldots \xi_N^j)` are the eigenvectors of
+        the matrix :math:`K`. Thus by solving the Eigenproblem for :math:`K` one
+        gets the eigenvecotrs :math:`\Xi_j` and the eigenfrequencies
+        :math:`\omega_j`. From the initial conditions
+
+        .. math:: X(0) = \sum_j \Xi_j \, A_j = \Xi \, A \qquad V(0) = \dot{X}(0)
+                  = \sum_j \Xi_j \, \omega_j\, B_j = \Xi \, \omega \, B
+
+        one can determine the real coefficient vectors :math:`A` and :math:`B` in
+        order to calculate :math:`X(t)` and :math:`V(t)` using the ansatz:
+
+        .. math::
+
+        A = \Xi \setminus X(0) \qquad B = (\Xi \setminus V(0)) ./ \omega
+
+        The external force is implemented as spacer sticks which are
+        inserted into the springs and hence the layers have a new
+        equillibrium positions :math:`z_i(\infty) = z_i^\infty`.
+        Thus we can do a coordination transformation:
+
+        .. math::
+
+        z_i(t) = z_i^0 + x_i(t) = z_i^\infty + x_i^\infty(t)
+
+        and
+
+        .. math::
+
+        x_i^\infty(t) = z_i^0 - z_i^\infty + x_i(t)
+
+        with the initial condition :math:`x_i(0) = 0` it becomes
+
+        .. math::
+
+        x_i^\infty(0) = z_i^0 - z_i^\infty = \sum_{j = i+1}^N l_j
+
+        :math:`x_i^\infty(0)` is the new initial condition after the excitation
+        where :math:`l_i` is the length of the :math:`i`-th spacer stick.
+        The spacer sticks are calculated from the temperature change and the
+        linear thermal expansion coefficients.
+        The actual strain :math:`\epsilon_i(t)` of each layer is calculates
+        as follows:
+
+        .. math::
+
+        \epsilon_i(t) = [ \Delta x_i(t) + l_i) ] / c_i
+
+        with :math:`\Delta x_i = x_i - x_{i-1}`. The stick :math:`l_i` have
+        to be added here, because :math:`x_i` has been transformed into the new
+        coordinate system :math:`x_i^\infty`.
+
+        """
+        t1 = time()
+
+        # initialize
+        L = self.S.get_number_of_layers()
+        M = len(delays)
+
+        try:
+            delays = delays.to('s').magnitude
+        except AttributeError:
+            pass
+
+        delay0 = delays[0]  # initial delay
+        thicknesses = self.S.get_layer_property_vector('_thickness')
+        X = np.zeros(M, L)  # shifts of the layers
+        V = np.zeros(M, L)  # velocities of the layers
+        A = np.zeros(M, L)  # coefficient vector for eigenwert solution
+        B = np.zeros(M, L)  # coefficient vector for eigenwert solution
+        strain_map = np.zeros(M, L)  # the restulting strain map
+
+        # check temp_maps
+        [temp_map, delta_temp_map] = self.check_temp_maps(temp_map, delta_temp_map, delays)
+
+        # calculate the sticks due to heat expansion first for all delay steps
+        self.disp_message('Calculating linear thermal expansion ...')
+        sticks, sticks_sub_systems = self.calc_sticks_from_temp_map(temp_map, delta_temp_map)
+
+        if self.only_heat:
+            # no coherent dynamics so calculate the strain directly
+            strain_map = sticks/np.tile(thicknesses, [np.size(sticks, 0), 1])
+        else:
+            # solve the eigenproblem for the structure to obtains the
+            # eigenvectors X_i and eigenfreqeuencies omega for the L
+            # coupled differential equations
+            Xi, omega = self.solve_eigenproblem()
+            # calculate the actual strain map with the solution of the
+            # eigenproblem and the external force (sticks, thermal stress)
+            self.disp_message('Calculating _strain_map_ ...')
+            if self.progress_bar:
+                iterator = trange(M, desc='Progress', leave=True)
+            else:
+                iterator = range(M)
+            for i in iterator:
+                dt = delays[i]-delay0  # this is the time step
+                # calculate the current shift X and velocity V of all
+                # layers using the ansatz
+                X[i, :] = Xi*(A[i, :].T*np.cos(omega*dt) + B[i, :].T*np.sin(omega*dt))
+                V[i, :] = Xi*(omega*(-A[i, :].T*np.sin(omega*dt) + B[i, :].T*np.cos(omega*dt)))
+                # remember the velocities and shifts as ic for the next
+                # time step
+                X0 = X[i, :].T
+                V0 = V[i, :].T
+                # the strain can only be calculated for L-1 layers, so
+                # we neglect the last one
+                if i > 0:
+                    strain_map[i, 0:-2] = (np.diff(X[i, :], n=1, axis=1)
+                                           + sticks[i-1, 0:-2])/thicknesses[0:-2].T
+                else:
+                    # initial sticks are zero
+                    strain_map[i, 0:-2] = np.diff(X[i, :], n=1, axis=1)/thicknesses[0:-2].T
+                # calculate everything for the next step
+                if i < (M-1):  # check, if there is a next step
+                    if np.any(delta_temp_map[i, :]):  # there is a temperature change
+                        delay0 = delays[i]  # set new initial delay
+                        # determining the shifts due to inserted sticks
+                        # as new ininital conditions
+                        if i > 0:
+                            temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T-sticks[i-1, :].T)))
+                        else:
+                            # initial sticks are zero
+                            temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T)))
+                        X0 = X0 + np.vertcat(temp[1:-1], 0)
+                        # determining the cofficient vectors A and B of
+                        # the general solution of X(t) using the inital
+                        # conditions X0 and V0
+                        A[i+1, :] = np.linalg.solve(Xi, X0)
+                        B[i+1, :] = (np.linalg.solve(Xi, V0)/omega).T
+                    else:
+                        # no temperature change, so keep the current As,
+                        # Bs, and sticks
+                        A[i+1, :] = A[i, :]
+                        B[i+1, :] = B[i, :]
+
+        self.disp_message('Elapsed time for _strain_map_:'
+                          ' {:f} s'.format(time()-t1))
+
+        return strain_map, X, V, A, B
+
+    def solve_eigenproblem(self):
+        r"""solve_eigenproblem
+
+        Creates the real and symmetric :math:`K` matrix (:math:`L \times L`) of
+        spring constants :math:`k_i` and masses :math:`m_i` and calculates the
+        eigenvectors :math:`\Xi_j` and eigenfrequencies :math:`\omega_j` for the
+        matrix which are used to calculate the ``strain_map`` of the structure.
+        If the result has been save to file, load it from there.
+
+        """
+        # create the file name to look for
+        filename = 'eigenvalues_' \
+                   + self.S.get_hash(types='phonon') \
+                   + '.npz'
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        if path.exists(full_filename) and not self.force_recalc:
+            # found something so load it
+            tmp = np.load(full_filename)
+            Xi = tmp['Xi']
+            omega = tmp['omega']
+            self.disp_message('_eigen_values_ loaded from file:\n\t' + filename)
+        else:
+            # file does not exist so calculate and save
+            t1 = time()
+            self.disp_message('Calculating _eigen_values_ ...')
+            # initialize
+            L = self.S.get_number_of_layers()
+            K = np.zeros(L, L)  # initializing three-diagonal springs-masses matrix.
+            omega = np.zeros(L, 1)  # initializing a vector for eigenfrequencies
+
+            masses = self.S.get_layer_property_vector('_mass_unit_area')
+            spring_consts = self.S.get_layer_property_vector('spring_const')
+            spring_consts = np.vertcat(0, spring_consts[:, 0])  # set the first spring free
+
+            for i in range(L):  # defining main diagonal
+                K[i, i] = -(spring_consts[i] + spring_consts[i+1])/masses[i]
+
+            # defining the two other diagonals - nearest neightbour interaction
+            for i in range(1, L):
+                K[i, i-1] = spring_consts[i]/masses[i]
+                K[i-1, i] = spring_consts[i]/masses[i-1]
+
+            # determining the eigenvectors and the eigenvalues
+            Xi, lambd = np.linalg.eig(K)
+
+            for i in range(L):  # calculate the eigenfrequencies from the eigenvalues
+                omega[i] = np.sqrt(-lambd[i, i])
+
+            self.disp_message('Elapsed time for _eigen_values_:'
+                              ' {:f} s'.format(time()-t1))
+            # save the result to file
+            self.save(full_filename, {'Xi': Xi, 'omega': omega}, '_eigen_values_')
+
+        return Xi, omega
+
     # %% getEnergyPerEigenmode
     # % Returns the energy per Eigenmode of the coherent phonons of
     # % the 1D sample sorted and unsorted.
@@ -1003,18 +1024,18 @@ class PhononAna(Phonon):
     # % Frequencies are in [Hz] and energy per mode in [J].
     # function [omegaSort ESort omega E] = getEnergyPerEigenmode(obj,A,B)
     #     % initialize
-    #     N       = obj.S.getNumberOfUnitCells; % nb of unit cells
+    #     L       = obj.S.getNumberOfUnitCells; % nb of unit cells
     #     M       = size(A,1); % nb of time steps
-    #     E       = zeros(M,N);
-    #     ESort   = zeros(M,N);
+    #     E       = zeros(M,L);
+    #     ESort   = zeros(M,L);
     #     masses  = obj.S.getUnitCellPropertyVector('mass'); % mass vector of unitCells
-        
+    #
     #     % get the eigenVectors and eigenFrequencies
-    #     [Xi,omega] = obj.solveEigenproblem(); 
-        
+    #     [Xi,omega] = obj.solveEigenproblem();
+    #
     #     % sort the frequencies and remeber the permutation of indicies
-    #     [omegaSort sortIndex] = sort(omega);            
-        
+    #     [omegaSort sortIndex] = sort(omega):
+    #
     #     % traverse time
     #     for i=1:M
     #         % calculate the energy for the jth mode
