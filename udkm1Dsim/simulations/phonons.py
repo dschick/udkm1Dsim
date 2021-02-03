@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Phonon', 'PhononNum']
+__all__ = ['Phonon', 'PhononNum', 'PhononAna']
 
 __docformat__ = 'restructuredtext'
 
@@ -897,7 +897,7 @@ class PhononAna(Phonon):
 
         # calculate the sticks due to heat expansion first for all delay steps
         self.disp_message('Calculating linear thermal expansion ...')
-        sticks, sticks_sub_systems = self.calc_sticks_from_temp_map(temp_map, delta_temp_map)
+        sticks, _ = self.calc_sticks_from_temp_map(temp_map, delta_temp_map)
 
         if self.only_heat:
             # no coherent dynamics so calculate the strain directly
