@@ -886,11 +886,11 @@ class PhononAna(Phonon):
 
         delay0 = delays[0]  # initial delay
         thicknesses = self.S.get_layer_property_vector('_thickness')
-        X = np.zeros(M, L)  # shifts of the layers
-        V = np.zeros(M, L)  # velocities of the layers
-        A = np.zeros(M, L)  # coefficient vector for eigenwert solution
-        B = np.zeros(M, L)  # coefficient vector for eigenwert solution
-        strain_map = np.zeros(M, L)  # the restulting strain map
+        X = np.zeros([M, L])  # shifts of the layers
+        V = np.zeros_like(X)  # velocities of the layers
+        A = np.zeros_like(X)  # coefficient vector for eigenwert solution
+        B = np.zeros_like(X)  # coefficient vector for eigenwert solution
+        strain_map = np.zeros_like(X)  # the restulting strain map
 
         # check temp_maps
         [temp_map, delta_temp_map] = self.check_temp_maps(temp_map, delta_temp_map, delays)
@@ -918,8 +918,8 @@ class PhononAna(Phonon):
                 dt = delays[i]-delay0  # this is the time step
                 # calculate the current shift X and velocity V of all
                 # layers using the ansatz
-                X[i, :] = Xi*(A[i, :].T*np.cos(omega*dt) + B[i, :].T*np.sin(omega*dt))
-                V[i, :] = Xi*(omega*(-A[i, :].T*np.sin(omega*dt) + B[i, :].T*np.cos(omega*dt)))
+                X[i, :] = np.dot(Xi, (A[i, :].T*np.cos(omega*dt) + B[i, :].T*np.sin(omega*dt)))
+                V[i, :] = np.dot(Xi, (omega*(-A[i, :].T*np.sin(omega*dt) + B[i, :].T*np.cos(omega*dt))))
                 # remember the velocities and shifts as ic for the next
                 # time step
                 X0 = X[i, :].T
@@ -927,11 +927,11 @@ class PhononAna(Phonon):
                 # the strain can only be calculated for L-1 layers, so
                 # we neglect the last one
                 if i > 0:
-                    strain_map[i, 0:-2] = (np.diff(X[i, :], n=1, axis=1)
-                                           + sticks[i-1, 0:-2])/thicknesses[0:-2].T
+                    strain_map[i, 0:-1] = (np.diff(X[i, :])
+                                           + sticks[i-1, 0:-1])/thicknesses[0:-1].T
                 else:
                     # initial sticks are zero
-                    strain_map[i, 0:-2] = np.diff(X[i, :], n=1, axis=1)/thicknesses[0:-2].T
+                    strain_map[i, 0:-1] = np.diff(X[i, :])/thicknesses[0:-1].T
                 # calculate everything for the next step
                 if i < (M-1):  # check, if there is a next step
                     if np.any(delta_temp_map[i, :]):  # there is a temperature change
@@ -943,7 +943,7 @@ class PhononAna(Phonon):
                         else:
                             # initial sticks are zero
                             temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T)))
-                        X0 = X0 + np.vertcat(temp[1:-1], 0)
+                        X0 = X0 + np.hstack((temp[0:-1], 0))
                         # determining the cofficient vectors A and B of
                         # the general solution of X(t) using the inital
                         # conditions X0 and V0
@@ -987,12 +987,12 @@ class PhononAna(Phonon):
             self.disp_message('Calculating _eigen_values_ ...')
             # initialize
             L = self.S.get_number_of_layers()
-            K = np.zeros(L, L)  # initializing three-diagonal springs-masses matrix.
-            omega = np.zeros(L, 1)  # initializing a vector for eigenfrequencies
+            K = np.zeros([L, L])  # initializing three-diagonal springs-masses matrix.
+            omega = np.zeros([L, 1], dtype=np.cfloat)  # initializing a vector for eigenfrequencies
 
             masses = self.S.get_layer_property_vector('_mass_unit_area')
             spring_consts = self.S.get_layer_property_vector('spring_const')
-            spring_consts = np.vertcat(0, spring_consts[:, 0])  # set the first spring free
+            spring_consts = np.hstack((0, spring_consts))  # set the first spring free
 
             for i in range(L):  # defining main diagonal
                 K[i, i] = -(spring_consts[i] + spring_consts[i+1])/masses[i]
@@ -1003,10 +1003,10 @@ class PhononAna(Phonon):
                 K[i-1, i] = spring_consts[i]/masses[i-1]
 
             # determining the eigenvectors and the eigenvalues
-            Xi, lambd = np.linalg.eig(K)
+            lambd, Xi = np.linalg.eig(K)
 
-            for i in range(L):  # calculate the eigenfrequencies from the eigenvalues
-                omega[i] = np.sqrt(-lambd[i, i])
+            # calculate the eigenfrequencies from the eigenvalues
+            omega = np.sqrt(-lambd)
 
             self.disp_message('Elapsed time for _eigen_values_:'
                               ' {:f} s'.format(time()-t1))
