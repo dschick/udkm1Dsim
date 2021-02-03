@@ -680,3 +680,54 @@ class PhononNum(Phonon):
         F = masses*damping*np.diff(v, 0)
 
         return F
+
+
+class PhononAna(Phonon):
+    """PhononAna
+
+    Base class for analytical phonon simulations.
+
+    Args:
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
+
+    Keyword Args:
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        only_heat (boolean): true when including only thermal expanison without
+            coherent phonon dynamics.
+
+    Attributes:
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        only_heat (boolean): true when including only thermal expanison without
+            coherent phonon dynamics.
+
+    References:
+
+        .. [8] M. Herzog, D. Schick, P. Gaal, R. Shayduk, C. von Korff Schmising
+           & M. Bargheer, *Analysis of ultrafast X-ray diffraction data in a
+           linear-chain model of the lattice dynamics*, `Applied Physics A,
+           106(3), 489-499 (2011).
+           <http://www.doi.org/doi:10.1007/s00339-011-6719-z>`_
+
+    """
+
+    def __init__(self, S, force_recalc, **kwargs):
+        super().__init__(S, force_recalc, **kwargs)
+
+    def __str__(self, output=[]):
+        """String representation of this class"""
+
+        class_str = 'Analytical Phonon simulation properties:\n\n'
+        class_str += super().__str__()
+
+        return class_str
