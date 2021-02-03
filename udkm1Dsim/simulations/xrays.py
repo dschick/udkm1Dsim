@@ -116,6 +116,28 @@ class Xray(Simulation):
                   ] + output
         return super().__str__(output)
 
+    def set_incoming_polarization(self, pol_in_state):
+        """set_incoming_polarization
+
+        Must be overwritten by child classes.
+
+        Args:
+            pol_in_state (int): incoming polarization state id.
+
+        """
+        pass
+
+    def set_outgoing_polarization(self, pol_out_state):
+        """set_outgoing_polarization
+
+        Must be overwritten by child classes.
+
+        Args:
+            pol_out_state (int): outgoing polarization state id.
+
+        """
+        pass
+
     def set_polarization(self, pol_in_state, pol_out_state):
         """set_polarization
 
@@ -529,7 +551,7 @@ class XrayKin(Xray):
         strainCounter = 0  # the is the index of the strain vector if applied
 
         # traverse substructures
-        for i, sub_structures in enumerate(S.sub_structures):
+        for sub_structures in S.sub_structures:
             if isinstance(sub_structures[0], UnitCell):
                 # the substructure is an unit cell and we can calculate
                 # Ep directly
@@ -812,7 +834,7 @@ class XrayDyn(Xray):
         strainCounter = 0
 
         # traverse substructures
-        for i, sub_structure in enumerate(S.sub_structures):
+        for sub_structure in S.sub_structures:
             if isinstance(sub_structure[0], UnitCell):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
@@ -1056,7 +1078,7 @@ class XrayDyn(Xray):
             R (ndarray[float]): inhomogeneous reflectivity.
 
         """
-        return
+        return []
 
     def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM):
         r"""calc_inhomogeneous_reflectivity
@@ -1150,7 +1172,7 @@ class XrayDyn(Xray):
             if temp is not []:
                 RT = m_times_n(RT, temp)
             else:
-                raise(ValueError, 'RTM not found')
+                raise ValueError('RTM not found')
 
         return RT
 
@@ -1935,7 +1957,7 @@ class XrayDynMag(Xray):
                                                                     magnetization_map,
                                                                     dask_client)
             elif calc_type == 'distributed':
-                R, R_Phi = self.distributed_inhomogeneous_reflectivity(strain_map,
+                R, R_phi = self.distributed_inhomogeneous_reflectivity(strain_map,
                                                                        magnetization_map,
                                                                        job,
                                                                        num_workers)
@@ -2119,7 +2141,7 @@ class XrayDynMag(Xray):
               magnetization.
 
         """
-        return
+        return [], []
 
     def calc_inhomogeneous_matrix(self, last_A, last_A_phi, last_k_z, strains, magnetizations):
         r"""calc_inhomogeneous_matrix
