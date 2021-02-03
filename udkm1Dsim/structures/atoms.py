@@ -158,7 +158,6 @@ class Atom:
             if source not in ['chantler', 'henke']:
                 raise ValueError('The source of the atomic form factors must be '
                                  'either chantler or henke!')
-                return
 
             if source == 'chantler':
                 sub_path = 'chantler/{:s}.cf'.format(self.symbol.lower())

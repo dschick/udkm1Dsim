@@ -183,7 +183,7 @@ class Heat(Simulation):
                  self.intp_at_interface, self._excitation,
                  self._boundary_conditions, self.distances]
 
-        for key, value in kwargs.items():
+        for value in kwargs.values():
             param.append(value)
 
         return self.S.get_hash(types='heat') + '_' + make_hash_md5(param)
@@ -233,7 +233,7 @@ class Heat(Simulation):
         return init_temp
 
     def check_excitation(self, delays):
-        """check_excitation
+        r"""check_excitation
 
         The optical excitation is a dictionary with fluence
         :math:`F` [J/m²], delays :math:`t` [s] of the pump events, and pulse
@@ -733,7 +733,7 @@ class Heat(Simulation):
             self.disp_message('_temp_map_ loaded from file:\n\t' + filename)
         else:
             # file does not exist so calculate and save
-            temp_map, delta_temp_map, checked_excitations = \
+            temp_map, delta_temp_map, _ = \
                 self.calc_temp_map(delays, init_temp)
             self.save(full_filename, {'temp_map': temp_map,
                                       'delta_temp_map': delta_temp_map},
@@ -939,7 +939,7 @@ class Heat(Simulation):
         M = len(delays)
         K = self.S.num_sub_systems
         init_temp = self.check_initial_temperature(init_temp, distances)
-        d_start, _, d_mid = self.S.get_distances_of_layers(False)
+        d_start, _, _ = self.S.get_distances_of_layers(False)
 
         d_distances = np.diff(distances)
         N = len(distances)

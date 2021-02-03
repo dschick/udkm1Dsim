@@ -107,7 +107,7 @@ class Phonon(Simulation):
         param.append(temp_map)
         param.append(delta_temp_map)
 
-        for key, value in kwargs.items():
+        for value in kwargs.values():
             param.append(value)
 
         return self.S.get_hash(types='phonon') + '_' + make_hash_md5(param)
@@ -126,7 +126,7 @@ class Phonon(Simulation):
         positions = self.S.get_all_positions_per_unique_layer()
         strains = []
 
-        for key, value in positions.items():
+        for value in positions.values():
             strains.append(np.sort(np.unique(strain_map[:, value].flatten())))
 
         return strains
@@ -385,7 +385,7 @@ class PhononNum(Phonon):
             self.disp_message('_strain_map_ loaded from file:\n\t' + filename)
         else:
             # file does not exist so calculate and save
-            strain_map, sticks_sub_systems, velocities = \
+            strain_map, _, _ = \
                 self.calc_strain_map(delays, temp_map, delta_temp_map)
             self.save(full_filename, {'strain_map': strain_map}, '_strain_map_num_')
         return strain_map
@@ -518,7 +518,7 @@ class PhononNum(Phonon):
     @staticmethod
     def ode_func(t, X, delays, force_from_heat, damping, spring_consts, masses, L,
                  pbar=None, state=None):
-        """ode_func
+        r"""ode_func
 
         Provides the according ode function for the ode solver which has to be
         solved. The ode function has the input :math:`t` and :math:`X(t)` and
@@ -582,7 +582,7 @@ class PhononNum(Phonon):
 
     @staticmethod
     def calc_force_from_spring(d_X1, d_X2, spring_consts):
-        """calc_force_from_spring
+        r"""calc_force_from_spring
 
         Calculates the force :math:`F_i^{spring}` acting on each mass due to
         the displacement between the left and right site of that mass.
@@ -658,7 +658,7 @@ class PhononNum(Phonon):
 
     @staticmethod
     def calc_force_from_damping(v, damping, masses):
-        """calc_force_from_damping
+        r"""calc_force_from_damping
 
         Calculates the force acting on each mass in a linear spring due to
         damping (:math:`\gamma_i`) according to the shift velocity difference
