@@ -125,7 +125,7 @@ class Xray(Simulation):
             pol_in_state (int): incoming polarization state id.
 
         """
-        pass
+        raise NotImplementedError
 
     def set_outgoing_polarization(self, pol_out_state):
         """set_outgoing_polarization
@@ -136,7 +136,7 @@ class Xray(Simulation):
             pol_out_state (int): outgoing polarization state id.
 
         """
-        pass
+        raise NotImplementedError
 
     def set_polarization(self, pol_in_state, pol_out_state):
         """set_polarization
@@ -1078,7 +1078,7 @@ class XrayDyn(Xray):
             R (ndarray[float]): inhomogeneous reflectivity.
 
         """
-        return []
+        raise NotImplementedError
 
     def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM):
         r"""calc_inhomogeneous_reflectivity
@@ -2141,7 +2141,7 @@ class XrayDynMag(Xray):
               magnetization.
 
         """
-        return [], []
+        raise NotImplementedError
 
     def calc_inhomogeneous_matrix(self, last_A, last_A_phi, last_k_z, strains, magnetizations):
         r"""calc_inhomogeneous_matrix
