@@ -101,7 +101,7 @@ class Magnetization(Simulation):
             param.append(temp_map)
             kwargs.pop('temp_map')
 
-        for key, value in kwargs.items():
+        for value in kwargs.values():
             param.append(value)
 
         return self.S.get_hash(types='magnetic') + '_' + make_hash_md5(param)
@@ -178,5 +178,4 @@ class Magnetization(Simulation):
             magnetization profile.
 
         """
-
-        pass
+        raise NotImplementedError
