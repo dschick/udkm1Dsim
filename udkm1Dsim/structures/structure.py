@@ -63,9 +63,7 @@ class Structure:
 
     def __str__(self, tabs=0):
         """String representation of this class"""
-        tab_str = ''
-        for i in range(tabs):
-            tab_str += '\t'
+        tab_str = tabs*'\t'
 
         class_str = tab_str + 'Structure properties:\n\n'
         class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
@@ -73,7 +71,7 @@ class Structure:
         class_str += tab_str + 'Roughness : {:0.2f}\n'.format(self.roughness)
         class_str += tab_str + '----\n'
         # traverse all substructures
-        for i, sub_structure in enumerate(self.sub_structures):
+        for sub_structure in self.sub_structures:
             if isinstance(sub_structure[0], (AmorphousLayer, UnitCell)):
                 # the substructure is an unitCell
                 class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
@@ -116,7 +114,7 @@ class Structure:
         from matplotlib import patches
         from matplotlib import cm
 
-        d_start, d_end, _ = self.get_distances_of_layers(True)  # distance vector of all layers
+        _, d_end, _ = self.get_distances_of_layers(True)  # distance vector of all layers
         layer_interfaces = np.append(0, d_end.to(unit).magnitude)  # Append zero at the start
         thickness = np.max(layer_interfaces)
 
@@ -125,7 +123,7 @@ class Structure:
 
         colortable = {}
         for i in range(N):
-            colortable[layer_ids[i]] = cm.Set1(i)
+            colortable[layer_ids[i]] = cm.get_cmap('Set1')(i)
 
         plt.figure(figsize=fig_size)
         ax = plt.axes()
@@ -337,7 +335,7 @@ class Structure:
                     # list.
                     temp1 = self.sub_structures[i][0].get_unique_layers()[0]
                     temp2 = self.sub_structures[i][0].get_unique_layers()[1]
-                    for j, temp in enumerate(temp1):
+                    for j in range(len(temp1)):
                         # check all ids from recursive call
                         if temp1[j] not in layer_ids:
                             # ids not in list, so add them
@@ -406,7 +404,7 @@ class Structure:
                 temp22 = []
                 temp33 = []
                 # concat the temporary arrays N times
-                for j in range(self.sub_structures[i][1]):
+                for _ in range(self.sub_structures[i][1]):
                     temp11 = temp11 + list(temp1)
                     temp22 = temp22 + list(temp2)
                     temp33 = temp33 + list(temp3)
@@ -475,7 +473,7 @@ class Structure:
 
         """
 
-        d_start, d_end, d_mid = self.get_distances_of_layers(False)
+        d_start, d_end, _ = self.get_distances_of_layers(False)
         indices = np.r_[1, np.diff(self.get_layer_vectors()[0])]
         res = np.append(d_start[np.nonzero(indices)], d_end[-1])
         if units:
@@ -513,7 +511,7 @@ class Structure:
             N += 1
 
         # traverse all distances
-        for i, z in enumerate(dist_intf):
+        for z in dist_intf:
             inda = finderb(z, d_start)  # this is the index of a layer after the interface
             indb = inda-1  # this is the index of a layer before the interface
 
