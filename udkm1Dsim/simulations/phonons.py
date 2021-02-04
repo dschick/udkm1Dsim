@@ -977,6 +977,11 @@ class PhononAna(Phonon):
         matrix which are used to calculate the ``strain_map`` of the structure.
         If the result has been save to file, load it from there.
 
+        Returns:
+            (tuple):
+            - *Xi (ndarray[float])* - eigenvectors.
+            - *omega (ndarray[float])* - eigenfrequencies.
+
         """
         # create the file name to look for
         filename = 'eigenvalues_' \
@@ -1026,8 +1031,8 @@ class PhononAna(Phonon):
     def get_energy_per_eigenmode(self, A, B):
         r"""get_energy_per_eigenmode
 
-        Returns the energy per Eigenmode of the coherent phonons of
-        the 1D sample sorted and unsorted.
+        Returns the sorted energy per Eigenmode of the coherent phonons of
+        the 1D sample.
 
         .. math::
 
@@ -1035,12 +1040,20 @@ class PhononAna(Phonon):
 
         Frequencies are in [Hz] and energy per mode in [J].
 
+        Args:
+            A (ndarray[float]): coefficient vector A of general solution.
+            B (ndarray[float]): coefficient vector B of general solution.
+
+        Returns:
+            (tuple):
+            - *omega (ndarray[float])* - eigenfrequencies.
+            - *E (ndarray[float])* - energy per eigenmode.
+
         """
         # initialize
         L = self.S.get_number_of_layers()
         M = A.shape[0]  # nb of delays
         E = np.zeros([M, L])
-        E_sort = np.zeros_like(E)
         masses = self.S.get_layer_property_vector('_mass_unit_area')
 
         # get the eigenVectors and eigenFrequencies
@@ -1048,13 +1061,10 @@ class PhononAna(Phonon):
 
         # sort the frequencies and remeber the permutation of indicies
         idx = np.argsort(omega)
-        omega_sort = omega[idx]
 
         # traverse time
         for i in range(M):
             # calculate the energy for the jth mode
             E[i, :] = 0.5 * (A[i, :].T**2 + B[i, :].T**2) * omega**2 * masses * np.sum(Xi**2, 0).T
-            # sort the energies according to the frequencies
-            E_sort[i, :] = E[i, idx]
 
-        return omega_sort, E_sort, omega, E
+        return omega[idx], E[:, idx]
