@@ -746,11 +746,10 @@ class PhononAna(Phonon):
             temperature map.
 
         Returns:
-            strain_map (ndarray[float]): spatio-temporal strain profile.
-            X (ndarray[float]): position shift vector.
-            V (ndarray[float]): velocity vector.
-            A (ndarray[float]): coefficient vector A of general solution.
-            B (ndarray[float]): coefficient vector B of general solution.
+            (tuple):
+            - *strain_map (ndarray[float])* - spatio-temporal strain profile.
+            - *A (ndarray[float])* - coefficient vector A of general solution.
+            - *B (ndarray[float])* - coefficient vector B of general solution.
 
         """
         filename = 'strain_map_ana_' \
@@ -761,22 +760,18 @@ class PhononAna(Phonon):
             # found something so load it
             tmp = np.load(full_filename)
             strain_map = tmp['strain_map']
-            X = tmp['X']
-            V = tmp['V']
             A = tmp['A']
             B = tmp['B']
             self.disp_message('_strain_map_ loaded from file:\n\t' + filename)
         else:
             # file does not exist so calculate and save
-            strain_map, X, V, A, B = \
+            strain_map, A, B = \
                 self.calc_strain_map(delays, temp_map, delta_temp_map)
             self.save(full_filename, {'strain_map': strain_map,
-                                      'X': X,
-                                      'V': V,
                                       'A': A,
                                       'B': B},
                       '_strain_map_ana_')
-        return strain_map, X, V, A, B
+        return strain_map, A, B
 
     def calc_strain_map(self, delays, temp_map, delta_temp_map):
         r"""calc_strain_map
@@ -872,6 +867,18 @@ class PhononAna(Phonon):
         to be added here, because :math:`x_i` has been transformed into the new
         coordinate system :math:`x_i^\infty`.
 
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            delta_temp_map (ndarray[float]): spatio-temporal differential
+            temperature map.
+
+        Returns:
+            (tuple):
+            - *strain_map (ndarray[float])* - spatio-temporal strain profile.
+            - *A (ndarray[float])* - coefficient vector A of general solution.
+            - *B (ndarray[float])* - coefficient vector B of general solution.
+
         """
         t1 = time()
 
@@ -919,7 +926,8 @@ class PhononAna(Phonon):
                 # calculate the current shift X and velocity V of all
                 # layers using the ansatz
                 X[i, :] = np.dot(Xi, (A[i, :].T*np.cos(omega*dt) + B[i, :].T*np.sin(omega*dt)))
-                V[i, :] = np.dot(Xi, (omega*(-A[i, :].T*np.sin(omega*dt) + B[i, :].T*np.cos(omega*dt))))
+                V[i, :] = np.dot(Xi, (omega*(-A[i, :].T*np.sin(omega*dt)
+                                             + B[i, :].T*np.cos(omega*dt))))
                 # remember the velocities and shifts as ic for the next
                 # time step
                 X0 = X[i, :].T
@@ -958,7 +966,7 @@ class PhononAna(Phonon):
         self.disp_message('Elapsed time for _strain_map_:'
                           ' {:f} s'.format(time()-t1))
 
-        return strain_map, X, V, A, B
+        return strain_map, A, B
 
     def solve_eigenproblem(self):
         r"""solve_eigenproblem
@@ -1015,31 +1023,38 @@ class PhononAna(Phonon):
 
         return Xi, omega
 
-    # %% getEnergyPerEigenmode
-    # % Returns the energy per Eigenmode of the coherent phonons of
-    # % the 1D sample sorted and unsorted.
-    # %
-    # % $$ E_j = \frac{1}{2} (A^2_j + B^2_j)\, \omega_j^2\, m_j \, \| \Xi_j\|^2 $$
-    # %
-    # % Frequencies are in [Hz] and energy per mode in [J].
-    # function [omegaSort ESort omega E] = getEnergyPerEigenmode(obj,A,B)
-    #     % initialize
-    #     L       = obj.S.getNumberOfUnitCells; % nb of unit cells
-    #     M       = size(A,1); % nb of time steps
-    #     E       = zeros(M,L);
-    #     ESort   = zeros(M,L);
-    #     masses  = obj.S.getUnitCellPropertyVector('mass'); % mass vector of unitCells
-    #
-    #     % get the eigenVectors and eigenFrequencies
-    #     [Xi,omega] = obj.solveEigenproblem();
-    #
-    #     % sort the frequencies and remeber the permutation of indicies
-    #     [omegaSort sortIndex] = sort(omega):
-    #
-    #     % traverse time
-    #     for i=1:M
-    #         % calculate the energy for the jth mode
-    #         E(i,:) = 0.5 * (A(i,:)'.^2 + B(i,:)'.^2).* omega(:).^2.*masses(:) .* sum(Xi.^2,1)';
-    #         % sort the energies according to the frequencies
-    #         ESort(i,:) = E(i,sortIndex);
-    #     end%for
+    def get_energy_per_eigenmode(self, A, B):
+        r"""get_energy_per_eigenmode
+
+        Returns the energy per Eigenmode of the coherent phonons of
+        the 1D sample sorted and unsorted.
+
+        .. math::
+
+        E_j = \frac{1}{2} (A^2_j + B^2_j)\, \omega_j^2\, m_j \, \| \Xi_j\|^2
+
+        Frequencies are in [Hz] and energy per mode in [J].
+
+        """
+        # initialize
+        L = self.S.get_number_of_layers()
+        M = A.shape[0]  # nb of delays
+        E = np.zeros([M, L])
+        E_sort = np.zeros_like(E)
+        masses = self.S.get_layer_property_vector('_mass_unit_area')
+
+        # get the eigenVectors and eigenFrequencies
+        Xi, omega = self.solve_eigenproblem()
+
+        # sort the frequencies and remeber the permutation of indicies
+        idx = np.argsort(omega)
+        omega_sort = omega[idx]
+
+        # traverse time
+        for i in range(M):
+            # calculate the energy for the jth mode
+            E[i, :] = 0.5 * (A[i, :].T**2 + B[i, :].T**2) * omega**2 * masses * np.sum(Xi**2, 0).T
+            # sort the energies according to the frequencies
+            E_sort[i, :] = E[i, idx]
+
+        return omega_sort, E_sort, omega, E
