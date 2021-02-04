@@ -1498,7 +1498,7 @@ class XrayDynMag(Xray):
 
     Dynamical magnetic Xray simulations adapted from Elzo et.al. [9]_.
     Initially realized in `Project Dyna
-    <http://neel.cnrs.fr/spip.php?rubrique1008>`_.
+    <http://dyna.neel.cnrs.fr>`_.
 
     Original copyright notice:
 
