@@ -806,7 +806,7 @@ class PhononAna(Phonon):
 
         .. math::
 
-        \frac{d^2}{dt^2} X = K\, X
+            \frac{d^2}{dt^2} X = K \, X
 
         Here :math:`X = (x_1 \ldots x_N)` and :math:`K` is the
         tri-diagonal matrix of :math:`\kappa` which is real and symmetric.
@@ -814,22 +814,24 @@ class PhononAna(Phonon):
 
         .. math::
 
-        X(t) = \sum_j \Xi_j \, (A_j \cos(\omega_j \, t) + B_j \sin(\omega_j \, t))
+         X(t) = \sum_j \Xi_j \, (A_j \cos(\omega_j \, t) + B_j \sin(\omega_j \, t))
 
         where :math:`\Xi_j = (\xi_1^j \ldots \xi_N^j)` are the eigenvectors of
         the matrix :math:`K`. Thus by solving the Eigenproblem for :math:`K` one
         gets the eigenvecotrs :math:`\Xi_j` and the eigenfrequencies
         :math:`\omega_j`. From the initial conditions
 
-        .. math:: X(0) = \sum_j \Xi_j \, A_j = \Xi \, A \qquad V(0) = \dot{X}(0)
-                  = \sum_j \Xi_j \, \omega_j\, B_j = \Xi \, \omega \, B
+        .. math::
+
+            X(0) = \sum_j \Xi_j \, A_j = \Xi \, A \qquad V(0) = \dot{X}(0)
+                 = \sum_j \Xi_j \, \omega_j\, B_j = \Xi \, \omega \, B
 
         one can determine the real coefficient vectors :math:`A` and :math:`B` in
         order to calculate :math:`X(t)` and :math:`V(t)` using the ansatz:
 
         .. math::
 
-        A = \Xi \setminus X(0) \qquad B = (\Xi \setminus V(0)) ./ \omega
+            A = \Xi \setminus X(0) \qquad B = (\Xi \setminus V(0)) / \omega
 
         The external force is implemented as spacer sticks which are
         inserted into the springs and hence the layers have a new
@@ -838,19 +840,19 @@ class PhononAna(Phonon):
 
         .. math::
 
-        z_i(t) = z_i^0 + x_i(t) = z_i^\infty + x_i^\infty(t)
+            z_i(t) = z_i^0 + x_i(t) = z_i^\infty + x_i^\infty(t)
 
         and
 
         .. math::
 
-        x_i^\infty(t) = z_i^0 - z_i^\infty + x_i(t)
+            x_i^\infty(t) = z_i^0 - z_i^\infty + x_i(t)
 
         with the initial condition :math:`x_i(0) = 0` it becomes
 
         .. math::
 
-        x_i^\infty(0) = z_i^0 - z_i^\infty = \sum_{j = i+1}^N l_j
+            x_i^\infty(0) = z_i^0 - z_i^\infty = \sum_{j = i+1}^N l_j
 
         :math:`x_i^\infty(0)` is the new initial condition after the excitation
         where :math:`l_i` is the length of the :math:`i`-th spacer stick.
@@ -861,7 +863,7 @@ class PhononAna(Phonon):
 
         .. math::
 
-        \epsilon_i(t) = [ \Delta x_i(t) + l_i) ] / c_i
+            \epsilon_i(t) = [ \Delta x_i(t) + l_i) ] / c_i
 
         with :math:`\Delta x_i = x_i - x_{i-1}`. The stick :math:`l_i` have
         to be added here, because :math:`x_i` has been transformed into the new
@@ -871,7 +873,7 @@ class PhononAna(Phonon):
             delays (ndarray[Quantity]): delays range of simulation [s].
             temp_map (ndarray[float]): spatio-temporal temperature map.
             delta_temp_map (ndarray[float]): spatio-temporal differential
-            temperature map.
+              temperature map.
 
         Returns:
             (tuple):
@@ -1036,7 +1038,7 @@ class PhononAna(Phonon):
 
         .. math::
 
-        E_j = \frac{1}{2} (A^2_j + B^2_j)\, \omega_j^2\, m_j \, \| \Xi_j\|^2
+            E_j = \frac{1}{2} (A^2_j + B^2_j)\, \omega_j^2\, m_j \, \| \Xi_j\|^2
 
         Frequencies are in [Hz] and energy per mode in [J].
 
