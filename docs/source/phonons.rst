@@ -8,6 +8,7 @@
 
     * :class:`Phonon`
     * :class:`PhononNum`
+    * :class:`PhononAna`
 
 .. automodule:: udkm1Dsim.simulations.phonons
     :show-inheritance:
