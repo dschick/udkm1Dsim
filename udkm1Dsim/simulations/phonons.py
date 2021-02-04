@@ -953,7 +953,7 @@ class PhononAna(Phonon):
                         else:
                             # initial sticks are zero
                             temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T)))
-                        X0 = X0 + np.hstack((temp[0:-1], 0))
+                        X0 = X0 + np.hstack((temp[1:], 0))
                         # determining the cofficient vectors A and B of
                         # the general solution of X(t) using the inital
                         # conditions X0 and V0
