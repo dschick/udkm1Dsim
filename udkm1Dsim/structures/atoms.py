@@ -36,10 +36,9 @@ from tabulate import tabulate
 class Atom:
     """Atom
 
-    The atom class is the smallest structural unit of which one can build
-    larger structures. It holds real physical properties of atoms defined in
-    the attributes section and can return parameters and data necessary for
-    different simulation types.
+    Smallest structural unit of which larger structures can be build.
+
+    It holds real physical properties of on the atomic level.
 
     Args:
         symbol (str): symbol of the atom.
@@ -359,9 +358,10 @@ class Atom:
 class AtomMixed(Atom):
     """AtomMixed
 
-    The AtomMixed class inherits from Atom and enables mixed atoms for certain
-    alloys and stochiometric mixtures. All properties of the included sub-atoms
-    of class Atom are averaged and weighted with their stochiometric ratio.
+    Representation of mixed atoms in alloys and stochiometric mixtures.
+
+    All properties of the included sub-atoms of class Atom are averaged
+    and weighted with their stochiometric ratio.
 
     Args:
         symbol (str): symbol of the atom.

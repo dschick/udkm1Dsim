@@ -38,7 +38,7 @@ from tqdm.notebook import tqdm, trange
 class Phonon(Simulation):
     """Phonon
 
-    Base class for phonon simulations.
+    Base class for phonon simulations in a linear chain of masses and springs.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -303,7 +303,7 @@ class Phonon(Simulation):
 class PhononNum(Phonon):
     """PhononNum
 
-    Base class for numerical phonon simulations.
+    Numerical model to simulate coherent acoustic phonons.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -685,7 +685,7 @@ class PhononNum(Phonon):
 class PhononAna(Phonon):
     """PhononAna
 
-    Base class for analytical phonon simulations.
+    Analytical model to simulate coherent acoustic phonons.
 
     Args:
         S (Structure): sample to do simulations with.

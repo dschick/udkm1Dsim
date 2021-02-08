@@ -42,7 +42,7 @@ from tqdm.notebook import tqdm
 class Heat(Simulation):
     """Heat
 
-    Base class for heat simulations.
+    Heat simulations including laser excitation and N-temperature model.
 
     Args:
         S (Structure): sample to do simulations with.

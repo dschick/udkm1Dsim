@@ -38,8 +38,10 @@ from tabulate import tabulate
 class Layer:
     r"""Layer
 
-    The layer class hold different structural properties of real physical
-    layers, such as amorphous layers and unit cells.
+    Base class of real physical layers, such as amorphous layers and unit cells.
+
+    It holds different structural, thermal, and eleastic properties that are
+    relevant for simulations.
 
     Args:
         id (str): id of the layer.
@@ -473,8 +475,7 @@ class Layer:
 class AmorphousLayer(Layer):
     r"""AmorphousLayer
 
-    The AmorphousLayer class hold different structural properties of real
-    physical amorphous layers and also an array of atoms in the layer.
+    Representation of amorphous layers containing an Atom or AtomMixed.
 
     Args:
         id (str): id of the layer.
@@ -599,9 +600,8 @@ class AmorphousLayer(Layer):
 class UnitCell(Layer):
     r"""Unit Cell
 
-    The unitCell class hold different structural properties of real
-    physical unit cells and also an array of atoms at different postions
-    in the unit cell.
+    Representation of unit cells made of one or multiple Atom or AtomMixed
+    instances at defined positions.
 
     Args:
         id (str): id of the UnitCell.

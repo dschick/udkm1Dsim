@@ -34,8 +34,9 @@ import os
 class Simulation:
     """Simulation
 
-    Base class for all simulations. Handles the caching and some displaying
-    option.
+    Base class for all simulations.
+
+    Handles the caching and some displaying option.
 
     Args:
         S (Structure): sample to do simulations with.

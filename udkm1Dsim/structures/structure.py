@@ -36,10 +36,11 @@ import numpy as np
 class Structure:
     """Structure
 
-    The structure class can hold various sub_structures. Each sub_structure can
-    be either a layer of :math:`N` UnitCell or AmorphousLayer objects or a
-    structure by itself. Thus it is possible to recursively build up 1D
-    structures.
+    Structure representation which holds various sub_structures.
+
+    Each sub_structure can be either a layer of :math:`N` UnitCell or
+    AmorphousLayer instances or a structure by itself.
+    It is possible to recursively build up 1D structures.
 
     Args:
         name (str): name of the sample.
