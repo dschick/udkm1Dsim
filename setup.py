@@ -25,7 +25,8 @@ setup(
     extras_require={
         'parallel':  ['dask>=2.6.0'],
         'testing': ['flake8', 'pytest'],
-        'documentation': ['sphinx', 'nbsphinx', 'sphinxcontrib-napoleon'],
+        'documentation': ['sphinx', 'nbsphinx', 'sphinxcontrib-napoleon',
+                          'autodocsumm'],
     },
     license='MIT',
     author='Daniel Schick',

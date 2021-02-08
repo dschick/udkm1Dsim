@@ -44,6 +44,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
     'nbsphinx',
+    'autodocsumm',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -174,6 +175,7 @@ nbsphinx_timeout = 3000
 # Autodoc setting
 autodoc_default_options = {
     'member-order': 'bysource',
+    'autosummary': True,
 }
 
 # Napoleon settings
