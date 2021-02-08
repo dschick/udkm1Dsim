@@ -36,10 +36,9 @@ from tabulate import tabulate
 class Atom:
     """Atom
 
-    The atom class is the smallest structural unit of which one can build
-    larger structures. It holds real physical properties of atoms defined in
-    the attributes section and can return parameters and data necessary for
-    different simulation types.
+    Smallest structural unit of which larger structures can be build.
+
+    It holds real physical properties of on the atomic level.
 
     Args:
         symbol (str): symbol of the atom.
@@ -81,7 +80,7 @@ class Atom:
            Absorption and Scattering Cross Section, and Mass Attenuation
            Coefficients for Z = 1-92 from E = 1-10 eV to E = 0.4-1.0 MeV*,
            `NIST Standard Reference Database 66.
-           < https://dx.doi.org/10.18434/T4HS32>`_
+           <https://dx.doi.org/10.18434/T4HS32>`_
         .. [3] J. Als-Nielson, & D. McMorrow,
            `Elements of Modern X-Ray Physics. New York: John Wiley &
            Sons, Ltd. (2001) <http://www.doi.org/10.1002/9781119998365>`_
@@ -158,7 +157,6 @@ class Atom:
             if source not in ['chantler', 'henke']:
                 raise ValueError('The source of the atomic form factors must be '
                                  'either chantler or henke!')
-                return
 
             if source == 'chantler':
                 sub_path = 'chantler/{:s}.cf'.format(self.symbol.lower())
@@ -360,9 +358,10 @@ class Atom:
 class AtomMixed(Atom):
     """AtomMixed
 
-    The AtomMixed class inherits from Atom and enables mixed atoms for certain
-    alloys and stochiometric mixtures. All properties of the included sub-atoms
-    of class Atom are averaged and weighted with their stochiometric ratio.
+    Representation of mixed atoms in alloys and stochiometric mixtures.
+
+    All properties of the included sub-atoms of class Atom are averaged
+    and weighted with their stochiometric ratio.
 
     Args:
         symbol (str): symbol of the atom.

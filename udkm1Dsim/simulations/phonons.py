@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Phonon', 'PhononNum']
+__all__ = ['Phonon', 'PhononNum', 'PhononAna']
 
 __docformat__ = 'restructuredtext'
 
@@ -32,13 +32,13 @@ import numpy as np
 from os import path
 from time import time
 from scipy.integrate import solve_ivp
-from tqdm.notebook import tqdm
+from tqdm.notebook import tqdm, trange
 
 
 class Phonon(Simulation):
     """Phonon
 
-    Base class for phonon simulations.
+    Base class for phonon simulations in a linear chain of masses and springs.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -107,7 +107,7 @@ class Phonon(Simulation):
         param.append(temp_map)
         param.append(delta_temp_map)
 
-        for key, value in kwargs.items():
+        for value in kwargs.values():
             param.append(value)
 
         return self.S.get_hash(types='phonon') + '_' + make_hash_md5(param)
@@ -126,7 +126,7 @@ class Phonon(Simulation):
         positions = self.S.get_all_positions_per_unique_layer()
         strains = []
 
-        for key, value in positions.items():
+        for value in positions.values():
             strains.append(np.sort(np.unique(strain_map[:, value].flatten())))
 
         return strains
@@ -303,7 +303,7 @@ class Phonon(Simulation):
 class PhononNum(Phonon):
     """PhononNum
 
-    Base class for numerical phonon simulations.
+    Numerical model to simulate coherent acoustic phonons.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -385,7 +385,7 @@ class PhononNum(Phonon):
             self.disp_message('_strain_map_ loaded from file:\n\t' + filename)
         else:
             # file does not exist so calculate and save
-            strain_map, sticks_sub_systems, velocities = \
+            strain_map, _, _ = \
                 self.calc_strain_map(delays, temp_map, delta_temp_map)
             self.save(full_filename, {'strain_map': strain_map}, '_strain_map_num_')
         return strain_map
@@ -518,7 +518,7 @@ class PhononNum(Phonon):
     @staticmethod
     def ode_func(t, X, delays, force_from_heat, damping, spring_consts, masses, L,
                  pbar=None, state=None):
-        """ode_func
+        r"""ode_func
 
         Provides the according ode function for the ode solver which has to be
         solved. The ode function has the input :math:`t` and :math:`X(t)` and
@@ -582,7 +582,7 @@ class PhononNum(Phonon):
 
     @staticmethod
     def calc_force_from_spring(d_X1, d_X2, spring_consts):
-        """calc_force_from_spring
+        r"""calc_force_from_spring
 
         Calculates the force :math:`F_i^{spring}` acting on each mass due to
         the displacement between the left and right site of that mass.
@@ -658,7 +658,7 @@ class PhononNum(Phonon):
 
     @staticmethod
     def calc_force_from_damping(v, damping, masses):
-        """calc_force_from_damping
+        r"""calc_force_from_damping
 
         Calculates the force acting on each mass in a linear spring due to
         damping (:math:`\gamma_i`) according to the shift velocity difference
@@ -680,3 +680,393 @@ class PhononNum(Phonon):
         F = masses*damping*np.diff(v, 0)
 
         return F
+
+
+class PhononAna(Phonon):
+    """PhononAna
+
+    Analytical model to simulate coherent acoustic phonons.
+
+    Args:
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
+
+    Keyword Args:
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        only_heat (boolean): true when including only thermal expanison without
+            coherent phonon dynamics.
+
+    Attributes:
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        only_heat (boolean): true when including only thermal expanison without
+            coherent phonon dynamics.
+
+    References:
+
+        .. [8] M. Herzog, D. Schick, P. Gaal, R. Shayduk, C. von Korff Schmising
+           & M. Bargheer, *Analysis of ultrafast X-ray diffraction data in a
+           linear-chain model of the lattice dynamics*, `Applied Physics A,
+           106(3), 489-499 (2011).
+           <http://www.doi.org/doi:10.1007/s00339-011-6719-z>`_
+
+    """
+
+    def __init__(self, S, force_recalc, **kwargs):
+        super().__init__(S, force_recalc, **kwargs)
+
+    def __str__(self, output=[]):
+        """String representation of this class"""
+
+        class_str = 'Analytical Phonon simulation properties:\n\n'
+        class_str += super().__str__()
+
+        return class_str
+
+    def get_strain_map(self, delays, temp_map, delta_temp_map):
+        """get_strain_map
+
+        Returns a strain profile for the sample structure for given temperature
+        profile. The result can be saved using an unique hash of the sample
+        and the simulation parameters in order to reuse it.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            delta_temp_map (ndarray[float]): spatio-temporal differential
+            temperature map.
+
+        Returns:
+            (tuple):
+            - *strain_map (ndarray[float])* - spatio-temporal strain profile.
+            - *A (ndarray[float])* - coefficient vector A of general solution.
+            - *B (ndarray[float])* - coefficient vector B of general solution.
+
+        """
+        filename = 'strain_map_ana_' \
+                   + self.get_hash(delays, temp_map, delta_temp_map) \
+                   + '.npz'
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        if path.exists(full_filename) and not self.force_recalc:
+            # found something so load it
+            tmp = np.load(full_filename)
+            strain_map = tmp['strain_map']
+            A = tmp['A']
+            B = tmp['B']
+            self.disp_message('_strain_map_ loaded from file:\n\t' + filename)
+        else:
+            # file does not exist so calculate and save
+            strain_map, A, B = \
+                self.calc_strain_map(delays, temp_map, delta_temp_map)
+            self.save(full_filename, {'strain_map': strain_map,
+                                      'A': A,
+                                      'B': B},
+                      '_strain_map_ana_')
+        return strain_map, A, B
+
+    def calc_strain_map(self, delays, temp_map, delta_temp_map):
+        r"""calc_strain_map
+
+        Calculates the ``strain_map`` of the sample structure for a given
+        ``temp_map`` and ``delta_temp_map`` and ``delay`` array. Further
+        details are given in Ref. [8]_. Within the linear chain of :math:`N`
+        masses (:math:`m_i`) at position :math:`z_i` coupled with spring
+        constants :math:`k_i` one can formulate the differential equation
+        of motion as follow:
+
+        .. math::
+
+            m_i\ddot{x}_i = -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1}) + F_i^{heat}(t)
+
+        Since we only consider nearest-neighbor interaction one can write:
+
+        .. math::
+
+            \ddot{x}_i = \sum_{n=1}^N \kappa_{i,n} x_n = \Delta_i(t)
+
+        Here :math:`x_i(t) = z_i(t)-z_i^0` is the shift of each layer,
+        :math:`F_i^{heat}(t)` is the external force (thermal stress) of each
+        layer and :math:`\kappa_{i,i} = -(k_i + k_{i+1})/m_i`, and
+        :math:`\kappa_{i,i+1} = \kappa_{i+1,i} = k_{i+1}/m_i`.
+
+        :math:`k_i = m_i\, v_i^2/c_i^2` is the spring constant and :math:`c_i`
+        and :math:`v_i` are the thickness and longitudinal sound velocity of
+        each layer respectively.
+        One can rewrite the homogeneous differential equation in matrix
+        form to obtain the general solution
+
+        .. math::
+
+            \frac{d^2}{dt^2} X = K \, X
+
+        Here :math:`X = (x_1 \ldots x_N)` and :math:`K` is the
+        tri-diagonal matrix of :math:`\kappa` which is real and symmetric.
+        The differential equation can be solved with the ansatz:
+
+        .. math::
+
+         X(t) = \sum_j \Xi_j \, (A_j \cos(\omega_j \, t) + B_j \sin(\omega_j \, t))
+
+        where :math:`\Xi_j = (\xi_1^j \ldots \xi_N^j)` are the eigenvectors of
+        the matrix :math:`K`. Thus by solving the Eigenproblem for :math:`K` one
+        gets the eigenvecotrs :math:`\Xi_j` and the eigenfrequencies
+        :math:`\omega_j`. From the initial conditions
+
+        .. math::
+
+            X(0) = \sum_j \Xi_j \, A_j = \Xi \, A \qquad V(0) = \dot{X}(0)
+                 = \sum_j \Xi_j \, \omega_j\, B_j = \Xi \, \omega \, B
+
+        one can determine the real coefficient vectors :math:`A` and :math:`B` in
+        order to calculate :math:`X(t)` and :math:`V(t)` using the ansatz:
+
+        .. math::
+
+            A = \Xi \setminus X(0) \qquad B = (\Xi \setminus V(0)) / \omega
+
+        The external force is implemented as spacer sticks which are
+        inserted into the springs and hence the layers have a new
+        equillibrium positions :math:`z_i(\infty) = z_i^\infty`.
+        Thus we can do a coordination transformation:
+
+        .. math::
+
+            z_i(t) = z_i^0 + x_i(t) = z_i^\infty + x_i^\infty(t)
+
+        and
+
+        .. math::
+
+            x_i^\infty(t) = z_i^0 - z_i^\infty + x_i(t)
+
+        with the initial condition :math:`x_i(0) = 0` it becomes
+
+        .. math::
+
+            x_i^\infty(0) = z_i^0 - z_i^\infty = \sum_{j = i+1}^N l_j
+
+        :math:`x_i^\infty(0)` is the new initial condition after the excitation
+        where :math:`l_i` is the length of the :math:`i`-th spacer stick.
+        The spacer sticks are calculated from the temperature change and the
+        linear thermal expansion coefficients.
+        The actual strain :math:`\epsilon_i(t)` of each layer is calculates
+        as follows:
+
+        .. math::
+
+            \epsilon_i(t) = [ \Delta x_i(t) + l_i) ] / c_i
+
+        with :math:`\Delta x_i = x_i - x_{i-1}`. The stick :math:`l_i` have
+        to be added here, because :math:`x_i` has been transformed into the new
+        coordinate system :math:`x_i^\infty`.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            delta_temp_map (ndarray[float]): spatio-temporal differential
+              temperature map.
+
+        Returns:
+            (tuple):
+            - *strain_map (ndarray[float])* - spatio-temporal strain profile.
+            - *A (ndarray[float])* - coefficient vector A of general solution.
+            - *B (ndarray[float])* - coefficient vector B of general solution.
+
+        """
+        t1 = time()
+
+        # initialize
+        L = self.S.get_number_of_layers()
+        M = len(delays)
+
+        try:
+            delays = delays.to('s').magnitude
+        except AttributeError:
+            pass
+
+        delay0 = delays[0]  # initial delay
+        thicknesses = self.S.get_layer_property_vector('_thickness')
+        X = np.zeros([M, L])  # shifts of the layers
+        V = np.zeros_like(X)  # velocities of the layers
+        A = np.zeros_like(X)  # coefficient vector for eigenwert solution
+        B = np.zeros_like(X)  # coefficient vector for eigenwert solution
+        strain_map = np.zeros_like(X)  # the restulting strain map
+
+        # check temp_maps
+        [temp_map, delta_temp_map] = self.check_temp_maps(temp_map, delta_temp_map, delays)
+
+        # calculate the sticks due to heat expansion first for all delay steps
+        self.disp_message('Calculating linear thermal expansion ...')
+        sticks, _ = self.calc_sticks_from_temp_map(temp_map, delta_temp_map)
+
+        if self.only_heat:
+            # no coherent dynamics so calculate the strain directly
+            strain_map = sticks/np.tile(thicknesses, [np.size(sticks, 0), 1])
+        else:
+            # solve the eigenproblem for the structure to obtains the
+            # eigenvectors X_i and eigenfreqeuencies omega for the L
+            # coupled differential equations
+            Xi, omega = self.solve_eigenproblem()
+            # calculate the actual strain map with the solution of the
+            # eigenproblem and the external force (sticks, thermal stress)
+            self.disp_message('Calculating _strain_map_ ...')
+            if self.progress_bar:
+                iterator = trange(M, desc='Progress', leave=True)
+            else:
+                iterator = range(M)
+            for i in iterator:
+                dt = delays[i]-delay0  # this is the time step
+                # calculate the current shift X and velocity V of all
+                # layers using the ansatz
+                X[i, :] = np.dot(Xi, (A[i, :].T*np.cos(omega*dt) + B[i, :].T*np.sin(omega*dt)))
+                V[i, :] = np.dot(Xi, (omega*(-A[i, :].T*np.sin(omega*dt)
+                                             + B[i, :].T*np.cos(omega*dt))))
+                # remember the velocities and shifts as ic for the next
+                # time step
+                X0 = X[i, :].T
+                V0 = V[i, :].T
+                # the strain can only be calculated for L-1 layers, so
+                # we neglect the last one
+                if i > 0:
+                    strain_map[i, 0:-1] = (np.diff(X[i, :])
+                                           + sticks[i-1, 0:-1])/thicknesses[0:-1].T
+                else:
+                    # initial sticks are zero
+                    strain_map[i, 0:-1] = np.diff(X[i, :])/thicknesses[0:-1].T
+                # calculate everything for the next step
+                if i < (M-1):  # check, if there is a next step
+                    if np.any(delta_temp_map[i, :]):  # there is a temperature change
+                        delay0 = delays[i]  # set new initial delay
+                        # determining the shifts due to inserted sticks
+                        # as new ininital conditions
+                        if i > 0:
+                            temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T-sticks[i-1, :].T)))
+                        else:
+                            # initial sticks are zero
+                            temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T)))
+                        X0 = X0 + np.hstack((temp[1:], 0))
+                        # determining the cofficient vectors A and B of
+                        # the general solution of X(t) using the inital
+                        # conditions X0 and V0
+                        A[i+1, :] = np.linalg.solve(Xi, X0)
+                        B[i+1, :] = (np.linalg.solve(Xi, V0)/omega).T
+                    else:
+                        # no temperature change, so keep the current As,
+                        # Bs, and sticks
+                        A[i+1, :] = A[i, :]
+                        B[i+1, :] = B[i, :]
+
+        self.disp_message('Elapsed time for _strain_map_:'
+                          ' {:f} s'.format(time()-t1))
+
+        return strain_map, A, B
+
+    def solve_eigenproblem(self):
+        r"""solve_eigenproblem
+
+        Creates the real and symmetric :math:`K` matrix (:math:`L \times L`) of
+        spring constants :math:`k_i` and masses :math:`m_i` and calculates the
+        eigenvectors :math:`\Xi_j` and eigenfrequencies :math:`\omega_j` for the
+        matrix which are used to calculate the ``strain_map`` of the structure.
+        If the result has been save to file, load it from there.
+
+        Returns:
+            (tuple):
+            - *Xi (ndarray[float])* - eigenvectors.
+            - *omega (ndarray[float])* - eigenfrequencies.
+
+        """
+        # create the file name to look for
+        filename = 'eigenvalues_' \
+                   + self.S.get_hash(types='phonon') \
+                   + '.npz'
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        if path.exists(full_filename) and not self.force_recalc:
+            # found something so load it
+            tmp = np.load(full_filename)
+            Xi = tmp['Xi']
+            omega = tmp['omega']
+            self.disp_message('_eigen_values_ loaded from file:\n\t' + filename)
+        else:
+            # file does not exist so calculate and save
+            t1 = time()
+            self.disp_message('Calculating _eigen_values_ ...')
+            # initialize
+            L = self.S.get_number_of_layers()
+            K = np.zeros([L, L])  # initializing three-diagonal springs-masses matrix.
+            omega = np.zeros([L, 1], dtype=np.cfloat)  # initializing a vector for eigenfrequencies
+
+            masses = self.S.get_layer_property_vector('_mass_unit_area')
+            spring_consts = self.S.get_layer_property_vector('spring_const')
+            spring_consts = np.hstack((0, spring_consts))  # set the first spring free
+
+            for i in range(L):  # defining main diagonal
+                K[i, i] = -(spring_consts[i] + spring_consts[i+1])/masses[i]
+
+            # defining the two other diagonals - nearest neightbour interaction
+            for i in range(1, L):
+                K[i, i-1] = spring_consts[i]/masses[i]
+                K[i-1, i] = spring_consts[i]/masses[i-1]
+
+            # determining the eigenvectors and the eigenvalues
+            lambd, Xi = np.linalg.eig(K)
+
+            # calculate the eigenfrequencies from the eigenvalues
+            omega = np.sqrt(-lambd)
+
+            self.disp_message('Elapsed time for _eigen_values_:'
+                              ' {:f} s'.format(time()-t1))
+            # save the result to file
+            self.save(full_filename, {'Xi': Xi, 'omega': omega}, '_eigen_values_')
+
+        return Xi, omega
+
+    def get_energy_per_eigenmode(self, A, B):
+        r"""get_energy_per_eigenmode
+
+        Returns the sorted energy per Eigenmode of the coherent phonons of
+        the 1D sample.
+
+        .. math::
+
+            E_j = \frac{1}{2} (A^2_j + B^2_j)\, \omega_j^2\, m_j \, \| \Xi_j\|^2
+
+        Frequencies are in [Hz] and energy per mode in [J].
+
+        Args:
+            A (ndarray[float]): coefficient vector A of general solution.
+            B (ndarray[float]): coefficient vector B of general solution.
+
+        Returns:
+            (tuple):
+            - *omega (ndarray[float])* - eigenfrequencies.
+            - *E (ndarray[float])* - energy per eigenmode.
+
+        """
+        # initialize
+        L = self.S.get_number_of_layers()
+        M = A.shape[0]  # nb of delays
+        E = np.zeros([M, L])
+        masses = self.S.get_layer_property_vector('_mass_unit_area')
+
+        # get the eigenVectors and eigenFrequencies
+        Xi, omega = self.solve_eigenproblem()
+
+        # sort the frequencies and remeber the permutation of indicies
+        idx = np.argsort(omega)
+
+        # traverse time
+        for i in range(M):
+            # calculate the energy for the jth mode
+            E[i, :] = 0.5 * (A[i, :].T**2 + B[i, :].T**2) * omega**2 * masses * np.sum(Xi**2, 0).T
+
+        return omega[idx], E[:, idx]

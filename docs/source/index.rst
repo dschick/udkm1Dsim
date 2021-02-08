@@ -10,7 +10,7 @@ Welcome to udkm1Dsim documentation!
     Examples <examples>
     API Documentation <api>
 
-The udkm1Dsim toolbox is a collection of Python classes and routines to
+The *udkm1Dsim* toolbox is a collection of Python classes and routines to
 simulate the thermal, structural, and magnetic dynamics after laser excitation
 as well as the according X-ray scattering response in one-dimensional sample
 structures after ultrafast excitation.
@@ -18,8 +18,9 @@ structures after ultrafast excitation.
 The toolbox provides the capabilities to define arbitrary layered structures
 on the atomic level including a rich database of element-specific physical
 properties. 
-The excitation of ultrafast dynamics is represented by an N-temperature-model
-which is commonly applied for ultrafast optical excitations. 
+The excitation of ultrafast dynamics is represented by an
+:math:`N`-temperature-model which is commonly applied for ultrafast optical
+excitations. 
 Structural dynamics due to thermal stresses are calculated by a linear-chain
 model of masses and springs.
 The implementation of magnetic dynamics can be easily accomplished by the user
@@ -28,14 +29,14 @@ for the individual problem.
 The resulting X-ray diffraction response is computed by kinematical or
 dynamical X-ray theory which can also include magnetic scattering.
 
-The udkm1Dsim toolbox is highly modular and allows to introduce user-defined
+The *udkm1Dsim* toolbox is highly modular and allows to introduce user-defined
 results at any step in the simulation procedure.
 
-The udkm1Dsim toolbox was initially developed for MATLAB® in the
+The *udkm1Dsim* toolbox was initially developed for MATLAB® in the
 *Ultrafast Dynamics in Condensed Matter* group of Prof. Matias Bargheer at the
 *University of Potsdam*, Germany.
 The MATLAB® source code is still available at
-https://github.com/dschick/udkm1DsimML.
+`github.com/dschick/udkm1DsimML <https://github.com/dschick/udkm1DsimML>`_.
 
 The current toolbox, written in Python, is maintained by Daniel Schick at the
 *Max-Born-Institute*, Berlin, Germany.
@@ -43,7 +44,7 @@ The current toolbox, written in Python, is maintained by Daniel Schick at the
 Citation
 ========
 
-Please cite the original publication if you use the udkm1Dsim toolbox for your
+Please cite the original publication if you use the *udkm1Dsim* toolbox for your
 own publications:
 
 D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Bargheer,

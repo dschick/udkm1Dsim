@@ -101,7 +101,7 @@ class Magnetization(Simulation):
             param.append(temp_map)
             kwargs.pop('temp_map')
 
-        for key, value in kwargs.items():
+        for value in kwargs.values():
             param.append(value)
 
         return self.S.get_hash(types='magnetic') + '_' + make_hash_md5(param)
@@ -110,6 +110,8 @@ class Magnetization(Simulation):
         """get_magnetization_map
 
         Returns an absolute `magnetization_map` for the sample structure.
+        The angles for `gamma` and `phi` must be in radians as pure numpy
+        arrays.
         The `magnetization_map` can depend on the ``temp_map`` and
         ``strain_map`` that can be also calculated for the sample structure.
 
@@ -158,6 +160,8 @@ class Magnetization(Simulation):
         """calc_magnetization_map
 
         Calculates an absolute ``magnetization_map`` for the sample structure.
+        The angles for `gamma` and `phi` must be in radians as pure numpy
+        arrays.
         The ``magnetization_map`` can depend on the ``temp_map`` and
         ``strain_map`` that can be also calculated for the sample structure.
 
@@ -174,5 +178,4 @@ class Magnetization(Simulation):
             magnetization profile.
 
         """
-
-        pass
+        raise NotImplementedError

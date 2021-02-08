@@ -42,7 +42,7 @@ r_0 = constants.physical_constants['classical electron radius'][0]
 class Xray(Simulation):
     r"""Xray
 
-    Base class for all xray simulations.
+    Base class for all X-ray scattering simulations.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -115,6 +115,28 @@ class Xray(Simulation):
                   ['analyzer polarization', self.polarizations[self.pol_out_state]],
                   ] + output
         return super().__str__(output)
+
+    def set_incoming_polarization(self, pol_in_state):
+        """set_incoming_polarization
+
+        Must be overwritten by child classes.
+
+        Args:
+            pol_in_state (int): incoming polarization state id.
+
+        """
+        raise NotImplementedError
+
+    def set_outgoing_polarization(self, pol_out_state):
+        """set_outgoing_polarization
+
+        Must be overwritten by child classes.
+
+        Args:
+            pol_out_state (int): outgoing polarization state id.
+
+        """
+        raise NotImplementedError
 
     def set_polarization(self, pol_in_state, pol_out_state):
         """set_polarization
@@ -271,7 +293,7 @@ class Xray(Simulation):
 class XrayKin(Xray):
     r"""XrayKin
 
-    Kinetic Xray simulations.
+    Kinetic X-ray scattering simulations.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -307,7 +329,7 @@ class XrayKin(Xray):
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
 
     References:
-        .. [8] B. E. Warren (1990). *X-ray diffraction*.
+        .. [9] B. E. Warren (1990). *X-ray diffraction*.
            New York: Dover Publications
 
     """
@@ -466,7 +488,7 @@ class XrayKin(Xray):
         Calculates the reflected field :math:`E_p^t` of the whole sample
         structure as well as for each sub-structure (:math:`E_p^N`). The
         reflected wave field :math:`E_p` from a single layer of unit cells at
-        the detector is calculated according to  Ref. [8]_:
+        the detector is calculated according to  Ref. [9]_:
 
         .. math::
 
@@ -529,7 +551,7 @@ class XrayKin(Xray):
         strainCounter = 0  # the is the index of the strain vector if applied
 
         # traverse substructures
-        for i, sub_structures in enumerate(S.sub_structures):
+        for sub_structures in S.sub_structures:
             if isinstance(sub_structures[0], UnitCell):
                 # the substructure is an unit cell and we can calculate
                 # Ep directly
@@ -636,7 +658,7 @@ class XrayKin(Xray):
 class XrayDyn(Xray):
     r"""XrayDyn
 
-    Dynamical Xray simulations.
+    Dynamical X-ray scattering simulations.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -812,7 +834,7 @@ class XrayDyn(Xray):
         strainCounter = 0
 
         # traverse substructures
-        for i, sub_structure in enumerate(S.sub_structures):
+        for sub_structure in S.sub_structures:
             if isinstance(sub_structure[0], UnitCell):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
@@ -1056,7 +1078,7 @@ class XrayDyn(Xray):
             R (ndarray[float]): inhomogeneous reflectivity.
 
         """
-        return
+        raise NotImplementedError
 
     def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM):
         r"""calc_inhomogeneous_reflectivity
@@ -1150,7 +1172,7 @@ class XrayDyn(Xray):
             if temp is not []:
                 RT = m_times_n(RT, temp)
             else:
-                raise(ValueError, 'RTM not found')
+                raise ValueError('RTM not found')
 
         return RT
 
@@ -1474,9 +1496,10 @@ class XrayDyn(Xray):
 class XrayDynMag(Xray):
     r"""XrayDynMag
 
-    Dynamical magnetic Xray simulations adapted from Elzo et.al. [9]_.
-    Initially realized in `Project Dyna
-    <http://neel.cnrs.fr/spip.php?rubrique1008>`_.
+    Dynamical magnetic X-ray scattering simulations.
+
+    Adapted from Elzo et.al. [10]_ and initially realized in `Project Dyna
+    <http://dyna.neel.cnrs.fr>`_.
 
     Original copyright notice:
 
@@ -1534,7 +1557,7 @@ class XrayDynMag(Xray):
 
     References:
 
-        .. [9] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
+        .. [10] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
            Ramos, H. C. N. Tolentino, J. M. Tonnerre & N. Jaouen, *X-ray
            resonant magnetic reflectivity of stratified magnetic structures:
            Eigenwave formalism and application to a W/Fe/W trilayer*,
@@ -1779,7 +1802,8 @@ class XrayDynMag(Xray):
 
                 A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                     self.get_atom_boundary_phase_matrix(layer.atom,
-                                                        layer._density,
+                                                        layer._density*(
+                                                            strains[layer_counter]+1),
                                                         layer._thickness*(
                                                             strains[layer_counter]+1),
                                                         magnetizations[layer_counter])
@@ -1925,7 +1949,7 @@ class XrayDynMag(Xray):
                 raise ValueError('At least a strain_map or magnetzation_map must be given!')
             else:
                 if M != N:
-                    raise ValueError('The strain_map and magnetzation_map must be '
+                    raise ValueError('The strain_map and magnetzation_map must '
                                      'have the same number of delay steps!')
 
             # select the type of computation
@@ -1934,7 +1958,7 @@ class XrayDynMag(Xray):
                                                                     magnetization_map,
                                                                     dask_client)
             elif calc_type == 'distributed':
-                R, R_Phi = self.distributed_inhomogeneous_reflectivity(strain_map,
+                R, R_phi = self.distributed_inhomogeneous_reflectivity(strain_map,
                                                                        magnetization_map,
                                                                        job,
                                                                        num_workers)
@@ -2118,7 +2142,7 @@ class XrayDynMag(Xray):
               magnetization.
 
         """
-        return
+        raise NotImplementedError
 
     def calc_inhomogeneous_matrix(self, last_A, last_A_phi, last_k_z, strains, magnetizations):
         r"""calc_inhomogeneous_matrix
@@ -2166,7 +2190,7 @@ class XrayDynMag(Xray):
             elif isinstance(layer, AmorphousLayer):
                 A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                     self.get_atom_boundary_phase_matrix(
-                        layer.atom, layer._density, layer._thickness*(strains[i]+1),
+                        layer.atom, layer._density*(strains[i]+1), layer._thickness*(strains[i]+1),
                         force_recalc, magnetizations[i])
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
@@ -2279,7 +2303,7 @@ class XrayDynMag(Xray):
         """get_atom_boundary_phase_matrix
 
         Returns the boundary and phase matrices of an atom from Elzo
-        formalism [9]_. The results for a given atom, energy, :math:`q_z`,
+        formalism [10]_. The results for a given atom, energy, :math:`q_z`,
         polarization, and magnetization are stored to RAM to avoid recalculation.
 
         Args:
@@ -2372,7 +2396,7 @@ class XrayDynMag(Xray):
         """calc_atom_boundary_phase_matrix
 
         Calculates the boundary and phase matrices of an atom from Elzo
-        formalism [9]_.
+        formalism [10]_.
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
@@ -2407,11 +2431,11 @@ class XrayDynMag(Xray):
             except AttributeError:
                 mag_amplitude = 0
             try:
-                mag_phi = atom.mag_phi.to_base_units().magnitude
+                mag_phi = atom._mag_phi
             except AttributeError:
                 mag_phi = 0
             try:
-                mag_gamma = atom.mag_gamma.to_base_units().magnitude
+                mag_gamma = atom._mag_gamma
             except AttributeError:
                 mag_gamma = 0
 
@@ -2575,7 +2599,7 @@ class XrayDynMag(Xray):
 
         Calculates the actual reflectivity from the reflectivity-transmission
         matrix for a given incoming and analyzer polarization from Elzo
-        formalism [9]_.
+        formalism [10]_.
 
         Args:
             RT (ndarray[complex]): reflection-transmission matrix.
@@ -2614,7 +2638,7 @@ class XrayDynMag(Xray):
         """calc_roughness_matrix
 
         Calculates the roughness matrix for an interface with a gaussian
-        roughness for the Elzo formalism [9]_.
+        roughness for the Elzo formalism [10]_.
 
         Args:
             roughness (float): gaussian rougness of the interface [m].

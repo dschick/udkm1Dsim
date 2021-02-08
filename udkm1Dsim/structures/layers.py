@@ -36,10 +36,12 @@ from tabulate import tabulate
 
 
 class Layer:
-    """Layer
+    r"""Layer
 
-    The layer class hold different structural properties of real physical
-    layers, such as amorphous layers and unit cells.
+    Base class of real physical layers, such as amorphous layers and unit cells.
+
+    It holds different structural, thermal, and eleastic properties that are
+    relevant for simulations.
 
     Args:
         id (str): id of the layer.
@@ -168,8 +170,6 @@ class Layer:
         for input in inputs:
             if isfunction(input):
                 raise ValueError('Please use string representation of function!')
-                output.append(input)
-                output_strs.append('no str representation available')
             elif isinstance(input, str):
                 try:
                     output.append(eval(input))
@@ -273,7 +273,7 @@ class Layer:
         self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
 
     def calc_spring_const(self):
-        """calc_spring_const
+        r"""calc_spring_const
 
         Calculates the spring constant of the layer from the mass per unit area,
         sound velocity and thickness
@@ -403,7 +403,7 @@ class Layer:
             self.int_heat_capacity_str = []
             try:
                 T = Symbol('T')
-                for i, hcs in enumerate(self.heat_capacity_str):
+                for hcs in self.heat_capacity_str:
                     integral = integrate(hcs.split(':')[1], T)
                     self._int_heat_capacity.append(lambdify(T, integral))
                     self.int_heat_capacity_str.append('lambda T : ' + str(integral))
@@ -442,7 +442,7 @@ class Layer:
         self.int_lin_therm_exp_str = []
         try:
             T = Symbol('T')
-            for i, ltes in enumerate(self.lin_therm_exp_str):
+            for ltes in self.lin_therm_exp_str:
                 integral = integrate(ltes.split(':')[1], T)
                 self._int_lin_therm_exp.append(lambdify(T, integral))
                 self.int_lin_therm_exp_str.append('lambda T : ' + str(integral))
@@ -473,10 +473,9 @@ class Layer:
 
 
 class AmorphousLayer(Layer):
-    """AmorphousLayer
+    r"""AmorphousLayer
 
-    The AmorphousLayer class hold different structural properties of real
-    physical amorphous layers and also an array of atoms in the layer.
+    Representation of amorphous layers containing an Atom or AtomMixed.
 
     Args:
         id (str): id of the layer.
@@ -599,11 +598,10 @@ class AmorphousLayer(Layer):
 
 
 class UnitCell(Layer):
-    """Unit Cell
+    r"""UnitCell
 
-    The unitCell class hold different structural properties of real
-    physical unit cells and also an array of atoms at different postions
-    in the unit cell.
+    Representation of unit cells made of one or multiple Atom or AtomMixed
+    instances at defined positions.
 
     Args:
         id (str): id of the UnitCell.
@@ -741,13 +739,13 @@ class UnitCell(Layer):
 
         """
         import matplotlib.pyplot as plt
-        import matplotlib.cm as cmx
+        from matplotlib import cm
 
         strains = kwargs.get('strains', 0)
         if not isinstance(strains, np.ndarray):
             strains = np.array([strains])
 
-        colors = [cmx.Dark2(x) for x in np.linspace(0, 1, self.num_atoms)]
+        colors = [cm.get_cmap('Dark2')(x) for x in np.linspace(0, 1, self.num_atoms)]
         atom_ids = self.get_atom_ids()
 
         for strain in strains:
@@ -780,7 +778,7 @@ class UnitCell(Layer):
             plt.show()
 
     def add_atom(self, atom, position):
-        """add_atom
+        r"""add_atom
 
         Adds an AtomBase/AtomMixed at a relative position of the unit cell.
 
@@ -800,7 +798,6 @@ class UnitCell(Layer):
         # test the input type of the position
         if isfunction(position):
             raise ValueError('Please use string representation of function!')
-            pass
         elif isinstance(position, str):
             try:
                 position_str = position
@@ -823,7 +820,7 @@ class UnitCell(Layer):
         # increase the number of atoms
         self.num_atoms = self.num_atoms + 1
 
-        self.magnetization.append([atom.mag_amplitude, atom._mag_phi, atom._mag_gamma])
+        self.magnetization.append([atom.mag_amplitude, atom.mag_phi, atom.mag_gamma])
 
         self.mass = 0*u.kg
         for i in range(self.num_atoms):
@@ -846,8 +843,8 @@ class UnitCell(Layer):
             Nb (int): repetition of atoms.
 
         """
-        for i in range(int(Nb)):
-            self.addAtom(atom, position)
+        for _ in range(int(Nb)):
+            self.add_atom(atom, position)
 
     def get_atom_ids(self):
         """get_atom_ids
