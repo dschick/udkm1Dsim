@@ -3,3 +3,4 @@ ipykernel
 nbsphinx
 ipywidgets
 IProgress
+autodocsumm
