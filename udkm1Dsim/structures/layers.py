@@ -598,7 +598,7 @@ class AmorphousLayer(Layer):
 
 
 class UnitCell(Layer):
-    r"""Unit Cell
+    r"""UnitCell
 
     Representation of unit cells made of one or multiple Atom or AtomMixed
     instances at defined positions.
