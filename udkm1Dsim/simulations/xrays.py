@@ -1715,9 +1715,11 @@ class XrayDynMag(Xray):
         RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
         # calc the actual reflectivity from the matrix
         R = XrayDynMag.calc_reflectivity_from_matrix(RT, self.pol_in, self.pol_out)
-        R_phi = XrayDynMag.calc_reflectivity_from_matrix(RT_phi, self.pol_in, self.pol_out)
+        R_phi = XrayDynMag.calc_reflectivity_from_matrix(RT_phi, self.pol_in, self.pol_out)        
+        T = XrayDynMag.calc_transmissivity_from_matrix(RT, self.pol_in, self.pol_out)
+        T_phi = XrayDynMag.calc_transmissivity_from_matrix(RT_phi, self.pol_in, self.pol_out)
         self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(time()-t1))
-        return R, R_phi
+        return R, R_phi, T, T_phi
 
     def calc_homogeneous_matrix(self, S, last_A, last_A_phi, last_k_z, *args):
         r"""calc_homogeneous_matrix
@@ -2632,6 +2634,54 @@ class XrayDynMag(Xray):
             R = np.real(np.square(np.absolute(X)))
 
         return R
+
+    @staticmethod
+    def calc_transmissivity_from_matrix(RT, pol_in, pol_out):
+        """calc_transmissivity_from_matrix
+
+        Calculates the actual transmissivity from the reflectivity-transmission
+        matrix for a given incoming and analyzer polarization from Elzo
+        formalism [10]_.
+
+        Args:
+            RT (ndarray[complex]): reflection-transmission matrix.
+            pol_in (ndarray[complex]): incoming polarization factor.
+            pol_out (ndarray[complex]): outgoing polarization factor.
+
+        Returns:
+            T (ndarray[float]): transmissivity.
+
+        """
+
+        Trans = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :],
+                        (np.size(RT, 0), np.size(RT, 1), 1, 1))
+
+        Ref = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :],
+                      (np.size(RT, 0), np.size(RT, 1), 1, 1))
+
+        d = np.divide(1, RT[:, :, 3, 3] * RT[:, :, 2, 2] - RT[:, :, 3, 2] * RT[:, :, 2, 3])
+        Ref[:, :, 0, 0] = (-RT[:, :, 3, 3] * RT[:, :, 2, 0] + RT[:, :, 2, 3] * RT[:, :, 3, 0]) * d
+        Ref[:, :, 0, 1] = (-RT[:, :, 3, 3] * RT[:, :, 2, 1] + RT[:, :, 2, 3] * RT[:, :, 3, 1]) * d
+        Ref[:, :, 1, 0] = (RT[:, :, 3, 2] * RT[:, :, 2, 0] - RT[:, :, 2, 2] * RT[:, :, 3, 0]) * d
+        Ref[:, :, 1, 1] = (RT[:, :, 3, 2] * RT[:, :, 2, 1] - RT[:, :, 2, 2] * RT[:, :, 3, 1]) * d        
+        
+        Trans[:, :, 0, 0] = RT[:, :, 0, 0] + RT[:, :, 0, 2] * Ref[:, :, 0, 0] + RT[:, :, 0, 3] * Ref[:, :, 1, 0]
+        Trans[:, :, 0, 1] = RT[:, :, 0, 1] + RT[:, :, 0, 2] * Ref[:, :, 0, 1] + RT[:, :, 0, 3] * Ref[:, :, 1, 1]
+        Trans[:, :, 1, 0] = RT[:, :, 1, 0] + RT[:, :, 1, 2] * Ref[:, :, 0, 0] + RT[:, :, 1, 3] * Ref[:, :, 1, 0]
+        Trans[:, :, 1, 1] = RT[:, :, 1, 1] + RT[:, :, 1, 2] * Ref[:, :, 0, 1] + RT[:, :, 1, 3] * Ref[:, :, 1, 1]
+
+        Trans = np.matmul(np.matmul(np.array([[-1, 1], [-1j, -1j]]), Trans),
+                        np.array([[-1, 1j], [1, 1j]])*0.5)
+
+        if pol_out.size == 0:
+            # no analyzer polarization
+            X = np.matmul(Trans, pol_in)
+            T = np.real(np.matmul(np.square(np.absolute(X)), np.array([1, 1], dtype=np.cfloat)))
+        else:
+            X = np.matmul(np.matmul(Trans, pol_in), pol_out)
+            T = np.real(np.square(np.absolute(X)))
+
+        return T
 
     @staticmethod
     def calc_roughness_matrix(roughness, k_z, last_k_z):
