@@ -2585,7 +2585,7 @@ class XrayDynMag(Xray):
 
         A_phi[:, :, 3, 0] = - alpha_z_left_down * n_left_down * A_phi[:, :, 0, 0]
         A_phi[:, :, 3, 1] = - alpha_z_right_down * n_right_down * A_phi[:, :, 0, 1]
-        A_phi[:, :, 3, 2] = alpha_z_left_up * n_right_up * A_phi[:, :, 0, 2]
+        A_phi[:, :, 3, 2] = alpha_z_left_up * n_left_up * A_phi[:, :, 0, 2]
         A_phi[:, :, 3, 3] = alpha_z_right_up * n_right_up * A_phi[:, :, 0, 3]
 
         A[:, :, :, :] = np.divide(
