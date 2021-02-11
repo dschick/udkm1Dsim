@@ -1714,9 +1714,9 @@ class XrayDynMag(Xray):
         RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
         RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
         # calc the actual reflectivit and transmissivity from the matrix
-        R, T = XrayDynMag.calc_reflectivity_tranmissivity_from_matrix(
+        R, T = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
             RT, self.pol_in, self.pol_out)
-        R_phi, T_phi = XrayDynMag.calc_reflectivity_tranmissivity_from_matrix(
+        R_phi, T_phi = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
             RT_phi, self.pol_in, self.pol_out)
         self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(time()-t1))
         return R, R_phi, T, T_phi
@@ -2033,10 +2033,10 @@ class XrayDynMag(Xray):
             RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
             RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
 
-            R[i, :, :], T[i, :, :] = XrayDynMag.calc_reflectivity_tranmissivity_from_matrix(
+            R[i, :, :], T[i, :, :] = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
                 RT, self.pol_in, self.pol_out)
             R_phi[i, :, :], T_phi[i, :, :] = \
-                XrayDynMag.calc_reflectivity_tranmissivity_from_matrix(
+                XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
                     RT_phi, self.pol_in, self.pol_out)
 
         return R, R_phi, T, T_phi
@@ -2120,16 +2120,14 @@ class XrayDynMag(Xray):
             temp_phi = delayed(m_times_n)(last_A_phi, RT_phi)
             RT = delayed(m_times_n)(last_A_inv, temp)
             RT_phi = delayed(m_times_n)(last_A_inv_phi, temp_phi)
-            Ri, Ti = delayed(
-                XrayDynMag.calc_reflectivity_transmissivity_from_matrix)(
-                    RT, remote_pol_in, remote_pol_out)
-            Ri_phi, Ti_phi = delayed(
-                XrayDynMag.calc_reflectivity_transmissivity_from_matrix)(
-                    RT_phi, remote_pol_in, remote_pol_out)
-            res.append(Ri)
-            res.append(Ri_phi)
-            res.append(Ti)
-            res.append(Ti_phi)
+            RTi = delayed(XrayDynMag.calc_reflectivity_transmissivity_from_matrix)(
+                RT, remote_pol_in, remote_pol_out)
+            RTi_phi = delayed(XrayDynMag.calc_reflectivity_transmissivity_from_matrix)(
+                RT_phi, remote_pol_in, remote_pol_out)
+            res.append(RTi[0])
+            res.append(RTi[1])
+            res.append(RTi_phi[0])
+            res.append(RTi_phi[1])
 
         # compute results
         res = dask_client.compute(res, sync=True)
@@ -2615,8 +2613,8 @@ class XrayDynMag(Xray):
         return A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z
 
     @staticmethod
-    def calc_reflectivity_tranmissivity_from_matrix(RT, pol_in, pol_out):
-        """calc_reflectivity_tranmissivity_from_matrix
+    def calc_reflectivity_transmissivity_from_matrix(RT, pol_in, pol_out):
+        """calc_reflectivity_transmissivity_from_matrix
 
         Calculates the actual reflectivity and transmissivity from the
         reflectivity-transmission matrix for a given incoming and analyzer
