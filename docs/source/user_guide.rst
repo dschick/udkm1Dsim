@@ -18,9 +18,9 @@ The internal structure of the *udkm1Dsim* toolbox is sketched in the lower figur
 The common experimental scheme is sketched below and shows the general
 definition of coordinates and angles that are used throughout the *udkm1Dsim*
 toolbox.
-The in-comming and out-going wavevectors :math:`\vec{k}_\text{in}` and
+The incoming and outgoing wavevectors :math:`\vec{k}_\text{in}` and
 :math:`\vec{k}_\text{out}` define the scattering plane which must be co-planar
-to the sample surface, hence only accessing scattering vecors :math:`\vec{q_z}`
+to the sample surface, hence only accessing scattering vectors :math:`\vec{q_z}`
 along the surface normal.
 The pointing of the magnetization vector :math:`\vec{m}` is defined by the two
 angles :math:`\phi` and :math:`\gamma` and allows any direction in the

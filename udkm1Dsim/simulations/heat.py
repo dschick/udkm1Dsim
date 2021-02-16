@@ -76,7 +76,7 @@ class Heat(Simulation):
         excitation (dict{ndarray[float, Quantity]}): excitation parameters
             fluence, delay_pump, pulse_width, wavelength, theta, polarization,
             multilayer_absorption
-        boundary_conditions (dict{str, float, Quantity}): boundary conditons of
+        boundary_conditions (dict{str, float, Quantity}): boundary conditions of
             the top and bottom boundary for the heat diffusion calculation.
             ``top_type`` or ``bottom_type`` must be one of ``boundary_types``.
             For the last two types the corresponding value, ``top_value`` and
@@ -191,9 +191,9 @@ class Heat(Simulation):
     def check_initial_temperature(self, init_temp, distances=[]):
         """check_initial_temperature
 
-        Inital temperature for heat simulations can be either a scalar
+        Initial temperature for heat simulations can be either a scalar
         temperature which is assumed to be valid for all layers in the
-        structure or a temeprature profile is given with one temperature for
+        structure or a temperature profile is given with one temperature for
         each layer in the structure and for each subsystem.
         Alternatively a spatial grid can be provided.
 
@@ -201,10 +201,10 @@ class Heat(Simulation):
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
                 temperature scalar or array [K].
             distances (ndarray[float, Quantity], optional): spatial grid of the
-                inital temperatrue.
+                initial temperatrue.
 
         Returns:
-            init_temp (ndarray[float]): checked inital temperature as array on
+            init_temp (ndarray[float]): checked initial temperature as array on
             the according spatial grid.
 
         """
@@ -312,7 +312,7 @@ class Heat(Simulation):
                     # no overlap, so go to the next iteration of the outer while loop
                     break
 
-            # caclulate the new time vector of the current excitation
+            # calculate the new time vector of the current excitation
             delta_delay = np.min(pulse_width[i:(k+1)])/intp
             if delta_delay == 0:
                 # its pulse_width = 0 or no heat diffusion was enabled
@@ -367,7 +367,7 @@ class Heat(Simulation):
 
         Returns:
             absorption_profile (ndarray[float]): absorption profile calculated
-            either by Lambert-Beers law or by a mulitlayer absorption formalism.
+            either by Lambert-Beers law or by a multilayer absorption formalism.
 
         """
         if self._excitation['multilayer_absorption']:
@@ -596,7 +596,7 @@ class Heat(Simulation):
                 z = distances[np.logical_and(distances >= interfaces[i-1],
                                              distances < interfaces[i])]
             m = len(z)
-            z -= interfaces[i-1]  # relative positon within the layer
+            z -= interfaces[i-1]  # relative position within the layer
             # For each layer except the first, compute Intensity, Absorption
             Ep = Dn[0, 0, i]*np.exp(1.0j*k_z[i]*z)
             Em = Dn[1, 0, i]*np.exp(-1.0j*k_z[i]*z)
@@ -619,8 +619,8 @@ class Heat(Simulation):
         r"""get_temperature_after_delta_excitation
 
         Calculate the final temperature and temperature change for each layer
-        of the sample structure after an optical exciation with a fluence
-        :math:`F` [J/m^2] and an inital temperature :math:`T_1` [K]:
+        of the sample structure after an optical excitation with a fluence
+        :math:`F` [J/m^2] and an initial temperature :math:`T_1` [K]:
 
         .. math:: \Delta E = \int_{T_1}^{T_2} m \, c(T)\, \mbox{d}T
 
@@ -681,7 +681,7 @@ class Heat(Simulation):
         # masses are normalized to 1Ang^2
         E0 = np.array(fluence)*(1*u.angstrom**2).to_base_units().magnitude
 
-        # check the intial temperature
+        # check the initial temperature
         init_temp = self.check_initial_temperature(init_temp, distances)
         final_temp = init_temp
         # traverse layers
@@ -720,7 +720,7 @@ class Heat(Simulation):
               change map.
 
         """
-        init_temp = self.check_initial_temperature(init_temp)  # check the intial temperature
+        init_temp = self.check_initial_temperature(init_temp)  # check the initial temperature
         filename = 'temp_map_' \
                    + self.get_hash(delays, init_temp) \
                    + '.npz'
@@ -766,7 +766,7 @@ class Heat(Simulation):
         K = self.S.num_sub_systems
 
         # there is an initial time step for the init_temp - we will remove it later on
-        # check the intial temperature
+        # check the initial temperature
         input_init_temp = self.check_initial_temperature(input_init_temp)
         checked_excitation, _, _, _ = self.check_excitation(delays)  # check excitation
         _, _, d_mid = self.S.get_distances_of_layers(False)
@@ -780,7 +780,7 @@ class Heat(Simulation):
                 distances, _ = self.S.interp_distance_at_interfaces(self.intp_at_interface, False)
             else:
                 # a user-defined distances vector is given, so determine the
-                # indicies for final assignment per layer
+                # indices for final assignment per layer
                 distances = self._distances
         else:
             distances = d_mid
@@ -798,7 +798,7 @@ class Heat(Simulation):
         temp = []
         # traverse excitations
         for i, excitation in enumerate(checked_excitation):
-            # reset inital temperature for delta excitation with heat diffusion enabled
+            # reset initial temperature for delta excitation with heat diffusion enabled
             special_init_temp = []
             # extract excitation parameters for the current iteration
             sub_delays = excitation[0]
@@ -864,7 +864,7 @@ class Heat(Simulation):
                 temp = np.reshape(temp, [1, np.size(temp, 0), np.size(temp, 1)])
             else:
                 # no excitation and no heat diffusion or not enough time
-                # step to calculate heat difusion, so just repeat the
+                # step to calculate heat diffusion, so just repeat the
                 # initial temperature + every unhandled case
                 temp = np.tile(np.reshape(init_temp, [1, N, K]), [len(sub_delays), 1, 1])
 
@@ -875,7 +875,7 @@ class Heat(Simulation):
                 init_temp = special_init_temp
             else:
                 init_temp = temp_map[-1, :, :].copy()
-            # increase excitation counder
+            # increase excitation counter
             if np.sum(fluence) > 0:
                 num_ex += len(fluence)
 
@@ -996,7 +996,7 @@ class Heat(Simulation):
                 pbar = None
                 state = None
 
-            indicies = finderb(distances, d_start)
+            indices = finderb(distances, d_start)
             densities = self.S.get_layer_property_vector('_density')
             # solve pdepe with method-of-lines
             sol = solve_ivp(
@@ -1010,8 +1010,8 @@ class Heat(Simulation):
                       self.S.get_layer_property_vector('therm_cond'),
                       self.S.get_layer_property_vector('heat_capacity'),
                       self.S.get_layer_property_vector('sub_system_coupling'),
-                      densities[indicies],
-                      indicies,
+                      densities[indices],
+                      indices,
                       dalpha_dz,
                       fluence,
                       delay_pump,
@@ -1039,7 +1039,7 @@ class Heat(Simulation):
 
     @staticmethod
     def odefunc(t, u, N, K, d_x_grid, x, thermal_conds, heat_capacities,
-                sub_system_coupling, densities, indicies, dalpha_dz, fluence,
+                sub_system_coupling, densities, indices, dalpha_dz, fluence,
                 delay_pump, pulse_length, bc_top_type, bc_top_value,
                 bc_bottom_type, bc_bottom_value, pbar, state):
         """odefunc
@@ -1060,14 +1060,14 @@ class Heat(Simulation):
             sub_system_coupling (ndarray[@lambda]): T-dependent sub-system
                 coupling.
             densities (ndarray[float]): density of layers.
-            indicies (ndarray[int]): indicies of actual layers in respect to
+            indices (ndarray[int]): indices of actual layers in respect to
                 interpolated spatial grid.
             dalpha_dz (ndarray[float]): absorption profile.
             fluence (ndarray[float]): excitation fluences.
             delay_pump (ndarray[float]): delay of excitations.
             pulse_length (ndarray[float]): pulse widths of excitations.
             bc_top_type (int): top boundary type.
-            bc_top_value (ndarray[float]): top bondary value.
+            bc_top_value (ndarray[float]): top boundary value.
             bc_bottom_type (int): bottom boundary type.
             bc_bottom_value (ndarray[float]): bottom boundary value.
             pbar (tqdm): tqdm progressbar.
@@ -1110,7 +1110,7 @@ class Heat(Simulation):
 
         # calculate temperature-dependent parameters
         for ii in range(N):
-            idx = indicies[ii]
+            idx = indices[ii]
             for iii in range(K):
                 ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
                 cs[ii, iii] = heat_capacities[idx][iii](u[ii, iii])
@@ -1279,11 +1279,11 @@ class Heat(Simulation):
         if (self._boundary_conditions['top_type'] > 0) \
                 and (np.size(self._boundary_conditions['top_value']) != K):
             raise ValueError('Non-isolating top boundary conditions must have the '
-                             'same dimensionality as the numer of sub-systems K!')
+                             'same dimensionality as the number of sub-systems K!')
         if (self._boundary_conditions['bottom_type'] > 0) \
                 and (np.size(self._boundary_conditions['bottom_value']) != K):
             raise ValueError('Non-isolating bottom boundary conditions must have the '
-                             'same dimensionality as the numer of sub-systems K!')
+                             'same dimensionality as the number of sub-systems K!')
 
     @property
     def distances(self):

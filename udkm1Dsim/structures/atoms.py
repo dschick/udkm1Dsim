@@ -146,7 +146,7 @@ class Atom:
         Args:
             source (str, optional): source of atmoic form factors can be either
                 _henke_ or _chantler_. Defaults to _chantler_.
-            filename (str, optional): full path and filenameto the atomic form
+            filename (str, optional): full path and filename to the atomic form
                 factor coefficients.
 
         Returns:

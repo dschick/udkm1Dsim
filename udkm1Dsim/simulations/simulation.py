@@ -139,7 +139,7 @@ class Simulation:
         temp = np.convolve(y_lin, y_handle/y_handle.sum(), mode="same")
 
         y_conv = np.interp(x, x_lin, temp)
-        # finaly remove NaN entries due to the interpolation
+        # finally remove NaN entries due to the interpolation
         y_conv[np.isnan(y_conv)] = 0
         return y_conv
 

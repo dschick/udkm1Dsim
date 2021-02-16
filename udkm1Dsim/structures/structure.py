@@ -252,13 +252,13 @@ class Structure:
 
         """
         L = 0
-        # traverse the substructres
+        # traverse the substructures
         for i in range(len(self.sub_structures)):
             if isinstance(self.sub_structures[i][0], AmorphousLayer) or \
                     isinstance(self.sub_structures[i][0], UnitCell):
                 L = L + self.sub_structures[i][1]
             else:
-                # its a sturcture, so call the method recursively
+                # its a structure, so call the method recursively
                 L = L + self.sub_structures[i][0].get_number_of_layers() \
                     * self.sub_structures[i][1]
 
@@ -282,7 +282,7 @@ class Structure:
                 Defaults to True.
 
         Returns:
-            thickness (float, Quantitiy): the thickness from surface to bottom
+            thickness (float, Quantity): the thickness from surface to bottom
             of the structure.
 
         """
@@ -350,7 +350,7 @@ class Structure:
 
         Returns three lists with the numeric index of all layers
         in a structure given by the get_unique_layers() method and
-        addidionally vectors with the ids and Handles of the
+        additionally vectors with the ids and Handles of the
         corresponding layer instances.
         The list and order of the unique layers can be either handed
         as an input parameter or is requested at the beginning.

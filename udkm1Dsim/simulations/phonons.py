@@ -50,7 +50,7 @@ class Phonon(Simulation):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        only_heat (boolean): true when including only thermal expanison without
+        only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
 
     Attributes:
@@ -61,7 +61,7 @@ class Phonon(Simulation):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        only_heat (boolean): true when including only thermal expanison without
+        only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
 
     """
@@ -276,7 +276,7 @@ class Phonon(Simulation):
                 int_alpha_T0[ii, iii] = int_lin_therm_exps[ii][iii](temp_map[0, ii, iii]
                                                                     - delta_temp_map[0, ii, iii])
 
-        # calculate sticks for all subsytsems for all delay steps
+        # calculate sticks for all subsystems for all delay steps
         # traverse time
         for i in range(M):
             if np.any(delta_temp_map[i, :]):  # there is a temperature change
@@ -315,7 +315,7 @@ class PhononNum(Phonon):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        only_heat (boolean): true when including only thermal expanison without
+        only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
 
     Attributes:
@@ -326,7 +326,7 @@ class PhononNum(Phonon):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        only_heat (boolean): true when including only thermal expanison without
+        only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
         ode_options (dict): options for scipy solve_ivp ode solver.
 
@@ -637,7 +637,7 @@ class PhononNum(Phonon):
         which is modeled by spacer sticks.
 
         Args:
-            stciks (ndarray[float]): spacer sticks.
+            sticks (ndarray[float]): spacer sticks.
             spring_consts (ndarray[float]): spring constants of masses.
 
         Returns:
@@ -697,7 +697,7 @@ class PhononAna(Phonon):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        only_heat (boolean): true when including only thermal expanison without
+        only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
 
     Attributes:
@@ -708,7 +708,7 @@ class PhononAna(Phonon):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        only_heat (boolean): true when including only thermal expanison without
+        only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
 
     References:
@@ -835,7 +835,7 @@ class PhononAna(Phonon):
 
         The external force is implemented as spacer sticks which are
         inserted into the springs and hence the layers have a new
-        equillibrium positions :math:`z_i(\infty) = z_i^\infty`.
+        equilibrium positions :math:`z_i(\infty) = z_i^\infty`.
         Thus we can do a coordination transformation:
 
         .. math::
@@ -947,15 +947,15 @@ class PhononAna(Phonon):
                     if np.any(delta_temp_map[i, :]):  # there is a temperature change
                         delay0 = delays[i]  # set new initial delay
                         # determining the shifts due to inserted sticks
-                        # as new ininital conditions
+                        # as new initial conditions
                         if i > 0:
                             temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T-sticks[i-1, :].T)))
                         else:
                             # initial sticks are zero
                             temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T)))
                         X0 = X0 + temp
-                        # determining the cofficient vectors A and B of
-                        # the general solution of X(t) using the inital
+                        # determining the coefficient vectors A and B of
+                        # the general solution of X(t) using the initial
                         # conditions X0 and V0
                         A[i+1, :] = np.linalg.solve(Xi, X0)
                         B[i+1, :] = (np.linalg.solve(Xi, V0)/omega).T
@@ -1012,7 +1012,7 @@ class PhononAna(Phonon):
             for i in range(L):  # defining main diagonal
                 K[i, i] = -(spring_consts[i] + spring_consts[i+1])/masses[i]
 
-            # defining the two other diagonals - nearest neightbour interaction
+            # defining the two other diagonals - nearest neighbor interaction
             for i in range(1, L):
                 K[i, i-1] = spring_consts[i]/masses[i]
                 K[i-1, i] = spring_consts[i]/masses[i-1]
@@ -1061,7 +1061,7 @@ class PhononAna(Phonon):
         # get the eigenVectors and eigenFrequencies
         Xi, omega = self.solve_eigenproblem()
 
-        # sort the frequencies and remeber the permutation of indicies
+        # sort the frequencies and remember the permutation of indices
         idx = np.argsort(omega)
 
         # traverse time
