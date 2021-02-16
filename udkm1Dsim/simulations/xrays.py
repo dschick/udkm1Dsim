@@ -1713,11 +1713,13 @@ class XrayDynMag(Xray):
         # of vacuum (initial layer) and the final layer
         RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
         RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
-        # calc the actual reflectivity from the matrix
-        R = XrayDynMag.calc_reflectivity_from_matrix(RT, self.pol_in, self.pol_out)
-        R_phi = XrayDynMag.calc_reflectivity_from_matrix(RT_phi, self.pol_in, self.pol_out)
+        # calc the actual reflectivit and transmissivity from the matrix
+        R, T = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
+            RT, self.pol_in, self.pol_out)
+        R_phi, T_phi = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
+            RT_phi, self.pol_in, self.pol_out)
         self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(time()-t1))
-        return R, R_phi
+        return R, R_phi, T, T_phi
 
     def calc_homogeneous_matrix(self, S, last_A, last_A_phi, last_k_z, *args):
         r"""calc_homogeneous_matrix
@@ -1877,12 +1879,13 @@ class XrayDynMag(Xray):
                                    magnetization_map=np.array([]), **kwargs):
         """inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogeneously strained and magnetized
-        sample structure for a given _strain_map_ and _magnetization_map_ in
-        space and time for each unit cell or amorphous layer in the sample
-        structure. If no reflectivity is saved in the cache it is caluclated.
-        Providing the ``calc_type`` for the calculation the corresponding
-        sub-routines for the reflectivity computation are called:
+        Returns the reflectivity and transmissivity of an inhomogeneously
+        strained and magnetized sample structure for a given _strain_map_
+        and _magnetization_map_ in space and time for each unit cell or
+        amorphous layer in the sample structure. If no reflectivity is
+        saved in the cache it is caluclated. Providing the ``calc_type``
+        for the calculation the corresponding sub-routines for the
+        reflectivity computation are called:
 
         * ``parallel`` parallelization over the time steps utilizing
           `Dask <https://dask.org/>`_
@@ -1906,6 +1909,9 @@ class XrayDynMag(Xray):
             - *R (ndarray[float])* - inhomogeneous reflectivity.
             - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
               magnetization.
+            - *T (ndarray[float])* - inhomogeneous transmissivity.
+            - *T_phi (ndarray[float])* - inhomogeneous transmissivity for opposite
+              magnetization.
 
         """
         # create a hash of all simulation parameters
@@ -1919,6 +1925,8 @@ class XrayDynMag(Xray):
             tmp = np.load(full_filename)
             R = tmp['R']
             R_phi = tmp['R_phi']
+            T = tmp['T']
+            T_phi = tmp['T_phi']
             self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
         else:
             t1 = time()
@@ -1954,30 +1962,28 @@ class XrayDynMag(Xray):
 
             # select the type of computation
             if calc_type == 'parallel':
-                R, R_phi = self.parallel_inhomogeneous_reflectivity(strain_map,
-                                                                    magnetization_map,
-                                                                    dask_client)
+                R, R_phi, T, T_phi = self.parallel_inhomogeneous_reflectivity(
+                    strain_map, magnetization_map, dask_client)
             elif calc_type == 'distributed':
-                R, R_phi = self.distributed_inhomogeneous_reflectivity(strain_map,
-                                                                       magnetization_map,
-                                                                       job,
-                                                                       num_workers)
+                R, R_phi, T, T_phi = self.distributed_inhomogeneous_reflectivity(
+                    strain_map, magnetization_map, job, num_workers)
             else:  # sequential
-                R, R_phi = self.sequential_inhomogeneous_reflectivity(strain_map,
-                                                                      magnetization_map)
+                R, R_phi, T, T_phi = self.sequential_inhomogeneous_reflectivity(
+                    strain_map, magnetization_map)
 
             self.disp_message('Elapsed time for _inhomogeneous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
-            self.save(full_filename, {'R': R, 'R_phi': R_phi}, '_inhomogeneous_reflectivity_')
-        return R, R_phi
+            self.save(full_filename, {'R': R, 'R_phi': R_phi, 'T': T, 'T_phi': T_phi},
+                      '_inhomogeneous_reflectivity_')
+        return R, R_phi, T, T_phi
 
     def sequential_inhomogeneous_reflectivity(self, strain_map, magnetization_map):
         """sequential_inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogeneously strained sample structure
-        for a given ``strain_map`` and ``magnetization_map`` in space and time.
-        The function calculates the results sequentially for every atomic layer
-        without parallelization.
+        Returns the reflectivity and transmission of an inhomogeneously strained
+        sample structure for a given ``strain_map`` and ``magnetization_map`` in
+        space and time. The function calculates the results sequentially for every
+        layer without parallelization.
 
         Args:
             strain_map (ndarray[float]): spatio-temporal strain profile.
@@ -1989,12 +1995,17 @@ class XrayDynMag(Xray):
             - *R (ndarray[float])* - inhomogeneous reflectivity.
             - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
               magnetization.
+            - *T (ndarray[float])* - inhomogeneous transmission.
+            - *T_phi (ndarray[float])* - inhomogeneous transmission for opposite
+              magnetization.
 
         """
         # initialize
         M = np.size(strain_map, 0)  # delay steps
         R = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
         R_phi = np.zeros_like(R)
+        T = np.zeros_like(R)
+        T_phi = np.zeros_like(R)
 
         if self.progress_bar:
             iterator = trange(M, desc='Progress', leave=True)
@@ -2022,20 +2033,21 @@ class XrayDynMag(Xray):
             RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
             RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
 
-            R[i, :, :] = XrayDynMag.calc_reflectivity_from_matrix(
+            R[i, :, :], T[i, :, :] = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
                 RT, self.pol_in, self.pol_out)
-            R_phi[i, :, :] = XrayDynMag.calc_reflectivity_from_matrix(
-                RT_phi, self.pol_in, self.pol_out)
+            R_phi[i, :, :], T_phi[i, :, :] = \
+                XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
+                    RT_phi, self.pol_in, self.pol_out)
 
-        return R, R_phi
+        return R, R_phi, T, T_phi
 
     def parallel_inhomogeneous_reflectivity(self, strain_map, magnetization_map, dask_client):
         """parallel_inhomogeneous_reflectivity
 
-        Returns the reflectivity of an inhomogeneously strained sample structure
-        for a given ``strain_map`` and ``magnetization_map`` in space and time.
-        The function tries to parallize the calculation over the time steps,
-        since the results do not depent on each other.
+        Returns the reflectivity and transmission of an inhomogeneously strained
+        sample structure for a given ``strain_map`` and ``magnetization_map`` in
+        space and time. The function tries to parallize the calculation over the
+        time steps, since the results do not depent on each other.
 
         Args:
             strain_map (ndarray[float]): spatio-temporal strain profile.
@@ -2047,6 +2059,9 @@ class XrayDynMag(Xray):
             (tuple):
             - *R (ndarray[float])* - inhomogeneous reflectivity.
             - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
+              magnetization.
+            - *T (ndarray[float])* - inhomogeneous transmission.
+            - *T_phi (ndarray[float])* - inhomogeneous transmission for opposite
               magnetization.
 
         """
@@ -2062,6 +2077,8 @@ class XrayDynMag(Xray):
 
         R = np.zeros([M, N, K])
         R_phi = np.zeros_like(R)
+        T = np.zeros_like(R)
+        T_phi = np.zeros_like(R)
         # vacuum boundary
         A0, A0_phi, _, _,  _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
         remote_A0 = dask_client.scatter(A0)
@@ -2103,24 +2120,26 @@ class XrayDynMag(Xray):
             temp_phi = delayed(m_times_n)(last_A_phi, RT_phi)
             RT = delayed(m_times_n)(last_A_inv, temp)
             RT_phi = delayed(m_times_n)(last_A_inv_phi, temp_phi)
-            Ri = delayed(XrayDynMag.calc_reflectivity_from_matrix)(RT,
-                                                                   remote_pol_in,
-                                                                   remote_pol_out)
-            Ri_phi = delayed(XrayDynMag.calc_reflectivity_from_matrix)(RT_phi,
-                                                                       remote_pol_in,
-                                                                       remote_pol_out)
-            res.append(Ri)
-            res.append(Ri_phi)
+            RTi = delayed(XrayDynMag.calc_reflectivity_transmissivity_from_matrix)(
+                RT, remote_pol_in, remote_pol_out)
+            RTi_phi = delayed(XrayDynMag.calc_reflectivity_transmissivity_from_matrix)(
+                RT_phi, remote_pol_in, remote_pol_out)
+            res.append(RTi[0])
+            res.append(RTi[1])
+            res.append(RTi_phi[0])
+            res.append(RTi_phi[1])
 
         # compute results
         res = dask_client.compute(res, sync=True)
 
         # reorder results to reflectivity matrix
         for i in range(M):
-            R[i, :, :] = res[2*i]
-            R_phi[i, :, :] = res[2*i + 1]
+            R[i, :, :] = res[4*i]
+            R_phi[i, :, :] = res[4*i + 1]
+            T[i, :, :] = res[4*i + 2]
+            T_phi[i, :, :] = res[4*i + 3]
 
-        return R, R_phi
+        return R, R_phi, T, T_phi
 
     def distributed_inhomogeneous_reflectivity(self, strain_map, magnetization_map,
                                                job, num_worker,):
@@ -2594,12 +2613,12 @@ class XrayDynMag(Xray):
         return A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z
 
     @staticmethod
-    def calc_reflectivity_from_matrix(RT, pol_in, pol_out):
-        """calc_reflectivity_from_matrix
+    def calc_reflectivity_transmissivity_from_matrix(RT, pol_in, pol_out):
+        """calc_reflectivity_transmissivity_from_matrix
 
-        Calculates the actual reflectivity from the reflectivity-transmission
-        matrix for a given incoming and analyzer polarization from Elzo
-        formalism [10]_.
+        Calculates the actual reflectivity and transmissivity from the
+        reflectivity-transmission matrix for a given incoming and analyzer
+        polarization from Elzo formalism [10]_.
 
         Args:
             RT (ndarray[complex]): reflection-transmission matrix.
@@ -2607,12 +2626,16 @@ class XrayDynMag(Xray):
             pol_out (ndarray[complex]): outgoing polarization factor.
 
         Returns:
-            R (ndarray[float]): reflectivity.
+            (tuple):
+            - *R (ndarray[float])* - reflectivity.
+            - *T (ndarray[float])* - transmissivity.
 
         """
 
         Ref = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :],
                       (np.size(RT, 0), np.size(RT, 1), 1, 1))
+        Trans = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :],
+                        (np.size(RT, 0), np.size(RT, 1), 1, 1))
 
         d = np.divide(1, RT[:, :, 3, 3] * RT[:, :, 2, 2] - RT[:, :, 3, 2] * RT[:, :, 2, 3])
         Ref[:, :, 0, 0] = (-RT[:, :, 3, 3] * RT[:, :, 2, 0] + RT[:, :, 2, 3] * RT[:, :, 3, 0]) * d
@@ -2620,18 +2643,50 @@ class XrayDynMag(Xray):
         Ref[:, :, 1, 0] = (RT[:, :, 3, 2] * RT[:, :, 2, 0] - RT[:, :, 2, 2] * RT[:, :, 3, 0]) * d
         Ref[:, :, 1, 1] = (RT[:, :, 3, 2] * RT[:, :, 2, 1] - RT[:, :, 2, 2] * RT[:, :, 3, 1]) * d
 
+        Trans[:, :, 0, 0] = (RT[:, :, 0, 0] + RT[:, :, 0, 2] * Ref[:, :, 0, 0]
+                             + RT[:, :, 0, 3] * Ref[:, :, 1, 0])
+        Trans[:, :, 0, 1] = (RT[:, :, 0, 1] + RT[:, :, 0, 2] * Ref[:, :, 0, 1]
+                             + RT[:, :, 0, 3] * Ref[:, :, 1, 1])
+        Trans[:, :, 1, 0] = (RT[:, :, 1, 0] + RT[:, :, 1, 2] * Ref[:, :, 0, 0]
+                             + RT[:, :, 1, 3] * Ref[:, :, 1, 0])
+        Trans[:, :, 1, 1] = (RT[:, :, 1, 1] + RT[:, :, 1, 2] * Ref[:, :, 0, 1]
+                             + RT[:, :, 1, 3] * Ref[:, :, 1, 1])
+
         Ref = np.matmul(np.matmul(np.array([[-1, 1], [-1j, -1j]]), Ref),
                         np.array([[-1, 1j], [1, 1j]])*0.5)
+        Trans = np.matmul(np.matmul(np.array([[-1, 1], [-1j, -1j]]), Trans),
+                          np.array([[-1, 1j], [1, 1j]])*0.5)
 
         if pol_out.size == 0:
             # no analyzer polarization
-            X = np.matmul(Ref, pol_in)
-            R = np.real(np.matmul(np.square(np.absolute(X)), np.array([1, 1], dtype=np.cfloat)))
+            R = np.real(np.matmul(np.square(np.absolute(np.matmul(Ref, pol_in))),
+                        np.array([1, 1], dtype=np.cfloat)))
+            T = np.real(np.matmul(np.square(np.absolute(np.matmul(Trans, pol_in))),
+                        np.array([1, 1], dtype=np.cfloat)))
         else:
-            X = np.matmul(np.matmul(Ref, pol_in), pol_out)
-            R = np.real(np.square(np.absolute(X)))
+            R = np.real(np.square(np.absolute(np.matmul(np.matmul(Ref, pol_in), pol_out))))
+            T = np.real(np.square(np.absolute(np.matmul(np.matmul(Trans, pol_in), pol_out))))
 
-        return R
+        return R, T
+
+    @staticmethod
+    def calc_kerr_effect_from_matrix(RT):
+        """calc_kerr_effect_from_matrix
+
+        Calculates the Kerr rotation and elipticity for sigma and pi
+        incident polarization from the reflectivity-transmission
+        matrix independent of the given incoming and analyzer polarization
+        from Elzo formalism [10]_.
+
+        Args:
+            RT (ndarray[complex]): reflection-transmission matrix.
+
+        Returns:
+            K (ndarray[float]): kerr.
+
+        """
+
+        raise NotImplementedError
 
     @staticmethod
     def calc_roughness_matrix(roughness, k_z, last_k_z):
