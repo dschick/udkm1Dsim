@@ -2125,8 +2125,8 @@ class XrayDynMag(Xray):
             RTi_phi = delayed(XrayDynMag.calc_reflectivity_transmissivity_from_matrix)(
                 RT_phi, remote_pol_in, remote_pol_out)
             res.append(RTi[0])
-            res.append(RTi[1])
             res.append(RTi_phi[0])
+            res.append(RTi[1])
             res.append(RTi_phi[1])
 
         # compute results
