@@ -558,6 +558,8 @@ class XrayKin(Xray):
                 Ep = self.get_Ep(energy, qz, theta, sub_structures[0], strains[strainCounter])
                 z = sub_structures[0]._c_axis
                 strainCounter = strainCounter+1
+            elif isinstance(sub_structures[0], AmorphousLayer):
+                raise ValueError('The substructure cannot be an AmorphousLayer!')
             else:
                 # the substructure is a structure, so we do a recursive
                 # call of this method
@@ -804,8 +806,8 @@ class XrayDyn(Xray):
         .. math:: M_{RT} = \prod_i H_i \ L_i
 
         For :math:`N` similar layers of unit cells one can calculate the
-        N-th power of the unit cell :math:`\left(M_{RT}\right)^N`. The
-        reflection-transmission matrix for the whole sample
+        :math:`N`-th power of the unit cell :math:`\left(M_{RT}\right)^N`.
+        The reflection-transmission matrix for the whole sample
         :math:`M_{RT}^t` consisting of :math:`j = 1\ldots M`
         sub-structures is then again:
 
@@ -844,6 +846,8 @@ class XrayDyn(Xray):
                 strainCounter += 1
                 # remember the result
                 A.append([temp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+            elif isinstance(sub_structures[0], AmorphousLayer):
+                raise ValueError('The substructure cannot be an AmorphousLayer!')
             else:
                 # its a structure
                 # make a recursive call
@@ -1244,13 +1248,15 @@ class XrayDyn(Xray):
             raise TypeError('The strain vector has not the same size '
                             'as number of unique unit cells')
 
-        # initialize refTransMatrices
+        # initialize ref_trans_matrices
         RTM = []
 
-        # traverse all unique unitCells
+        # traverse all unique unit_cells
         for i, uc in enumerate(uc_handles):
             # traverse all strains in the strain_vector for this unique
-            # unit_cell
+            # unit_cell            
+            if not isinstance(uc, UnitCell):
+                raise ValueError('All layers  must be UnitCells!')
             temp = []
             for strain in strain_vectors[i]:
                 temp.append(self.get_uc_ref_trans_matrix(uc, strain))
