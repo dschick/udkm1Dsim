@@ -846,7 +846,7 @@ class XrayDyn(Xray):
                 strainCounter += 1
                 # remember the result
                 A.append([temp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
-            elif isinstance(sub_structures[0], AmorphousLayer):
+            elif isinstance(sub_structure[0], AmorphousLayer):
                 raise ValueError('The substructure cannot be an AmorphousLayer!')
             else:
                 # its a structure
@@ -1254,7 +1254,7 @@ class XrayDyn(Xray):
         # traverse all unique unit_cells
         for i, uc in enumerate(uc_handles):
             # traverse all strains in the strain_vector for this unique
-            # unit_cell            
+            # unit_cell
             if not isinstance(uc, UnitCell):
                 raise ValueError('All layers  must be UnitCells!')
             temp = []
