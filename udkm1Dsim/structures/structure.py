@@ -99,7 +99,7 @@ class Structure:
             class_str += tab_str + 'no substrate\n'
         return class_str
 
-    def visualize(self, unit='nm', fig_size=[20, 1]):
+    def visualize(self, unit='nm', fig_size=[20, 1], cmap='Set1', show=True):
         """visualize
 
         Simple visualization of the structure.
@@ -109,6 +109,8 @@ class Structure:
                 'nm'.
             fig_size (list[float]): figure size of the visualization plot.
                 Defaults to [20, 1].
+            cmap (str): Matplotlib colormap for colors of layers.
+            show (boolean): show visualization plot at the end.
 
         """
         import matplotlib.pyplot as plt
@@ -124,7 +126,7 @@ class Structure:
 
         colortable = {}
         for i in range(N):
-            colortable[layer_ids[i]] = cm.get_cmap('Set1')(i)
+            colortable[layer_ids[i]] = cm.get_cmap(cmap)(i)
 
         plt.figure(figsize=fig_size)
         ax = plt.axes()
@@ -132,20 +134,25 @@ class Structure:
         for i, name in enumerate(self.get_layer_vectors()[1]):
             col = colortable.get(name, 'k')
             rect = patches.Rectangle((layer_interfaces[i], 0), np.diff(layer_interfaces)[i], 1,
-                                     linewidth=0.25, facecolor=col, edgecolor='k')
+                                     linewidth=0, facecolor=col, edgecolor='k')
             ax.add_patch(rect)
 
         plt.xlim(0, thickness)
         plt.ylim(0, 1)
-        plt.xlabel('distance [{:s}]'.format(unit))
+        plt.xlabel('Distance [{:s}]'.format(unit))
         plt.yticks([], [])
 
         # add labels for legend
         for layer_id, col in colortable.items():
             plt.plot(0, 0, color=col, label=layer_id)
 
-        plt.legend(bbox_to_anchor=(0., 1.08, 1, .102), frameon=False, ncol=8)
-        plt.show()
+        leg = plt.legend(bbox_to_anchor=(0., 1.08, 1, .102), frameon=False, ncol=8)
+
+        for line in leg.get_lines():
+            line.set_linewidth(8.0)
+
+        if show:
+            plt.show()
 
     def get_hash(self, **kwargs):
         """get_hash
