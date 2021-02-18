@@ -99,7 +99,7 @@ class Structure:
             class_str += tab_str + 'no substrate\n'
         return class_str
 
-    def visualize(self, unit='nm', fig_size=[20, 1], cmap='Set1', show=True):
+    def visualize(self, unit='nm', fig_size=[20, 1], cmap='Set1', linewidth=0.1, show=True):
         """visualize
 
         Simple visualization of the structure.
@@ -110,6 +110,7 @@ class Structure:
             fig_size (list[float]): figure size of the visualization plot.
                 Defaults to [20, 1].
             cmap (str): Matplotlib colormap for colors of layers.
+            linewidth (float): line width of the patches.
             show (boolean): show visualization plot at the end.
 
         """
@@ -134,7 +135,7 @@ class Structure:
         for i, name in enumerate(self.get_layer_vectors()[1]):
             col = colortable.get(name, 'k')
             rect = patches.Rectangle((layer_interfaces[i], 0), np.diff(layer_interfaces)[i], 1,
-                                     linewidth=0, facecolor=col, edgecolor='k')
+                                     linewidth=linewidth, facecolor=col, edgecolor='k')
             ax.add_patch(rect)
 
         plt.xlim(0, thickness)
