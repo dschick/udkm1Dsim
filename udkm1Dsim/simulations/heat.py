@@ -249,7 +249,7 @@ class Heat(Simulation):
 
         and to combine excitations which have overlapping intervalls.
 
-        Moreover the incidence angle :math:`theta` is taken into account for
+        Moreover the incidence angle :math:`\vartheta` is taken into account for
         the user-defined incidence fluence in order to project the laser
         footprint onto the sample surface.
 
@@ -920,6 +920,8 @@ class Heat(Simulation):
         capacity [J/kg K], :math:`\rho` the density [kg/m³] and :math:`k_i(T)`
         is the temperature-dependent thermal conductivity [W/m K] and
         :math:`S(z,t)` is a source term [W/m³].
+        The energy flow between the subsystems is given by the ``sub_system_coupling``
+        parameter :math:`G_i(T_1,...,T_N)` of the individual layers.
         The index :math:`i` referrs to the :math:`i`-th subsystem.
 
         The 1D heat diffusion equation can be either solved with SciPy or
