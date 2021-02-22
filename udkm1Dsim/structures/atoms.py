@@ -498,7 +498,7 @@ class AtomMixed(Atom):
 
         return f
 
-    @u.wraps(None, (None, 'eV'), strict=False)
+    @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
@@ -521,7 +521,7 @@ class AtomMixed(Atom):
                 f += self.atoms[i][0].get_cm_atomic_form_factor(energy, qz) * self.atoms[i][1]
         else:
             warnings.warn('Cromer-Mann correction cannot be applied to '
-                          'atomic form factors from external files.'
+                          'atomic form factors from external files. '
                           'Returning uncorrected values instead!')
             f = self.get_atomic_form_factor(energy)
 
