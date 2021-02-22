@@ -438,6 +438,7 @@ class AtomMixed(Atom):
         self.mass = self.mass + fraction * atom.mass
         self.ionicity = self.ionicity + fraction * atom.ionicity
 
+    @u.wraps(None, (None, 'eV'), strict=False)
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
@@ -456,6 +457,7 @@ class AtomMixed(Atom):
 
         return f
 
+    @u.wraps(None, (None, 'eV'), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
@@ -476,6 +478,7 @@ class AtomMixed(Atom):
 
         return f
 
+    @u.wraps(None, (None, 'eV'), strict=False)
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
