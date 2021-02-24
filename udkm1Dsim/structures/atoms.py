@@ -369,6 +369,8 @@ class AtomMixed(Atom):
     Keyword Args:
         id (str): id of the atom, may differ from symbol and/or name.
         name (str): name of the mixed atom, default is symbol.
+        atomic_form_factor_path (str): path to atomic form factor coeffs.
+        magnetic_form_factor_path (str): path to magnetic form factor coeffs.
 
     Attributes:
         symbol (str): symbol of the element.
