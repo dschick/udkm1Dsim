@@ -47,6 +47,7 @@ class Atom:
         id (str): id of the atom, may differ from symbol and/or name.
         ionicity (int): ionicity of the atom.
         atomic_form_factor_path (str): path to atomic form factor coeffs.
+        atomic_form_factor_source (str): either _henke_ or default _chantler_
         magnetic_form_factor_path (str): path to magnetic form factor coeffs.
 
     Attributes:
@@ -116,7 +117,8 @@ class Atom:
         self._mass = self.mass_number_a*constants.atomic_mass
         self.mass = self._mass*u.kg
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
-            filename=kwargs.get('atomic_form_factor_path', ''))
+            filename=kwargs.get('atomic_form_factor_path', ''),
+            source=kwargs.get('atomic_form_factor_source', 'chantler'))
         self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
             filename=kwargs.get('magnetic_form_factor_path', ''))
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
