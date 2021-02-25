@@ -31,7 +31,7 @@ The current toolbox, written in Python, is maintained by Daniel Schick at the
 *Max-Born-Institute*, Berlin, Germany.
 
 ## Documentation
-The documentation can be found at [readthedocs.io](http://udkm1Dsim.readthedocs.io).
+The documentation can be found at [udkm1Dsim.readthedocs.io](http://udkm1Dsim.readthedocs.io).
 
 ## Citation
 
