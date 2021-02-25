@@ -30,6 +30,7 @@ from .. import u, Q_
 import os
 import numpy as np
 import scipy.constants as constants
+import warnings
 from tabulate import tabulate
 
 
@@ -382,6 +383,10 @@ class AtomMixed(Atom):
         mass_number_a (float): A atomic mass number.
         ionicity (int): ionicity of the atom.
         mass (float): mass of the atom [kg].
+        atomic_form_factor_coeff (ndarray[float]): atomic form factor.
+           coefficients for energy-dependent atomic form factor.
+        magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
+           coefficients for energy-dependent magnetic form factor.
         mag_amplitude (float): magnetization amplitude -1 .. 1.
         mag_phi (float): phi angle of magnetization [deg].
         mag_gamma (float): gamma angle of magnetization [deg].
@@ -403,6 +408,10 @@ class AtomMixed(Atom):
         self.mass = 0
         self.atoms = []
         self.num_atoms = 0
+        self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
+            filename=kwargs.get('atomic_form_factor_path', ''))
+        self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
+            filename=kwargs.get('magnetic_form_factor_path', ''))
 
     def __str__(self):
         """String representation of this class"""
@@ -442,10 +451,38 @@ class AtomMixed(Atom):
         self.mass = self.mass + fraction * atom.mass
         self.ionicity = self.ionicity + fraction * atom.ionicity
 
+    def read_atomic_form_factor_coeff(self, filename=''):
+        """read_atomic_form_factor_coeff
+
+        The coefficients for the atomic form factor :math:`f` in dependence of
+        the photon energy :math:`E` must be read from an external file given
+        by ``filename``.
+
+        Args:
+            filename (str, optional): full path and filename to the atomic form
+                factor coefficients.
+
+        Returns:
+            f (ndarray[float]): atomic form factor coefficients.
+
+        """
+        if not filename:
+            return None
+        try:
+            f = np.genfromtxt(filename, skip_header=0)
+        except Exception as e:
+            print('File {:s} not found!'.format(filename))
+            print(e)
+
+        return f
+
+    @u.wraps(None, (None, 'eV'), strict=False)
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
         Averaged energy dependent atomic form factor.
+        If ``atomic_form_factor_path`` was given on initialization this file
+        will be used instead.
 
         Args:
             energy (ndarray[float]): photon energy [eV].
@@ -454,12 +491,18 @@ class AtomMixed(Atom):
             f (ndarray[complex]): energy-dependent atomic form factors.
 
         """
-        f = 0
-        for i in range(self.num_atoms):
-            f += self.atoms[i][0].get_atomic_form_factor(energy) * self.atoms[i][1]
+        if self.atomic_form_factor_coeff is None:
+            # no external file is given
+            # calculate average from added atoms
+            f = 0
+            for i in range(self.num_atoms):
+                f += self.atoms[i][0].get_atomic_form_factor(energy) * self.atoms[i][1]
+        else:
+            f = super().get_atomic_form_factor(energy)
 
         return f
 
+    @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
@@ -474,12 +517,48 @@ class AtomMixed(Atom):
             form factors.
 
         """
-        f = 0
-        for i in range(self.num_atoms):
-            f += self.atoms[i][0].get_cm_atomic_form_factor(energy, qz) * self.atoms[i][1]
+        if self.atomic_form_factor_coeff is None:
+            # no external file is given
+            # calculate average from added atoms
+            f = 0
+            for i in range(self.num_atoms):
+                f += self.atoms[i][0].get_cm_atomic_form_factor(energy, qz) * self.atoms[i][1]
+        else:
+            warnings.warn('Cromer-Mann correction cannot be applied to '
+                          'atomic form factors from external files. '
+                          'Returning uncorrected values instead!')
+            f = self.get_atomic_form_factor(energy)
 
         return f
 
+    def read_magnetic_form_factor_coeff(self, filename=''):
+        """read_magnetic_form_factor_coeff
+
+        The coefficients for the magnetic form factor :math:`m` in dependence
+        of the photon energy :math:`E` must be read from an external file given
+        by ``filename``.
+
+        Args:
+            filename (str): optional full path and filename to the magnetic
+                form factor coefficients.
+
+        Returns:
+            m (ndarray[float]): magnetic form factor coefficients.
+
+        """
+        if not filename:
+            return None
+        try:
+            m = np.genfromtxt(filename)
+        except Exception as e:
+            print('File {:s} not found!'.format(filename))
+            print(e)
+            # return zero array
+            m = np.zeros([1, 3])
+
+        return m
+
+    @u.wraps(None, (None, 'eV'), strict=False)
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
@@ -492,11 +571,16 @@ class AtomMixed(Atom):
             f (ndarray[complex]): energy-dependent magnetic form factors.
 
         """
-        f = 0
-        for i in range(self.num_atoms):
-            f += self.atoms[i][0].get_magnetic_form_factor(energy) * self.atoms[i][1]
+        if self.magnetic_form_factor_coeff is None:
+            # no external file is given
+            # calculate average from added atoms
+            m = 0
+            for i in range(self.num_atoms):
+                m += self.atoms[i][0].get_magnetic_form_factor(energy) * self.atoms[i][1]
+        else:
+            m = super().get_magnetic_form_factor(energy)
 
-        return f
+        return m
 
     @property
     def mag_phi(self):
