@@ -21,7 +21,8 @@ setup(
                       'pint>=0.9',
                       'scipy>=1.4.1',
                       'sympy>=1.5.1',
-                      'tabulate'],
+                      'tabulate',
+                      'matplotlib>=2.0.0'],
     extras_require={
         'parallel':  ['dask>=2.6.0'],
         'testing': ['flake8', 'pytest'],
