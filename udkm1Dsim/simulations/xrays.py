@@ -2281,6 +2281,7 @@ class XrayDynMag(Xray):
 
         """
         K = uc.num_atoms  # number of atoms
+        force_recalc = True
         for j in range(K):
             if j == (K-1):  # its the last atom
                 del_dist = (strain+1)-uc.atoms[j][1](strain)
@@ -2299,7 +2300,7 @@ class XrayDynMag(Xray):
 
             A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                 self.get_atom_boundary_phase_matrix(uc.atoms[j][0], density, distance,
-                                                    magnetization)
+                                                    force_recalc, magnetization)
             F = m_times_n(A_inv, last_A)
             F_phi = m_times_n(A_inv_phi, last_A_phi)
             if (j == 0) and (uc._roughness > 0):
