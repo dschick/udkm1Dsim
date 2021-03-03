@@ -31,12 +31,16 @@ The current toolbox, written in Python, is maintained by Daniel Schick at the
 *Max-Born-Institute*, Berlin, Germany.
 
 ## Documentation
-The documentation can be found at [readthedocs.io](http://udkm1Dsim.readthedocs.io).
+The documentation can be found at [udkm1Dsim.readthedocs.io](http://udkm1Dsim.readthedocs.io).
 
 ## Citation
 
-Please cite the original publication if you use the *udkm1Dsim* toolbox for your
-own publications:
+Please cite the current preprint if you use the toolbox in your own work:
+
+D. Schick, *udkm1Dsim - A Python toolbox for simulating 1D ultrafast dynamics in condensed matter*,
+[arxiv:2102.12144 [physics.comp-ph] (2021)](https://arxiv.org/abs/2102.12144).
+
+You can also cite the original publication if appropriate:
 
 D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Bargheer,
 *udkm1Dsim - A Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter*,
@@ -61,6 +65,10 @@ but not copied to the python site-packages), just do:
 Or to do a normal install with
 
     pip install ./udkm1Dsim
+
+Optionally, you can also let pip install directly from the repository: 
+
+    pip install git+https://github.com/dschick/udkm1Dsim.git
 
 You can have the following optional installation to enable parallel
 computations, unit tests, as well as building the documentation:

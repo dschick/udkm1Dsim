@@ -40,7 +40,7 @@ class Layer:
 
     Base class of real physical layers, such as amorphous layers and unit cells.
 
-    It holds different structural, thermal, and eleastic properties that are
+    It holds different structural, thermal, and elastic properties that are
     relevant for simulations.
 
     Args:
