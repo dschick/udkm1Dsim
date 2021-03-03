@@ -24,7 +24,7 @@ setup(
                       'tabulate',
                       'matplotlib>=2.0.0'],
     extras_require={
-        'parallel':  ['dask>=2.6.0'],
+        'parallel':  ['dask[distributed]>=2.6.0'],
         'testing': ['flake8', 'pytest'],
         'documentation': ['sphinx', 'nbsphinx', 'sphinxcontrib-napoleon',
                           'autodocsumm'],
