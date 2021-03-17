@@ -1117,7 +1117,13 @@ class Heat(Simulation):
         for ii in range(N):
             idx = indices[ii]
             for iii in range(K):
-                ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
+                try:
+                    # temperature argument should be scalar
+                    ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
+                except IndexError:
+                    # temperature argument should be a vector
+                    ks[ii, iii] = thermal_conds[idx][iii](u[ii, :])
+
                 cs[ii, iii] = heat_capacities[idx][iii](u[ii, iii])
                 source[ii, iii] = source[ii, iii] + sub_system_coupling[idx][iii](u[ii, :])
 
