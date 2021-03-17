@@ -1123,12 +1123,8 @@ class Heat(Simulation):
                 except IndexError:
                     # temperature argument should be a vector
                     ks[ii, iii] = thermal_conds[idx][iii](u[ii, :])
-                try:
-                    # temperature argument should be scalar
-                    cs[ii, iii] = heat_capacities[idx][iii](u[ii, iii])
-                except IndexError:
-                    # temperature argument should be a vector
-                    cs[ii, iii] = heat_capacities[idx][iii](u[ii, :])
+
+                cs[ii, iii] = heat_capacities[idx][iii](u[ii, iii])
                 source[ii, iii] = source[ii, iii] + sub_system_coupling[idx][iii](u[ii, :])
 
         # boundary conditions
