@@ -662,10 +662,10 @@ class UnitCell(Layer):
            different subsystems [W/m³].
         num_sub_systems (int): number of subsystems for heat and phonons
            (electrons, lattice, spins, ...).
-        atoms (list[atom, @lambda]): list of atoms and funtion handle
+        atoms (list[atom, @lambda]): list of atoms and function handle
            for strain dependent displacement.
         num_atoms (int): number of atoms in unit cell.
-        magnetization (list[foat]): magnetization amplitutes, phi, and
+        magnetization (list[float]): magnetization amplitutes, phi, and
            gamma angle of each atom in the unit cell.
 
     """
