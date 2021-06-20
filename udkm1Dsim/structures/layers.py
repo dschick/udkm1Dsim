@@ -102,7 +102,7 @@ class Layer:
         self.id = id
         self.name = name
         self.roughness = kwargs.get('roughness', 0*u.nm)
-        self.spring_const = np.array([0])
+        self.spring_const = np.array([0.0])
         self.deb_wal_fac = kwargs.get('deb_wal_fac', 0*u.m**2)
         self.sound_vel = kwargs.get('sound_vel', 0*u.m/u.s)
         self.phonon_damping = kwargs.get('phonon_damping', 0*u.kg/u.s)
