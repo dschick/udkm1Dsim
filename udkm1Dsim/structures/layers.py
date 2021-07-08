@@ -31,9 +31,8 @@ from .. import u, Q_
 import numpy as np
 from inspect import isfunction
 from sympy import integrate
-from sympy.utilities.lambdify import lambdify, lambdastr
+from sympy.utilities.lambdify import lambdify
 from sympy.abc import T
-from sympy.functions import exp
 from tabulate import tabulate
 
 
@@ -185,10 +184,10 @@ class Layer:
                         cannot be converted to function handle!')
                     print(e)
             elif isinstance(input, (int, float)):
-                output.append(lambdify(T, input, modules= 'numpy'))
+                output.append(lambdify(T, input, modules='numpy'))
                 output_strs.append(str(input))
             elif isinstance(input, object):
-                output.append(lambdify(T, input.to_base_units().magnitude, modules= 'numpy'))
+                output.append(lambdify(T, input.to_base_units().magnitude, modules='numpy'))
                 output_strs.append(str(input.to_base_units().magnitude))
             else:
                 raise ValueError('Layer property input has to be a single or '
