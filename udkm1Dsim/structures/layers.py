@@ -30,8 +30,10 @@ from .atoms import Atom, AtomMixed
 from .. import u, Q_
 import numpy as np
 from inspect import isfunction
-from sympy import integrate, Symbol
-from sympy.utilities.lambdify import lambdify
+from sympy import integrate
+from sympy.utilities.lambdify import lambdify, lambdastr
+from sympy.abc import T
+from sympy.functions import exp
 from tabulate import tabulate
 
 
@@ -172,18 +174,22 @@ class Layer:
                 raise ValueError('Please use string representation of function!')
             elif isinstance(input, str):
                 try:
-                    output.append(eval(input))
-                    output_strs.append(input)
+                    # backwards compatibility for direct lambda definition
+                    if ':' in input:
+                        # strip lambda prefix
+                        input = input.split(':')[1]
+                    output.append(lambdify(T, input, modules='numpy'))
+                    output_strs.append(input.strip())
                 except Exception as e:
                     print('String input for layer property ' + input + ' \
                         cannot be converted to function handle!')
                     print(e)
             elif isinstance(input, (int, float)):
-                output.append(eval('lambda T: {:f}'.format(input)))
-                output_strs.append('lambda T: {:f}'.format(input))
+                output.append(lambdify(T, input, modules= 'numpy'))
+                output_strs.append(str(input))
             elif isinstance(input, object):
-                output.append(eval('lambda T: {:f}'.format(input.to_base_units().magnitude)))
-                output_strs.append('lambda T: {:f}'.format(input.to_base_units().magnitude))
+                output.append(lambdify(T, input.to_base_units().magnitude, modules= 'numpy'))
+                output_strs.append(str(input.to_base_units().magnitude))
             else:
                 raise ValueError('Layer property input has to be a single or '
                                  'list of numerics, Quantities, or function handle strings '
@@ -402,12 +408,10 @@ class Layer:
             self._int_heat_capacity = []
             self.int_heat_capacity_str = []
             try:
-                T = Symbol('T')
                 for hcs in self.heat_capacity_str:
-                    integral = integrate(hcs.split(':')[1], T)
-                    self._int_heat_capacity.append(lambdify(T, integral))
-                    self.int_heat_capacity_str.append('lambda T : ' + str(integral))
-
+                    integral = integrate(hcs, T)
+                    self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
+                    self.int_heat_capacity_str.append(str(integral))
             except Exception as e:
                 print('The sympy integration did not work. You can set the '
                       'analytical anti-derivative of the heat capacity '
@@ -441,12 +445,10 @@ class Layer:
         self._int_lin_therm_exp = []
         self.int_lin_therm_exp_str = []
         try:
-            T = Symbol('T')
             for ltes in self.lin_therm_exp_str:
-                integral = integrate(ltes.split(':')[1], T)
-                self._int_lin_therm_exp.append(lambdify(T, integral))
-                self.int_lin_therm_exp_str.append('lambda T : ' + str(integral))
-
+                integral = integrate(ltes, T)
+                self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
+                self.int_lin_therm_exp_str.append(str(integral))
         except Exception as e:
             print('The sympy integration did not work. You can set the '
                   'analytical anti-derivative of the linear thermal expansion '
