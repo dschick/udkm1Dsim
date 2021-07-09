@@ -757,16 +757,16 @@ class UnitCell(Layer):
                     label = self.atoms[j][0].id
                     atoms_plotted[atom_ids.index(self.atoms[j][0].id)] = True
                     plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                             MarkerSize=10,
+                             markersize=10,
                              markeredgecolor=[0, 0, 0],
-                             markerfaceColor=colors[atom_ids.index(self.atoms[j][0].id)],
+                             markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
                              label=label)
                 else:
                     label = '_nolegend_'
                     plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                             MarkerSize=10,
+                             markersize=10,
                              markeredgecolor=[0, 0, 0],
-                             markerfaceColor=colors[atom_ids.index(self.atoms[j][0].id)],
+                             markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
                              label=label)
 
             plt.axis([0.1, self.num_atoms+0.9, -0.1, (1.1+np.max(strains))])
