@@ -32,7 +32,7 @@ import numpy as np
 from inspect import isfunction
 from sympy import integrate
 from sympy.utilities.lambdify import lambdify
-from sympy.abc import T
+from sympy.abc import T, s
 from tabulate import tabulate
 
 
@@ -801,15 +801,19 @@ class UnitCell(Layer):
             raise ValueError('Please use string representation of function!')
         elif isinstance(position, str):
             try:
-                position_str = position
-                position = eval(position)
+                # backwards compatibility for direct lambda definition
+                if ':' in position:
+                    # strip lambda prefix
+                    position = position.split(':')[1]
+                position_str = position.strip()
+                position = lambdify(s, position, modules='numpy')
             except Exception as e:
                 print('String input for unit cell property ' + position + ' \
                     cannot be converted to function handle!')
                 print(e)
         elif isinstance(position, (int, float)):
-            position_str = 'lambda strain: {:e}*(strain+1)'.format(position)
-            position = eval(position_str)
+            position_str = str(position)
+            position = lambdify(s, position, modules='numpy')
         else:
             raise ValueError('Atom position input has to be a scalar, or string'
                              'which can be converted into a lambda function!')
