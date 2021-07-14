@@ -152,8 +152,8 @@ class Layer:
         argument. Inputs can be strings, floats, ints, or pint quantaties.
 
         Args:
-            inputs (list[str, float, Quantity]): list of strings, floats, or
-                Pint quantities.
+            inputs (list[str, int, float, Quantity]): list of strings, int, floats,
+                or Pint quantities.
 
         Returns:
             (tuple):
@@ -429,8 +429,8 @@ class Layer:
             except Exception as e:
                 print('The sympy integration did not work. You can set the '
                       'analytical anti-derivative of the heat capacity '
-                      'of your layer as lambda function of the temperature '
-                      'T by typing layer.int_heat_capacity = lambda T: c(T) '
+                      'of your layer as function str of the temperature '
+                      'T by typing layer.int_heat_capacity = \'c(T)\' '
                       'where layer is the name of the layer object.')
                 print(e)
 
@@ -471,8 +471,8 @@ class Layer:
                 print('The sympy integration did not work. You can set the '
                       'analytical anti-derivative of the linear thermal expansion '
                       'of your unit cells as lambda function of the temperature '
-                      'T by typing UC.int_lin_therm_exp = lambda T: c(T) '
-                      'where UC is the name of the unit cell object.')
+                      'T by typing layer.int_lin_therm_exp = \'c(T)\' '
+                      'where layer is the name of the layer object.')
                 print(e)
 
         return self._int_lin_therm_exp
