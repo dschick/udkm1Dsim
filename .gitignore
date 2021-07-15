@@ -22,3 +22,6 @@ docs/source/**/dask-worker-space
 
 # vscode
 .vscode
+
+#hypothesis
+.hypothesis
