@@ -66,8 +66,8 @@ class Atom:
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
         mag_amplitude (float): magnetization amplitude -1 .. 1.
-        mag_phi (float): phi angle of magnetization [deg].
-        mag_gamma (float): gamma angle of magnetization [deg].
+        mag_phi (float): phi angle of magnetization [rad].
+        mag_gamma (float): gamma angle of magnetization [rad].
 
     References:
 
@@ -388,8 +388,8 @@ class AtomMixed(Atom):
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
         mag_amplitude (float): magnetization amplitude -1 .. 1.
-        mag_phi (float): phi angle of magnetization [deg].
-        mag_gamma (float): gamma angle of magnetization [deg].
+        mag_phi (float): phi angle of magnetization [rad].
+        mag_gamma (float): gamma angle of magnetization [rad].
         atoms (list[Atoms]): list of Atoms.
         num_atoms (int): number of atoms.
 
