@@ -289,7 +289,10 @@ class Layer:
             wavelength (Quantity): wavelength as Pint Quantitiy.
 
         """
-        self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
+        if np.imag(self.opt_ref_index) == 0:
+            self.opt_pen_depth = Q_(np.inf, u.m)
+        else:
+            self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
 
     def calc_spring_const(self):
         r"""calc_spring_const
