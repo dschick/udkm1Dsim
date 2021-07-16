@@ -115,6 +115,8 @@ class Phonon(Simulation):
     def get_all_strains_per_unique_layer(self, strain_map):
         """get_all_strains_per_unique_layer
 
+        Determines all values of the strain per unique layer.
+
         Args:
             strain_map (ndarray[float]): spatio-temporal strain profile.
 

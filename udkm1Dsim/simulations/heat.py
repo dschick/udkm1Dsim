@@ -360,7 +360,9 @@ class Heat(Simulation):
         return res, fluence, delay_pump, pulse_width
 
     def get_absorption_profile(self, distances=[]):
-        """get_absorption_profile
+        r"""get_absorption_profile
+
+        Returns the spatial absorption profile :math:`\mbox{d}A/\mbox{d}z`.
 
         Args:
             distances (ndarray[float], optional): spatial grid for calculation.
