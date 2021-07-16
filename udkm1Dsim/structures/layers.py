@@ -79,7 +79,7 @@ class Layer:
            and imagenary part :math:`n + i\kappa`.
         opt_ref_index_per_strain (ndarray[float]): optical refractive
            index change per strain - real and imagenary part
-           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`.
+           :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
         therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
@@ -258,6 +258,8 @@ class Layer:
     def get_acoustic_impedance(self):
         """get_acoustic_impedance
 
+        Calculates the acoustic impedance.
+
         Returns:
             Z (float): acoustic impedance.
 
@@ -300,7 +302,7 @@ class Layer:
         Calculates the spring constant of the layer from the mass per unit area,
         sound velocity and thickness
 
-        .. math:: k = m \, \left(\\frac{v}{c}\\right)^2
+        .. math:: k = m \, \left(\frac{v}{c}\right)^2
 
         """
         self.spring_const[0] = (self._mass_unit_area * (self._sound_vel/self._thickness)**2)
@@ -542,7 +544,7 @@ class AmorphousLayer(Layer):
            and imagenary part :math:`n + i\kappa`.
         opt_ref_index_per_strain (ndarray[float]): optical refractive
            index change per strain - real and imagenary part
-           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`.
+           :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
         therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
@@ -670,7 +672,7 @@ class UnitCell(Layer):
            and imagenary part :math:`n + i\kappa`.
         opt_ref_index_per_strain (ndarray[float]): optical refractive
            index change per strain - real and imagenary part
-           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`.
+           :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
         therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
@@ -877,6 +879,8 @@ class UnitCell(Layer):
     def get_atom_ids(self):
         """get_atom_ids
 
+        Provides a list of atom ids within the unit cell.
+
         Returns:
             ids (list[str]): list of atom ids within unit cell
 
@@ -890,6 +894,8 @@ class UnitCell(Layer):
 
     def get_atom_positions(self, *args):
         """get_atom_positions
+
+        Calculates the relative positions of the atoms in the unit cell
 
         Returns:
             res (ndarray[float]): relative postion of the atoms within the unit
