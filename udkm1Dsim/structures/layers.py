@@ -30,8 +30,7 @@ from .atoms import Atom, AtomMixed
 from .. import u, Q_
 import numpy as np
 from inspect import isfunction
-from sympy import integrate, Symbol
-from sympy.utilities.lambdify import lambdify
+from sympy import integrate, lambdify, symbols, symarray
 from tabulate import tabulate
 
 
@@ -80,7 +79,7 @@ class Layer:
            and imagenary part :math:`n + i\kappa`.
         opt_ref_index_per_strain (ndarray[float]): optical refractive
            index change per strain - real and imagenary part
-           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`.
+           :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
         therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
@@ -101,8 +100,9 @@ class Layer:
     def __init__(self, id, name, **kwargs):
         self.id = id
         self.name = name
+        self.num_sub_systems = 1
         self.roughness = kwargs.get('roughness', 0*u.nm)
-        self.spring_const = np.array([0])
+        self.spring_const = np.array([0.0])
         self.deb_wal_fac = kwargs.get('deb_wal_fac', 0*u.m**2)
         self.sound_vel = kwargs.get('sound_vel', 0*u.m/u.s)
         self.phonon_damping = kwargs.get('phonon_damping', 0*u.kg/u.s)
@@ -152,8 +152,8 @@ class Layer:
         argument. Inputs can be strings, floats, ints, or pint quantaties.
 
         Args:
-            inputs (list[str, float, Quantity]): list of strings, floats, or
-                Pint quantities.
+            inputs (list[str, int, float, Quantity]): list of strings, int, floats,
+                or Pint quantities.
 
         Returns:
             (tuple):
@@ -166,24 +166,43 @@ class Layer:
         # if the input is not a list, we convert it to one
         if not isinstance(inputs, list):
             inputs = [inputs]
+        # update number of subsystems
+        K = self.num_sub_systems
+        k = len(inputs)
+        if k != K:
+            print('Number of subsystems changed from {:d} to {:d}.'.format(K, k))
+            self.num_sub_systems = k
+
+        T = symbols('T')
         # traverse each list element and convert it to a function handle
         for input in inputs:
             if isfunction(input):
                 raise ValueError('Please use string representation of function!')
             elif isinstance(input, str):
                 try:
-                    output.append(eval(input))
-                    output_strs.append(input)
+                    # backwards compatibility for direct lambda definition
+                    if ':' in input:
+                        # strip lambda prefix
+                        input = input.split(':')[1]
+                    # backwards compatibility for []-indexing
+                    input = input.replace('[', '_').replace(']', '')
+                    # check for presence of indexing and use symarray as argument
+                    if '_' in input:
+                        T = symarray('T', k)
+                        output.append(lambdify([T], input, modules='numpy'))
+                    else:
+                        output.append(lambdify(T, input, modules='numpy'))
+                    output_strs.append(input.strip())
                 except Exception as e:
                     print('String input for layer property ' + input + ' \
                         cannot be converted to function handle!')
                     print(e)
             elif isinstance(input, (int, float)):
-                output.append(eval('lambda T: {:f}'.format(input)))
-                output_strs.append('lambda T: {:f}'.format(input))
+                output.append(lambdify(T, input, modules='numpy'))
+                output_strs.append(str(input))
             elif isinstance(input, object):
-                output.append(eval('lambda T: {:f}'.format(input.to_base_units().magnitude)))
-                output_strs.append('lambda T: {:f}'.format(input.to_base_units().magnitude))
+                output.append(lambdify(T, input.to_base_units().magnitude, modules='numpy'))
+                output_strs.append(str(input.to_base_units().magnitude))
             else:
                 raise ValueError('Layer property input has to be a single or '
                                  'list of numerics, Quantities, or function handle strings '
@@ -239,6 +258,8 @@ class Layer:
     def get_acoustic_impedance(self):
         """get_acoustic_impedance
 
+        Calculates the acoustic impedance.
+
         Returns:
             Z (float): acoustic impedance.
 
@@ -270,7 +291,10 @@ class Layer:
             wavelength (Quantity): wavelength as Pint Quantitiy.
 
         """
-        self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
+        if np.imag(self.opt_ref_index) == 0:
+            self.opt_pen_depth = Q_(np.inf, u.m)
+        else:
+            self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
 
     def calc_spring_const(self):
         r"""calc_spring_const
@@ -278,7 +302,7 @@ class Layer:
         Calculates the spring constant of the layer from the mass per unit area,
         sound velocity and thickness
 
-        .. math:: k = m \, \left(\\frac{v}{c}\\right)^2
+        .. math:: k = m \, \left(\frac{v}{c}\right)^2
 
         """
         self.spring_const[0] = (self._mass_unit_area * (self._sound_vel/self._thickness)**2)
@@ -401,18 +425,17 @@ class Layer:
         else:
             self._int_heat_capacity = []
             self.int_heat_capacity_str = []
+            T = symbols('T')
             try:
-                T = Symbol('T')
                 for hcs in self.heat_capacity_str:
-                    integral = integrate(hcs.split(':')[1], T)
-                    self._int_heat_capacity.append(lambdify(T, integral))
-                    self.int_heat_capacity_str.append('lambda T : ' + str(integral))
-
+                    integral = integrate(hcs, T)
+                    self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
+                    self.int_heat_capacity_str.append(str(integral))
             except Exception as e:
                 print('The sympy integration did not work. You can set the '
                       'analytical anti-derivative of the heat capacity '
-                      'of your layer as lambda function of the temperature '
-                      'T by typing layer.int_heat_capacity = lambda T: c(T) '
+                      'of your layer as function str of the temperature '
+                      'T by typing layer.int_heat_capacity = \'c(T)\' '
                       'where layer is the name of the layer object.')
                 print(e)
 
@@ -438,22 +461,24 @@ class Layer:
 
     @property
     def int_lin_therm_exp(self):
-        self._int_lin_therm_exp = []
-        self.int_lin_therm_exp_str = []
-        try:
-            T = Symbol('T')
-            for ltes in self.lin_therm_exp_str:
-                integral = integrate(ltes.split(':')[1], T)
-                self._int_lin_therm_exp.append(lambdify(T, integral))
-                self.int_lin_therm_exp_str.append('lambda T : ' + str(integral))
-
-        except Exception as e:
-            print('The sympy integration did not work. You can set the '
-                  'analytical anti-derivative of the linear thermal expansion '
-                  'of your unit cells as lambda function of the temperature '
-                  'T by typing UC.int_lin_therm_exp = lambda T: c(T) '
-                  'where UC is the name of the unit cell object.')
-            print(e)
+        if hasattr(self, '_int_lin_therm_exp') and isinstance(self._int_lin_therm_exp, list):
+            return self._int_lin_therm_exp
+        else:
+            self._int_lin_therm_exp = []
+            self.int_lin_therm_exp_str = []
+            T = symbols('T')
+            try:
+                for ltes in self.lin_therm_exp_str:
+                    integral = integrate(ltes, T)
+                    self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
+                    self.int_lin_therm_exp_str.append(str(integral))
+            except Exception as e:
+                print('The sympy integration did not work. You can set the '
+                      'analytical anti-derivative of the linear thermal expansion '
+                      'of your unit cells as lambda function of the temperature '
+                      'T by typing layer.int_lin_therm_exp = \'c(T)\' '
+                      'where layer is the name of the layer object.')
+                print(e)
 
         return self._int_lin_therm_exp
 
@@ -519,7 +544,7 @@ class AmorphousLayer(Layer):
            and imagenary part :math:`n + i\kappa`.
         opt_ref_index_per_strain (ndarray[float]): optical refractive
            index change per strain - real and imagenary part
-           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`.
+           :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
         therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
@@ -647,7 +672,7 @@ class UnitCell(Layer):
            and imagenary part :math:`n + i\kappa`.
         opt_ref_index_per_strain (ndarray[float]): optical refractive
            index change per strain - real and imagenary part
-           :math:`\\frac{d n}{d \eta} + i\\frac{d \kappa}{d \eta}`.
+           :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
         therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
@@ -756,16 +781,16 @@ class UnitCell(Layer):
                     label = self.atoms[j][0].id
                     atoms_plotted[atom_ids.index(self.atoms[j][0].id)] = True
                     plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                             MarkerSize=10,
+                             markersize=10,
                              markeredgecolor=[0, 0, 0],
-                             markerfaceColor=colors[atom_ids.index(self.atoms[j][0].id)],
+                             markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
                              label=label)
                 else:
                     label = '_nolegend_'
                     plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                             MarkerSize=10,
+                             markersize=10,
                              markeredgecolor=[0, 0, 0],
-                             markerfaceColor=colors[atom_ids.index(self.atoms[j][0].id)],
+                             markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
                              label=label)
 
             plt.axis([0.1, self.num_atoms+0.9, -0.1, (1.1+np.max(strains))])
@@ -794,21 +819,26 @@ class UnitCell(Layer):
             position (float): relative position within unit cel [0 .. 1].
 
         """
+        s = symbols('s')
         position_str = ''
         # test the input type of the position
         if isfunction(position):
             raise ValueError('Please use string representation of function!')
         elif isinstance(position, str):
             try:
-                position_str = position
-                position = eval(position)
+                # backwards compatibility for direct lambda definition
+                if ':' in position:
+                    # strip lambda prefix
+                    position = position.split(':')[1]
+                position_str = position.strip()
+                position = lambdify(s, position, modules='numpy')
             except Exception as e:
                 print('String input for unit cell property ' + position + ' \
                     cannot be converted to function handle!')
                 print(e)
         elif isinstance(position, (int, float)):
-            position_str = 'lambda strain: {:e}*(strain+1)'.format(position)
-            position = eval(position_str)
+            position_str = str(position)
+            position = lambdify(s, position, modules='numpy')
         else:
             raise ValueError('Atom position input has to be a scalar, or string'
                              'which can be converted into a lambda function!')
@@ -849,6 +879,8 @@ class UnitCell(Layer):
     def get_atom_ids(self):
         """get_atom_ids
 
+        Provides a list of atom ids within the unit cell.
+
         Returns:
             ids (list[str]): list of atom ids within unit cell
 
@@ -862,6 +894,8 @@ class UnitCell(Layer):
 
     def get_atom_positions(self, *args):
         """get_atom_positions
+
+        Calculates the relative positions of the atoms in the unit cell
 
         Returns:
             res (ndarray[float]): relative postion of the atoms within the unit

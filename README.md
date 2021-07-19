@@ -38,7 +38,7 @@ The documentation can be found at [udkm1Dsim.readthedocs.io](http://udkm1Dsim.re
 Please cite the current preprint if you use the toolbox in your own work:
 
 D. Schick, *udkm1Dsim - A Python toolbox for simulating 1D ultrafast dynamics in condensed matter*,
-[arxiv:2102.12144 [physics.comp-ph] (2021)](https://arxiv.org/abs/2102.12144).
+[Comput. Phys. Commun. 266, 108031 (2021)](https://doi.org/10.1016/j.cpc.2021.108031) [(preprint)](https://arxiv.org/abs/2102.12144).
 
 You can also cite the original publication if appropriate:
 

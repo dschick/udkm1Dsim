@@ -360,7 +360,9 @@ class Heat(Simulation):
         return res, fluence, delay_pump, pulse_width
 
     def get_absorption_profile(self, distances=[]):
-        """get_absorption_profile
+        r"""get_absorption_profile
+
+        Returns the spatial absorption profile :math:`\mbox{d}A/\mbox{d}z`.
 
         Args:
             distances (ndarray[float], optional): spatial grid for calculation.
@@ -764,6 +766,7 @@ class Heat(Simulation):
         # initialize
         L = self.S.get_number_of_layers()
         K = self.S.num_sub_systems
+        F = len(self._excitation['fluence'])  # total number of excitations
 
         # there is an initial time step for the init_temp - we will remove it later on
         # check the initial temperature
@@ -818,10 +821,16 @@ class Heat(Simulation):
                 # either no excitation with temperature gradient or excitation with finite pulse
                 # duration
                 if np.sum(fluence) == 0:
-                    self.disp_message('Calculating _heat_diffusion_ ...')
+                    self.disp_message('Calculating _heat_diffusion_ without excitation...')
                 else:
-                    self.disp_message('Calculating _heat_diffusion_ for excitation ' +
-                                      '{:d}:{:d} ...'.format(num_ex, num_ex+len(fluence)-1))
+                    if len(fluence) == 1:
+                        self.disp_message('Calculating _heat_diffusion_ for excitation ' +
+                                          '{:d}:{:d} ...'.format(num_ex, F))
+                    elif len(fluence) > 1:
+                        self.disp_message('Calculating _heat_diffusion_ for excitation ' +
+                                          '{:d}-{:d}:{:d}...'.format(num_ex,
+                                                                     num_ex+len(fluence)-1,
+                                                                     F))
 
                 start = 0
                 stop = 0
@@ -948,7 +957,10 @@ class Heat(Simulation):
 
         d_distances = np.diff(distances)
         N = len(distances)
-        dalpha_dz = self.get_absorption_profile(distances)
+        if fluence != []:
+            dalpha_dz = self.get_absorption_profile(distances)
+        else:
+            dalpha_dz = np.zeros_like(distances)
 
         if self.backend == 'matlab':
             # use of matlab backend for heat diffusion calculation

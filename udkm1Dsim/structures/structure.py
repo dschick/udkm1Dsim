@@ -255,6 +255,8 @@ class Structure:
     def get_number_of_layers(self):
         """get_number_of_layers
 
+        Determines the number of all layers in the structure.
+
         Returns:
             L (int): number of all layers in the structure.
 
@@ -275,6 +277,8 @@ class Structure:
     def get_number_of_unique_layers(self):
         """get_number_of_unique_layers
 
+        Determines the number of unique layers in the structure.
+
         Returns:
             N (int): number of unique layers in the structure.
 
@@ -284,6 +288,8 @@ class Structure:
 
     def get_thickness(self, units=True):
         """get_thickness
+
+        Determines the thickness of the structure.
 
         Args:
             units (boolean, optional): whether units should be returned or not.
@@ -426,6 +432,8 @@ class Structure:
     def get_all_positions_per_unique_layer(self):
         """get_all_positions_per_unique_layer
 
+        Determines the position indices for each unique layer in the structure.
+
         Returns:
             pos (dict{ndarray[int]}): position indices for each unique layer in
             the structure.
@@ -472,6 +480,8 @@ class Structure:
     def get_distances_of_interfaces(self, units=True):
         """get_distances_of_interfaces
 
+        Calculates the distances of the interafaces of the structure.
+
         Args:
             units (boolean, optional): whether units should be returned or not.
                 Defaults to True.
@@ -492,6 +502,9 @@ class Structure:
 
     def interp_distance_at_interfaces(self, N, units=True):
         """ interp_distance_at_interfaces
+
+        Interpolates the distances at the layer interfaces by an odd number
+        :math:`N`.
 
         Args:
             N (int): number of point of interpolation at interface
@@ -610,6 +623,8 @@ class Structure:
 
     def get_layer_handle(self, i):
         """get_layer_handle
+
+        Returns the handle to a layer at a given position index.
 
         Args:
             i (int): index of the layer to return.
