@@ -2215,7 +2215,7 @@ class XrayDynMag(Xray):
             elif isinstance(layer, AmorphousLayer):
                 A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                     self.get_atom_boundary_phase_matrix(
-                        layer.atom, layer._density*(strains[i]+1), layer._thickness*(strains[i]+1),
+                        layer.atom, layer._density/(strains[i]+1), layer._thickness*(strains[i]+1),
                         force_recalc, magnetizations[i])
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
