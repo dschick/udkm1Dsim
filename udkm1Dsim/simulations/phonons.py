@@ -200,7 +200,7 @@ class Phonon(Simulation):
                 delta_temp_map[0, :] = temp
             elif (np.size(delta_temp_map, 0) != M) or (np.size(delta_temp_map, 1) != L):
                 raise ValueError('The given temperature difference map does not have the '
-                                 'dimension M x L, where K is the number of delay steps '
+                                 'dimension M x L, where M is the number of delay steps '
                                  'and L the number of layers!')
         else:
             if np.shape(delta_temp_map) == (1, L, K):
