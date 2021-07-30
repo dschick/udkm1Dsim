@@ -173,9 +173,9 @@ class Layer:
             print('Number of subsystems changed from {:d} to {:d}.'.format(K, k))
             self.num_sub_systems = k
 
-        T = symbols('T')
         # traverse each list element and convert it to a function handle
         for input in inputs:
+            T = symbols('T')
             if isfunction(input):
                 raise ValueError('Please use string representation of function!')
             elif isinstance(input, str):
