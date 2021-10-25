@@ -52,8 +52,10 @@ class Layer:
         sound_vel (float): sound velocity.
         phonon_damping (float): phonon damping.
         opt_pen_depth (float): optical penetration depth.
-        opt_ref_index (float): refractive index.
-        opt_ref_index_per_strain (float): change of refractive index per strain.
+        opt_ref_index (complex): refractive index.
+        opt_ref_index_per_strain (complex): change of refractive index per strain.
+        epsilon (complex): permittivity.
+        euler_angles (float): euler angles theta, phi, psi of the permittivity.
         heat_capacity (float): heat capacity.
         therm_cond (float): thermal conductivity.
         lin_therm_exp (float): linear thermal expansion.
@@ -80,6 +82,10 @@ class Layer:
         opt_ref_index_per_strain (ndarray[float]): optical refractive
            index change per strain - real and imagenary part
            :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
+        epsilon (list[@lambda]): list of photon frequency [Hz] dependent
+           permittivity elements xx, yy, zz.
+        euler_angles (list[float]): euler angles theta, phi, psi of the permittivity.
+        euler_matrix (ndarray[complex]): euler matrix for permittivity calculations.
         therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
@@ -109,10 +115,14 @@ class Layer:
         self.opt_pen_depth = kwargs.get('opt_pen_depth', 0*u.nm)
         self.opt_ref_index = kwargs.get('opt_ref_index', 0)
         self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0)
+        self.epsilon = kwargs.get('epsilon', 0)
+        self.euler_matrix = np.identity(3, dtype=np.complex128)
+        self.euler_angles = kwargs.get('euler_angles', [0, 0, 0]*u.deg)
         self.heat_capacity = kwargs.get('heat_capacity', 0)
         self.therm_cond = kwargs.get('therm_cond', 0)
         self.lin_therm_exp = kwargs.get('lin_therm_exp', 0)
         self.sub_system_coupling = kwargs.get('sub_system_coupling', 0)
+
 
         if len(self.heat_capacity) == len(self.therm_cond) \
                 == len(self.lin_therm_exp) == len(self.sub_system_coupling):
@@ -138,6 +148,8 @@ class Layer:
                   ['opt. pen. depth', self.opt_pen_depth.to('nm')],
                   ['opt. refractive index', self.opt_ref_index],
                   ['opt. ref. index/strain', self.opt_ref_index_per_strain],
+                  ['epsilon', self.epsilon],
+                  ['euler angles', self.euler_angles],
                   ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
                   ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
                   ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
@@ -235,7 +247,8 @@ class Layer:
                                'xray': ['num_atoms', '_area', '_mass', '_deb_wal_fac',
                                         '_thickness'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
-                                           'opt_ref_index_per_strain', 'epsilon', '_thickness'],
+                                           'opt_ref_index_per_strain', 'epsilon', 'euler_angles',
+                                           '_thickness'],
                                'magnetic': ['_thickness', 'magnetization'],
                                }
 
@@ -390,6 +403,64 @@ class Layer:
         self._opt_pen_depth = opt_pen_depth.to_base_units().magnitude
 
     @property
+    def epsilon(self):
+        return self._epsilon
+
+    @epsilon.setter
+    def epsilon(self, epsilon):
+        if not type(epsilon) is list:
+            epsilon = [epsilon]
+        self._epsilon = [0, 0, 0]
+        if epsilon[0] != 0:
+            if isfunction(epsilon[0]):
+                self._epsilon[0] = epsilon[0]
+            else:
+                self._epsilon[0] = lambda f: epsilon[0]*np.ones_like(f)
+        else:
+            self._epsilon[0] = lambda f: (1.0 + 0.0j)*np.ones_like(f)
+        try:
+            if isfunction(epsilon[1]):
+                self._epsilon[1] = epsilon[1]
+            else:
+                self._epsilon[1] = lambda f: epsilon[1]*np.ones_like(f)
+        except IndexError:
+            self._epsilon[1] = epsilon[0]
+        try:
+            if isfunction(epsilon[2]):
+                self._epsilon[2] = epsilon[2]
+            else:
+                self._epsilon[2] = lambda f: epsilon[2]*np.ones_like(f)
+        except IndexError:
+            self._epsilon[2] = epsilon[0]
+
+    @property
+    def euler_angles(self):
+        res = []
+        for eu in self._euler_angles:
+            res.append(Q_(eu, u.rad).to('deg'))
+        return res
+
+    @euler_angles.setter
+    def euler_angles(self, euler_angles):
+        self._euler_angles = []
+        for eu in euler_angles:
+            self._euler_angles.append(eu.to_base_units().magnitude)
+
+        theta = self._euler_angles[0]
+        phi = self._euler_angles[1]
+        psi = self._euler_angles[2]
+
+        self.euler_matrix[0, 0] = np.cos(psi) * np.cos(phi) - np.cos(theta) * np.sin(phi) * np.sin(psi)
+        self.euler_matrix[0, 1] = -np.sin(psi) * np.cos(phi) - np.cos(theta) * np.sin(phi) * np.cos(psi)
+        self.euler_matrix[0, 2] = np.sin(theta) * np.sin(phi)
+        self.euler_matrix[1, 0] = np.cos(psi) * np.sin(phi) + np.cos(theta) * np.cos(phi) * np.sin(psi)
+        self.euler_matrix[1, 1] = -np.sin(psi) * np.sin(phi) + np.cos(theta) * np.cos(phi) * np.cos(psi)
+        self.euler_matrix[1, 2] = -np.sin(theta) * np.cos(phi)
+        self.euler_matrix[2, 0] = np.sin(theta) * np.sin(psi)
+        self.euler_matrix[2, 1] = np.sin(theta) * np.cos(psi)
+        self.euler_matrix[2, 2] = np.cos(theta)
+
+    @property
     def roughness(self):
         return Q_(self._roughness, u.meter).to('nm')
 
@@ -496,6 +567,13 @@ class Layer:
         self._sub_system_coupling, self.sub_system_coupling_str = \
             self.check_input(sub_system_coupling)
 
+    def get_epsilon_matrix(self, f):
+        epsilon_matrix = np.zeros((len(f), 3, 3), dtype=np.complex128)
+        epsilon_matrix[:, 0, 0] = self._epsilon[0](f)
+        epsilon_matrix[:, 1, 1] = self._epsilon[1](f)
+        epsilon_matrix[:, 2, 2] = self._epsilon[2](f)
+        return np.matmul(np.linalg.inv(self.euler_matrix),
+                         np.matmul(epsilon_matrix, self.euler_matrix))
 
 class AmorphousLayer(Layer):
     r"""AmorphousLayer
