@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag']
+__all__ = ['Scattering', 'XrayKin', 'XrayDyn', 'XrayDynMag']
 
 __docformat__ = 'restructuredtext'
 
@@ -39,10 +39,10 @@ from tqdm.notebook import trange
 r_0 = constants.physical_constants['classical electron radius'][0]
 
 
-class Xray(Simulation):
+class Scattering(Simulation):
     r"""Xray
 
-    Base class for all X-ray scattering simulations.
+    Base class for all light scattering simulations.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -290,7 +290,90 @@ class Xray(Simulation):
         self.update_experiment('qz')
 
 
-class XrayKin(Xray):
+class GTM(Scattering):
+    r"""GTM
+
+    General Transfer Matrix scattering simulations.
+
+    Adapted from pyGTM
+
+    Args:
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
+
+    Keyword Args:
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+
+    Attributes:
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): incidence angles :math:`\theta` of scattering
+            light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
+
+    """
+
+    def __init__(self, S, force_recalc, **kwargs):
+        super().__init__(S, force_recalc, **kwargs)
+
+    def __str__(self):
+        """String representation of this class"""
+        class_str = 'General Transfer Matrix scattering simulation properties:\n\n'
+        class_str += super().__str__()
+        return class_str
+
+    def get_hash(self, **kwargs):
+        """get_hash
+
+        Calculates an unique hash given by the energy :math:`E`, :math:`q_z`
+        range, polarization states as well as the sample structure hash for
+        relevant scattering parameters. Optionally, part of the
+        ``strain_map`` is used.
+
+        Args:
+            **kwargs (ndarray[float]): spatio-temporal strain profile.
+
+        Returns:
+            hash (str): unique hash.
+
+        """
+        param = [self._qz, self._energy]
+
+        if 'strain_map' in kwargs:
+            strain_map = kwargs.get('strain_map')
+            if np.size(strain_map) > 1e6:
+                strain_map = strain_map.flatten()[0:1000000]
+            param.append(strain_map)
+
+        return self.S.get_hash(types=['optical']) + '_' + make_hash_md5(param)
+
+    def set_polarization(self, pol_in_state, pol_out_state):
+        """set_polarization
+
+        Sets the incoming and analyzer (outgoing) polarization. This is not
+        supported as the GTM always calculates s- and p-polarization.
+
+        Args:
+            pol_in_state (int): incoming polarization state id.
+            pol_out_state (int): outgoing polarization state id.
+
+        """
+        pass
+
+
+class XrayKin(Scattering):
     r"""XrayKin
 
     Kinetic X-ray scattering simulations.
@@ -657,7 +740,7 @@ class XrayKin(Xray):
         return Ep
 
 
-class XrayDyn(Xray):
+class XrayDyn(Scattering):
     r"""XrayDyn
 
     Dynamical X-ray scattering simulations.
@@ -1499,7 +1582,7 @@ class XrayDyn(Xray):
         return np.abs(M[:, :, 0, 1]/M[:, :, 1, 1])**2
 
 
-class XrayDynMag(Xray):
+class XrayDynMag(Scattering):
     r"""XrayDynMag
 
     Dynamical magnetic X-ray scattering simulations.
