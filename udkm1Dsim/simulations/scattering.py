@@ -356,6 +356,8 @@ class GTM(Scattering):
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
+        self.qsd_thr = 1e-10  # threshold for wavevector comparison
+        self.zero_thr = 1e-10  # threshold for eigenvalue comparison to zero
 
     def __str__(self):
         """String representation of this class"""
@@ -454,18 +456,26 @@ class GTM(Scattering):
         S[:, :, 0, 1] = M[:, :, 0, 1] + M[:, :, 0, 2]*a[:, :, 2, 1] + M[:, :, 0, 5]*a[:, :, 5, 1]
         S[:, :, 0, 2] = M[:, :, 0, 3] + M[:, :, 0, 2]*a[:, :, 2, 3] + M[:, :, 0, 5]*a[:, :, 5, 3]
         S[:, :, 0, 3] = M[:, :, 0, 4] + M[:, :, 0, 2]*a[:, :, 2, 4] + M[:, :, 0, 5]*a[:, :, 5, 4]
-        S[:, :, 1, 0] = M[:, :, 1, 0] + M[:, :, 1, 2]*a[:, :, 2, 0] + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 0]
-        S[:, :, 1, 1] = M[:, :, 1, 1] + M[:, :, 1, 2]*a[:, :, 2, 1] + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 1]
-        S[:, :, 1, 2] = M[:, :, 1, 3] + M[:, :, 1, 2]*a[:, :, 2, 3] + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 3]
-        S[:, :, 1, 3] = M[:, :, 1, 4] + M[:, :, 1, 2]*a[:, :, 2, 4] + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 4]
+        S[:, :, 1, 0] = M[:, :, 1, 0] + M[:, :, 1, 2]*a[:, :, 2, 0] \
+            + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 0]
+        S[:, :, 1, 1] = M[:, :, 1, 1] + M[:, :, 1, 2]*a[:, :, 2, 1] \
+            + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 1]
+        S[:, :, 1, 2] = M[:, :, 1, 3] + M[:, :, 1, 2]*a[:, :, 2, 3] \
+            + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 3]
+        S[:, :, 1, 3] = M[:, :, 1, 4] + M[:, :, 1, 2]*a[:, :, 2, 4] \
+            + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 4]
         S[:, :, 2, 0] = M[:, :, 3, 0] + M[:, :, 3, 2]*a[:, :, 2, 0] + M[:, :, 3, 5]*a[:, :, 5, 0]
         S[:, :, 2, 1] = M[:, :, 3, 1] + M[:, :, 3, 2]*a[:, :, 2, 1] + M[:, :, 3, 5]*a[:, :, 5, 1]
         S[:, :, 2, 2] = M[:, :, 3, 3] + M[:, :, 3, 2]*a[:, :, 2, 3] + M[:, :, 3, 5]*a[:, :, 5, 3]
         S[:, :, 2, 3] = M[:, :, 3, 4] + M[:, :, 3, 2]*a[:, :, 2, 4] + M[:, :, 3, 5]*a[:, :, 5, 4]
-        S[:, :, 3, 0] = M[:, :, 4, 0] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 0] + M[:, :, 4, 5]*a[:, :, 5, 0]
-        S[:, :, 3, 1] = M[:, :, 4, 1] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 1] + M[:, :, 4, 5]*a[:, :, 5, 1]
-        S[:, :, 3, 2] = M[:, :, 4, 3] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 3] + M[:, :, 4, 5]*a[:, :, 5, 3]
-        S[:, :, 3, 3] = M[:, :, 4, 4] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 4] + M[:, :, 4, 5]*a[:, :, 5, 4]
+        S[:, :, 3, 0] = M[:, :, 4, 0] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 0] \
+            + M[:, :, 4, 5]*a[:, :, 5, 0]
+        S[:, :, 3, 1] = M[:, :, 4, 1] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 1] \
+            + M[:, :, 4, 5]*a[:, :, 5, 1]
+        S[:, :, 3, 2] = M[:, :, 4, 3] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 3] \
+            + M[:, :, 4, 5]*a[:, :, 5, 3]
+        S[:, :, 3, 3] = M[:, :, 4, 4] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 4] \
+            + M[:, :, 4, 5]*a[:, :, 5, 4]
 
         # Delta Matrix from eqn (8)
         Delta[:, :, 0, 0] = S[:, :, 3, 0]
@@ -487,6 +497,139 @@ class GTM(Scattering):
 
         return M, a, b, S, Delta
 
+    def calculate_layer_q(self, layer, zeta):
+        """
+        Calculates the 4 out-of-plane wavevectors for the current layer.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        From this we also get the Poynting vectors.
+        Wavevectors are sorted according to (trans-p, trans-s, refl-p, refl-s)
+        Birefringence is determined according to a threshold value `qsd_thr` 
+        set at the beginning of the script.
+        """
+
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        M, a, b, S, Delta = self.calculate_layer_matrices(layer, zeta)
+
+        qs = np.zeros((N, K, 4), dtype=np.complex128)  # out of plane wavevector
+        Py = np.zeros((N, K, 3, 4), dtype=np.complex128)  # Poyting vector
+        # Stores the Berreman modes, used for birefringent layers
+        Berreman = np.zeros((N, K, 4, 3), dtype=np.complex128)
+        Berreman_unsorted = np.zeros((N, K, 4, 3), dtype=np.complex128)
+
+        transmode = np.zeros((N, K, 2), dtype=np.int64)
+        reflmode = np.zeros((N, K, 2), dtype=np.int64)
+
+        # eigenvals // eigenvects as of eqn (11)
+        qs_unsorted, psi_unsorted = np.linalg.eig(Delta)
+        # remove extremely small real/imaginary parts that are due to
+        # numerical inaccuracy
+        select = np.logical_and(np.abs(np.imag(qs_unsorted)) > 0,
+                                np.abs(np.imag(qs_unsorted)) < self.zero_thr)
+        qs_unsorted[select] = np.real(qs_unsorted[select]) + 0.0j
+
+        select = np.logical_and(np.abs(np.real(qs_unsorted)) > 0,
+                                np.abs(np.real(qs_unsorted)) < self.zero_thr)
+        qs_unsorted[select] = 0.0 + 1.0j*np.imag(qs_unsorted[select])
+
+        select = np.logical_and(np.abs(np.real(psi_unsorted)) > 0,
+                                np.abs(np.real(psi_unsorted)) < self.zero_thr)
+        psi_unsorted[select] = 0.0 + 1.0j*np.imag(psi_unsorted[select])
+
+        select = np.logical_and(np.abs(np.imag(psi_unsorted)) > 0,
+                                np.abs(np.imag(psi_unsorted)) < self.zero_thr)
+        psi_unsorted[select] = np.real(psi_unsorted[select]) + 0.0j
+
+        # sort berremann qi's according to (12)
+        transmode[:, :, 0] = np.reshape(np.where(
+            np.logical_and(np.iscomplex(qs_unsorted), np.imag(qs_unsorted) >= 0))[2], (N, K))
+        transmode[:, :, 1] = np.reshape(np.where(
+            np.logical_and(np.isreal(qs_unsorted), np.real(qs_unsorted) >= 0))[2], (N, K))
+        reflmode[:, :, 0] = np.reshape(np.where(
+            np.logical_and(np.iscomplex(qs_unsorted), np.imag(qs_unsorted) < 0))[2], (N, K))
+        reflmode[:, :, 1] = np.reshape(np.where(
+            np.logical_and(np.isreal(qs_unsorted), np.real(qs_unsorted) < 0))[2], (N, K))
+
+        # Calculate the Poyting vector for each Psi using (16-18)
+        for km in range(0, 4):
+            Ex = psi_unsorted[:, :, 0, km]
+            Ey = psi_unsorted[:, :, 2, km]
+            Hx = -psi_unsorted[:, :, 3, km]
+            Hy = psi_unsorted[:, :, 1, km]
+            # from eqn (17)
+            Ez = a[:, :, 2, 0]*Ex + a[:, :, 2, 1]*Ey + a[:, :, 2, 3]*Hx + a[:, :, 2, 4]*Hy
+            # from eqn (18)
+            Hz = a[:, :, 5, 0]*Ex + a[:, :, 5, 1]*Ey + a[:, :, 5, 3]*Hx + a[:, :, 5, 4]*Hy
+            # and from (16)
+            Py[:, :, 0, km] = Ey*Hz-Ez*Hy
+            Py[:, :, 1, km] = Ez*Hx-Ex*Hz
+            Py[:, :, 2, km] = Ex*Hy-Ey*Hx
+            # Berreman modes (unsorted) in case they are needed later (birefringence)
+            Berreman_unsorted[:, :, km, 0] = Ex
+            Berreman_unsorted[:, :, km, 1] = Ey
+            Berreman_unsorted[:, :, km, 2] = Ez
+        # check Cp using either the Poynting vector for birefringent
+        # materials or the electric field vector for non-birefringent
+        # media to sort the modes
+
+        # first calculate Cp for transmitted waves
+        Cp_t1 = np.abs(Py[0, transmode[0]])**2/(np.abs(Py[0, transmode[0]])**2
+                                                + np.abs(Py[1, transmode[0]])**2)
+        Cp_t2 = np.abs(Py[0, transmode[1]])**2/(np.abs(Py[0, transmode[1]])**2
+                                                + np.abs(Py[1, transmode[1]])**2)
+
+        if np.abs(Cp_t1-Cp_t2) > self.qsd_thr:  # birefringence
+            # sets _useBerreman fo the calculation of gamma matrix below
+            layer._useBerreman = True
+            if Cp_t2 > Cp_t1:
+                transmode = np.flip(transmode, 0)  # flip the two values
+            # then calculate for reflected waves if necessary
+            Cp_r1 = np.abs(Py[0, reflmode[1]])**2/(np.abs(Py[0, reflmode[1]])**2
+                                                   + np.abs(Py[1, reflmode[1]])**2)
+            Cp_r2 = np.abs(Py[0, reflmode[0]])**2/(np.abs(Py[0, reflmode[0]])**2
+                                                   + np.abs(Py[1, reflmode[0]])**2)
+            if Cp_r1 > Cp_r2:
+                reflmode = np.flip(reflmode, 0)  # flip the two values
+
+        else:  # No birefringence, use the Electric field s-pol/p-pol
+            Cp_te1 = np.abs(psi_unsorted[0, transmode[1]])**2/(np.abs(psi_unsorted[0, transmode[1]])**2
+                                                              + np.abs(psi_unsorted[2, transmode[1]])**2)
+            Cp_te2 = np.abs(psi_unsorted[0, transmode[0]])**2/(np.abs(psi_unsorted[0, transmode[0]])**2
+                                                              + np.abs(psi_unsorted[2, transmode[0]])**2)
+            if Cp_te1>Cp_te2:
+                transmode = np.flip(transmode,0) ## flip the two values
+            Cp_re1 = np.abs(psi_unsorted[0, reflmode[1]])**2/(np.abs(psi_unsorted[0, reflmode[1]])**2
+                                                             + np.abs(psi_unsorted[2, reflmode[1]])**2)
+            Cp_re2 = np.abs(psi_unsorted[0, reflmode[0]])**2/(np.abs(psi_unsorted[0, reflmode[0]])**2
+                                                             + np.abs(psi_unsorted[2, reflmode[0]])**2)
+            if Cp_re1>Cp_re2:
+                reflmode = np.flip(reflmode, 0)  # flip the two values
+
+        # finally store the sorted version
+        # q is (trans-p, trans-s, refl-p, refl-s)
+        qs[0] = qs_unsorted[transmode[0]]
+        qs[1] = qs_unsorted[transmode[1]]
+        qs[2] = qs_unsorted[reflmode[0]]
+        qs[3] = qs_unsorted[reflmode[1]]
+        Py_temp = Py.copy()
+        Py[:, 0] = Py_temp[:, transmode[0]]
+        Py[:, 1] = Py_temp[:, transmode[1]]
+        Py[:, 2] = Py_temp[:, reflmode[0]]
+        Py[:, 3] = Py_temp[:, reflmode[1]]
+        # Store the (sorted) Berreman modes
+        Berreman[0] = Berreman_unsorted[transmode[0], :]
+        Berreman[1] = Berreman_unsorted[transmode[1], :]
+        Berreman[2] = Berreman_unsorted[reflmode[0], :]
+        Berreman[3] = Berreman_unsorted[reflmode[1], :]
+
+        return qs, Py, Berreman
 
 class XrayKin(Scattering):
     r"""XrayKin
