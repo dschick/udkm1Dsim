@@ -64,6 +64,7 @@ class Scattering(Simulation):
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
         energy (ndarray[float]): photon energies :math:`E` of scattering light
+        frequency (ndarray[float]): photon frequency :math:`f` of scattering light
         wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
         k (ndarray[float]): wavenumber :math:`k` of scattering light
         theta (ndarray[float]): incidence angles :math:`\theta` of scattering
@@ -82,6 +83,7 @@ class Scattering(Simulation):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self._energy = np.array([])
+        self._frequency = np.array([])
         self._wl = np.array([])
         self._k = np.array([])
         self._theta = np.zeros([1, 1])
@@ -103,6 +105,8 @@ class Scattering(Simulation):
         """String representation of this class"""
         output = [['energy', self.energy[0] if np.size(self.energy) == 1 else
                    '{:f} .. {:f}'.format(np.min(self.energy), np.max(self.energy))],
+                  ['frequency', self.frequency[0] if np.size(self.frequency) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.frequency), np.max(self.frequency))],
                   ['wavelength', self.wl[0] if np.size(self.wl) == 1 else
                    '{:f} .. {:f}'.format(np.min(self.wl), np.max(self.wl))],
                   ['wavenumber', self.k[0] if np.size(self.k) == 1 else
@@ -221,24 +225,40 @@ class Scattering(Simulation):
         if caller != 'energy':
             if caller == 'wl':  # calc energy from wavelength
                 self._energy = Q_((constants.h*constants.c)/self._wl, 'J').to('eV').magnitude
-            elif caller == 'k':  # calc energy von wavevector
+            elif caller == 'k':  # calc energy from wavevector
                 self._energy = \
                     Q_((constants.h*constants.c)/(2*np.pi/self._k), 'J').to('eV').magnitude
+            elif caller == 'frequency':  # calc energy from frequency
+                self._energy = \
+                    Q_(constants.h*self._frequency, 'J').to('eV').magnitude
         if caller != 'wl':
             if caller == 'energy':  # calc wavelength from energy
                 self._wl = (constants.h*constants.c)/self.energy.to('J').magnitude
             elif caller == 'k':  # calc wavelength from wavevector
                 self._wl = 2*np.pi/self._k
+            elif caller == 'frequency':  # calc wavelength from frequency
+                self._wl = constants.c/self._frequency
         if caller != 'k':
             if caller == 'energy':  # calc wavevector from energy
                 self._k = 2*np.pi/self._wl
             elif caller == 'wl':  # calc wavevector from wavelength
                 self._k = 2*np.pi/self._wl
+            elif caller == 'frequency':  # calc wavevector from frequency
+                self._k = 2*np.pi*self._frequency/constants.c
+        if caller != 'frequency':
+            if caller == 'energy':  # calc frequency from energy
+                self._frequency = self.energy.to('J').magnitude/constants.h
+            elif caller == 'wl':  # calc frequency from wavelength
+                self._frequency = constants.c/self._wl
+            elif caller == 'k':  # calc frequency from wavevector
+                self._frequency = self._k*constants.c/(2*np.pi)
 
         if caller != 'theta':
             self._theta = np.arcsin(np.outer(self._wl, self._qz[0, :])/np.pi/4)
         if caller != 'qz':
             self._qz = np.outer(2*self._k, np.sin(self._theta[0, :]))
+
+        self._zeta = np.sin(self._theta)
 
     @property
     def energy(self):
@@ -248,6 +268,15 @@ class Scattering(Simulation):
     def energy(self, energy):
         self._energy = np.array(energy.to('eV').magnitude, ndmin=1)
         self.update_experiment('energy')
+
+    @property
+    def frequency(self):
+        return Q_(self._frequency, u.Hz)
+
+    @frequency.setter
+    def frequency(self, frequency):
+        self._frequency = np.array(frequency.to('Hz').magnitude, ndmin=1)
+        self.update_experiment('frequency')
 
     @property
     def wl(self):
@@ -371,6 +400,92 @@ class GTM(Scattering):
 
         """
         pass
+
+    def calculate_layer_matrices(self, layer, zeta):
+        """
+        Calculate the principal matrices necessary for the GTM algorithm.
+
+        Parameters
+        ----------
+        zeta : complex
+             In-plane reduced wavevector kx/k0 in the system.
+
+        Returns
+        -------
+             None
+
+        Notes
+        -----
+        Note that zeta is conserved through the whole system and set externally
+        using the angle of incidence and `System.superstrate.epsilon[0,0]` value
+
+        Requires prior execution of :py:func:`calculate_epsilon`
+
+        """
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        M = np.zeros((N, K, 6, 6), dtype=np.complex128)  # constitutive relations
+        a = np.zeros((N, K, 6, 6), dtype=np.complex128)
+        S = np.zeros((N, K, 4, 4), dtype=np.complex128)
+        Delta = np.zeros((N, K, 4, 4), dtype=np.complex128)
+
+        # Constitutive matrix (see e.g. eqn (4))
+        M[:, :, 0:3, 0:3] = np.repeat(np.expand_dims(
+            layer.get_epsilon_matrix(self._frequency), 1), K, 1)
+        M[:, :, 3:6, 3:6] = np.identity(3)
+
+        # from eqn (10)
+        b = M[:, :, 2, 2]*M[:, :, 5, 5] - M[:, :, 2, 5]*M[:, :, 5, 2]
+
+        # a matrix from eqn (9)
+        a[:, :, 2, 0] = (M[:, :, 5, 0]*M[:, :, 2, 5] - M[:, :, 2, 0]*M[:, :, 5, 5])/b
+        a[:, :, 2, 1] = ((M[:, :, 5, 1]-zeta)*M[:, :, 2, 5] - M[:, :, 2, 1]*M[:, :, 5, 5])/b
+        a[:, :, 2, 3] = (M[:, :, 5, 3]*M[:, :, 2, 5] - M[:, :, 2, 3]*M[:, :, 5, 5])/b
+        a[:, :, 2, 4] = (M[:, :, 5, 4]*M[:, :, 2, 5] - (M[:, :, 2, 4]+zeta)*M[:, :, 5, 5])/b
+        a[:, :, 5, 0] = (M[:, :, 5, 2]*M[:, :, 2, 0] - M[:, :, 2, 2]*M[:, :, 5, 0])/b
+        a[:, :, 5, 1] = (M[:, :, 5, 2]*M[:, :, 2, 1] - M[:, :, 2, 2]*(M[:, :, 5, 1]-zeta))/b
+        a[:, :, 5, 3] = (M[:, :, 5, 2]*M[:, :, 2, 3] - M[:, :, 2, 2]*M[:, :, 5, 3])/b
+        a[:, :, 5, 4] = (M[:, :, 5, 2]*(M[:, :, 2, 4]+zeta) - M[:, :, 2, 2]*M[:, :, 5, 4])/b
+
+        # S Matrix (Don't know where it comes from since Delta is just S re-ordered)
+        # Note that after this only Delta is used
+        S[:, :, 0, 0] = M[:, :, 0, 0] + M[:, :, 0, 2]*a[:, :, 2, 0] + M[:, :, 0, 5]*a[:, :, 5, 0]
+        S[:, :, 0, 1] = M[:, :, 0, 1] + M[:, :, 0, 2]*a[:, :, 2, 1] + M[:, :, 0, 5]*a[:, :, 5, 1]
+        S[:, :, 0, 2] = M[:, :, 0, 3] + M[:, :, 0, 2]*a[:, :, 2, 3] + M[:, :, 0, 5]*a[:, :, 5, 3]
+        S[:, :, 0, 3] = M[:, :, 0, 4] + M[:, :, 0, 2]*a[:, :, 2, 4] + M[:, :, 0, 5]*a[:, :, 5, 4]
+        S[:, :, 1, 0] = M[:, :, 1, 0] + M[:, :, 1, 2]*a[:, :, 2, 0] + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 0]
+        S[:, :, 1, 1] = M[:, :, 1, 1] + M[:, :, 1, 2]*a[:, :, 2, 1] + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 1]
+        S[:, :, 1, 2] = M[:, :, 1, 3] + M[:, :, 1, 2]*a[:, :, 2, 3] + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 3]
+        S[:, :, 1, 3] = M[:, :, 1, 4] + M[:, :, 1, 2]*a[:, :, 2, 4] + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 4]
+        S[:, :, 2, 0] = M[:, :, 3, 0] + M[:, :, 3, 2]*a[:, :, 2, 0] + M[:, :, 3, 5]*a[:, :, 5, 0]
+        S[:, :, 2, 1] = M[:, :, 3, 1] + M[:, :, 3, 2]*a[:, :, 2, 1] + M[:, :, 3, 5]*a[:, :, 5, 1]
+        S[:, :, 2, 2] = M[:, :, 3, 3] + M[:, :, 3, 2]*a[:, :, 2, 3] + M[:, :, 3, 5]*a[:, :, 5, 3]
+        S[:, :, 2, 3] = M[:, :, 3, 4] + M[:, :, 3, 2]*a[:, :, 2, 4] + M[:, :, 3, 5]*a[:, :, 5, 4]
+        S[:, :, 3, 0] = M[:, :, 4, 0] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 0] + M[:, :, 4, 5]*a[:, :, 5, 0]
+        S[:, :, 3, 1] = M[:, :, 4, 1] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 1] + M[:, :, 4, 5]*a[:, :, 5, 1]
+        S[:, :, 3, 2] = M[:, :, 4, 3] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 3] + M[:, :, 4, 5]*a[:, :, 5, 3]
+        S[:, :, 3, 3] = M[:, :, 4, 4] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 4] + M[:, :, 4, 5]*a[:, :, 5, 4]
+
+        # Delta Matrix from eqn (8)
+        Delta[:, :, 0, 0] = S[:, :, 3, 0]
+        Delta[:, :, 0, 1] = S[:, :, 3, 3]
+        Delta[:, :, 0, 2] = S[:, :, 3, 1]
+        Delta[:, :, 0, 3] = - S[:, :, 3, 2]
+        Delta[:, :, 1, 0] = S[:, :, 0, 0]
+        Delta[:, :, 1, 1] = S[:, :, 0, 3]
+        Delta[:, :, 1, 2] = S[:, :, 0, 1]
+        Delta[:, :, 1, 3] = - S[:, :, 0, 2]
+        Delta[:, :, 2, 0] = -S[:, :, 2, 0]
+        Delta[:, :, 2, 1] = -S[:, :, 2, 3]
+        Delta[:, :, 2, 2] = -S[:, :, 2, 1]
+        Delta[:, :, 2, 3] = S[:, :, 2, 2]
+        Delta[:, :, 3, 0] = S[:, :, 1, 0]
+        Delta[:, :, 3, 1] = S[:, :, 1, 3]
+        Delta[:, :, 3, 2] = S[:, :, 1, 1]
+        Delta[:, :, 3, 3] = -S[:, :, 1, 2]
+
+        return M, a, b, S, Delta
 
 
 class XrayKin(Scattering):
