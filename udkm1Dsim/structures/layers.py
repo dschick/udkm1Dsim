@@ -123,7 +123,6 @@ class Layer:
         self.lin_therm_exp = kwargs.get('lin_therm_exp', 0)
         self.sub_system_coupling = kwargs.get('sub_system_coupling', 0)
 
-
         if len(self.heat_capacity) == len(self.therm_cond) \
                 == len(self.lin_therm_exp) == len(self.sub_system_coupling):
             self.num_sub_systems = len(self.heat_capacity)
@@ -424,14 +423,14 @@ class Layer:
             else:
                 self._epsilon[1] = lambda f: epsilon[1]*np.ones_like(f)
         except IndexError:
-            self._epsilon[1] = epsilon[0]
+            self._epsilon[1] = self._epsilon[0]
         try:
             if isfunction(epsilon[2]):
                 self._epsilon[2] = epsilon[2]
             else:
                 self._epsilon[2] = lambda f: epsilon[2]*np.ones_like(f)
         except IndexError:
-            self._epsilon[2] = epsilon[0]
+            self._epsilon[2] = self._epsilon[0]
 
     @property
     def euler_angles(self):
