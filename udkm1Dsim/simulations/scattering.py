@@ -560,7 +560,7 @@ class GTM(Scattering):
             transmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
             transmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
 
-            idx0, idx1, idx2 = np.where(np.resl(qs_unsorted) < 0)
+            idx0, idx1, idx2 = np.where(np.real(qs_unsorted) < 0)
             reflmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
             reflmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
 
@@ -911,6 +911,463 @@ class GTM(Scattering):
         Ti = m_times_n(Ai, m_times_n(Ki, Ai_inv))
 
         return Ai, Ki, Ai_inv, Ti
+
+    def calculate_GammaStar(self, zeta):
+        """
+        Calculate the whole system's transfer matrix.
+
+        Parameters
+        -----------
+        f : float
+            Frequency (Hz)
+        zeta_sys : complex
+            In-plane wavevector kx/k0
+
+        Returns
+        -------
+        GammaStar: 4x4 complex matrix
+                   System transfer matrix :math:`\Gamma^{*}`
+        """
+
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        Ai_super, Ki_super, Ai_inv_super, T_super = self.calculate_layer_transfer_matrix(
+            self.S.get_layer_handle(0), zeta)
+        Ai_sub, Ki_sub, Ai_inv_sub, T_sub = self.calculate_layer_transfer_matrix(
+            self.S.get_layer_handle(-1), zeta)
+
+        Delta1234 = np.tile(np.array([[1, 0, 0, 0],
+                                     [0, 0, 1, 0],
+                                     [0, 1, 0, 0],
+                                     [0, 0, 0, 1]])[np.newaxis, np.newaxis, :, :], [N, K, 1, 1])
+        Gamma = np.zeros((N, K, 4), dtype=np.complex128)
+        GammaStar = np.zeros((N, K, 4), dtype=np.complex128)
+
+        Tloc = np.tile(np.identity(4, dtype=np.complex128)[np.newaxis, np.newaxis, :, :],
+                       [N, K, 1, 1])
+
+        for ii in range(self.S.get_number_of_layers())[-2:0:-1]:
+            print(ii)
+            Ai, Ki, Ai_inv, T_ii = self.calculate_layer_transfer_matrix(
+                self.S.get_layer_handle(ii), zeta)
+            Tloc = m_times_n(T_ii, Tloc)
+
+        Gamma = m_times_n(Ai_inv_super, m_times_n(Tloc, Ai_sub))
+        GammaStar = m_times_n(np.linalg.inv(Delta1234),
+                              m_times_n(Gamma, Delta1234))
+
+        return GammaStar
+
+    # def calculate_r_t(self, zeta_sys, GammaStar):
+    #     """ Calculate various field and intensity reflection and transmission
+    #     coefficients, as well as the 4-valued vector of transmitted field.
+
+    #     Parameters
+    #     -----------
+    #     zeta_sys : complex
+    #         Incident in-plane wavevector
+    #     Returns
+    #     -------
+    #     r_out : len(4)-array
+    #             Complex *field* reflection coefficients r_out=([rpp,rps,rss,rsp])
+    #     R_out : len(4)-array
+    #             Real *intensity* reflection coefficients R_out=([Rpp,Rss,Rsp,Tps])
+    #     t_out : len(4)-array
+    #             Complex *field* transmition coefficients t=([tpp, tps, tsp, tss])
+    #     T_out : len(4)-array
+    #             Real *intensity* transmition coefficients T_out=([Tp,Ts]) (mode-inselective)
+
+    #     Notes
+    #     -----
+    #     **IMPORTANT**
+    #     ..version 19-03-2020:
+    #     All intensity coefficients are now well defined. Transmission is defined 
+    #     mode-independently. It could be defined mode-dependently for non-birefringent
+    #     substrates in future versions.
+    #     The new definition of this function **BREAKS compatibility** with the previous
+    #     one.
+
+    #     ..version 13-09-2019:
+    #     Note that the field reflectivity and transmission coefficients
+    #     r and t are well defined. The intensity reflection coefficient is also correct.
+    #     However, the intensity transmission coefficients T are ill-defined so far.
+    #     This will be corrected upon future publication of the correct intensity coefficients.
+
+    #     Note also the different ordering of the coefficients, for consistency w/ Passler's matlab code
+
+    #     """
+
+    #     # common denominator for all coefficients
+    #     Denom = GammaStar[0, 0]*GammaStar[2, 2]-GammaStar[0, 2]*GammaStar[2, 0]
+    #     # field reflection coefficients
+    #     rpp = GammaStar[1, 0]*GammaStar[2, 2]-GammaStar[1, 2]*GammaStar[2, 0]
+    #     rpp = np.nan_to_num(rpp/Denom)
+
+    #     rss = GammaStar[0, 0]*GammaStar[3, 2]-GammaStar[3, 0]*GammaStar[0, 2]
+    #     rss = np.nan_to_num(rss/Denom)
+
+    #     rps = GammaStar[3, 0]*GammaStar[2, 2]-GammaStar[3, 2]*GammaStar[2, 0]
+    #     rps = np.nan_to_num(rps/Denom)
+
+    #     rsp = GammaStar[0, 0]*GammaStar[1, 2]-GammaStar[1, 0]*GammaStar[0, 2]
+    #     rsp = np.nan_to_num(rsp/Denom)
+
+    #     # Intensity reflection coefficients are just square moduli
+    #     Rpp = np.abs(rpp)**2
+    #     Rss = np.abs(rss)**2
+    #     Rps = np.abs(rps)**2
+    #     Rsp = np.abs(rsp)**2
+    #     r_out = np.array([rpp, rps, rss, rsp])  # order matching Passler Matlab code
+    #     R_out = np.array([Rpp, Rss, Rsp, Rps])  # order matching Passler Matlab code
+
+    #     # field transmission coefficients
+    #     # t_field = np.zeros(4, dtype=np.complex128)
+    #     t_out = np.zeros(4, dtype=np.complex128)
+    #     tpp = np.nan_to_num(GammaStar[2, 2]/Denom)
+    #     tss = np.nan_to_num(GammaStar[0, 0]/Denom)
+    #     tps = np.nan_to_num(-GammaStar[2, 0]/Denom)
+    #     tsp = np.nan_to_num(-GammaStar[0, 2]/Denom)
+    #     t_out = np.array([tpp, tps, tsp, tss])
+    #     # t_field = np.array([tpp, tps, tsp, tss])
+
+    #     # Intensity transmission requires Poyting vector analysis
+    #     # N.B: could be done mode-dependentely later
+    #     # start with the superstrate
+    #     # Incident fields are either p or s polarized
+    #     ksup = np.zeros((4, 3), dtype=np.complex128)  # wavevector in superstrate
+    #     ksup[:, 0] = zeta_sys
+
+    #     gamma_sup, qs_sup = self.calculate_layer_gamma(self.structure.superstrate, zeta_sys)
+    #     gamma_sub, qs_sub = self.calculate_layer_gamma(self.structure.substrate, zeta_sys)
+
+    #     for ii, qi in enumerate(qs_sup):
+    #         ksup[ii,2] = qi
+    #     ksup = ksup/c_const  # omega simplifies in the H field formula
+    #     Einc_pin = gamma_sup[0, :]  # p-pol incident electric field
+    #     Einc_sin = gamma_sup[1, :]  # s-pol incident electric field
+    #     # Poyting vector in superstrate (incident, p-in and s-in)
+    #     Sinc_pin = 0.5*np.real(np.cross(Einc_pin, np.conj(np.cross(ksup[0, :], Einc_pin))))
+    #     Sinc_sin = 0.5*np.real(np.cross(Einc_sin, np.conj(np.cross(ksup[1, :], Einc_sin))))
+
+    #     # Substrate Poyting vector
+    #     # Outgoing fields (eqn 17)
+    #     Eout_pin = t_out[0]*gamma_sub[0,:]+t_out[1]*gamma_sub[1,:]  # p-in, p or s out
+    #     Eout_sin = t_out[2]*gamma_sub[0,:]+t_out[3]*gamma_sub[1,:]  # s-in, p or s out
+    #     ksub = np.zeros((4,3), dtype=np.complex128)
+    #     ksub[:, 0] = zeta_sys
+    #     for ii, qi in enumerate(qs_sub):
+    #         ksub[ii, 2] = qi
+    #     ksub = ksub/c_const  # omega simplifies in the H field formula
+
+    #     # outgoing Poyting vectors, 2 formulations
+    #     Sout_pin = 0.5*np.real(np.cross(Eout_pin, np.conj(np.cross(ksub[0, :], Eout_pin))))
+    #     Sout_sin = 0.5*np.real(np.cross(Eout_sin, np.conj(np.cross(ksub[1, :], Eout_sin))))
+    #     # Intensity transmission coefficients are only the z-component of S !
+    #     T_pp = (Sout_pin[2]/Sinc_pin[2])  # z-component only
+    #     T_ss = (Sout_sin[2]/Sinc_sin[2])  # z-component only
+
+    #     T_out = np.array([T_pp, T_ss])
+
+    #     return r_out, R_out, t_out, T_out
+
+    # def calculate_Efield(self, f, zeta_sys, z_vect=None, x=0.0,
+    #                      magnetic=False, dz=None):
+    #     """
+    #     Calculate the electric field profiles for both s-pol and p-pol excitation.
+
+    #     Parameters
+    #     ----------
+    #     f : float
+    #         frequency (Hz)
+    #     zeta_sys : complex
+    #         in-plane normalized wavevector kx/k0
+    #     z_vect : 1Darray
+    #         Coordinates at which the calculation is done. if None, the layers boundaries are used.
+    #     x : float or 1D array
+    #         x-coordinates for (future) 2D plot of the electric field. Not yet implemented
+    #     magnetic : bool
+    #         Boolean to skip or compute the magnetic field vector
+    #     dz : float (optional)
+    #         Space resolution along propagation (z) axis. Superseed z_vect
+
+    #     Returns
+    #     --------
+    #     z : 1Darray
+    #         1D array of z-coordinates according to dz
+    #     E_out : (len(z),3)-Array
+    #         Total electric field in the structure
+    #     H_out (opt): (len(z),3)-Array
+    #         Total magnetic field in the structure
+    #     zn : list
+    #         Positions of the different interfaces
+
+    #     Notes
+    #     -----
+    #     ..Version 19-03-2020:
+    #         changed keywords to add z_vect
+    #         z_vect is used for either minimal computation (using get_layers_boundaries)
+    #         or hand-defined z-positions (e.g. irregular spacing for improved resolution)
+    #         if dz is given, a regular grid is used.
+    #         A sketch of the definition of all fields and algorithm is supplied in the module,
+    #         to better get a grasp on where Fft and Fbk are defined.
+    #     ..Version 28-01-2020:
+    #         Added Magnetic field keyword to save time.
+    #         Poyting and absorption defined in a separate function
+    #     ..Version 06-01-2020:
+    #         Added Magnetic field and Poyting vector.
+    #     ..Version 13-09-2019:
+    #         the 2D field profile is not implemented yet. x should be left to default
+
+    #     """
+
+    #     GammaStar = self.calculate_GammaStar(f, zeta_sys)
+    #     # r_out, R_out, t_field, t_out, T_out = self.calculate_r_t()
+    #     r_out, R_out, t, T = self.calculate_r_t(zeta_sys, GammaStar)
+
+    #     # Nb of layers
+    #     laynum = len(self.structure.layers)
+    #     zn = np.zeros(laynum+2)  # superstrate+layers+substrate
+
+    #     # 4-components field tensor at the front and
+    #     # back interfaces of the layer
+    #     # correspond to E0 and E1
+    #     # defined by (37*)
+    #     # E0 (E^(p/o)_t, E^(s/e)_t, E^(p/o)_r, E^(s/e)_r)
+    #     # twice for p-pol in and s-pol in
+    #     F_ft = np.zeros((laynum+2, 8), dtype=np.complex128)
+    #     # E1 (E^(p/o)_t, E^(s/e)_t, E^(p/o)_r, E^(s/e)_r)
+    #     # twice for p-pol in and s-pol in
+    #     F_bk = np.zeros((laynum+2, 8), dtype=np.complex128)
+
+    #     zn[-1] = 0.0  # initially with the substrate
+
+    #     # First step of the algorithm starts from the top of the substrate
+    #     # a sketch is provided to better visualize the steps
+    #     # red quantities in sketch
+    #     # (37*) with p-pol excitation
+    #     F_ft[-1, 0] = t[0]  # t_pp
+    #     F_ft[-1, 1] = t[1]  # t_ps
+    #     # (37*) with s-pol excitation
+    #     F_ft[-1, 4] = t[2]  # t_sp
+    #     F_ft[-1, 5] = t[3]  # t_ss
+
+    #     # propagate to the "end" of the substrate
+    #     # F_bk[-1] for plot purpose (see Fig. 1.(a))
+
+    #     Ai, Ki_sub, _, _ = self.calculate_layer_transfer_matrix(
+    #         self.structure.substrate, f, zeta_sys)
+    #     F_bk[-1, :4] = np.matmul(exact_inv(Ki_sub), F_ft[-1, :4])
+    #     F_bk[-1, 4:] = np.matmul(exact_inv(Ki_sub), F_ft[-1, 4:])
+
+    #     if laynum > 0:
+    #         # First layer is a special case to handle System.substrate
+    #         # purple quantities in sketch
+    #         zn[-2] = zn[-1]-self.structure.substrate.thick
+
+    #         Aim1, Kim1, _, _ = self.calculate_layer_transfer_matrix(
+    #             self.structure.layers[-1], f, zeta_sys)
+
+    #         Li = np.matmul(exact_inv(Aim1), Ai)
+    #         F_bk[-2, :4] = np.matmul(Li, F_ft[-1, :4])
+    #         F_bk[-2, 4:] = np.matmul(Li, F_ft[-1, 4:])
+    #         F_ft[-2, :4] = np.matmul(Kim1, F_bk[-2, :4])
+    #         F_ft[-2, 4:] = np.matmul(Kim1, F_bk[-2, 4:])
+
+    #         # From here we start recursively computing the fields
+    #         # blue quantities in sketch
+    #         for kl in range(1, laynum)[::-1]:
+    #             # subtract the thickness (building thickness array backwards)
+    #             zn[kl] = zn[kl+1]-self.structure.layers[kl].thick
+
+    #             Aim1, Kim1, _, _ = self.calculate_layer_transfer_matrix(
+    #                 self.structure.layers[kl-1], f, zeta_sys)
+    #             Ai, _, _, _ = self.calculate_layer_transfer_matrix(
+    #                 self.structure.layers[kl], f, zeta_sys)
+
+    #             Li = np.matmul(exact_inv(Aim1), Ai)
+    #             # F_ft == E0  //  F_bk == E1
+    #             F_bk[kl, :4] = np.matmul(Li, F_ft[kl+1, :4])
+    #             F_bk[kl, 4:] = np.matmul(Li, F_ft[kl+1, 4:])
+    #             F_ft[kl, :4] = np.matmul(Kim1, F_bk[kl, :4])
+    #             F_ft[kl, 4:] = np.matmul(Kim1, F_bk[kl, 4:])
+
+    #         zn[0] = zn[1]-self.structure.layers[0].thick
+
+    #         Aim1, Ki_sup, _, _ = self.calculate_layer_transfer_matrix(
+    #             self.structure.superstrate, f, zeta_sys)
+    #         Ai, _, _, _ = self.calculate_layer_transfer_matrix(
+    #             self.structure.layers[0], f, zeta_sys)
+
+    #         Li = np.matmul(exact_inv(Aim1), Ai)
+    #         # F_ft == E0  //  F_bk == E1
+    #         F_bk[0, :4] = np.matmul(Li, F_ft[1, :4])
+    #         F_bk[0, 4:] = np.matmul(Li, F_ft[1, 4:])
+    #         F_ft[0, :4] = np.matmul(Ki_sup, F_bk[0, :4])
+    #         F_ft[0, 4:] = np.matmul(Ki_sup, F_bk[0, 4:])
+    #     else:
+    #         zn[0] = -self.structure.substrate.thick
+    #         Ai, Ki_sub, _, _ = self.calculate_layer_transfer_matrix(
+    #             self.structure.substrate, f, zeta_sys)
+    #         Aim1, Ki_sup, _, _ = self.calculate_layer_transfer_matrix(
+    #             self.structure.superstrate, f, zeta_sys)
+    #         Li = np.matmul(exact_inv(Aim1), Ai)
+    #         # F_ft == E0  //  F_bk == E1
+    #         F_bk[0, :4] = np.matmul(Li, F_ft[1, :4])
+    #         F_bk[0, 4:] = np.matmul(Li, F_ft[1, 4:])
+    #         F_ft[0, :4] = np.matmul(Ki_sup, F_bk[0, :4])
+    #         F_ft[0, 4:] = np.matmul(Ki_sup, F_bk[0, 4:])
+
+    #     # shift everything so that incident boundary is at z=0
+    #     zn = zn-zn[0]
+
+    #     # define the spatial points where the computation is performed
+    #     if dz is None:
+    #         # print('No dz given, \n')
+    #         if z_vect is None:
+    #             # print('Resorting to minimal computation on boundaries')
+    #             z = self.structure.get_layers_boundaries()
+    #         else:
+    #             print('using manually given z-vector')
+    #             z = z_vect
+    #     else:
+    #         # print('using dz=%.2e'%(dz))
+    #         z = np.arange(-self.structure.superstrate.thick, zn[-1], dz)
+
+    #     # 2x4 component field tensor E_prop propagated from front surface
+    #     Eprop = np.empty((8), dtype=np.complex128)
+    #     # 4-component field tensor F_tens for each direction and polarization
+    #     F_tens = np.zeros((24, len(z)), dtype=np.complex128)
+    #     if magnetic is True:
+    #         H_tens = np.zeros((24, len(z)), dtype=np.complex128)
+    #     # final component electric field E_out = (E_x, Ey, Ez)
+    #     # for p-pol and s-pol excitation
+    #     E_out = np.zeros((6, len(z)), dtype=np.complex128)
+    #     if magnetic is True:
+    #         H_out = np.zeros((6, len(z)), dtype=np.complex128)
+    #     # Elementary propagation
+    #     dKiz = np.zeros((4, 4), dtype=np.complex128)
+
+    #     # starting from the superstrate:
+    #     current_layer = 0
+    #     L = self.structure.superstrate
+    #     for ii, zc in enumerate(z):  # enumerates returns a tuple (index, value)
+
+    #         if zc > zn[current_layer]:
+    #             # change the layer
+    #             # important to count here until laynum+1 to get the correct zn
+    #             # in the substrate for dKiz
+    #             current_layer += 1
+
+    #             if current_layer == laynum+1:  # reached substrate
+    #                 L = self.structure.substrate
+    #             else:
+    #                 L = self.structure.layers[current_layer-1]
+
+    #         gamma, qs = self.calculate_layer_gamma(L, zeta_sys)
+
+    #         for kk in range(4):
+    #             # use the conjugate of the K matrix => exp(+1.0j...)
+    #             dKiz[kk, kk] = np.exp(1.0j*(2.0*np.pi*f*qs[kk]*(zc-zn[current_layer]))/c_const)
+
+    #         # Eprop propagated from front surface to back of next layer
+    #         # n.b: unclear why using F_bk and not F_ft works... but it works !
+    #         Eprop[:4] = np.matmul(dKiz, F_bk[current_layer, :4])
+    #         Eprop[4:] = np.matmul(dKiz, F_bk[current_layer, 4:])
+
+    #         # wave vector for each mode in layer L 
+    #         k_lay = np.zeros((4, 3), dtype=np.complex128)
+    #         k_lay[:, 0] = zeta_sys
+    #         for jj, qj in enumerate(qs):
+    #             k_lay[jj, 2] = qj
+    #         # no normalization by c_const eases the visualization of H
+    #         # k_lay = k_lay/(c_const) ## omega simplifies in the H field formula
+
+    #         # p-pol in 
+    #         # forward, o/p
+    #         F_tens[:3, ii] = Eprop[0]*gamma[0, :]
+    #         if magnetic is True:
+    #             H_tens[:3, ii] = (1./L.mu)*np.cross(k_lay[0, :], F_tens[:3, ii])
+    #         # forward, e/s
+    #         F_tens[3:6, ii] = Eprop[1]*gamma[1, :]
+    #         if magnetic is True:
+    #             H_tens[3:6, ii] = (1./L.mu)*np.cross(k_lay[1, :], F_tens[3:6, ii])
+    #         # backward, o/p
+    #         F_tens[6:9, ii] = Eprop[2]*gamma[2, :]
+    #         if magnetic is True:
+    #             H_tens[6:9, ii] = (1./L.mu)*np.cross(k_lay[2, :], F_tens[6:9, ii])
+    #         # backward, e/s
+    #         F_tens[9:12, ii] = Eprop[3]*gamma[3, :]
+    #         if magnetic is True:
+    #             H_tens[9:12, ii] = (1./L.mu)*np.cross(k_lay[3, :], F_tens[9:12, ii])
+    #         # s-pol in 
+    #         # forward, o/p
+    #         F_tens[12:15, ii] = Eprop[4]*gamma[0, :]
+    #         if magnetic is True:
+    #             H_tens[12:15, ii] = (1./L.mu)*np.cross(k_lay[0, :], F_tens[12:15, ii])
+    #         # forward, e/s
+    #         F_tens[15:18, ii] = Eprop[5]*gamma[1, :]
+    #         if magnetic is True:
+    #             H_tens[15:18, ii] = (1./L.mu)*np.cross(k_lay[1, :], F_tens[15:18, ii])
+    #         # backward, o/p
+    #         F_tens[18:21, ii] = Eprop[6]*gamma[2, :]
+    #         if magnetic is True:
+    #             H_tens[18:21, ii] = (1./L.mu)*np.cross(k_lay[2, :], F_tens[18:21, ii])
+    #         # backward, e/s
+    #         F_tens[21:, ii] = Eprop[7]*gamma[3, :]
+    #         if magnetic is True:
+    #             H_tens[21:, ii] = (1./L.mu)*np.cross(k_lay[3, :], F_tens[21:, ii])
+
+    #         # Total electric field (note that sign flip for
+    #         # backward propagation is already in gamma)
+    #         # p in 
+    #         E_out[:3, ii] = F_tens[:3, ii]+F_tens[3:6, ii]+F_tens[6:9, ii]+F_tens[9:12, ii]
+    #         if magnetic is True:
+    #             H_out[:3, ii] = H_tens[:3, ii]+H_tens[3:6, ii]+H_tens[6:9, ii]+H_tens[9:12, ii]
+    #         # s in
+    #         E_out[3:6, ii] = F_tens[12:15, ii]+F_tens[15:18, ii]+F_tens[18:21, ii]+F_tens[21:, ii]
+    #         if magnetic is True:
+    #             H_out[3:6, ii] = H_tens[12:15, ii]+H_tens[15:18, ii]+H_tens[18:21, ii]+H_tens[21:, ii]
+    #     if magnetic is True:
+    #         return z, E_out, H_out, zn[:-1]  # last interface is useless, substrate=infinite
+    #     else:
+    #         return z, E_out, zn[:-1]  # last interface is useless, substrate=infinite
+
+    # def calculate_Poynting_Absorption_vs_z(self, z, E, H, R):
+    #     """
+    #     Calculate the z-dependent Poynting vector and cumulated absorption.
+
+    #     Parameters
+    #     ----------
+    #     z : 1Darray
+    #         Spatial coordinate for the fields
+    #     E : 1Darray
+    #         6-components Electric field vector (p- or s- in) along z
+    #     H : 1Darray
+    #         6-components Magnetic field vector (p- or s- in) along z
+    #     R : len(4)-array
+    #         Reflectivity from :py:func:`calculate_r_t`
+    #     S_out : 6xlen(z) array
+    #         6 components (p//s) Poyting vector along z
+    #     A_out : 2xlen(z)
+    #         2 components (p//s) absorption along z
+    #     """
+    #     S_out = np.zeros((6, len(z)))  # Poynting vector
+    #     A_out = np.zeros((2, len(z)))  # z-dependent absorption
+
+    #     # S=0.5*Re(ExB)
+    #     S_out[:3, :] = 0.5*np.real(np.cross(E[:3, :], np.conj(H[:3, :]),
+    #                              axisa=0, axisb=0, axisc=0))
+    #     S_out[3:6, :] = 0.5*np.real(np.cross(E[3:6, :], np.conj(H[3:6, :]),
+    #                              axisa=0, axisb=0, axisc=0))
+
+    #     z1 = np.abs(z).argmin()+1  # index where z>0, first interface
+    #     Tp_z = S_out[2, :]/S_out[2, 0]*(1.0-(R[0]+R[2]))  # layer-resolved transmittance p-pol
+    #     Ts_z = S_out[5, :]/S_out[5,0]*(1.0-(R[1]+R[3]))  # layer-resolved transmittance s-pol
+    #     A_out[0, z1:] = 1.0-(R[0]+R[2])-Tp_z[z1:]
+    #     A_out[1, z1:] = 1.0-(R[1]+R[3])-Ts_z[z1:]
+
+    #     return S_out, A_out
 
 
 class XrayKin(Scattering):
