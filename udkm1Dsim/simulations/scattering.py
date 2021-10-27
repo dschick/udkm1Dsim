@@ -26,6 +26,7 @@ __all__ = ['Scattering', 'XrayKin', 'XrayDyn', 'XrayDynMag']
 
 __docformat__ = 'restructuredtext'
 
+from sympy.logic.boolalg import Boolean
 from .simulation import Simulation
 from ..structures.layers import AmorphousLayer, UnitCell
 from .. import u, Q_
@@ -519,13 +520,10 @@ class GTM(Scattering):
         M, a, b, S, Delta = self.calculate_layer_matrices(layer, zeta)
 
         qs = np.zeros((N, K, 4), dtype=np.complex128)  # out of plane wavevector
-        Py = np.zeros((N, K, 3, 4), dtype=np.complex128)  # Poyting vector
+        Py = np.zeros((N, K, 4, 3), dtype=np.complex128)  # Poynting vector
         # Stores the Berreman modes, used for birefringent layers
         Berreman = np.zeros((N, K, 4, 3), dtype=np.complex128)
         Berreman_unsorted = np.zeros((N, K, 4, 3), dtype=np.complex128)
-
-        transmode = np.zeros((N, K, 2), dtype=np.int64)
-        reflmode = np.zeros((N, K, 2), dtype=np.int64)
 
         # eigenvals // eigenvects as of eqn (11)
         qs_unsorted, psi_unsorted = np.linalg.eig(Delta)
@@ -548,88 +546,130 @@ class GTM(Scattering):
         psi_unsorted[select] = np.real(psi_unsorted[select]) + 0.0j
 
         # sort berremann qi's according to (12)
-        transmode[:, :, 0] = np.reshape(np.where(
-            np.logical_and(np.iscomplex(qs_unsorted), np.imag(qs_unsorted) >= 0))[2], (N, K))
-        transmode[:, :, 1] = np.reshape(np.where(
-            np.logical_and(np.isreal(qs_unsorted), np.real(qs_unsorted) >= 0))[2], (N, K))
-        reflmode[:, :, 0] = np.reshape(np.where(
-            np.logical_and(np.iscomplex(qs_unsorted), np.imag(qs_unsorted) < 0))[2], (N, K))
-        reflmode[:, :, 1] = np.reshape(np.where(
-            np.logical_and(np.isreal(qs_unsorted), np.real(qs_unsorted) < 0))[2], (N, K))
+        if any(np.abs(np.imag(qs_unsorted.flatten()))):
+            idx0, idx1, idx2 = np.where(np.imag(qs_unsorted) >= 0)
+            transmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
+            transmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
 
-        # Calculate the Poyting vector for each Psi using (16-18)
-        for km in range(0, 4):
-            Ex = psi_unsorted[:, :, 0, km]
-            Ey = psi_unsorted[:, :, 2, km]
-            Hx = -psi_unsorted[:, :, 3, km]
-            Hy = psi_unsorted[:, :, 1, km]
-            # from eqn (17)
-            Ez = a[:, :, 2, 0]*Ex + a[:, :, 2, 1]*Ey + a[:, :, 2, 3]*Hx + a[:, :, 2, 4]*Hy
-            # from eqn (18)
-            Hz = a[:, :, 5, 0]*Ex + a[:, :, 5, 1]*Ey + a[:, :, 5, 3]*Hx + a[:, :, 5, 4]*Hy
-            # and from (16)
-            Py[:, :, 0, km] = Ey*Hz-Ez*Hy
-            Py[:, :, 1, km] = Ez*Hx-Ex*Hz
-            Py[:, :, 2, km] = Ex*Hy-Ey*Hx
-            # Berreman modes (unsorted) in case they are needed later (birefringence)
-            Berreman_unsorted[:, :, km, 0] = Ex
-            Berreman_unsorted[:, :, km, 1] = Ey
-            Berreman_unsorted[:, :, km, 2] = Ez
+            idx0, idx1, idx2 = np.where(np.imag(qs_unsorted) < 0)
+            reflmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
+            reflmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
+        else:
+            idx0, idx1, idx2 = np.where(np.real(qs_unsorted) >= 0)
+            transmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
+            transmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
+
+            idx0, idx1, idx2 = np.where(np.resl(qs_unsorted) < 0)
+            reflmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
+            reflmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
+
+        # Calculate the Poynting vector for each Psi using (16-18)
+        Ex = psi_unsorted[:, :, 0, :]
+        Ey = psi_unsorted[:, :, 2, :]
+        Hx = -psi_unsorted[:, :, 3, :]
+        Hy = psi_unsorted[:, :, 1, :]
+        # from eqn (17)
+        Ez = np.repeat(a[:, :, 2, 0][:, :, np.newaxis], 4, axis=2)*Ex \
+            + np.repeat(a[:, :, 2, 1][:, :, np.newaxis], 4, axis=2)*Ey \
+            + np.repeat(a[:, :, 2, 3][:, :, np.newaxis], 4, axis=2)*Hx \
+            + np.repeat(a[:, :, 2, 4][:, :, np.newaxis], 4, axis=2)*Hy
+        # from eqn (18)
+        Hz = np.repeat(a[:, :, 5, 0][:, :, np.newaxis], 4, axis=2)*Ex \
+            + np.repeat(a[:, :, 5, 1][:, :, np.newaxis], 4, axis=2)*Ey \
+            + np.repeat(a[:, :, 5, 3][:, :, np.newaxis], 4, axis=2)*Hx \
+            + np.repeat(a[:, :, 5, 4][:, :, np.newaxis], 4, axis=2)*Hy
+        # and from (16)
+        Py[:, :, :, 0] = Ey*Hz-Ez*Hy
+        Py[:, :, :, 1] = Ez*Hx-Ex*Hz
+        Py[:, :, :, 2] = Ex*Hy-Ey*Hx
+        # Berreman modes (unsorted) in case they are needed later (birefringence)
+        Berreman_unsorted[:, :, :, 0] = Ex
+        Berreman_unsorted[:, :, :, 1] = Ey
+        Berreman_unsorted[:, :, :, 2] = Ez
+
         # check Cp using either the Poynting vector for birefringent
         # materials or the electric field vector for non-birefringent
         # media to sort the modes
 
         # first calculate Cp for transmitted waves
-        Cp_t1 = np.abs(Py[0, transmode[0]])**2/(np.abs(Py[0, transmode[0]])**2
-                                                + np.abs(Py[1, transmode[0]])**2)
-        Cp_t2 = np.abs(Py[0, transmode[1]])**2/(np.abs(Py[0, transmode[1]])**2
-                                                + np.abs(Py[1, transmode[1]])**2)
+        Cp_t1 = np.abs(Py[transmode0[0], transmode0[1], transmode0[2], 0])**2/(
+            np.abs(Py[transmode0[0], transmode0[1], transmode0[2], 0])**2
+            + np.abs(Py[transmode0[0], transmode0[1], transmode0[2], 1])**2)
+        Cp_t2 = np.abs(Py[transmode1[0], transmode1[1], transmode1[2], 0])**2/(
+            np.abs(Py[transmode1[0], transmode1[1], transmode1[2], 0])**2
+            + np.abs(Py[transmode1[0], transmode1[1], transmode1[2], 1])**2)
 
-        if np.abs(Cp_t1-Cp_t2) > self.qsd_thr:  # birefringence
-            # sets _useBerreman fo the calculation of gamma matrix below
-            layer._useBerreman = True
-            if Cp_t2 > Cp_t1:
-                transmode = np.flip(transmode, 0)  # flip the two values
-            # then calculate for reflected waves if necessary
-            Cp_r1 = np.abs(Py[0, reflmode[1]])**2/(np.abs(Py[0, reflmode[1]])**2
-                                                   + np.abs(Py[1, reflmode[1]])**2)
-            Cp_r2 = np.abs(Py[0, reflmode[0]])**2/(np.abs(Py[0, reflmode[0]])**2
-                                                   + np.abs(Py[1, reflmode[0]])**2)
-            if Cp_r1 > Cp_r2:
-                reflmode = np.flip(reflmode, 0)  # flip the two values
+        Cp_r1 = np.abs(Py[reflmode1[0], reflmode1[1], reflmode1[2], 0])**2/(
+            np.abs(Py[reflmode1[0], reflmode1[1], reflmode1[2], 0])**2
+            + np.abs(Py[reflmode1[0], reflmode1[1], reflmode1[2], 1])**2)
+        Cp_r2 = np.abs(Py[reflmode0[0], reflmode0[1], reflmode0[2], 0])**2/(
+            np.abs(Py[reflmode0[0], reflmode0[1], reflmode0[2], 0])**2
+            + np.abs(Py[reflmode0[0], reflmode0[1], reflmode0[2], 1])**2)
 
-        else:  # No birefringence, use the Electric field s-pol/p-pol
-            Cp_te1 = np.abs(psi_unsorted[0, transmode[1]])**2/(np.abs(psi_unsorted[0, transmode[1]])**2
-                                                              + np.abs(psi_unsorted[2, transmode[1]])**2)
-            Cp_te2 = np.abs(psi_unsorted[0, transmode[0]])**2/(np.abs(psi_unsorted[0, transmode[0]])**2
-                                                              + np.abs(psi_unsorted[2, transmode[0]])**2)
-            if Cp_te1>Cp_te2:
-                transmode = np.flip(transmode,0) ## flip the two values
-            Cp_re1 = np.abs(psi_unsorted[0, reflmode[1]])**2/(np.abs(psi_unsorted[0, reflmode[1]])**2
-                                                             + np.abs(psi_unsorted[2, reflmode[1]])**2)
-            Cp_re2 = np.abs(psi_unsorted[0, reflmode[0]])**2/(np.abs(psi_unsorted[0, reflmode[0]])**2
-                                                             + np.abs(psi_unsorted[2, reflmode[0]])**2)
-            if Cp_re1>Cp_re2:
-                reflmode = np.flip(reflmode, 0)  # flip the two values
+        Cp_te1 = np.abs(psi_unsorted[transmode1[0], transmode1[1], transmode1[2], 0])**2/(
+            np.abs(psi_unsorted[transmode1[0], transmode1[1], transmode1[2], 0])**2
+            + np.abs(psi_unsorted[transmode1[0], transmode1[1], transmode1[2], 2])**2)
+        Cp_te2 = np.abs(psi_unsorted[transmode0[0], transmode0[1], transmode0[2], 0])**2/(
+            np.abs(psi_unsorted[transmode0[0], transmode0[1], transmode0[2], 0])**2
+            + np.abs(psi_unsorted[transmode0[0], transmode0[1], transmode0[2], 2])**2)
+
+        Cp_re1 = np.abs(psi_unsorted[reflmode1[0], reflmode1[1], reflmode1[2], 0])**2/(
+            np.abs(psi_unsorted[reflmode1[0], reflmode1[1], reflmode1[2], 0])**2
+            + np.abs(psi_unsorted[reflmode1[0], reflmode1[1], reflmode1[2], 2])**2)
+        Cp_re2 = np.abs(psi_unsorted[reflmode0[0], reflmode0[1], reflmode0[2], 0])**2/(
+            np.abs(psi_unsorted[reflmode0[0], reflmode0[1], reflmode0[2], 0])**2
+            + np.abs(psi_unsorted[reflmode0[0], reflmode0[1], reflmode0[2], 2])**2)
+
+        print(Cp_te1)
+        print(Cp_te2)
+        print(Cp_re1)
+        print(Cp_re2)
+
+        idx_bf = (np.abs(Cp_t1-Cp_t2) > self.qsd_thr)
+        idx_nbf = (np.abs(Cp_t1-Cp_t2) <= self.qsd_thr)
+        idx_bf_fliptrans = Cp_t2[idx_bf] > Cp_t1[idx_bf]
+        idx_bf_fliprefl = Cp_r1[idx_bf] > Cp_r2[idx_bf]
+        idx_nbf_fliptrans = Cp_te1[idx_nbf] > Cp_te2[idx_nbf]
+        idx_nbf_fliprefl = Cp_re1[idx_nbf] > Cp_re2[idx_nbf]
+
+        # birefringence
+        # transmission
+        temp = transmode1[2][idx_bf_fliptrans]
+        transmode1[2][idx_bf_fliptrans] = transmode0[2][idx_bf_fliptrans]
+        transmode0[2][idx_bf_fliptrans] = temp
+        # reflection
+        temp = reflmode1[2][idx_bf_fliprefl]
+        reflmode1[2][idx_bf_fliprefl] = reflmode0[2][idx_bf_fliprefl]
+        reflmode0[2][idx_bf_fliprefl] = temp
+
+        # no birefringence
+        # transmission
+        temp = transmode1[2][idx_nbf_fliptrans]
+        transmode1[2][idx_nbf_fliptrans] = transmode0[2][idx_nbf_fliptrans]
+        transmode0[2][idx_nbf_fliptrans] = temp
+        # reflection
+        temp = reflmode1[2][idx_nbf_fliprefl]
+        reflmode1[2][idx_nbf_fliprefl] = reflmode0[2][idx_nbf_fliprefl]
+        reflmode0[2][idx_nbf_fliprefl] = temp
 
         # finally store the sorted version
         # q is (trans-p, trans-s, refl-p, refl-s)
-        qs[0] = qs_unsorted[transmode[0]]
-        qs[1] = qs_unsorted[transmode[1]]
-        qs[2] = qs_unsorted[reflmode[0]]
-        qs[3] = qs_unsorted[reflmode[1]]
+        qs[:, :, 0] = np.reshape(qs_unsorted[transmode0], (N, K))
+        qs[:, :, 1] = np.reshape(qs_unsorted[transmode1], (N, K))
+        qs[:, :, 2] = np.reshape(qs_unsorted[reflmode0], (N, K))
+        qs[:, :, 3] = np.reshape(qs_unsorted[reflmode1], (N, K))
         Py_temp = Py.copy()
-        Py[:, 0] = Py_temp[:, transmode[0]]
-        Py[:, 1] = Py_temp[:, transmode[1]]
-        Py[:, 2] = Py_temp[:, reflmode[0]]
-        Py[:, 3] = Py_temp[:, reflmode[1]]
-        # Store the (sorted) Berreman modes
-        Berreman[0] = Berreman_unsorted[transmode[0], :]
-        Berreman[1] = Berreman_unsorted[transmode[1], :]
-        Berreman[2] = Berreman_unsorted[reflmode[0], :]
-        Berreman[3] = Berreman_unsorted[reflmode[1], :]
+        Py[:, :, 0] = np.reshape(Py_temp[transmode0], (N, K, 3))
+        Py[:, :, 1] = np.reshape(Py_temp[transmode1], (N, K, 3))
+        Py[:, :, 2] = np.reshape(Py_temp[reflmode0], (N, K, 3))
+        Py[:, :, 3] = np.reshape(Py_temp[reflmode1], (N, K, 3))
+        # # Store the (sorted) Berreman modes
+        Berreman[:, :, 0] = np.reshape(Berreman_unsorted[transmode0], (N, K, 3))
+        Berreman[:, :, 1] = np.reshape(Berreman_unsorted[transmode1], (N, K, 3))
+        Berreman[:, :, 2] = np.reshape(Berreman_unsorted[reflmode0], (N, K, 3))
+        Berreman[:, :, 3] = np.reshape(Berreman_unsorted[reflmode1], (N, K, 3))
 
-        return qs, Py, Berreman
+        return qs, Py, Berreman, idx_bf
 
 class XrayKin(Scattering):
     r"""XrayKin
