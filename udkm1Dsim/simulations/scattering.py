@@ -959,117 +959,125 @@ class GTM(Scattering):
 
         return GammaStar
 
-    # def calculate_r_t(self, zeta_sys, GammaStar):
-    #     """ Calculate various field and intensity reflection and transmission
-    #     coefficients, as well as the 4-valued vector of transmitted field.
+    def calculate_r_t(self, zeta, GammaStar):
+        """ Calculate various field and intensity reflection and transmission
+        coefficients, as well as the 4-valued vector of transmitted field.
 
-    #     Parameters
-    #     -----------
-    #     zeta_sys : complex
-    #         Incident in-plane wavevector
-    #     Returns
-    #     -------
-    #     r_out : len(4)-array
-    #             Complex *field* reflection coefficients r_out=([rpp,rps,rss,rsp])
-    #     R_out : len(4)-array
-    #             Real *intensity* reflection coefficients R_out=([Rpp,Rss,Rsp,Tps])
-    #     t_out : len(4)-array
-    #             Complex *field* transmition coefficients t=([tpp, tps, tsp, tss])
-    #     T_out : len(4)-array
-    #             Real *intensity* transmition coefficients T_out=([Tp,Ts]) (mode-inselective)
+        Parameters
+        -----------
+        zeta_sys : complex
+            Incident in-plane wavevector
+        Returns
+        -------
+        r_out : len(4)-array
+                Complex *field* reflection coefficients r_out=([rpp,rps,rss,rsp])
+        R_out : len(4)-array
+                Real *intensity* reflection coefficients R_out=([Rpp,Rss,Rsp,Tps])
+        t_out : len(4)-array
+                Complex *field* transmition coefficients t=([tpp, tps, tsp, tss])
+        T_out : len(4)-array
+                Real *intensity* transmition coefficients T_out=([Tp,Ts]) (mode-inselective)
 
-    #     Notes
-    #     -----
-    #     **IMPORTANT**
-    #     ..version 19-03-2020:
-    #     All intensity coefficients are now well defined. Transmission is defined 
-    #     mode-independently. It could be defined mode-dependently for non-birefringent
-    #     substrates in future versions.
-    #     The new definition of this function **BREAKS compatibility** with the previous
-    #     one.
+        Notes
+        -----
+        **IMPORTANT**
+        ..version 19-03-2020:
+        All intensity coefficients are now well defined. Transmission is defined 
+        mode-independently. It could be defined mode-dependently for non-birefringent
+        substrates in future versions.
+        The new definition of this function **BREAKS compatibility** with the previous
+        one.
 
-    #     ..version 13-09-2019:
-    #     Note that the field reflectivity and transmission coefficients
-    #     r and t are well defined. The intensity reflection coefficient is also correct.
-    #     However, the intensity transmission coefficients T are ill-defined so far.
-    #     This will be corrected upon future publication of the correct intensity coefficients.
+        ..version 13-09-2019:
+        Note that the field reflectivity and transmission coefficients
+        r and t are well defined. The intensity reflection coefficient is also correct.
+        However, the intensity transmission coefficients T are ill-defined so far.
+        This will be corrected upon future publication of the correct intensity coefficients.
 
-    #     Note also the different ordering of the coefficients, for consistency w/ Passler's matlab code
+        Note also the different ordering of the coefficients, for consistency w/ Passler's matlab code
 
-    #     """
+        """
 
-    #     # common denominator for all coefficients
-    #     Denom = GammaStar[0, 0]*GammaStar[2, 2]-GammaStar[0, 2]*GammaStar[2, 0]
-    #     # field reflection coefficients
-    #     rpp = GammaStar[1, 0]*GammaStar[2, 2]-GammaStar[1, 2]*GammaStar[2, 0]
-    #     rpp = np.nan_to_num(rpp/Denom)
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+        # common denominator for all coefficients
+        Denom = GammaStar[:, :, 0, 0]*GammaStar[:, :, 2, 2] \
+            - GammaStar[:, :, 0, 2]*GammaStar[:, :, 2, 0]
+        # field reflection coefficients
+        rpp = GammaStar[:, :, 1, 0]*GammaStar[:, :, 2, 2] \
+            - GammaStar[:, :, 1, 2]*GammaStar[:, :, 2, 0]
+        rpp = np.nan_to_num(rpp/Denom)
 
-    #     rss = GammaStar[0, 0]*GammaStar[3, 2]-GammaStar[3, 0]*GammaStar[0, 2]
-    #     rss = np.nan_to_num(rss/Denom)
+        rss = GammaStar[:, :, 0, 0]*GammaStar[:, :, 3, 2] \
+            - GammaStar[:, :, 3, 0]*GammaStar[:, :, 0, 2]
+        rss = np.nan_to_num(rss/Denom)
 
-    #     rps = GammaStar[3, 0]*GammaStar[2, 2]-GammaStar[3, 2]*GammaStar[2, 0]
-    #     rps = np.nan_to_num(rps/Denom)
+        rps = GammaStar[:, :, 3, 0]*GammaStar[:, :, 2, 2] \
+            - GammaStar[:, :, 3, 2]*GammaStar[:, :, 2, 0]
+        rps = np.nan_to_num(rps/Denom)
 
-    #     rsp = GammaStar[0, 0]*GammaStar[1, 2]-GammaStar[1, 0]*GammaStar[0, 2]
-    #     rsp = np.nan_to_num(rsp/Denom)
+        rsp = GammaStar[:, :, 0, 0]*GammaStar[:, :, 1, 2] \
+            - GammaStar[:, :, 1, 0]*GammaStar[:, :, 0, 2]
+        rsp = np.nan_to_num(rsp/Denom)
 
-    #     # Intensity reflection coefficients are just square moduli
-    #     Rpp = np.abs(rpp)**2
-    #     Rss = np.abs(rss)**2
-    #     Rps = np.abs(rps)**2
-    #     Rsp = np.abs(rsp)**2
-    #     r_out = np.array([rpp, rps, rss, rsp])  # order matching Passler Matlab code
-    #     R_out = np.array([Rpp, Rss, Rsp, Rps])  # order matching Passler Matlab code
+        # Intensity reflection coefficients are just square moduli
+        Rpp = np.abs(rpp)**2
+        Rss = np.abs(rss)**2
+        Rps = np.abs(rps)**2
+        Rsp = np.abs(rsp)**2
+        r_out = np.stack([rpp, rps, rss, rsp], axis=2)  # order matching Passler Matlab code
+        R_out = np.stack([Rpp, Rss, Rsp, Rps], axis=2)  # order matching Passler Matlab code
 
-    #     # field transmission coefficients
-    #     # t_field = np.zeros(4, dtype=np.complex128)
-    #     t_out = np.zeros(4, dtype=np.complex128)
-    #     tpp = np.nan_to_num(GammaStar[2, 2]/Denom)
-    #     tss = np.nan_to_num(GammaStar[0, 0]/Denom)
-    #     tps = np.nan_to_num(-GammaStar[2, 0]/Denom)
-    #     tsp = np.nan_to_num(-GammaStar[0, 2]/Denom)
-    #     t_out = np.array([tpp, tps, tsp, tss])
-    #     # t_field = np.array([tpp, tps, tsp, tss])
+        # field transmission coefficients
+        tpp = np.nan_to_num(GammaStar[:, :, 2, 2]/Denom)
+        tss = np.nan_to_num(GammaStar[:, :, 0, 0]/Denom)
+        tps = np.nan_to_num(-GammaStar[:, :, 2, 0]/Denom)
+        tsp = np.nan_to_num(-GammaStar[:, :, 0, 2]/Denom)
+        t_out = np.stack([tpp, tps, tsp, tss], axis=2)
+        # t_field = np.array([tpp, tps, tsp, tss])
 
-    #     # Intensity transmission requires Poyting vector analysis
-    #     # N.B: could be done mode-dependentely later
-    #     # start with the superstrate
-    #     # Incident fields are either p or s polarized
-    #     ksup = np.zeros((4, 3), dtype=np.complex128)  # wavevector in superstrate
-    #     ksup[:, 0] = zeta_sys
+        # Intensity transmission requires Poyting vector analysis
+        # N.B: could be done mode-dependentely later
+        # start with the superstrate
+        # Incident fields are either p or s polarized
+        ksup = np.zeros((N, K, 4, 3), dtype=np.complex128)  # wavevector in superstrate
+        ksup[:, :, :, 0] = np.repeat(zeta[:, :, np.newaxis], 4, axis=2)
 
-    #     gamma_sup, qs_sup = self.calculate_layer_gamma(self.structure.superstrate, zeta_sys)
-    #     gamma_sub, qs_sub = self.calculate_layer_gamma(self.structure.substrate, zeta_sys)
+        gamma_sup, qs_sup = self.calculate_layer_gamma(self.S.get_layer_handle(0), zeta)
+        gamma_sub, qs_sub = self.calculate_layer_gamma(self.S.get_layer_handle(-1), zeta)
 
-    #     for ii, qi in enumerate(qs_sup):
-    #         ksup[ii,2] = qi
-    #     ksup = ksup/c_const  # omega simplifies in the H field formula
-    #     Einc_pin = gamma_sup[0, :]  # p-pol incident electric field
-    #     Einc_sin = gamma_sup[1, :]  # s-pol incident electric field
-    #     # Poyting vector in superstrate (incident, p-in and s-in)
-    #     Sinc_pin = 0.5*np.real(np.cross(Einc_pin, np.conj(np.cross(ksup[0, :], Einc_pin))))
-    #     Sinc_sin = 0.5*np.real(np.cross(Einc_sin, np.conj(np.cross(ksup[1, :], Einc_sin))))
+        ksup[:, :, :, 2] = qs_sup
 
-    #     # Substrate Poyting vector
-    #     # Outgoing fields (eqn 17)
-    #     Eout_pin = t_out[0]*gamma_sub[0,:]+t_out[1]*gamma_sub[1,:]  # p-in, p or s out
-    #     Eout_sin = t_out[2]*gamma_sub[0,:]+t_out[3]*gamma_sub[1,:]  # s-in, p or s out
-    #     ksub = np.zeros((4,3), dtype=np.complex128)
-    #     ksub[:, 0] = zeta_sys
-    #     for ii, qi in enumerate(qs_sub):
-    #         ksub[ii, 2] = qi
-    #     ksub = ksub/c_const  # omega simplifies in the H field formula
+        ksup = ksup/c_0  # omega simplifies in the H field formula
+        Einc_pin = gamma_sup[:, :, 0, :]  # p-pol incident electric field
+        Einc_sin = gamma_sup[:, :, 1, :]  # s-pol incident electric field
+        # Poyting vector in superstrate (incident, p-in and s-in)
+        Sinc_pin = 0.5*np.real(np.cross(Einc_pin, np.conj(np.cross(ksup[:, :, 0, :], Einc_pin))))
+        Sinc_sin = 0.5*np.real(np.cross(Einc_sin, np.conj(np.cross(ksup[:, :, 1, :], Einc_sin))))
 
-    #     # outgoing Poyting vectors, 2 formulations
-    #     Sout_pin = 0.5*np.real(np.cross(Eout_pin, np.conj(np.cross(ksub[0, :], Eout_pin))))
-    #     Sout_sin = 0.5*np.real(np.cross(Eout_sin, np.conj(np.cross(ksub[1, :], Eout_sin))))
-    #     # Intensity transmission coefficients are only the z-component of S !
-    #     T_pp = (Sout_pin[2]/Sinc_pin[2])  # z-component only
-    #     T_ss = (Sout_sin[2]/Sinc_sin[2])  # z-component only
+        # Substrate Poyting vector
+        # Outgoing fields (eqn 17)
+        Eout_pin = np.repeat(t_out[:, :, 0][:, :, np.newaxis], 3, 2)*gamma_sub[:, :, 0, :] \
+            + np.repeat(t_out[:, :, 1][:, :, np.newaxis], 3, 2) \
+            * gamma_sub[:, :, 1, :]  # p-in, p or s out
+        Eout_sin = np.repeat(t_out[:, :, 2][:, :, np.newaxis], 3, 2)*gamma_sub[:, :, 0, :] \
+            + np.repeat(t_out[:, :, 3][:, :, np.newaxis], 3, 2) \
+            * gamma_sub[:, :, 1, :]  # s-in, p or s out
+        ksub = np.zeros((N, K, 4, 3), dtype=np.complex128)
+        ksub[:, :, :, 0] = np.repeat(zeta[:, :, np.newaxis], 4, axis=2)
+        ksub[:, :, :, 2] = qs_sub
+        ksub = ksub/c_0  # omega simplifies in the H field formula
 
-    #     T_out = np.array([T_pp, T_ss])
+        # outgoing Poyting vectors, 2 formulations
+        Sout_pin = 0.5*np.real(np.cross(Eout_pin, np.conj(np.cross(ksub[:, :, 0, :], Eout_pin))))
+        Sout_sin = 0.5*np.real(np.cross(Eout_sin, np.conj(np.cross(ksub[:, :, 1, :], Eout_sin))))
+        # Intensity transmission coefficients are only the z-component of S !
+        T_pp = np.real(Sout_pin[:, :, 2]/Sinc_pin[:, :, 2])  # z-component only
+        T_ss = np.real(Sout_sin[:, :, 2]/Sinc_sin[:, :, 2])  # z-component only
 
-    #     return r_out, R_out, t_out, T_out
+        T_out = np.stack([T_pp, T_ss], axis=2)
+
+        return r_out, R_out, t_out, T_out
 
     # def calculate_Efield(self, f, zeta_sys, z_vect=None, x=0.0,
     #                      magnetic=False, dz=None):
