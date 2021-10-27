@@ -38,6 +38,7 @@ from os import path
 from tqdm.notebook import trange
 
 r_0 = constants.physical_constants['classical electron radius'][0]
+c_0 = constants.physical_constants['speed of light in vacuum'][0]
 
 
 class Scattering(Simulation):
@@ -867,6 +868,49 @@ class GTM(Scattering):
             Berreman[idx_bf], axis=2)[:, :, np.newaxis], 3, axis=2)
 
         return gamma, qs
+
+    def calculate_layer_transfer_matrix(self, layer, zeta):
+        """
+        Compute the transfer matrix of the whole layer :math:`T_i=A_iP_iA_i^{-1}`
+
+        Parameters
+        ----------
+        f : float
+            frequency (in Hz)
+        zeta : complex
+               reduced in-plane wavevector kx/k0
+        Returns
+        -------
+        None
+
+        """
+
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+        mu = 1
+        gamma, qs = self.calculate_layer_gamma(layer, zeta)
+
+        Ai = np.zeros((N, K, 4, 4), dtype=np.complex128)
+        Ki = np.zeros((N, K, 4, 4), dtype=np.complex128)
+        Ti = np.zeros((N, K, 4, 4), dtype=np.complex128)  # Layer transfer matrix
+
+        # eqn(22)
+        Ai[:, :, 0, :] = gamma[:, :, :, 0]
+        Ai[:, :, 1, :] = gamma[:, :, :, 1]
+
+        Ai[:, :, 2, :] = (qs*gamma[:, :, :, 0]
+                          - np.repeat(zeta[:, :, np.newaxis], 4, axis=2)*gamma[:, :, :, 2])/mu
+        Ai[:, :, 3, :] = qs*gamma[:, :, :, 1]/mu
+
+        f = np.tile(self._frequency[:, np.newaxis, np.newaxis], [1, K, 4])
+        Ki[:, :, np.array([0, 1, 2, 3]), np.array([0, 1, 2, 3])] = np.exp(
+            -1.0j*(2.0*np.pi*f*qs[:, :, :]*layer._thickness)/c_0)
+
+        Ai_inv = np.linalg.inv(Ai)
+        # eqn (26)
+        Ti = m_times_n(Ai, m_times_n(Ki, Ai_inv))
+
+        return Ai, Ki, Ai_inv, Ti
 
 
 class XrayKin(Scattering):
