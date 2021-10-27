@@ -620,11 +620,6 @@ class GTM(Scattering):
             np.abs(psi_unsorted[reflmode0[0], reflmode0[1], reflmode0[2], 0])**2
             + np.abs(psi_unsorted[reflmode0[0], reflmode0[1], reflmode0[2], 2])**2)
 
-        print(Cp_te1)
-        print(Cp_te2)
-        print(Cp_re1)
-        print(Cp_re2)
-
         idx_bf = (np.abs(Cp_t1-Cp_t2) > self.qsd_thr)
         idx_nbf = (np.abs(Cp_t1-Cp_t2) <= self.qsd_thr)
         idx_bf_fliptrans = Cp_t2[idx_bf] > Cp_t1[idx_bf]
@@ -670,6 +665,209 @@ class GTM(Scattering):
         Berreman[:, :, 3] = np.reshape(Berreman_unsorted[reflmode1], (N, K, 3))
 
         return qs, Py, Berreman, idx_bf
+
+    def calculate_layer_gamma(self, layer, zeta):
+        """
+        Calculate the gamma matrix
+
+        Parameters
+        ----------
+        zeta : complex
+             in-plane reduced wavevector kx/k0
+
+        Returns
+        -------
+        None
+        """
+
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        mu = 1
+        layer_epsilon_matrix = np.repeat(np.expand_dims(
+            layer.get_epsilon_matrix(self._frequency), 1), K, 1)
+        qs, Py, Berreman, idx_bf = self.calculate_layer_q(layer, zeta)
+
+        gamma = np.zeros((N, K, 4, 3), dtype=np.complex128)
+
+        # this whole function is eqn (20)
+        gamma[:, :, 0, 0] = 1.0 + 0.0j
+        gamma[:, :, 1, 1] = 1.0 + 0.0j
+        gamma[:, :, 3, 1] = 1.0 + 0.0j
+        gamma[:, :, 2, 0] = -1.0 + 0.0j
+
+        # convenience definition of the repetitive factor
+        mu_eps33_zeta2 = (mu*layer_epsilon_matrix[:, :, 2, 2]-zeta**2)
+
+        #########################################
+        idx_qs0le1 = np.abs(qs[:, :, 0]-qs[:, :, 1]) < self.qsd_thr
+
+        gamma12 = np.zeros((N, K), dtype=np.complex128)
+        gamma12_num = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma12_denom = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma13 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma21 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma21_num = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma21_denom = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma23 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma32 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma32_num = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma32_denom = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma33 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma41 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma41_num = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma41_denom = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma43 = np.zeros_like(gamma12, dtype=np.complex128)
+
+        gamma12[idx_qs0le1] = 0.0 + 0.0j
+        gamma13[idx_qs0le1] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0le1]
+                                + zeta[idx_qs0le1]*qs[idx_qs0le1, 0]) \
+            / mu_eps33_zeta2[idx_qs0le1]
+
+        gamma21[idx_qs0le1] = 0.0 + 0.0j
+        gamma23[idx_qs0le1] = -mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0le1] \
+            / mu_eps33_zeta2[idx_qs0le1]
+
+        #########################################
+        idx_qs0geq1 = np.abs(qs[:, :, 0]-qs[:, :, 1]) >= self.qsd_thr
+
+        gamma12_num[idx_qs0geq1] = mu*layer_epsilon_matrix[:, :, 1, 2][idx_qs0geq1] \
+            * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
+               + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 0])
+        gamma12_num[idx_qs0geq1] = gamma12_num[idx_qs0geq1] \
+            - mu*layer_epsilon_matrix[:, :, 1, 0][idx_qs0geq1]*mu_eps33_zeta2[idx_qs0geq1]
+        gamma12_denom[idx_qs0geq1] = mu_eps33_zeta2[idx_qs0geq1] \
+            * (mu*layer_epsilon_matrix[:, :, 1, 1][idx_qs0geq1]
+               - zeta[idx_qs0geq1]**2-qs[idx_qs0geq1, 0]**2)
+        gamma12_denom[idx_qs0geq1] = gamma12_denom[idx_qs0geq1] - mu**2*layer_epsilon_matrix[:, :, 1, 2][idx_qs0geq1] \
+            * layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]
+        gamma12[idx_qs0geq1] = gamma12_num[idx_qs0geq1]/gamma12_denom[idx_qs0geq1]
+        # remove nans
+        gamma12[np.logical_and(np.isnan(gamma12), idx_qs0geq1)] = 0.0 + 0.0j
+
+        gamma13[idx_qs0geq1] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
+                                 + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 0])
+        gamma13[idx_qs0geq1] = gamma13[idx_qs0geq1] \
+            - mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]*gamma12[idx_qs0geq1]
+        gamma13[idx_qs0geq1] = gamma13[idx_qs0geq1]/mu_eps33_zeta2[idx_qs0geq1]
+
+        # remove nans
+        idx_nans = np.logical_and(np.isnan(gamma13), idx_qs0geq1)
+        gamma13[idx_nans] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_nans]
+                              + zeta[idx_nans]*qs[idx_nans, 0])/mu_eps33_zeta2[idx_nans]
+
+        gamma21_num[idx_qs0geq1] = mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1] \
+            * (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs0geq1]
+               + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1])
+        gamma21_num[idx_qs0geq1] = gamma21_num[idx_qs0geq1] \
+            - mu*layer_epsilon_matrix[:, :, 0, 1][idx_qs0geq1]*mu_eps33_zeta2[idx_qs0geq1]
+        gamma21_denom[idx_qs0geq1] = mu_eps33_zeta2[idx_qs0geq1] \
+            * (mu*layer_epsilon_matrix[:, :, 0, 0][idx_qs0geq1]-qs[idx_qs0geq1, 1]**2)
+        gamma21_denom[idx_qs0geq1] = gamma21_denom[idx_qs0geq1] \
+            - (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs0geq1]
+               + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1]) \
+            * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
+               + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1])
+        gamma21[idx_qs0geq1] = gamma21_num[idx_qs0geq1]/gamma21_denom[idx_qs0geq1]
+        # remove nans
+        gamma21[np.logical_and(np.isnan(gamma21), idx_qs0geq1)] = 0.0 + 0.0j
+
+        gamma23[idx_qs0geq1] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
+                                 + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1]) \
+            * gamma21[idx_qs0geq1]-mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]
+        gamma23[idx_qs0geq1] = gamma23[idx_qs0geq1]/mu_eps33_zeta2[idx_qs0geq1]
+        # remove nans
+        idx_nans = np.logical_and(np.isnan(gamma23), idx_qs0geq1)
+        gamma23[idx_nans] = -mu*layer_epsilon_matrix[:, :, 2, 1][idx_nans] \
+            / mu_eps33_zeta2[idx_nans]
+
+        #########################################
+        idx_qs2le3 = np.abs(qs[:, :, 2]-qs[:, :, 3]) < self.qsd_thr
+
+        gamma32[idx_qs2le3] = 0.0 + 0.0j
+        gamma33[idx_qs2le3] = (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2le3]
+                               + zeta[idx_qs2le3]*qs[idx_qs2le3, 2])/mu_eps33_zeta2[idx_qs2le3]
+        gamma41[idx_qs2le3] = 0.0 + 0.0j
+        gamma43[idx_qs2le3] = -mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2le3] \
+            / mu_eps33_zeta2[idx_qs2le3]
+
+        #########################################
+        idx_qs2geq3 = np.abs(qs[:, :, 2]-qs[:, :, 3]) >= self.qsd_thr
+
+        gamma32_num[idx_qs2geq3] = mu*layer_epsilon_matrix[:, :, 1, 0][idx_qs2geq3] \
+            * mu_eps33_zeta2[idx_qs2geq3]
+        gamma32_num[idx_qs2geq3] = gamma32_num[idx_qs2geq3] \
+            - mu*layer_epsilon_matrix[:, :, 1, 2][idx_qs2geq3] \
+                * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3]
+                   + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 2])
+        gamma32_denom[idx_qs2geq3] = mu_eps33_zeta2[idx_qs2geq3] \
+            * (mu*layer_epsilon_matrix[:, :, 1, 1][idx_qs2geq3]
+               - zeta[idx_qs2geq3]**2-qs[idx_qs2geq3, 2]**2)
+        gamma32_denom[idx_qs2geq3] = gamma32_denom[idx_qs2geq3] \
+            - mu**2*layer_epsilon_matrix[:, :, 1, 2][idx_qs2geq3] \
+            * layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3]
+        gamma32[idx_qs2geq3] = gamma32_num[idx_qs2geq3]/gamma32_denom[idx_qs2geq3]
+        # remove nans
+        gamma32[np.logical_and(np.isnan(gamma32), idx_qs2geq3)] = 0.0 + 0.0j
+
+        gamma33[idx_qs2geq3] = mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3] \
+            + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 2]
+        gamma33[idx_qs2geq3] = gamma33[idx_qs2geq3] \
+            + mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3]*gamma32[idx_qs2geq3]
+        gamma33[idx_qs2geq3] = gamma33[idx_qs2geq3]/mu_eps33_zeta2[idx_qs2geq3]
+        # remove nans
+        idx_nans = np.logical_and(np.isnan(gamma33), idx_qs2geq3)
+        gamma33[idx_nans] = (mu*layer_epsilon_matrix[:, :, 2, 0][idx_nans]
+                             + zeta[idx_nans]*qs[idx_nans, 2])/mu_eps33_zeta2[idx_nans]
+
+        gamma41_num[idx_qs2geq3] = mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3] \
+            * (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs2geq3]
+               + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])
+        gamma41_num[idx_qs2geq3] = gamma41_num[idx_qs2geq3] \
+            - mu*layer_epsilon_matrix[:, :, 0, 1][idx_qs2geq3]*mu_eps33_zeta2[idx_qs2geq3]
+        gamma41_denom[idx_qs2geq3] = mu_eps33_zeta2[idx_qs2geq3] \
+            * (mu*layer_epsilon_matrix[:, :, 0, 0][idx_qs2geq3]-qs[idx_qs2geq3, 3]**2)
+        gamma41_denom[idx_qs2geq3] = gamma41_denom[idx_qs2geq3] \
+            - (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs2geq3]
+               + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3]) \
+            * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3]
+               + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])
+        gamma41[idx_qs2geq3] = gamma41_num[idx_qs2geq3]/gamma41_denom[idx_qs2geq3]
+        # remove nans
+        gamma41[np.logical_and(np.isnan(gamma41), idx_qs2geq3)] = 0.0 + 0.0j
+
+        gamma43[idx_qs2geq3] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3]
+                                 + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])*gamma41[idx_qs2geq3]
+        gamma43[idx_qs2geq3] = gamma43[idx_qs2geq3] \
+            - mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3]
+        gamma43[idx_qs2geq3] = gamma43[idx_qs2geq3]/mu_eps33_zeta2[idx_qs2geq3]
+        # remove nans
+        idx_nans = np.logical_and(np.isnan(gamma43), idx_qs2geq3)
+        gamma43[idx_nans] = -mu*layer_epsilon_matrix[:, :, 2, 1][idx_nans]/mu_eps33_zeta2[idx_nans]
+
+        # gamma field vectors should be normalized to avoid any birefringence problems
+        gamma1 = np.stack([gamma[:, :, 0, 0], gamma12, gamma13], axis=2)
+        gamma2 = np.stack([gamma21, gamma[:, :, 1, 1], gamma23], axis=2)
+        gamma3 = np.stack([gamma[:, :, 2, 0], gamma32, gamma33], axis=2)
+        gamma4 = np.stack([gamma41, gamma[:, :, 3, 1], gamma43], axis=2)
+
+        # Regular case, no birefringence, we keep the Xu fields
+        gamma[:, :, 0, :] = gamma1/np.repeat(np.linalg.norm(
+            gamma1, axis=2)[:, :, np.newaxis], 3, axis=2)
+        gamma[:, :, 1, :] = gamma2/np.repeat(np.linalg.norm(
+            gamma2, axis=2)[:, :, np.newaxis], 3, axis=2)
+        gamma[:, :, 2, :] = gamma3/np.repeat(np.linalg.norm(
+            gamma3, axis=2)[:, :, np.newaxis], 3, axis=2)
+        gamma[:, :, 3, :] = gamma4/np.repeat(np.linalg.norm(
+            gamma4, axis=2)[:, :, np.newaxis], 3, axis=2)
+
+        # In case of birefringence, use Berreman fields
+        idx_bf = np.reshape(idx_bf, (N, K))
+        gamma[idx_bf] = Berreman[idx_bf]/np.repeat(np.linalg.norm(
+            Berreman[idx_bf], axis=2)[:, :, np.newaxis], 3, axis=2)
+
+        return gamma, qs
+
 
 class XrayKin(Scattering):
     r"""XrayKin
