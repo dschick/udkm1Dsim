@@ -449,11 +449,15 @@ class Layer:
         phi = self._euler_angles[1]
         psi = self._euler_angles[2]
 
-        self.euler_matrix[0, 0] = np.cos(psi) * np.cos(phi) - np.cos(theta) * np.sin(phi) * np.sin(psi)
-        self.euler_matrix[0, 1] = -np.sin(psi) * np.cos(phi) - np.cos(theta) * np.sin(phi) * np.cos(psi)
+        self.euler_matrix[0, 0] = np.cos(psi) * np.cos(phi) \
+            - np.cos(theta) * np.sin(phi) * np.sin(psi)
+        self.euler_matrix[0, 1] = -np.sin(psi) * np.cos(phi) \
+            - np.cos(theta) * np.sin(phi) * np.cos(psi)
         self.euler_matrix[0, 2] = np.sin(theta) * np.sin(phi)
-        self.euler_matrix[1, 0] = np.cos(psi) * np.sin(phi) + np.cos(theta) * np.cos(phi) * np.sin(psi)
-        self.euler_matrix[1, 1] = -np.sin(psi) * np.sin(phi) + np.cos(theta) * np.cos(phi) * np.cos(psi)
+        self.euler_matrix[1, 0] = np.cos(psi) * np.sin(phi) \
+            + np.cos(theta) * np.cos(phi) * np.sin(psi)
+        self.euler_matrix[1, 1] = -np.sin(psi) * np.sin(phi) \
+            + np.cos(theta) * np.cos(phi) * np.cos(psi)
         self.euler_matrix[1, 2] = -np.sin(theta) * np.cos(phi)
         self.euler_matrix[2, 0] = np.sin(theta) * np.sin(psi)
         self.euler_matrix[2, 1] = np.sin(theta) * np.cos(psi)
