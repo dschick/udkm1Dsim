@@ -992,7 +992,7 @@ class GTM(Scattering):
 
         return GammaStar
 
-    def calculate_r_t(self, zeta, GammaStar):
+    def calculate_r_t(self):
         """ Calculate various field and intensity reflection and transmission
         coefficients, as well as the 4-valued vector of transmitted field.
 
@@ -1031,9 +1031,13 @@ class GTM(Scattering):
         for consistency w/ Passler's matlab code
 
         """
-
         N = np.size(self._qz, 0)  # energy steps
         K = np.size(self._qz, 1)  # qz steps
+        eps = np.repeat(self.S.get_layer_handle(0).epsilon[0](
+            self._frequency[:])[:, np.newaxis], K, 1)
+        zeta = np.sin(self._theta)*np.sqrt((eps))
+
+        GammaStar = self.calculate_GammaStar(zeta)
         # common denominator for all coefficients
         Denom = GammaStar[:, :, 0, 0]*GammaStar[:, :, 2, 2] \
             - GammaStar[:, :, 0, 2]*GammaStar[:, :, 2, 0]
