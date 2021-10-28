@@ -578,6 +578,7 @@ class Layer:
         return np.matmul(np.linalg.inv(self.euler_matrix),
                          np.matmul(epsilon_matrix, self.euler_matrix))
 
+
 class AmorphousLayer(Layer):
     r"""AmorphousLayer
 
