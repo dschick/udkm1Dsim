@@ -26,7 +26,6 @@ __all__ = ['Scattering', 'GTM', 'XrayKin', 'XrayDyn', 'XrayDynMag']
 
 __docformat__ = 'restructuredtext'
 
-from sympy.logic.boolalg import Boolean
 from .simulation import Simulation
 from ..structures.layers import AmorphousLayer, UnitCell
 from .. import u, Q_
@@ -511,7 +510,7 @@ class GTM(Scattering):
         -----
         From this we also get the Poynting vectors.
         Wavevectors are sorted according to (trans-p, trans-s, refl-p, refl-s)
-        Birefringence is determined according to a threshold value `qsd_thr` 
+        Birefringence is determined according to a threshold value `qsd_thr`
         set at the beginning of the script.
         """
 
@@ -548,13 +547,17 @@ class GTM(Scattering):
 
         # sort berremann qi's according to (12)
         select1 = np.logical_and(np.imag(qs_unsorted) >= 0,
-                                 np.repeat((np.sum(np.abs(np.imag(qs_unsorted)), 2) > 0)[:, :, np.newaxis], 4, 2))
+                                 np.repeat((np.sum(np.abs(
+                                     np.imag(qs_unsorted)), 2) > 0)[:, :, np.newaxis], 4, 2))
         select2 = np.logical_and(np.imag(qs_unsorted) < 0,
-                                 np.repeat((np.sum(np.abs(np.imag(qs_unsorted)), 2) > 0)[:, :, np.newaxis], 4, 2))
+                                 np.repeat((np.sum(np.abs(
+                                     np.imag(qs_unsorted)), 2) > 0)[:, :, np.newaxis], 4, 2))
         select3 = np.logical_and(np.real(qs_unsorted) >= 0,
-                                 np.repeat((np.sum(np.abs(np.imag(qs_unsorted)), 2) == 0)[:, :, np.newaxis], 4, 2))
+                                 np.repeat((np.sum(np.abs(
+                                     np.imag(qs_unsorted)), 2) == 0)[:, :, np.newaxis], 4, 2))
         select4 = np.logical_and(np.real(qs_unsorted) < 0,
-                                 np.repeat((np.sum(np.abs(np.imag(qs_unsorted)), 2) == 0)[:, :, np.newaxis], 4, 2))
+                                 np.repeat((np.sum(np.abs(
+                                     np.imag(qs_unsorted)), 2) == 0)[:, :, np.newaxis], 4, 2))
 
         idx0, idx1, idx2 = np.where(select1)
         transmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
@@ -612,6 +615,7 @@ class GTM(Scattering):
         Py[:, :, :, 0] = Ey*Hz-Ez*Hy
         Py[:, :, :, 1] = Ez*Hx-Ex*Hz
         Py[:, :, :, 2] = Ex*Hy-Ey*Hx
+
         # Berreman modes (unsorted) in case they are needed later (birefringence)
         Berreman_unsorted[:, :, :, 0] = Ex
         Berreman_unsorted[:, :, :, 1] = Ey
@@ -769,7 +773,8 @@ class GTM(Scattering):
         gamma12_denom[idx_qs0geq1] = mu_eps33_zeta2[idx_qs0geq1] \
             * (mu*layer_epsilon_matrix[:, :, 1, 1][idx_qs0geq1]
                - zeta[idx_qs0geq1]**2-qs[idx_qs0geq1, 0]**2)
-        gamma12_denom[idx_qs0geq1] = gamma12_denom[idx_qs0geq1] - mu**2*layer_epsilon_matrix[:, :, 1, 2][idx_qs0geq1] \
+        gamma12_denom[idx_qs0geq1] = gamma12_denom[idx_qs0geq1] \
+            - mu**2*layer_epsilon_matrix[:, :, 1, 2][idx_qs0geq1] \
             * layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]
         gamma12[idx_qs0geq1] = gamma12_num[idx_qs0geq1]/gamma12_denom[idx_qs0geq1]
         # remove nans
@@ -894,7 +899,7 @@ class GTM(Scattering):
         # In case of birefringence, use Berreman fields
         idx_bf = np.reshape(idx_bf, (N, K), order='F')
         gamma[idx_bf] = Berreman[idx_bf]/np.repeat(np.linalg.norm(
-            Berreman[idx_bf], axis=2)[:, :, np.newaxis], 3, axis=2)
+           Berreman[idx_bf], axis=2)[:, :, np.newaxis], 3, axis=2)
 
         return gamma, qs
 
@@ -1010,7 +1015,7 @@ class GTM(Scattering):
         -----
         **IMPORTANT**
         ..version 19-03-2020:
-        All intensity coefficients are now well defined. Transmission is defined 
+        All intensity coefficients are now well defined. Transmission is defined
         mode-independently. It could be defined mode-dependently for non-birefringent
         substrates in future versions.
         The new definition of this function **BREAKS compatibility** with the previous
@@ -1022,7 +1027,8 @@ class GTM(Scattering):
         However, the intensity transmission coefficients T are ill-defined so far.
         This will be corrected upon future publication of the correct intensity coefficients.
 
-        Note also the different ordering of the coefficients, for consistency w/ Passler's matlab code
+        Note also the different ordering of the coefficients,
+        for consistency w/ Passler's matlab code
 
         """
 
@@ -1119,7 +1125,8 @@ class GTM(Scattering):
     #     zeta_sys : complex
     #         in-plane normalized wavevector kx/k0
     #     z_vect : 1Darray
-    #         Coordinates at which the calculation is done. if None, the layers boundaries are used.
+    #         Coordinates at which the calculation is done.
+    #         if None, the layers boundaries are used.
     #     x : float or 1D array
     #         x-coordinates for (future) 2D plot of the electric field. Not yet implemented
     #     magnetic : bool
@@ -1311,7 +1318,7 @@ class GTM(Scattering):
     #         Eprop[:4] = np.matmul(dKiz, F_bk[current_layer, :4])
     #         Eprop[4:] = np.matmul(dKiz, F_bk[current_layer, 4:])
 
-    #         # wave vector for each mode in layer L 
+    #         # wave vector for each mode in layer L
     #         k_lay = np.zeros((4, 3), dtype=np.complex128)
     #         k_lay[:, 0] = zeta_sys
     #         for jj, qj in enumerate(qs):
@@ -1319,7 +1326,7 @@ class GTM(Scattering):
     #         # no normalization by c_const eases the visualization of H
     #         # k_lay = k_lay/(c_const) ## omega simplifies in the H field formula
 
-    #         # p-pol in 
+    #         # p-pol in
     #         # forward, o/p
     #         F_tens[:3, ii] = Eprop[0]*gamma[0, :]
     #         if magnetic is True:
@@ -1336,7 +1343,7 @@ class GTM(Scattering):
     #         F_tens[9:12, ii] = Eprop[3]*gamma[3, :]
     #         if magnetic is True:
     #             H_tens[9:12, ii] = (1./L.mu)*np.cross(k_lay[3, :], F_tens[9:12, ii])
-    #         # s-pol in 
+    #         # s-pol in
     #         # forward, o/p
     #         F_tens[12:15, ii] = Eprop[4]*gamma[0, :]
     #         if magnetic is True:
@@ -1356,14 +1363,16 @@ class GTM(Scattering):
 
     #         # Total electric field (note that sign flip for
     #         # backward propagation is already in gamma)
-    #         # p in 
+    #         # p in
     #         E_out[:3, ii] = F_tens[:3, ii]+F_tens[3:6, ii]+F_tens[6:9, ii]+F_tens[9:12, ii]
     #         if magnetic is True:
     #             H_out[:3, ii] = H_tens[:3, ii]+H_tens[3:6, ii]+H_tens[6:9, ii]+H_tens[9:12, ii]
     #         # s in
-    #         E_out[3:6, ii] = F_tens[12:15, ii]+F_tens[15:18, ii]+F_tens[18:21, ii]+F_tens[21:, ii]
+    #         E_out[3:6, ii] = F_tens[12:15, ii]+F_tens[15:18, ii] \
+    #           +F_tens[18:21, ii]+F_tens[21:, ii]
     #         if magnetic is True:
-    #             H_out[3:6, ii] = H_tens[12:15, ii]+H_tens[15:18, ii]+H_tens[18:21, ii]+H_tens[21:, ii]
+    #             H_out[3:6, ii] = H_tens[12:15, ii]+H_tens[15:18, ii] \
+    #               + H_tens[18:21, ii]+H_tens[21:, ii]
     #     if magnetic is True:
     #         return z, E_out, H_out, zn[:-1]  # last interface is useless, substrate=infinite
     #     else:
