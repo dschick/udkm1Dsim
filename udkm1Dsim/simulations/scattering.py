@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Scattering', 'XrayKin', 'XrayDyn', 'XrayDynMag']
+__all__ = ['Scattering', 'GTM', 'XrayKin', 'XrayDyn', 'XrayDynMag']
 
 __docformat__ = 'restructuredtext'
 
@@ -547,22 +547,51 @@ class GTM(Scattering):
         psi_unsorted[select] = np.real(psi_unsorted[select]) + 0.0j
 
         # sort berremann qi's according to (12)
-        if any(np.abs(np.imag(qs_unsorted.flatten()))):
-            idx0, idx1, idx2 = np.where(np.imag(qs_unsorted) >= 0)
-            transmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
-            transmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
+        select1 = np.logical_and(np.imag(qs_unsorted) >= 0,
+                                 np.repeat((np.sum(np.abs(np.imag(qs_unsorted)), 2) > 0)[:, :, np.newaxis], 4, 2))
+        select2 = np.logical_and(np.imag(qs_unsorted) < 0,
+                                 np.repeat((np.sum(np.abs(np.imag(qs_unsorted)), 2) > 0)[:, :, np.newaxis], 4, 2))
+        select3 = np.logical_and(np.real(qs_unsorted) >= 0,
+                                 np.repeat((np.sum(np.abs(np.imag(qs_unsorted)), 2) == 0)[:, :, np.newaxis], 4, 2))
+        select4 = np.logical_and(np.real(qs_unsorted) < 0,
+                                 np.repeat((np.sum(np.abs(np.imag(qs_unsorted)), 2) == 0)[:, :, np.newaxis], 4, 2))
 
-            idx0, idx1, idx2 = np.where(np.imag(qs_unsorted) < 0)
-            reflmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
-            reflmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
-        else:
-            idx0, idx1, idx2 = np.where(np.real(qs_unsorted) >= 0)
-            transmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
-            transmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
+        idx0, idx1, idx2 = np.where(select1)
+        transmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
+        transmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
 
-            idx0, idx1, idx2 = np.where(np.real(qs_unsorted) < 0)
-            reflmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
-            reflmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
+        idx0, idx1, idx2 = np.where(select2)
+        reflmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
+        reflmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
+
+        idx0, idx1, idx2 = np.where(select3)
+        transmode0 = (np.concatenate([transmode0[0], idx0[0::2]]),
+                      np.concatenate([transmode0[1], idx1[0::2]]),
+                      np.concatenate([transmode0[2], idx2[0::2]])
+                      )
+        transmode1 = (np.concatenate([transmode1[0], idx0[1::2]]),
+                      np.concatenate([transmode1[1], idx1[1::2]]),
+                      np.concatenate([transmode1[2], idx2[1::2]])
+                      )
+
+        idx0, idx1, idx2 = np.where(select4)
+        reflmode0 = (np.concatenate([reflmode0[0], idx0[0::2]]),
+                     np.concatenate([reflmode0[1], idx1[0::2]]),
+                     np.concatenate([reflmode0[2], idx2[0::2]])
+                     )
+        reflmode1 = (np.concatenate([reflmode1[0], idx0[1::2]]),
+                     np.concatenate([reflmode1[1], idx1[1::2]]),
+                     np.concatenate([reflmode1[2], idx2[1::2]])
+                     )
+        # sort the indexing
+        idx_tm0 = np.lexsort((transmode0[0], transmode0[1]))
+        transmode0 = (transmode0[0][idx_tm0], transmode0[1][idx_tm0], transmode0[2][idx_tm0])
+        idx_tm1 = np.lexsort((transmode1[0], transmode1[1]))
+        transmode1 = (transmode1[0][idx_tm1], transmode1[1][idx_tm1], transmode1[2][idx_tm1])
+        idx_rm0 = np.lexsort((reflmode0[0], reflmode0[1]))
+        reflmode0 = (reflmode0[0][idx_rm0], reflmode0[1][idx_rm0], reflmode0[2][idx_rm0])
+        idx_rm1 = np.lexsort((reflmode1[0], reflmode1[1]))
+        reflmode1 = (reflmode1[0][idx_rm1], reflmode1[1][idx_rm1], reflmode1[2][idx_rm1])
 
         # Calculate the Poynting vector for each Psi using (16-18)
         Ex = psi_unsorted[:, :, 0, :]
@@ -650,20 +679,20 @@ class GTM(Scattering):
 
         # finally store the sorted version
         # q is (trans-p, trans-s, refl-p, refl-s)
-        qs[:, :, 0] = np.reshape(qs_unsorted[transmode0], (N, K))
-        qs[:, :, 1] = np.reshape(qs_unsorted[transmode1], (N, K))
-        qs[:, :, 2] = np.reshape(qs_unsorted[reflmode0], (N, K))
-        qs[:, :, 3] = np.reshape(qs_unsorted[reflmode1], (N, K))
+        qs[:, :, 0] = np.reshape(qs_unsorted[transmode0], (N, K), order='F')
+        qs[:, :, 1] = np.reshape(qs_unsorted[transmode1], (N, K), order='F')
+        qs[:, :, 2] = np.reshape(qs_unsorted[reflmode0], (N, K), order='F')
+        qs[:, :, 3] = np.reshape(qs_unsorted[reflmode1], (N, K), order='F')
         Py_temp = Py.copy()
-        Py[:, :, 0] = np.reshape(Py_temp[transmode0], (N, K, 3))
-        Py[:, :, 1] = np.reshape(Py_temp[transmode1], (N, K, 3))
-        Py[:, :, 2] = np.reshape(Py_temp[reflmode0], (N, K, 3))
-        Py[:, :, 3] = np.reshape(Py_temp[reflmode1], (N, K, 3))
+        Py[:, :, 0] = np.reshape(Py_temp[transmode0], (N, K, 3), order='F')
+        Py[:, :, 1] = np.reshape(Py_temp[transmode1], (N, K, 3), order='F')
+        Py[:, :, 2] = np.reshape(Py_temp[reflmode0], (N, K, 3), order='F')
+        Py[:, :, 3] = np.reshape(Py_temp[reflmode1], (N, K, 3), order='F')
         # # Store the (sorted) Berreman modes
-        Berreman[:, :, 0] = np.reshape(Berreman_unsorted[transmode0], (N, K, 3))
-        Berreman[:, :, 1] = np.reshape(Berreman_unsorted[transmode1], (N, K, 3))
-        Berreman[:, :, 2] = np.reshape(Berreman_unsorted[reflmode0], (N, K, 3))
-        Berreman[:, :, 3] = np.reshape(Berreman_unsorted[reflmode1], (N, K, 3))
+        Berreman[:, :, 0] = np.reshape(Berreman_unsorted[transmode0], (N, K, 3), order='F')
+        Berreman[:, :, 1] = np.reshape(Berreman_unsorted[transmode1], (N, K, 3), order='F')
+        Berreman[:, :, 2] = np.reshape(Berreman_unsorted[reflmode0], (N, K, 3), order='F')
+        Berreman[:, :, 3] = np.reshape(Berreman_unsorted[reflmode1], (N, K, 3), order='F')
 
         return qs, Py, Berreman, idx_bf
 
@@ -863,7 +892,7 @@ class GTM(Scattering):
             gamma4, axis=2)[:, :, np.newaxis], 3, axis=2)
 
         # In case of birefringence, use Berreman fields
-        idx_bf = np.reshape(idx_bf, (N, K))
+        idx_bf = np.reshape(idx_bf, (N, K), order='F')
         gamma[idx_bf] = Berreman[idx_bf]/np.repeat(np.linalg.norm(
             Berreman[idx_bf], axis=2)[:, :, np.newaxis], 3, axis=2)
 
@@ -941,14 +970,13 @@ class GTM(Scattering):
                                      [0, 0, 1, 0],
                                      [0, 1, 0, 0],
                                      [0, 0, 0, 1]])[np.newaxis, np.newaxis, :, :], [N, K, 1, 1])
-        Gamma = np.zeros((N, K, 4), dtype=np.complex128)
-        GammaStar = np.zeros((N, K, 4), dtype=np.complex128)
+        Gamma = np.zeros((N, K, 4, 4), dtype=np.complex128)
+        GammaStar = np.zeros((N, K, 4, 4), dtype=np.complex128)
 
         Tloc = np.tile(np.identity(4, dtype=np.complex128)[np.newaxis, np.newaxis, :, :],
                        [N, K, 1, 1])
 
         for ii in range(self.S.get_number_of_layers())[-2:0:-1]:
-            print(ii)
             Ai, Ki, Ai_inv, T_ii = self.calculate_layer_transfer_matrix(
                 self.S.get_layer_handle(ii), zeta)
             Tloc = m_times_n(T_ii, Tloc)
