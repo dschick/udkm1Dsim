@@ -404,7 +404,7 @@ class GTM(Scattering):
         """
         pass
 
-    def calculate_layer_matrices(self, layer, zeta):
+    def calculate_layer_matrices(self, layer):
         """
         Calculate the principal matrices necessary for the GTM algorithm.
 
@@ -443,13 +443,13 @@ class GTM(Scattering):
 
         # a matrix from eqn (9)
         a[:, :, 2, 0] = (M[:, :, 5, 0]*M[:, :, 2, 5] - M[:, :, 2, 0]*M[:, :, 5, 5])/b
-        a[:, :, 2, 1] = ((M[:, :, 5, 1]-zeta)*M[:, :, 2, 5] - M[:, :, 2, 1]*M[:, :, 5, 5])/b
+        a[:, :, 2, 1] = ((M[:, :, 5, 1]-self.zeta)*M[:, :, 2, 5] - M[:, :, 2, 1]*M[:, :, 5, 5])/b
         a[:, :, 2, 3] = (M[:, :, 5, 3]*M[:, :, 2, 5] - M[:, :, 2, 3]*M[:, :, 5, 5])/b
-        a[:, :, 2, 4] = (M[:, :, 5, 4]*M[:, :, 2, 5] - (M[:, :, 2, 4]+zeta)*M[:, :, 5, 5])/b
+        a[:, :, 2, 4] = (M[:, :, 5, 4]*M[:, :, 2, 5] - (M[:, :, 2, 4]+self.zeta)*M[:, :, 5, 5])/b
         a[:, :, 5, 0] = (M[:, :, 5, 2]*M[:, :, 2, 0] - M[:, :, 2, 2]*M[:, :, 5, 0])/b
-        a[:, :, 5, 1] = (M[:, :, 5, 2]*M[:, :, 2, 1] - M[:, :, 2, 2]*(M[:, :, 5, 1]-zeta))/b
+        a[:, :, 5, 1] = (M[:, :, 5, 2]*M[:, :, 2, 1] - M[:, :, 2, 2]*(M[:, :, 5, 1]-self.zeta))/b
         a[:, :, 5, 3] = (M[:, :, 5, 2]*M[:, :, 2, 3] - M[:, :, 2, 2]*M[:, :, 5, 3])/b
-        a[:, :, 5, 4] = (M[:, :, 5, 2]*(M[:, :, 2, 4]+zeta) - M[:, :, 2, 2]*M[:, :, 5, 4])/b
+        a[:, :, 5, 4] = (M[:, :, 5, 2]*(M[:, :, 2, 4]+self.zeta) - M[:, :, 2, 2]*M[:, :, 5, 4])/b
 
         # S Matrix (Don't know where it comes from since Delta is just S re-ordered)
         # Note that after this only Delta is used
@@ -458,24 +458,24 @@ class GTM(Scattering):
         S[:, :, 0, 2] = M[:, :, 0, 3] + M[:, :, 0, 2]*a[:, :, 2, 3] + M[:, :, 0, 5]*a[:, :, 5, 3]
         S[:, :, 0, 3] = M[:, :, 0, 4] + M[:, :, 0, 2]*a[:, :, 2, 4] + M[:, :, 0, 5]*a[:, :, 5, 4]
         S[:, :, 1, 0] = M[:, :, 1, 0] + M[:, :, 1, 2]*a[:, :, 2, 0] \
-            + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 0]
+            + (M[:, :, 1, 5]-self.zeta)*a[:, :, 5, 0]
         S[:, :, 1, 1] = M[:, :, 1, 1] + M[:, :, 1, 2]*a[:, :, 2, 1] \
-            + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 1]
+            + (M[:, :, 1, 5]-self.zeta)*a[:, :, 5, 1]
         S[:, :, 1, 2] = M[:, :, 1, 3] + M[:, :, 1, 2]*a[:, :, 2, 3] \
-            + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 3]
+            + (M[:, :, 1, 5]-self.zeta)*a[:, :, 5, 3]
         S[:, :, 1, 3] = M[:, :, 1, 4] + M[:, :, 1, 2]*a[:, :, 2, 4] \
-            + (M[:, :, 1, 5]-zeta)*a[:, :, 5, 4]
+            + (M[:, :, 1, 5]-self.zeta)*a[:, :, 5, 4]
         S[:, :, 2, 0] = M[:, :, 3, 0] + M[:, :, 3, 2]*a[:, :, 2, 0] + M[:, :, 3, 5]*a[:, :, 5, 0]
         S[:, :, 2, 1] = M[:, :, 3, 1] + M[:, :, 3, 2]*a[:, :, 2, 1] + M[:, :, 3, 5]*a[:, :, 5, 1]
         S[:, :, 2, 2] = M[:, :, 3, 3] + M[:, :, 3, 2]*a[:, :, 2, 3] + M[:, :, 3, 5]*a[:, :, 5, 3]
         S[:, :, 2, 3] = M[:, :, 3, 4] + M[:, :, 3, 2]*a[:, :, 2, 4] + M[:, :, 3, 5]*a[:, :, 5, 4]
-        S[:, :, 3, 0] = M[:, :, 4, 0] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 0] \
+        S[:, :, 3, 0] = M[:, :, 4, 0] + (M[:, :, 4, 2]+self.zeta)*a[:, :, 2, 0] \
             + M[:, :, 4, 5]*a[:, :, 5, 0]
-        S[:, :, 3, 1] = M[:, :, 4, 1] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 1] \
+        S[:, :, 3, 1] = M[:, :, 4, 1] + (M[:, :, 4, 2]+self.zeta)*a[:, :, 2, 1] \
             + M[:, :, 4, 5]*a[:, :, 5, 1]
-        S[:, :, 3, 2] = M[:, :, 4, 3] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 3] \
+        S[:, :, 3, 2] = M[:, :, 4, 3] + (M[:, :, 4, 2]+self.zeta)*a[:, :, 2, 3] \
             + M[:, :, 4, 5]*a[:, :, 5, 3]
-        S[:, :, 3, 3] = M[:, :, 4, 4] + (M[:, :, 4, 2]+zeta)*a[:, :, 2, 4] \
+        S[:, :, 3, 3] = M[:, :, 4, 4] + (M[:, :, 4, 2]+self.zeta)*a[:, :, 2, 4] \
             + M[:, :, 4, 5]*a[:, :, 5, 4]
 
         # Delta Matrix from eqn (8)
@@ -498,7 +498,7 @@ class GTM(Scattering):
 
         return M, a, b, S, Delta
 
-    def calculate_layer_q(self, layer, zeta):
+    def calculate_layer_q(self, layer):
         """
         Calculates the 4 out-of-plane wavevectors for the current layer.
 
@@ -517,7 +517,7 @@ class GTM(Scattering):
         N = np.size(self._qz, 0)  # energy steps
         K = np.size(self._qz, 1)  # qz steps
 
-        M, a, b, S, Delta = self.calculate_layer_matrices(layer, zeta)
+        M, a, b, S, Delta = self.calculate_layer_matrices(layer)
 
         qs = np.zeros((N, K, 4), dtype=np.complex128)  # out of plane wavevector
         Py = np.zeros((N, K, 4, 3), dtype=np.complex128)  # Poynting vector
@@ -700,7 +700,7 @@ class GTM(Scattering):
 
         return qs, Py, Berreman, idx_bf
 
-    def calculate_layer_gamma(self, layer, zeta):
+    def calculate_layer_gamma(self, layer):
         """
         Calculate the gamma matrix
 
@@ -720,7 +720,7 @@ class GTM(Scattering):
         mu = 1
         layer_epsilon_matrix = np.repeat(np.expand_dims(
             layer.get_epsilon_matrix(self._frequency), 1), K, 1)
-        qs, Py, Berreman, idx_bf = self.calculate_layer_q(layer, zeta)
+        qs, Py, Berreman, idx_bf = self.calculate_layer_q(layer)
 
         gamma = np.zeros((N, K, 4, 3), dtype=np.complex128)
 
@@ -731,7 +731,7 @@ class GTM(Scattering):
         gamma[:, :, 2, 0] = -1.0 + 0.0j
 
         # convenience definition of the repetitive factor
-        mu_eps33_zeta2 = (mu*layer_epsilon_matrix[:, :, 2, 2]-zeta**2)
+        mu_eps33_zeta2 = (mu*layer_epsilon_matrix[:, :, 2, 2]-self.zeta**2)
 
         #########################################
         idx_qs0le1 = np.abs(qs[:, :, 0]-qs[:, :, 1]) < self.qsd_thr
@@ -755,7 +755,7 @@ class GTM(Scattering):
 
         gamma12[idx_qs0le1] = 0.0 + 0.0j
         gamma13[idx_qs0le1] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0le1]
-                                + zeta[idx_qs0le1]*qs[idx_qs0le1, 0]) \
+                                + self.zeta[idx_qs0le1]*qs[idx_qs0le1, 0]) \
             / mu_eps33_zeta2[idx_qs0le1]
 
         gamma21[idx_qs0le1] = 0.0 + 0.0j
@@ -767,12 +767,12 @@ class GTM(Scattering):
 
         gamma12_num[idx_qs0geq1] = mu*layer_epsilon_matrix[:, :, 1, 2][idx_qs0geq1] \
             * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
-               + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 0])
+               + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 0])
         gamma12_num[idx_qs0geq1] = gamma12_num[idx_qs0geq1] \
             - mu*layer_epsilon_matrix[:, :, 1, 0][idx_qs0geq1]*mu_eps33_zeta2[idx_qs0geq1]
         gamma12_denom[idx_qs0geq1] = mu_eps33_zeta2[idx_qs0geq1] \
             * (mu*layer_epsilon_matrix[:, :, 1, 1][idx_qs0geq1]
-               - zeta[idx_qs0geq1]**2-qs[idx_qs0geq1, 0]**2)
+               - self.zeta[idx_qs0geq1]**2-qs[idx_qs0geq1, 0]**2)
         gamma12_denom[idx_qs0geq1] = gamma12_denom[idx_qs0geq1] \
             - mu**2*layer_epsilon_matrix[:, :, 1, 2][idx_qs0geq1] \
             * layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]
@@ -781,7 +781,7 @@ class GTM(Scattering):
         gamma12[np.logical_and(np.isnan(gamma12), idx_qs0geq1)] = 0.0 + 0.0j
 
         gamma13[idx_qs0geq1] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
-                                 + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 0])
+                                 + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 0])
         gamma13[idx_qs0geq1] = gamma13[idx_qs0geq1] \
             - mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]*gamma12[idx_qs0geq1]
         gamma13[idx_qs0geq1] = gamma13[idx_qs0geq1]/mu_eps33_zeta2[idx_qs0geq1]
@@ -789,26 +789,26 @@ class GTM(Scattering):
         # remove nans
         idx_nans = np.logical_and(np.isnan(gamma13), idx_qs0geq1)
         gamma13[idx_nans] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_nans]
-                              + zeta[idx_nans]*qs[idx_nans, 0])/mu_eps33_zeta2[idx_nans]
+                              + self.zeta[idx_nans]*qs[idx_nans, 0])/mu_eps33_zeta2[idx_nans]
 
         gamma21_num[idx_qs0geq1] = mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1] \
             * (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs0geq1]
-               + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1])
+               + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1])
         gamma21_num[idx_qs0geq1] = gamma21_num[idx_qs0geq1] \
             - mu*layer_epsilon_matrix[:, :, 0, 1][idx_qs0geq1]*mu_eps33_zeta2[idx_qs0geq1]
         gamma21_denom[idx_qs0geq1] = mu_eps33_zeta2[idx_qs0geq1] \
             * (mu*layer_epsilon_matrix[:, :, 0, 0][idx_qs0geq1]-qs[idx_qs0geq1, 1]**2)
         gamma21_denom[idx_qs0geq1] = gamma21_denom[idx_qs0geq1] \
             - (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs0geq1]
-               + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1]) \
+               + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1]) \
             * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
-               + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1])
+               + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1])
         gamma21[idx_qs0geq1] = gamma21_num[idx_qs0geq1]/gamma21_denom[idx_qs0geq1]
         # remove nans
         gamma21[np.logical_and(np.isnan(gamma21), idx_qs0geq1)] = 0.0 + 0.0j
 
         gamma23[idx_qs0geq1] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
-                                 + zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1]) \
+                                 + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1]) \
             * gamma21[idx_qs0geq1]-mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]
         gamma23[idx_qs0geq1] = gamma23[idx_qs0geq1]/mu_eps33_zeta2[idx_qs0geq1]
         # remove nans
@@ -821,7 +821,8 @@ class GTM(Scattering):
 
         gamma32[idx_qs2le3] = 0.0 + 0.0j
         gamma33[idx_qs2le3] = (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2le3]
-                               + zeta[idx_qs2le3]*qs[idx_qs2le3, 2])/mu_eps33_zeta2[idx_qs2le3]
+                               + self.zeta[idx_qs2le3]*qs[idx_qs2le3, 2]) \
+                                   / mu_eps33_zeta2[idx_qs2le3]
         gamma41[idx_qs2le3] = 0.0 + 0.0j
         gamma43[idx_qs2le3] = -mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2le3] \
             / mu_eps33_zeta2[idx_qs2le3]
@@ -834,10 +835,10 @@ class GTM(Scattering):
         gamma32_num[idx_qs2geq3] = gamma32_num[idx_qs2geq3] \
             - mu*layer_epsilon_matrix[:, :, 1, 2][idx_qs2geq3] \
                 * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3]
-                   + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 2])
+                   + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 2])
         gamma32_denom[idx_qs2geq3] = mu_eps33_zeta2[idx_qs2geq3] \
             * (mu*layer_epsilon_matrix[:, :, 1, 1][idx_qs2geq3]
-               - zeta[idx_qs2geq3]**2-qs[idx_qs2geq3, 2]**2)
+               - self.zeta[idx_qs2geq3]**2-qs[idx_qs2geq3, 2]**2)
         gamma32_denom[idx_qs2geq3] = gamma32_denom[idx_qs2geq3] \
             - mu**2*layer_epsilon_matrix[:, :, 1, 2][idx_qs2geq3] \
             * layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3]
@@ -846,33 +847,33 @@ class GTM(Scattering):
         gamma32[np.logical_and(np.isnan(gamma32), idx_qs2geq3)] = 0.0 + 0.0j
 
         gamma33[idx_qs2geq3] = mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3] \
-            + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 2]
+            + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 2]
         gamma33[idx_qs2geq3] = gamma33[idx_qs2geq3] \
             + mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3]*gamma32[idx_qs2geq3]
         gamma33[idx_qs2geq3] = gamma33[idx_qs2geq3]/mu_eps33_zeta2[idx_qs2geq3]
         # remove nans
         idx_nans = np.logical_and(np.isnan(gamma33), idx_qs2geq3)
         gamma33[idx_nans] = (mu*layer_epsilon_matrix[:, :, 2, 0][idx_nans]
-                             + zeta[idx_nans]*qs[idx_nans, 2])/mu_eps33_zeta2[idx_nans]
+                             + self.zeta[idx_nans]*qs[idx_nans, 2])/mu_eps33_zeta2[idx_nans]
 
         gamma41_num[idx_qs2geq3] = mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3] \
             * (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs2geq3]
-               + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])
+               + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])
         gamma41_num[idx_qs2geq3] = gamma41_num[idx_qs2geq3] \
             - mu*layer_epsilon_matrix[:, :, 0, 1][idx_qs2geq3]*mu_eps33_zeta2[idx_qs2geq3]
         gamma41_denom[idx_qs2geq3] = mu_eps33_zeta2[idx_qs2geq3] \
             * (mu*layer_epsilon_matrix[:, :, 0, 0][idx_qs2geq3]-qs[idx_qs2geq3, 3]**2)
         gamma41_denom[idx_qs2geq3] = gamma41_denom[idx_qs2geq3] \
             - (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs2geq3]
-               + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3]) \
+               + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3]) \
             * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3]
-               + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])
+               + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])
         gamma41[idx_qs2geq3] = gamma41_num[idx_qs2geq3]/gamma41_denom[idx_qs2geq3]
         # remove nans
         gamma41[np.logical_and(np.isnan(gamma41), idx_qs2geq3)] = 0.0 + 0.0j
 
         gamma43[idx_qs2geq3] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3]
-                                 + zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])*gamma41[idx_qs2geq3]
+                                 + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])*gamma41[idx_qs2geq3]
         gamma43[idx_qs2geq3] = gamma43[idx_qs2geq3] \
             - mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3]
         gamma43[idx_qs2geq3] = gamma43[idx_qs2geq3]/mu_eps33_zeta2[idx_qs2geq3]
@@ -903,7 +904,7 @@ class GTM(Scattering):
 
         return gamma, qs
 
-    def calculate_layer_transfer_matrix(self, layer, zeta):
+    def calculate_layer_transfer_matrix(self, layer):
         """
         Compute the transfer matrix of the whole layer :math:`T_i=A_iP_iA_i^{-1}`
 
@@ -922,7 +923,7 @@ class GTM(Scattering):
         N = np.size(self._qz, 0)  # energy steps
         K = np.size(self._qz, 1)  # qz steps
         mu = 1
-        gamma, qs = self.calculate_layer_gamma(layer, zeta)
+        gamma, qs = self.calculate_layer_gamma(layer)
 
         Ai = np.zeros((N, K, 4, 4), dtype=np.complex128)
         Ki = np.zeros((N, K, 4, 4), dtype=np.complex128)
@@ -933,7 +934,7 @@ class GTM(Scattering):
         Ai[:, :, 1, :] = gamma[:, :, :, 1]
 
         Ai[:, :, 2, :] = (qs*gamma[:, :, :, 0]
-                          - np.repeat(zeta[:, :, np.newaxis], 4, axis=2)*gamma[:, :, :, 2])/mu
+                          - np.repeat(self.zeta[:, :, np.newaxis], 4, axis=2)*gamma[:, :, :, 2])/mu
         Ai[:, :, 3, :] = qs*gamma[:, :, :, 1]/mu
 
         f = np.tile(self._frequency[:, np.newaxis, np.newaxis], [1, K, 4])
@@ -946,7 +947,7 @@ class GTM(Scattering):
 
         return Ai, Ki, Ai_inv, Ti
 
-    def calculate_GammaStar(self, zeta):
+    def calculate_GammaStar(self):
         """
         Calculate the whole system's transfer matrix.
 
@@ -967,9 +968,9 @@ class GTM(Scattering):
         K = np.size(self._qz, 1)  # qz steps
 
         Ai_super, Ki_super, Ai_inv_super, T_super = self.calculate_layer_transfer_matrix(
-            self.S.get_layer_handle(0), zeta)
+            self.S.get_layer_handle(0))
         Ai_sub, Ki_sub, Ai_inv_sub, T_sub = self.calculate_layer_transfer_matrix(
-            self.S.get_layer_handle(-1), zeta)
+            self.S.get_layer_handle(-1))
 
         Delta1234 = np.tile(np.array([[1, 0, 0, 0],
                                      [0, 0, 1, 0],
@@ -983,7 +984,7 @@ class GTM(Scattering):
 
         for ii in range(self.S.get_number_of_layers())[-2:0:-1]:
             Ai, Ki, Ai_inv, T_ii = self.calculate_layer_transfer_matrix(
-                self.S.get_layer_handle(ii), zeta)
+                self.S.get_layer_handle(ii))
             Tloc = m_times_n(T_ii, Tloc)
 
         Gamma = m_times_n(Ai_inv_super, m_times_n(Tloc, Ai_sub))
@@ -1035,9 +1036,9 @@ class GTM(Scattering):
         K = np.size(self._qz, 1)  # qz steps
         eps = np.repeat(self.S.get_layer_handle(0).epsilon[0](
             self._frequency[:])[:, np.newaxis], K, 1)
-        zeta = np.sin(self._theta)*np.sqrt((eps))
+        self.zeta = np.sin(self._theta)*np.sqrt((eps))
 
-        GammaStar = self.calculate_GammaStar(zeta)
+        GammaStar = self.calculate_GammaStar()
         # common denominator for all coefficients
         Denom = GammaStar[:, :, 0, 0]*GammaStar[:, :, 2, 2] \
             - GammaStar[:, :, 0, 2]*GammaStar[:, :, 2, 0]
@@ -1079,10 +1080,10 @@ class GTM(Scattering):
         # start with the superstrate
         # Incident fields are either p or s polarized
         ksup = np.zeros((N, K, 4, 3), dtype=np.complex128)  # wavevector in superstrate
-        ksup[:, :, :, 0] = np.repeat(zeta[:, :, np.newaxis], 4, axis=2)
+        ksup[:, :, :, 0] = np.repeat(self.zeta[:, :, np.newaxis], 4, axis=2)
 
-        gamma_sup, qs_sup = self.calculate_layer_gamma(self.S.get_layer_handle(0), zeta)
-        gamma_sub, qs_sub = self.calculate_layer_gamma(self.S.get_layer_handle(-1), zeta)
+        gamma_sup, qs_sup = self.calculate_layer_gamma(self.S.get_layer_handle(0))
+        gamma_sub, qs_sub = self.calculate_layer_gamma(self.S.get_layer_handle(-1))
 
         ksup[:, :, :, 2] = qs_sup
 
@@ -1102,7 +1103,7 @@ class GTM(Scattering):
             + np.repeat(t_out[:, :, 3][:, :, np.newaxis], 3, 2) \
             * gamma_sub[:, :, 1, :]  # s-in, p or s out
         ksub = np.zeros((N, K, 4, 3), dtype=np.complex128)
-        ksub[:, :, :, 0] = np.repeat(zeta[:, :, np.newaxis], 4, axis=2)
+        ksub[:, :, :, 0] = np.repeat(self.zeta[:, :, np.newaxis], 4, axis=2)
         ksub[:, :, :, 2] = qs_sub
         ksub = ksub/c_0  # omega simplifies in the H field formula
 
