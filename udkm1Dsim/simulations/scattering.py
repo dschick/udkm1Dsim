@@ -404,6 +404,74 @@ class GTM(Scattering):
         """
         pass
 
+    def calc_inv(self, A):
+        return np.linalg.inv(A)
+
+    @staticmethod
+    def exact_inv(M):
+        """Compute the 'exact' inverse of a 4x4 matrix using the analytical result.
+
+        Parameters
+        ----------
+        M : 4X4 array (float or complex)
+        Matrix to be inverted
+
+        Returns
+        -------
+        out : 4X4 array (complex)
+            Inverse of this matrix or Moore-Penrose approximation if matrix cannot
+            be inverted.
+
+        Notes
+        -----
+        This should give a higher precision and speed at a reduced noise.
+        From D.Dietze code https://github.com/ddietze/FSRStools
+
+        .. see also:: http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
+
+        """
+        #assert M.shape == (4, 4)
+
+        # the following equations use algebraic indexing; transpose input
+        # matrix to get indexing right
+
+        A = np.transpose(M, (0, 1, 3, 2))
+        detA = A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 2, 2] * A[:, :, 3, 3]+ A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 2, 3] * A[:, :, 3, 1] + A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 2, 1] * A[:, :, 3, 2]
+        detA = detA + A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 2, 3] * A[:, :, 3, 2] + A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 2, 0] * A[:, :, 3, 3] + A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 2, 2] * A[:, :, 3, 0]
+        detA = detA + A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 2, 1] * A[:, :, 3, 3] + A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 2, 3] * A[:, :, 3, 0] + A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 2, 0] * A[:, :, 3, 1]
+        detA = detA + A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 2, 2] * A[:, :, 3, 1] + A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 2, 0] * A[:, :, 3, 2] + A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 2, 1] * A[:, :, 3, 0]
+
+        detA = detA - A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 2, 3] * A[:, :, 3, 2] - A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 2, 1] * A[:, :, 3, 3] - A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 2, 2] * A[:, :, 3, 1]
+        detA = detA - A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 2, 2] * A[:, :, 3, 3] - A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 2, 3] * A[:, :, 3, 0] - A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 2, 0] * A[:, :, 3, 2]
+        detA = detA - A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 2, 3] * A[:, :, 3, 1] - A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 2, 0] * A[:, :, 3, 3] - A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 2, 1] * A[:, :, 3, 0]
+        detA = detA - A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 2, 1] * A[:, :, 3, 2] - A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 2, 2] * A[:, :, 3, 0] - A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 2, 0] * A[:, :, 3, 1]
+
+        #if detA == 0:
+        #    return np.linalg.pinv(M)
+
+        B = np.zeros(A.shape, dtype=np.complex128)
+        B[:, :, 0, 0] = A[:, :, 1, 1] * A[:, :, 2, 2] * A[:, :, 3, 3] + A[:, :, 1, 2] * A[:, :, 2, 3] * A[:, :, 3, 1] + A[:, :, 1, 3] * A[:, :, 2, 1] * A[:, :, 3, 2] - A[:, :, 1, 1] * A[:, :, 2, 3] * A[:, :, 3, 2] - A[:, :, 1, 2] * A[:, :, 2, 1] * A[:, :, 3, 3] - A[:, :, 1, 3] * A[:, :, 2, 2] * A[:, :, 3, 1]
+        B[:, :, 0, 1] = A[:, :, 0, 1] * A[:, :, 2, 3] * A[:, :, 3, 2] + A[:, :, 0, 2] * A[:, :, 2, 1] * A[:, :, 3, 3] + A[:, :, 0, 3] * A[:, :, 2, 2] * A[:, :, 3, 1] - A[:, :, 0, 1] * A[:, :, 2, 2] * A[:, :, 3, 3] - A[:, :, 0, 2] * A[:, :, 2, 3] * A[:, :, 3, 1] - A[:, :, 0, 3] * A[:, :, 2, 1] * A[:, :, 3, 2]
+        B[:, :, 0, 2] = A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 3, 3] + A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 3, 1] + A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 3, 2] - A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 3, 2] - A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 3, 3] - A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 3, 1]
+        B[:, :, 0, 3] = A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 2, 2] + A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 2, 3] + A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 2, 1] - A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 2, 3] - A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 2, 1] - A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 2, 2]
+
+        B[:, :, 1, 0] = A[:, :, 1, 0] * A[:, :, 2, 3] * A[:, :, 3, 2] + A[:, :, 1, 2] * A[:, :, 2, 0] * A[:, :, 3, 3] + A[:, :, 1, 3] * A[:, :, 2, 2] * A[:, :, 3, 0] - A[:, :, 1, 0] * A[:, :, 2, 2] * A[:, :, 3, 3] - A[:, :, 1, 2] * A[:, :, 2, 3] * A[:, :, 3, 0] - A[:, :, 1, 3] * A[:, :, 2, 0] * A[:, :, 3, 2]
+        B[:, :, 1, 1] = A[:, :, 0, 0] * A[:, :, 2, 2] * A[:, :, 3, 3] + A[:, :, 0, 2] * A[:, :, 2, 3] * A[:, :, 3, 0] + A[:, :, 0, 3] * A[:, :, 2, 0] * A[:, :, 3, 2] - A[:, :, 0, 0] * A[:, :, 2, 3] * A[:, :, 3, 2] - A[:, :, 0, 2] * A[:, :, 2, 0] * A[:, :, 3, 3] - A[:, :, 0, 3] * A[:, :, 2, 2] * A[:, :, 3, 0]
+        B[:, :, 1, 2] = A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 3, 2] + A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 3, 3] + A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 3, 0] - A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 3, 3] - A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 3, 0] - A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 3, 2]
+        B[:, :, 1, 3] = A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 2, 3] + A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 2, 0] + A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 2, 2] - A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 2, 2] - A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 2, 3] - A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 2, 0]
+
+        B[:, :, 2, 0] = A[:, :, 1, 0] * A[:, :, 2, 1] * A[:, :, 3, 3] + A[:, :, 1, 1] * A[:, :, 2, 3] * A[:, :, 3, 0] + A[:, :, 1, 3] * A[:, :, 2, 0] * A[:, :, 3, 1] - A[:, :, 1, 0] * A[:, :, 2, 3] * A[:, :, 3, 1] - A[:, :, 1, 1] * A[:, :, 2, 0] * A[:, :, 3, 3] - A[:, :, 1, 3] * A[:, :, 2, 1] * A[:, :, 3, 0]
+        B[:, :, 2, 1] = A[:, :, 0, 0] * A[:, :, 2, 3] * A[:, :, 3, 1] + A[:, :, 0, 1] * A[:, :, 2, 0] * A[:, :, 3, 3] + A[:, :, 0, 3] * A[:, :, 2, 1] * A[:, :, 3, 0] - A[:, :, 0, 0] * A[:, :, 2, 1] * A[:, :, 3, 3] - A[:, :, 0, 1] * A[:, :, 2, 3] * A[:, :, 3, 0] - A[:, :, 0, 3] * A[:, :, 2, 0] * A[:, :, 3, 1]
+        B[:, :, 2, 2] = A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 3, 3] + A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 3, 0] + A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 3, 1] - A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 3, 1] - A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 3, 3] - A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 3, 0]
+        B[:, :, 2, 3] = A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 2, 1] + A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 2, 3] + A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 2, 0] - A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 2, 3] - A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 2, 0] - A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 2, 1]
+
+        B[:, :, 3, 0] = A[:, :, 1, 0] * A[:, :, 2, 2] * A[:, :, 3, 1] + A[:, :, 1, 1] * A[:, :, 2, 0] * A[:, :, 3, 2] + A[:, :, 1, 2] * A[:, :, 2, 1] * A[:, :, 3, 0] - A[:, :, 1, 0] * A[:, :, 2, 1] * A[:, :, 3, 2] - A[:, :, 1, 1] * A[:, :, 2, 2] * A[:, :, 3, 0] - A[:, :, 1, 2] * A[:, :, 2, 0] * A[:, :, 3, 1]
+        B[:, :, 3, 1] = A[:, :, 0, 0] * A[:, :, 2, 1] * A[:, :, 3, 2] + A[:, :, 0, 1] * A[:, :, 2, 2] * A[:, :, 3, 0] + A[:, :, 0, 2] * A[:, :, 2, 0] * A[:, :, 3, 1] - A[:, :, 0, 0] * A[:, :, 2, 2] * A[:, :, 3, 1] - A[:, :, 0, 1] * A[:, :, 2, 0] * A[:, :, 3, 2] - A[:, :, 0, 2] * A[:, :, 2, 1] * A[:, :, 3, 0]
+        B[:, :, 3, 2] = A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 3, 1] + A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 3, 2] + A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 3, 0] - A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 3, 2] - A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 3, 0] - A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 3, 1]
+        B[:, :, 3, 3] = A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 2, 2] + A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 2, 0] + A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 2, 1] - A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 2, 1] - A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 2, 2] - A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 2, 0]
+
+        return np.transpose(B, (0, 1, 3, 2)) / np.tile(detA[:, :, np.newaxis, np.newaxis], (1, 1, 4, 4))
+
     def calculate_layer_matrices(self, layer):
         """
         Calculate the principal matrices necessary for the GTM algorithm.
@@ -941,7 +1009,7 @@ class GTM(Scattering):
         Ki[:, :, np.array([0, 1, 2, 3]), np.array([0, 1, 2, 3])] = np.exp(
             -1.0j*(2.0*np.pi*f*qs[:, :, :]*layer._thickness)/c_0)
 
-        Ai_inv = np.linalg.inv(Ai)
+        Ai_inv = self.calc_inv(Ai)
         # eqn (26)
         Ti = m_times_n(Ai, m_times_n(Ki, Ai_inv))
 
@@ -988,7 +1056,7 @@ class GTM(Scattering):
             Tloc = m_times_n(T_ii, Tloc)
 
         Gamma = m_times_n(Ai_inv_super, m_times_n(Tloc, Ai_sub))
-        GammaStar = m_times_n(np.linalg.inv(Delta1234),
+        GammaStar = m_times_n(self.calc_inv(Delta1234),
                               m_times_n(Gamma, Delta1234))
 
         return GammaStar
@@ -1073,7 +1141,6 @@ class GTM(Scattering):
         tps = np.nan_to_num(-GammaStar[:, :, 2, 0]/Denom)
         tsp = np.nan_to_num(-GammaStar[:, :, 0, 2]/Denom)
         t_out = np.stack([tpp, tps, tsp, tss], axis=2)
-        # t_field = np.array([tpp, tps, tsp, tss])
 
         # Intensity transmission requires Poyting vector analysis
         # N.B: could be done mode-dependentely later
@@ -1201,8 +1268,8 @@ class GTM(Scattering):
         # F_bk[-1] for plot purpose (see Fig. 1.(a))
         Ai, Ki_sub, _, _ = self.calculate_layer_transfer_matrix(
             self.S.get_layer_handle(-1))
-        F_bk[:, :, :4, -1] = np.einsum("lmij,lmj->lmj", np.linalg.inv(Ki_sub), F_ft[:, :, :4, -1])
-        F_bk[:, :, 4:, -1] = np.einsum("lmij,lmj->lmj", np.linalg.inv(Ki_sub), F_ft[:, :, 4:, -1])
+        F_bk[:, :, :4, -1] = np.einsum("lmij,lmj->lmi", self.calc_inv(Ki_sub), F_ft[:, :, :4, -1])
+        F_bk[:, :, 4:, -1] = np.einsum("lmij,lmj->lmi", self.calc_inv(Ki_sub), F_ft[:, :, 4:, -1])
 
         if num_layers > 2:
             # First layer is a special case to handle System.substrate
@@ -1211,7 +1278,7 @@ class GTM(Scattering):
 
             Aim1, Kim1, _, _ = self.calculate_layer_transfer_matrix(
                 self.S.get_layer_handle(-2))
-            Li = m_times_n(np.linalg.inv(Aim1), Ai)
+            Li = m_times_n(self.calc_inv(Aim1), Ai)
 
             F_bk[:, :, :4, -2] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, :4, -1])
             F_bk[:, :, 4:, -2] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, 4:, -1])
@@ -1229,12 +1296,12 @@ class GTM(Scattering):
                 Ai, _, _, _ = self.calculate_layer_transfer_matrix(
                     self.S.get_layer_handle(kl))
 
-                Li = m_times_n(np.linalg.inv(Aim1), Ai)
+                Li = m_times_n(self.calc_inv(Aim1), Ai)
                 # F_ft == E0  //  F_bk == E1
-                F_bk[:, :, :4, kl] = np.einsum("lmij,lmj->lmj", Li, F_ft[:, :, :4, kl+1])
-                F_bk[:, :, 4:, kl] = np.einsum("lmij,lmj->lmj", Li, F_ft[:, :, 4:, kl+1])
-                F_ft[:, :, :4, kl] = np.einsum("lmij,lmj->lmj", Kim1, F_bk[:, :, :4, kl])
-                F_ft[:, :, 4:, kl] = np.einsum("lmij,lmj->lmj", Kim1, F_bk[:, :, 4:, kl])
+                F_bk[:, :, :4, kl] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, :4, kl+1])
+                F_bk[:, :, 4:, kl] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, 4:, kl+1])
+                F_ft[:, :, :4, kl] = np.einsum("lmij,lmj->lmi", Kim1, F_bk[:, :, :4, kl])
+                F_ft[:, :, 4:, kl] = np.einsum("lmij,lmj->lmi", Kim1, F_bk[:, :, 4:, kl])
 
             zn[0] = zn[1]-self.S.get_layer_handle(1)._thickness
 
@@ -1242,32 +1309,25 @@ class GTM(Scattering):
                 self.S.get_layer_handle(0))
             Ai, _, _, _ = self.calculate_layer_transfer_matrix(
                 self.S.get_layer_handle(1))
-            Li = m_times_n(np.linalg.inv(Aim1), Ai)
+            Li = m_times_n(self.calc_inv(Aim1), Ai)
 
             # F_ft == E0  //  F_bk == E1
             F_bk[:, :, :4, 0] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, :4, 1])
             F_bk[:, :, 4:, 0] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, 4:, 1])
             F_ft[:, :, :4, 0] = np.einsum("lmij,lmj->lmi", Ki_sup, F_bk[:, :, :4, 0])
             F_ft[:, :, 4:, 0] = np.einsum("lmij,lmj->lmi", Ki_sup, F_bk[:, :, 4:, 0])
-
-            # for ii in range(N):
-            #     for jj in range(K):
-            #         F_bk[ii, jj, :4, 0] = np.matmul(Li[ii, jj, :, :], F_ft[ii, jj, :4, 1])
-            #         F_bk[ii, jj, 4:, 0] = np.matmul(Li[ii, jj, :, :], F_ft[ii, jj, 4:, 1])
-            #         F_ft[ii, jj, :4, 0] = np.matmul(Ki_sup[ii, jj, :, :], F_bk[ii, jj, :4, 0])
-            #         F_ft[ii, jj, 4:, 0] = np.matmul(Ki_sup[ii, jj, :, :], F_bk[ii, jj, 4:, 0])
         else:
             zn[0] = -self.S.get_layer_handle(-1)._thickness
             Ai, Ki_sub, _, _ = self.calculate_layer_transfer_matrix(
                 self.S.get_layer_handle(-1))
             Aim1, Ki_sup, _, _ = self.calculate_layer_transfer_matrix(
                 self.S.get_layer_handle(0))
-            Li = m_times_n(np.linalg.inv(Aim1), Ai)
+            Li = m_times_n(self.calc_inv(Aim1), Ai)
             # F_ft == E0  //  F_bk == E1
-            F_bk[:, :, :4, 0] = np.einsum("lmij,lmj->lmj", Li, F_ft[:, :, :4, 1])
-            F_bk[:, :, 4:, 0] = np.einsum("lmij,lmj->lmj", Li, F_ft[:, :, 4:, 1])
-            F_ft[:, :, :4, 0] = np.einsum("lmij,lmj->lmj", Ki_sup, F_bk[:, :, :4, 0])
-            F_ft[:, :, 4:, 0] = np.einsum("lmij,lmj->lmj", Ki_sup, F_bk[:, :, 4:, 0])
+            F_bk[:, :, :4, 0] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, :4, 1])
+            F_bk[:, :, 4:, 0] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, 4:, 1])
+            F_ft[:, :, :4, 0] = np.einsum("lmij,lmj->lmi", Ki_sup, F_bk[:, :, :4, 0])
+            F_ft[:, :, 4:, 0] = np.einsum("lmij,lmj->lmi", Ki_sup, F_bk[:, :, 4:, 0])
 
         # shift everything so that incident boundary is at z=0
         zn = zn-zn[0]
@@ -1388,7 +1448,6 @@ class GTM(Scattering):
                 H_out[:, :, 3:, ii] = H_tens[:, :, 12:15, ii] + H_tens[:, :, 15:18, ii] \
                     + H_tens[:, :, 18:21, ii] + H_tens[:, :, 21:, ii]
 
-        #print(F_tens[0, 0, :, :])
         if magnetic is True:
             return z, E_out, H_out, zn[:-1]  # last interface is useless, substrate=infinite
         else:
@@ -3742,8 +3801,8 @@ class XrayDynMag(Scattering):
             A_phi[:, :, :, :],
             np.sqrt(2) * eps[:, :, 0, 0][:, :, np.newaxis, np.newaxis])
 
-        A_inv = np.linalg.inv(A)
-        A_inv_phi = np.linalg.inv(A_phi)
+        A_inv = self.calc_inv(A)
+        A_inv_phi = self.calc_inv(A_phi)
 
         phase = self._k * distance
         phase = phase[:, np.newaxis]
