@@ -1443,7 +1443,7 @@ class GTM(Scattering):
             z = np.arange(-self.S.get_layer_handle(0)._thickness, zn[-1], dz)
 
         # 2x4 component field tensor E_prop propagated from front surface
-        Eprop = np.empty((N, K, 8), dtype=np.complex128)
+        E_prop = np.empty((N, K, 8), dtype=np.complex128)
         # 4-component field tensor F_tens for each direction and polarization
         F_tens = np.zeros((N, K, 24, len(z)), dtype=np.complex128)
         if magnetic is True:
@@ -1467,7 +1467,7 @@ class GTM(Scattering):
                 # in the substrate for dKiz
                 current_layer += 1
 
-                if current_layer == num_layers-2:  # reached substrate
+                if current_layer == num_layers-1:  # reached substrate
                     L = self.S.get_layer_handle(-1)
                 else:
                     L = self.S.get_layer_handle(current_layer)
@@ -1478,10 +1478,10 @@ class GTM(Scattering):
             dKiz[:, :, [0, 1, 2, 3], [0, 1, 2, 3]] = np.exp(1.0j*(
                 2.0*np.pi*f*qs*(zc-zn[current_layer]))/c_0)
 
-            # Eprop propagated from front surface to back of next layer
+            # E_prop propagated from front surface to back of next layer
             # n.b: unclear why using F_bk and not F_ft works... but it works !
-            Eprop[:, :, :4] = np.einsum("lmij,lmj->lmi", dKiz, F_bk[:, :, :4, current_layer])
-            Eprop[:, :, 4:] = np.einsum("lmij,lmj->lmi", dKiz, F_bk[:, :, 4:, current_layer])
+            E_prop[:, :, :4] = np.einsum("lmij,lmj->lmi", dKiz, F_bk[:, :, :4, current_layer])
+            E_prop[:, :, 4:] = np.einsum("lmij,lmj->lmi", dKiz, F_bk[:, :, 4:, current_layer])
 
             # wave vector for each mode in layer L
             k_lay = np.zeros((N, K, 4, 3), dtype=np.complex128)
@@ -1493,40 +1493,40 @@ class GTM(Scattering):
             # p-pol in
             # forward, o/p
             mu = 1
-            F_tens[:, :, :3, ii] = np.einsum('lm,lmj->lmj', Eprop[:, :, 0], gamma[:, :, 0, :])
+            F_tens[:, :, :3, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 0], gamma[:, :, 0, :])
             if magnetic is True:
                 H_tens[:, :, :3, ii] = (1./mu)*np.cross(k_lay[:, :, 0, :], F_tens[:, :, :3, ii])
             # forward, e/s
-            F_tens[:, :, 3:6, ii] = np.einsum('lm,lmj->lmj', Eprop[:, :, 1], gamma[:, :, 1, :])
+            F_tens[:, :, 3:6, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 1], gamma[:, :, 1, :])
             if magnetic is True:
                 H_tens[:, :, 3:6, ii] = (1./mu)*np.cross(k_lay[:, :, 1, :], F_tens[:, :, 3:6, ii])
             # backward, o/p
-            F_tens[:, :, 6:9, ii] = np.einsum('lm,lmj->lmj', Eprop[:, :, 2], gamma[:, :, 2, :])
+            F_tens[:, :, 6:9, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 2], gamma[:, :, 2, :])
             if magnetic is True:
                 H_tens[:, :, 6:9, ii] = (1./mu)*np.cross(k_lay[:, :, 2, :], F_tens[:, :, 6:9, ii])
             # backward, e/s
-            F_tens[:, :, 9:12, ii] = np.einsum('lm,lmj->lmj', Eprop[:, :, 3], gamma[:, :, 3, :])
+            F_tens[:, :, 9:12, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 3], gamma[:, :, 3, :])
             if magnetic is True:
                 H_tens[:, :, 9:12, ii] = (1./mu)*np.cross(k_lay[:, :, 3, :],
                                                           F_tens[:, :, 9:12, ii])
             # s-pol in
             # forward, o/p
-            F_tens[:, :, 12:15, ii] = np.einsum('lm,lmj->lmj', Eprop[:, :, 4], gamma[:, :, 0, :])
+            F_tens[:, :, 12:15, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 4], gamma[:, :, 0, :])
             if magnetic is True:
                 H_tens[:, :, 12:15, ii] = (1./mu)*np.cross(k_lay[:, :, 0, :],
                                                            F_tens[:, :, 12:15, ii])
             # forward, e/s
-            F_tens[:, :, 15:18, ii] = np.einsum('lm,lmj->lmj', Eprop[:, :, 5], gamma[:, :, 1, :])
+            F_tens[:, :, 15:18, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 5], gamma[:, :, 1, :])
             if magnetic is True:
                 H_tens[:, :, 15:18, ii] = (1./mu)*np.cross(k_lay[:, :, 1, :],
                                                            F_tens[:, :, 15:18, ii])
             # backward, o/p
-            F_tens[:, :, 18:21, ii] = np.einsum('lm,lmj->lmj', Eprop[:, :, 6], gamma[:, :, 2, :])
+            F_tens[:, :, 18:21, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 6], gamma[:, :, 2, :])
             if magnetic is True:
                 H_tens[:, :, 18:21, ii] = (1./mu)*np.cross(k_lay[:, :, 2, :],
                                                            F_tens[:, :, 18:21, ii])
             # backward, e/s
-            F_tens[:, :, 21:, ii] = np.einsum('lm,lmj->lmj', Eprop[:, :, 7], gamma[:, :, 3, :])
+            F_tens[:, :, 21:, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 7], gamma[:, :, 3, :])
             if magnetic is True:
                 H_tens[:, :, 21:, ii] = (1./mu)*np.cross(k_lay[:, :, 3, :],
                                                          F_tens[:, :, 21:, ii])
