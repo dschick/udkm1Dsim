@@ -1386,12 +1386,12 @@ class GTM(Scattering):
             # blue quantities in sketch
             for kl in range(1, num_layers-2)[::-1]:
                 # subtract the thickness (building thickness array backwards)
-                zn[kl] = zn[kl+1]-self.S.get_layer_handle(kl)._thickness
+                zn[kl] = zn[kl+1]-self.S.get_layer_handle(kl+1)._thickness
 
                 Aim1, Kim1, _, _ = self.calculate_layer_transfer_matrix(
-                    self.S.get_layer_handle(kl-1))
-                Ai, _, _, _ = self.calculate_layer_transfer_matrix(
                     self.S.get_layer_handle(kl))
+                Ai, _, _, _ = self.calculate_layer_transfer_matrix(
+                    self.S.get_layer_handle(kl+1))
 
                 Li = m_times_n(self.calc_inv(Aim1), Ai)
                 # F_ft == E0  //  F_bk == E1
@@ -1550,41 +1550,54 @@ class GTM(Scattering):
         else:
             return z, E_out, zn[:-1]  # last interface is useless, substrate=infinite
 
-    # def calculate_Poynting_Absorption_vs_z(self, z, E, H, R):
-    #     """
-    #     Calculate the z-dependent Poynting vector and cumulated absorption.
+    def calculate_Poynting_Absorption_vs_z(self, z, E, H, R):
+        """
+        Calculate the z-dependent Poynting vector and cumulated absorption.
 
-    #     Parameters
-    #     ----------
-    #     z : 1Darray
-    #         Spatial coordinate for the fields
-    #     E : 1Darray
-    #         6-components Electric field vector (p- or s- in) along z
-    #     H : 1Darray
-    #         6-components Magnetic field vector (p- or s- in) along z
-    #     R : len(4)-array
-    #         Reflectivity from :py:func:`calculate_r_t`
-    #     S_out : 6xlen(z) array
-    #         6 components (p//s) Poyting vector along z
-    #     A_out : 2xlen(z)
-    #         2 components (p//s) absorption along z
-    #     """
-    #     S_out = np.zeros((6, len(z)))  # Poynting vector
-    #     A_out = np.zeros((2, len(z)))  # z-dependent absorption
+        Parameters
+        ----------
+        z : 1Darray
+            Spatial coordinate for the fields
+        E : 1Darray
+            6-components Electric field vector (p- or s- in) along z
+        H : 1Darray
+            6-components Magnetic field vector (p- or s- in) along z
+        R : len(4)-array
+            Reflectivity from :py:func:`calculate_r_t`
+        S_out : 6xlen(z) array
+            6 components (p//s) Poyting vector along z
+        A_out : 2xlen(z)
+            2 components (p//s) absorption along z
+        """
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
 
-    #     # S=0.5*Re(ExB)
-    #     S_out[:3, :] = 0.5*np.real(np.cross(E[:3, :], np.conj(H[:3, :]),
-    #                              axisa=0, axisb=0, axisc=0))
-    #     S_out[3:6, :] = 0.5*np.real(np.cross(E[3:6, :], np.conj(H[3:6, :]),
-    #                              axisa=0, axisb=0, axisc=0))
+        S_out = np.zeros((N, K, 6, len(z)))  # Poynting vector
+        A_out = np.zeros((N, K, 2, len(z)))  # z-dependent absorption
+        # Tp_z = np.zeros((N, K, len(z)))  # z-dependent absorption
+        # Ts_z = np.zeros((N, K, len(z)))  # z-dependent absorption
+        Tp_z = np.zeros((len(z)))  # z-dependent absorption
+        Ts_z = np.zeros((len(z)))  # z-dependent absorption
 
-    #     z1 = np.abs(z).argmin()+1  # index where z>0, first interface
-    #     Tp_z = S_out[2, :]/S_out[2, 0]*(1.0-(R[0]+R[2]))  # layer-resolved transmittance p-pol
-    #     Ts_z = S_out[5, :]/S_out[5,0]*(1.0-(R[1]+R[3]))  # layer-resolved transmittance s-pol
-    #     A_out[0, z1:] = 1.0-(R[0]+R[2])-Tp_z[z1:]
-    #     A_out[1, z1:] = 1.0-(R[1]+R[3])-Ts_z[z1:]
+        # S=0.5*Re(ExB)
+        S_out[:, :, :3, :] = 0.5*np.real(np.cross(E[:, :, :3, :], np.conj(H[:, :, :3, :]),
+                                         axisa=2, axisb=2, axisc=2))
+        S_out[:, :, 3:, :] = 0.5*np.real(np.cross(E[:, :, 3:, :], np.conj(H[:, :, 3:, :]),
+                                         axisa=2, axisb=2, axisc=2))
 
-    #     return S_out, A_out
+        z1 = np.abs(z).argmin()+1  # index where z>0, first interface
+        # layer-resolved transmittance p-pol
+        Tp_z = S_out[:, :, 2, :]/np.repeat(S_out[:, :, 2, 0][:, :, np.newaxis], len(z), 2) \
+            * np.repeat((1-(R[:, :, 0]+R[:, :, 2]))[:, :, np.newaxis], len(z), 2)
+        # layer-resolved transmittance s-pol
+        Ts_z = S_out[:, :, 5, :]/np.repeat(S_out[:, :, 5, 0][:, :, np.newaxis], len(z), 2) \
+            * np.repeat((1-(R[:, :, 1]+R[:, :, 3]))[:, :, np.newaxis], len(z), 2)
+        A_out[:, :, 0, z1:] = 1.0-np.repeat(
+            (R[:, :, 0]+R[:, :, 2])[:, :, np.newaxis], len(z)-z1, 2)-Tp_z[:, :, z1:]
+        A_out[:, :, 1, z1:] = 1.0-np.repeat(
+            (R[:, :, 1]+R[:, :, 3])[:, :, np.newaxis], len(z)-z1, 2)-Ts_z[:, :, z1:]
+
+        return S_out, A_out
 
 
 class XrayKin(Scattering):
