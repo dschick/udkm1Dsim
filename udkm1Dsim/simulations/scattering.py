@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag']
+__all__ = ['Scattering', 'GTM', 'XrayKin', 'XrayDyn', 'XrayDynMag']
 
 __docformat__ = 'restructuredtext'
 
@@ -37,12 +37,13 @@ from os import path
 from tqdm.notebook import trange
 
 r_0 = constants.physical_constants['classical electron radius'][0]
+c_0 = constants.physical_constants['speed of light in vacuum'][0]
 
 
-class Xray(Simulation):
+class Scattering(Simulation):
     r"""Xray
 
-    Base class for all X-ray scattering simulations.
+    Base class for all light scattering simulations.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -64,6 +65,7 @@ class Xray(Simulation):
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
         energy (ndarray[float]): photon energies :math:`E` of scattering light
+        frequency (ndarray[float]): photon frequency :math:`f` of scattering light
         wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
         k (ndarray[float]): wavenumber :math:`k` of scattering light
         theta (ndarray[float]): incidence angles :math:`\theta` of scattering
@@ -82,6 +84,7 @@ class Xray(Simulation):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self._energy = np.array([])
+        self._frequency = np.array([])
         self._wl = np.array([])
         self._k = np.array([])
         self._theta = np.zeros([1, 1])
@@ -103,6 +106,8 @@ class Xray(Simulation):
         """String representation of this class"""
         output = [['energy', self.energy[0] if np.size(self.energy) == 1 else
                    '{:f} .. {:f}'.format(np.min(self.energy), np.max(self.energy))],
+                  ['frequency', self.frequency[0] if np.size(self.frequency) == 1 else
+                   '{:f} .. {:f}'.format(np.min(self.frequency), np.max(self.frequency))],
                   ['wavelength', self.wl[0] if np.size(self.wl) == 1 else
                    '{:f} .. {:f}'.format(np.min(self.wl), np.max(self.wl))],
                   ['wavenumber', self.k[0] if np.size(self.k) == 1 else
@@ -221,24 +226,205 @@ class Xray(Simulation):
         if caller != 'energy':
             if caller == 'wl':  # calc energy from wavelength
                 self._energy = Q_((constants.h*constants.c)/self._wl, 'J').to('eV').magnitude
-            elif caller == 'k':  # calc energy von wavevector
+            elif caller == 'k':  # calc energy from wavevector
                 self._energy = \
                     Q_((constants.h*constants.c)/(2*np.pi/self._k), 'J').to('eV').magnitude
+            elif caller == 'frequency':  # calc energy from frequency
+                self._energy = \
+                    Q_(constants.h*self._frequency, 'J').to('eV').magnitude
         if caller != 'wl':
             if caller == 'energy':  # calc wavelength from energy
                 self._wl = (constants.h*constants.c)/self.energy.to('J').magnitude
             elif caller == 'k':  # calc wavelength from wavevector
                 self._wl = 2*np.pi/self._k
+            elif caller == 'frequency':  # calc wavelength from frequency
+                self._wl = constants.c/self._frequency
         if caller != 'k':
             if caller == 'energy':  # calc wavevector from energy
                 self._k = 2*np.pi/self._wl
             elif caller == 'wl':  # calc wavevector from wavelength
                 self._k = 2*np.pi/self._wl
+            elif caller == 'frequency':  # calc wavevector from frequency
+                self._k = 2*np.pi*self._frequency/constants.c
+        if caller != 'frequency':
+            if caller == 'energy':  # calc frequency from energy
+                self._frequency = self.energy.to('J').magnitude/constants.h
+            elif caller == 'wl':  # calc frequency from wavelength
+                self._frequency = constants.c/self._wl
+            elif caller == 'k':  # calc frequency from wavevector
+                self._frequency = self._k*constants.c/(2*np.pi)
 
         if caller != 'theta':
             self._theta = np.arcsin(np.outer(self._wl, self._qz[0, :])/np.pi/4)
         if caller != 'qz':
             self._qz = np.outer(2*self._k, np.sin(self._theta[0, :]))
+
+        self._zeta = np.sin(self._theta)
+
+    def calc_inv(self, A):
+        return np.linalg.inv(A)
+
+    @staticmethod
+    def exact_inv(M):
+        """Compute the 'exact' inverse of a 4x4 matrix using the analytical result.
+
+        Parameters
+        ----------
+        M : 4X4 array (float or complex)
+        Matrix to be inverted
+
+        Returns
+        -------
+        out : 4X4 array (complex)
+            Inverse of this matrix or Moore-Penrose approximation if matrix cannot
+            be inverted.
+
+        Notes
+        -----
+        This should give a higher precision and speed at a reduced noise.
+        From D.Dietze code https://github.com/ddietze/FSRStools
+
+        .. see also:: http://www.cg.info.hiroshima-cu.ac.jp/~miyazaki/knowledge/teche23.html
+
+        """
+        # assert M.shape == (4, 4)
+
+        # the following equations use algebraic indexing; transpose input
+        # matrix to get indexing right
+
+        A = np.transpose(M, (0, 1, 3, 2))
+        detA = A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 2, 2] * A[:, :, 3, 3] \
+            + A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 2, 3] * A[:, :, 3, 1] \
+            + A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 2, 1] * A[:, :, 3, 2]
+        detA = detA + A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 2, 3] * A[:, :, 3, 2] \
+            + A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 2, 0] * A[:, :, 3, 3] \
+            + A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 2, 2] * A[:, :, 3, 0]
+        detA = detA + A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 2, 1] * A[:, :, 3, 3] \
+            + A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 2, 3] * A[:, :, 3, 0] \
+            + A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 2, 0] * A[:, :, 3, 1]
+        detA = detA + A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 2, 2] * A[:, :, 3, 1] \
+            + A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 2, 0] * A[:, :, 3, 2] \
+            + A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 2, 1] * A[:, :, 3, 0]
+
+        detA = detA - A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 2, 3] * A[:, :, 3, 2] \
+            - A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 2, 1] * A[:, :, 3, 3] \
+            - A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 2, 2] * A[:, :, 3, 1]
+        detA = detA - A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 2, 2] * A[:, :, 3, 3] \
+            - A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 2, 3] * A[:, :, 3, 0] \
+            - A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 2, 0] * A[:, :, 3, 2]
+        detA = detA - A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 2, 3] * A[:, :, 3, 1] \
+            - A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 2, 0] * A[:, :, 3, 3] \
+            - A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 2, 1] * A[:, :, 3, 0]
+        detA = detA - A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 2, 1] * A[:, :, 3, 2] \
+            - A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 2, 2] * A[:, :, 3, 0] \
+            - A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 2, 0] * A[:, :, 3, 1]
+
+        if detA == 0:
+            return np.linalg.pinv(M)
+
+        B = np.zeros(A.shape, dtype=np.complex128)
+        B[:, :, 0, 0] = A[:, :, 1, 1] * A[:, :, 2, 2] * A[:, :, 3, 3] \
+            + A[:, :, 1, 2] * A[:, :, 2, 3] * A[:, :, 3, 1] \
+            + A[:, :, 1, 3] * A[:, :, 2, 1] * A[:, :, 3, 2] \
+            - A[:, :, 1, 1] * A[:, :, 2, 3] * A[:, :, 3, 2] \
+            - A[:, :, 1, 2] * A[:, :, 2, 1] * A[:, :, 3, 3] \
+            - A[:, :, 1, 3] * A[:, :, 2, 2] * A[:, :, 3, 1]
+        B[:, :, 0, 1] = A[:, :, 0, 1] * A[:, :, 2, 3] * A[:, :, 3, 2] \
+            + A[:, :, 0, 2] * A[:, :, 2, 1] * A[:, :, 3, 3] \
+            + A[:, :, 0, 3] * A[:, :, 2, 2] * A[:, :, 3, 1] \
+            - A[:, :, 0, 1] * A[:, :, 2, 2] * A[:, :, 3, 3] \
+            - A[:, :, 0, 2] * A[:, :, 2, 3] * A[:, :, 3, 1] \
+            - A[:, :, 0, 3] * A[:, :, 2, 1] * A[:, :, 3, 2]
+        B[:, :, 0, 2] = A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 3, 3] \
+            + A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 3, 1] \
+            + A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 3, 2] \
+            - A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 3, 2] \
+            - A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 3, 3] \
+            - A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 3, 1]
+        B[:, :, 0, 3] = A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 2, 2] \
+            + A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 2, 3] \
+            + A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 2, 1] \
+            - A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 2, 3] \
+            - A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 2, 1] \
+            - A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 2, 2]
+
+        B[:, :, 1, 0] = A[:, :, 1, 0] * A[:, :, 2, 3] * A[:, :, 3, 2] \
+            + A[:, :, 1, 2] * A[:, :, 2, 0] * A[:, :, 3, 3] \
+            + A[:, :, 1, 3] * A[:, :, 2, 2] * A[:, :, 3, 0] \
+            - A[:, :, 1, 0] * A[:, :, 2, 2] * A[:, :, 3, 3] \
+            - A[:, :, 1, 2] * A[:, :, 2, 3] * A[:, :, 3, 0] \
+            - A[:, :, 1, 3] * A[:, :, 2, 0] * A[:, :, 3, 2]
+        B[:, :, 1, 1] = A[:, :, 0, 0] * A[:, :, 2, 2] * A[:, :, 3, 3] \
+            + A[:, :, 0, 2] * A[:, :, 2, 3] * A[:, :, 3, 0] \
+            + A[:, :, 0, 3] * A[:, :, 2, 0] * A[:, :, 3, 2] \
+            - A[:, :, 0, 0] * A[:, :, 2, 3] * A[:, :, 3, 2] \
+            - A[:, :, 0, 2] * A[:, :, 2, 0] * A[:, :, 3, 3] \
+            - A[:, :, 0, 3] * A[:, :, 2, 2] * A[:, :, 3, 0]
+        B[:, :, 1, 2] = A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 3, 2] \
+            + A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 3, 3] \
+            + A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 3, 0] \
+            - A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 3, 3] \
+            - A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 3, 0] \
+            - A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 3, 2]
+        B[:, :, 1, 3] = A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 2, 3] \
+            + A[:, :, 0, 2] * A[:, :, 1, 3] * A[:, :, 2, 0] \
+            + A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 2, 2] \
+            - A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 2, 2] \
+            - A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 2, 3] \
+            - A[:, :, 0, 3] * A[:, :, 1, 2] * A[:, :, 2, 0]
+
+        B[:, :, 2, 0] = A[:, :, 1, 0] * A[:, :, 2, 1] * A[:, :, 3, 3] \
+            + A[:, :, 1, 1] * A[:, :, 2, 3] * A[:, :, 3, 0] \
+            + A[:, :, 1, 3] * A[:, :, 2, 0] * A[:, :, 3, 1] \
+            - A[:, :, 1, 0] * A[:, :, 2, 3] * A[:, :, 3, 1] \
+            - A[:, :, 1, 1] * A[:, :, 2, 0] * A[:, :, 3, 3] \
+            - A[:, :, 1, 3] * A[:, :, 2, 1] * A[:, :, 3, 0]
+        B[:, :, 2, 1] = A[:, :, 0, 0] * A[:, :, 2, 3] * A[:, :, 3, 1] \
+            + A[:, :, 0, 1] * A[:, :, 2, 0] * A[:, :, 3, 3] \
+            + A[:, :, 0, 3] * A[:, :, 2, 1] * A[:, :, 3, 0] \
+            - A[:, :, 0, 0] * A[:, :, 2, 1] * A[:, :, 3, 3] \
+            - A[:, :, 0, 1] * A[:, :, 2, 3] * A[:, :, 3, 0] \
+            - A[:, :, 0, 3] * A[:, :, 2, 0] * A[:, :, 3, 1]
+        B[:, :, 2, 2] = A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 3, 3] \
+            + A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 3, 0] \
+            + A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 3, 1] \
+            - A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 3, 1] \
+            - A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 3, 3] \
+            - A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 3, 0]
+        B[:, :, 2, 3] = A[:, :, 0, 0] * A[:, :, 1, 3] * A[:, :, 2, 1] \
+            + A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 2, 3] \
+            + A[:, :, 0, 3] * A[:, :, 1, 1] * A[:, :, 2, 0] \
+            - A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 2, 3] \
+            - A[:, :, 0, 1] * A[:, :, 1, 3] * A[:, :, 2, 0] \
+            - A[:, :, 0, 3] * A[:, :, 1, 0] * A[:, :, 2, 1]
+
+        B[:, :, 3, 0] = A[:, :, 1, 0] * A[:, :, 2, 2] * A[:, :, 3, 1] \
+            + A[:, :, 1, 1] * A[:, :, 2, 0] * A[:, :, 3, 2] \
+            + A[:, :, 1, 2] * A[:, :, 2, 1] * A[:, :, 3, 0] \
+            - A[:, :, 1, 0] * A[:, :, 2, 1] * A[:, :, 3, 2] \
+            - A[:, :, 1, 1] * A[:, :, 2, 2] * A[:, :, 3, 0] \
+            - A[:, :, 1, 2] * A[:, :, 2, 0] * A[:, :, 3, 1]
+        B[:, :, 3, 1] = A[:, :, 0, 0] * A[:, :, 2, 1] * A[:, :, 3, 2] \
+            + A[:, :, 0, 1] * A[:, :, 2, 2] * A[:, :, 3, 0] \
+            + A[:, :, 0, 2] * A[:, :, 2, 0] * A[:, :, 3, 1] \
+            - A[:, :, 0, 0] * A[:, :, 2, 2] * A[:, :, 3, 1] \
+            - A[:, :, 0, 1] * A[:, :, 2, 0] * A[:, :, 3, 2] \
+            - A[:, :, 0, 2] * A[:, :, 2, 1] * A[:, :, 3, 0]
+        B[:, :, 3, 2] = A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 3, 1] \
+            + A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 3, 2] \
+            + A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 3, 0] \
+            - A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 3, 2] \
+            - A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 3, 0] \
+            - A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 3, 1]
+        B[:, :, 3, 3] = A[:, :, 0, 0] * A[:, :, 1, 1] * A[:, :, 2, 2] \
+            + A[:, :, 0, 1] * A[:, :, 1, 2] * A[:, :, 2, 0] \
+            + A[:, :, 0, 2] * A[:, :, 1, 0] * A[:, :, 2, 1] \
+            - A[:, :, 0, 0] * A[:, :, 1, 2] * A[:, :, 2, 1] \
+            - A[:, :, 0, 1] * A[:, :, 1, 0] * A[:, :, 2, 2] \
+            - A[:, :, 0, 2] * A[:, :, 1, 1] * A[:, :, 2, 0]
+
+        return np.transpose(B, (0, 1, 3, 2)) \
+            / np.tile(detA[:, :, np.newaxis, np.newaxis], (1, 1, 4, 4))
 
     @property
     def energy(self):
@@ -248,6 +434,15 @@ class Xray(Simulation):
     def energy(self, energy):
         self._energy = np.array(energy.to('eV').magnitude, ndmin=1)
         self.update_experiment('energy')
+
+    @property
+    def frequency(self):
+        return Q_(self._frequency, u.Hz)
+
+    @frequency.setter
+    def frequency(self, frequency):
+        self._frequency = np.array(frequency.to('Hz').magnitude, ndmin=1)
+        self.update_experiment('frequency')
 
     @property
     def wl(self):
@@ -290,7 +485,1122 @@ class Xray(Simulation):
         self.update_experiment('qz')
 
 
-class XrayKin(Xray):
+class GTM(Scattering):
+    r"""GTM
+
+    General Transfer Matrix scattering simulations.
+
+    Adapted from pyGTM
+
+    Args:
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
+
+    Keyword Args:
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+
+    Attributes:
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): incidence angles :math:`\theta` of scattering
+            light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
+
+    """
+
+    def __init__(self, S, force_recalc, **kwargs):
+        super().__init__(S, force_recalc, **kwargs)
+        self.qsd_thr = 1e-10  # threshold for wavevector comparison
+        self.zero_thr = 1e-10  # threshold for eigenvalue comparison to zero
+
+    def __str__(self):
+        """String representation of this class"""
+        class_str = 'General Transfer Matrix scattering simulation properties:\n\n'
+        class_str += super().__str__()
+        return class_str
+
+    def get_hash(self, **kwargs):
+        """get_hash
+
+        Calculates an unique hash given by the energy :math:`E`, :math:`q_z`
+        range, polarization states as well as the sample structure hash for
+        relevant scattering parameters. Optionally, part of the
+        ``strain_map`` is used.
+
+        Args:
+            **kwargs (ndarray[float]): spatio-temporal strain profile.
+
+        Returns:
+            hash (str): unique hash.
+
+        """
+        param = [self._qz, self._energy]
+
+        if 'strain_map' in kwargs:
+            strain_map = kwargs.get('strain_map')
+            if np.size(strain_map) > 1e6:
+                strain_map = strain_map.flatten()[0:1000000]
+            param.append(strain_map)
+
+        return self.S.get_hash(types=['optical']) + '_' + make_hash_md5(param)
+
+    def set_polarization(self, pol_in_state, pol_out_state):
+        """set_polarization
+
+        Sets the incoming and analyzer (outgoing) polarization. This is not
+        supported as the GTM always calculates s- and p-polarization.
+
+        Args:
+            pol_in_state (int): incoming polarization state id.
+            pol_out_state (int): outgoing polarization state id.
+
+        """
+        pass
+
+    def calculate_layer_matrices(self, layer):
+        """
+        Calculate the principal matrices necessary for the GTM algorithm.
+
+        Parameters
+        ----------
+        zeta : complex
+             In-plane reduced wavevector kx/k0 in the system.
+
+        Returns
+        -------
+             None
+
+        Notes
+        -----
+        Note that zeta is conserved through the whole system and set externally
+        using the angle of incidence and `System.superstrate.epsilon[0,0]` value
+
+        Requires prior execution of :py:func:`calculate_epsilon`
+
+        """
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        M = np.zeros((N, K, 6, 6), dtype=np.complex128)  # constitutive relations
+        a = np.zeros((N, K, 6, 6), dtype=np.complex128)
+        S = np.zeros((N, K, 4, 4), dtype=np.complex128)
+        Delta = np.zeros((N, K, 4, 4), dtype=np.complex128)
+
+        # Constitutive matrix (see e.g. eqn (4))
+        M[:, :, 0:3, 0:3] = np.repeat(np.expand_dims(
+            layer.get_epsilon_matrix(self._frequency), 1), K, 1)
+        M[:, :, 3:6, 3:6] = np.identity(3)
+
+        # from eqn (10)
+        b = M[:, :, 2, 2]*M[:, :, 5, 5] - M[:, :, 2, 5]*M[:, :, 5, 2]
+
+        # a matrix from eqn (9)
+        a[:, :, 2, 0] = (M[:, :, 5, 0]*M[:, :, 2, 5] - M[:, :, 2, 0]*M[:, :, 5, 5])/b
+        a[:, :, 2, 1] = ((M[:, :, 5, 1]-self.zeta)*M[:, :, 2, 5] - M[:, :, 2, 1]*M[:, :, 5, 5])/b
+        a[:, :, 2, 3] = (M[:, :, 5, 3]*M[:, :, 2, 5] - M[:, :, 2, 3]*M[:, :, 5, 5])/b
+        a[:, :, 2, 4] = (M[:, :, 5, 4]*M[:, :, 2, 5] - (M[:, :, 2, 4]+self.zeta)*M[:, :, 5, 5])/b
+        a[:, :, 5, 0] = (M[:, :, 5, 2]*M[:, :, 2, 0] - M[:, :, 2, 2]*M[:, :, 5, 0])/b
+        a[:, :, 5, 1] = (M[:, :, 5, 2]*M[:, :, 2, 1] - M[:, :, 2, 2]*(M[:, :, 5, 1]-self.zeta))/b
+        a[:, :, 5, 3] = (M[:, :, 5, 2]*M[:, :, 2, 3] - M[:, :, 2, 2]*M[:, :, 5, 3])/b
+        a[:, :, 5, 4] = (M[:, :, 5, 2]*(M[:, :, 2, 4]+self.zeta) - M[:, :, 2, 2]*M[:, :, 5, 4])/b
+
+        # S Matrix (Don't know where it comes from since Delta is just S re-ordered)
+        # Note that after this only Delta is used
+        S[:, :, 0, 0] = M[:, :, 0, 0] + M[:, :, 0, 2]*a[:, :, 2, 0] + M[:, :, 0, 5]*a[:, :, 5, 0]
+        S[:, :, 0, 1] = M[:, :, 0, 1] + M[:, :, 0, 2]*a[:, :, 2, 1] + M[:, :, 0, 5]*a[:, :, 5, 1]
+        S[:, :, 0, 2] = M[:, :, 0, 3] + M[:, :, 0, 2]*a[:, :, 2, 3] + M[:, :, 0, 5]*a[:, :, 5, 3]
+        S[:, :, 0, 3] = M[:, :, 0, 4] + M[:, :, 0, 2]*a[:, :, 2, 4] + M[:, :, 0, 5]*a[:, :, 5, 4]
+        S[:, :, 1, 0] = M[:, :, 1, 0] + M[:, :, 1, 2]*a[:, :, 2, 0] \
+            + (M[:, :, 1, 5]-self.zeta)*a[:, :, 5, 0]
+        S[:, :, 1, 1] = M[:, :, 1, 1] + M[:, :, 1, 2]*a[:, :, 2, 1] \
+            + (M[:, :, 1, 5]-self.zeta)*a[:, :, 5, 1]
+        S[:, :, 1, 2] = M[:, :, 1, 3] + M[:, :, 1, 2]*a[:, :, 2, 3] \
+            + (M[:, :, 1, 5]-self.zeta)*a[:, :, 5, 3]
+        S[:, :, 1, 3] = M[:, :, 1, 4] + M[:, :, 1, 2]*a[:, :, 2, 4] \
+            + (M[:, :, 1, 5]-self.zeta)*a[:, :, 5, 4]
+        S[:, :, 2, 0] = M[:, :, 3, 0] + M[:, :, 3, 2]*a[:, :, 2, 0] + M[:, :, 3, 5]*a[:, :, 5, 0]
+        S[:, :, 2, 1] = M[:, :, 3, 1] + M[:, :, 3, 2]*a[:, :, 2, 1] + M[:, :, 3, 5]*a[:, :, 5, 1]
+        S[:, :, 2, 2] = M[:, :, 3, 3] + M[:, :, 3, 2]*a[:, :, 2, 3] + M[:, :, 3, 5]*a[:, :, 5, 3]
+        S[:, :, 2, 3] = M[:, :, 3, 4] + M[:, :, 3, 2]*a[:, :, 2, 4] + M[:, :, 3, 5]*a[:, :, 5, 4]
+        S[:, :, 3, 0] = M[:, :, 4, 0] + (M[:, :, 4, 2]+self.zeta)*a[:, :, 2, 0] \
+            + M[:, :, 4, 5]*a[:, :, 5, 0]
+        S[:, :, 3, 1] = M[:, :, 4, 1] + (M[:, :, 4, 2]+self.zeta)*a[:, :, 2, 1] \
+            + M[:, :, 4, 5]*a[:, :, 5, 1]
+        S[:, :, 3, 2] = M[:, :, 4, 3] + (M[:, :, 4, 2]+self.zeta)*a[:, :, 2, 3] \
+            + M[:, :, 4, 5]*a[:, :, 5, 3]
+        S[:, :, 3, 3] = M[:, :, 4, 4] + (M[:, :, 4, 2]+self.zeta)*a[:, :, 2, 4] \
+            + M[:, :, 4, 5]*a[:, :, 5, 4]
+
+        # Delta Matrix from eqn (8)
+        Delta[:, :, 0, 0] = S[:, :, 3, 0]
+        Delta[:, :, 0, 1] = S[:, :, 3, 3]
+        Delta[:, :, 0, 2] = S[:, :, 3, 1]
+        Delta[:, :, 0, 3] = - S[:, :, 3, 2]
+        Delta[:, :, 1, 0] = S[:, :, 0, 0]
+        Delta[:, :, 1, 1] = S[:, :, 0, 3]
+        Delta[:, :, 1, 2] = S[:, :, 0, 1]
+        Delta[:, :, 1, 3] = - S[:, :, 0, 2]
+        Delta[:, :, 2, 0] = -S[:, :, 2, 0]
+        Delta[:, :, 2, 1] = -S[:, :, 2, 3]
+        Delta[:, :, 2, 2] = -S[:, :, 2, 1]
+        Delta[:, :, 2, 3] = S[:, :, 2, 2]
+        Delta[:, :, 3, 0] = S[:, :, 1, 0]
+        Delta[:, :, 3, 1] = S[:, :, 1, 3]
+        Delta[:, :, 3, 2] = S[:, :, 1, 1]
+        Delta[:, :, 3, 3] = -S[:, :, 1, 2]
+
+        return M, a, b, S, Delta
+
+    def calculate_layer_q(self, layer):
+        """
+        Calculates the 4 out-of-plane wavevectors for the current layer.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        From this we also get the Poynting vectors.
+        Wavevectors are sorted according to (trans-p, trans-s, refl-p, refl-s)
+        Birefringence is determined according to a threshold value `qsd_thr`
+        set at the beginning of the script.
+        """
+
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        M, a, b, S, Delta = self.calculate_layer_matrices(layer)
+
+        qs = np.zeros((N, K, 4), dtype=np.complex128)  # out of plane wavevector
+        Py = np.zeros((N, K, 4, 3), dtype=np.complex128)  # Poynting vector
+        # Stores the Berreman modes, used for birefringent layers
+        Berreman = np.zeros((N, K, 4, 3), dtype=np.complex128)
+        Berreman_unsorted = np.zeros((N, K, 4, 3), dtype=np.complex128)
+
+        # eigenvals // eigenvects as of eqn (11)
+        qs_unsorted, psi_unsorted = np.linalg.eig(Delta)
+        # remove extremely small real/imaginary parts that are due to
+        # numerical inaccuracy
+        select = np.logical_and(np.abs(np.imag(qs_unsorted)) > 0,
+                                np.abs(np.imag(qs_unsorted)) < self.zero_thr)
+        qs_unsorted[select] = np.real(qs_unsorted[select]) + 0.0j
+
+        select = np.logical_and(np.abs(np.real(qs_unsorted)) > 0,
+                                np.abs(np.real(qs_unsorted)) < self.zero_thr)
+        qs_unsorted[select] = 0.0 + 1.0j*np.imag(qs_unsorted[select])
+
+        select = np.logical_and(np.abs(np.real(psi_unsorted)) > 0,
+                                np.abs(np.real(psi_unsorted)) < self.zero_thr)
+        psi_unsorted[select] = 0.0 + 1.0j*np.imag(psi_unsorted[select])
+
+        select = np.logical_and(np.abs(np.imag(psi_unsorted)) > 0,
+                                np.abs(np.imag(psi_unsorted)) < self.zero_thr)
+        psi_unsorted[select] = np.real(psi_unsorted[select]) + 0.0j
+
+        # sort berremann qi's according to (12)
+        select1 = np.logical_and(np.imag(qs_unsorted) >= 0,
+                                 np.repeat((np.sum(np.abs(
+                                     np.imag(qs_unsorted)), 2) > 0)[:, :, np.newaxis], 4, 2))
+        select2 = np.logical_and(np.imag(qs_unsorted) < 0,
+                                 np.repeat((np.sum(np.abs(
+                                     np.imag(qs_unsorted)), 2) > 0)[:, :, np.newaxis], 4, 2))
+        select3 = np.logical_and(np.real(qs_unsorted) >= 0,
+                                 np.repeat((np.sum(np.abs(
+                                     np.imag(qs_unsorted)), 2) == 0)[:, :, np.newaxis], 4, 2))
+        select4 = np.logical_and(np.real(qs_unsorted) < 0,
+                                 np.repeat((np.sum(np.abs(
+                                     np.imag(qs_unsorted)), 2) == 0)[:, :, np.newaxis], 4, 2))
+
+        idx0, idx1, idx2 = np.where(select1)
+        transmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
+        transmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
+
+        idx0, idx1, idx2 = np.where(select2)
+        reflmode0 = (idx0[0::2], idx1[0::2], idx2[0::2])
+        reflmode1 = (idx0[1::2], idx1[1::2], idx2[1::2])
+
+        idx0, idx1, idx2 = np.where(select3)
+        transmode0 = (np.concatenate([transmode0[0], idx0[0::2]]),
+                      np.concatenate([transmode0[1], idx1[0::2]]),
+                      np.concatenate([transmode0[2], idx2[0::2]])
+                      )
+        transmode1 = (np.concatenate([transmode1[0], idx0[1::2]]),
+                      np.concatenate([transmode1[1], idx1[1::2]]),
+                      np.concatenate([transmode1[2], idx2[1::2]])
+                      )
+
+        idx0, idx1, idx2 = np.where(select4)
+        reflmode0 = (np.concatenate([reflmode0[0], idx0[0::2]]),
+                     np.concatenate([reflmode0[1], idx1[0::2]]),
+                     np.concatenate([reflmode0[2], idx2[0::2]])
+                     )
+        reflmode1 = (np.concatenate([reflmode1[0], idx0[1::2]]),
+                     np.concatenate([reflmode1[1], idx1[1::2]]),
+                     np.concatenate([reflmode1[2], idx2[1::2]])
+                     )
+        # sort the indexing
+        idx_tm0 = np.lexsort((transmode0[0], transmode0[1]))
+        transmode0 = (transmode0[0][idx_tm0], transmode0[1][idx_tm0], transmode0[2][idx_tm0])
+        idx_tm1 = np.lexsort((transmode1[0], transmode1[1]))
+        transmode1 = (transmode1[0][idx_tm1], transmode1[1][idx_tm1], transmode1[2][idx_tm1])
+        idx_rm0 = np.lexsort((reflmode0[0], reflmode0[1]))
+        reflmode0 = (reflmode0[0][idx_rm0], reflmode0[1][idx_rm0], reflmode0[2][idx_rm0])
+        idx_rm1 = np.lexsort((reflmode1[0], reflmode1[1]))
+        reflmode1 = (reflmode1[0][idx_rm1], reflmode1[1][idx_rm1], reflmode1[2][idx_rm1])
+
+        # Calculate the Poynting vector for each Psi using (16-18)
+        Ex = psi_unsorted[:, :, 0, :]
+        Ey = psi_unsorted[:, :, 2, :]
+        Hx = -psi_unsorted[:, :, 3, :]
+        Hy = psi_unsorted[:, :, 1, :]
+        # from eqn (17)
+        Ez = np.repeat(a[:, :, 2, 0][:, :, np.newaxis], 4, axis=2)*Ex \
+            + np.repeat(a[:, :, 2, 1][:, :, np.newaxis], 4, axis=2)*Ey \
+            + np.repeat(a[:, :, 2, 3][:, :, np.newaxis], 4, axis=2)*Hx \
+            + np.repeat(a[:, :, 2, 4][:, :, np.newaxis], 4, axis=2)*Hy
+        # from eqn (18)
+        Hz = np.repeat(a[:, :, 5, 0][:, :, np.newaxis], 4, axis=2)*Ex \
+            + np.repeat(a[:, :, 5, 1][:, :, np.newaxis], 4, axis=2)*Ey \
+            + np.repeat(a[:, :, 5, 3][:, :, np.newaxis], 4, axis=2)*Hx \
+            + np.repeat(a[:, :, 5, 4][:, :, np.newaxis], 4, axis=2)*Hy
+        # and from (16)
+        Py[:, :, :, 0] = Ey*Hz-Ez*Hy
+        Py[:, :, :, 1] = Ez*Hx-Ex*Hz
+        Py[:, :, :, 2] = Ex*Hy-Ey*Hx
+
+        # Berreman modes (unsorted) in case they are needed later (birefringence)
+        Berreman_unsorted[:, :, :, 0] = Ex
+        Berreman_unsorted[:, :, :, 1] = Ey
+        Berreman_unsorted[:, :, :, 2] = Ez
+
+        # check Cp using either the Poynting vector for birefringent
+        # materials or the electric field vector for non-birefringent
+        # media to sort the modes
+
+        # first calculate Cp for transmitted waves
+        Cp_t1 = np.abs(Py[transmode0[0], transmode0[1], transmode0[2], 0])**2/(
+            np.abs(Py[transmode0[0], transmode0[1], transmode0[2], 0])**2
+            + np.abs(Py[transmode0[0], transmode0[1], transmode0[2], 1])**2)
+        Cp_t2 = np.abs(Py[transmode1[0], transmode1[1], transmode1[2], 0])**2/(
+            np.abs(Py[transmode1[0], transmode1[1], transmode1[2], 0])**2
+            + np.abs(Py[transmode1[0], transmode1[1], transmode1[2], 1])**2)
+
+        Cp_r1 = np.abs(Py[reflmode1[0], reflmode1[1], reflmode1[2], 0])**2/(
+            np.abs(Py[reflmode1[0], reflmode1[1], reflmode1[2], 0])**2
+            + np.abs(Py[reflmode1[0], reflmode1[1], reflmode1[2], 1])**2)
+        Cp_r2 = np.abs(Py[reflmode0[0], reflmode0[1], reflmode0[2], 0])**2/(
+            np.abs(Py[reflmode0[0], reflmode0[1], reflmode0[2], 0])**2
+            + np.abs(Py[reflmode0[0], reflmode0[1], reflmode0[2], 1])**2)
+
+        Cp_te1 = np.abs(psi_unsorted[transmode1[0], transmode1[1], transmode1[2], 0])**2/(
+            np.abs(psi_unsorted[transmode1[0], transmode1[1], transmode1[2], 0])**2
+            + np.abs(psi_unsorted[transmode1[0], transmode1[1], transmode1[2], 2])**2)
+        Cp_te2 = np.abs(psi_unsorted[transmode0[0], transmode0[1], transmode0[2], 0])**2/(
+            np.abs(psi_unsorted[transmode0[0], transmode0[1], transmode0[2], 0])**2
+            + np.abs(psi_unsorted[transmode0[0], transmode0[1], transmode0[2], 2])**2)
+
+        Cp_re1 = np.abs(psi_unsorted[reflmode1[0], reflmode1[1], reflmode1[2], 0])**2/(
+            np.abs(psi_unsorted[reflmode1[0], reflmode1[1], reflmode1[2], 0])**2
+            + np.abs(psi_unsorted[reflmode1[0], reflmode1[1], reflmode1[2], 2])**2)
+        Cp_re2 = np.abs(psi_unsorted[reflmode0[0], reflmode0[1], reflmode0[2], 0])**2/(
+            np.abs(psi_unsorted[reflmode0[0], reflmode0[1], reflmode0[2], 0])**2
+            + np.abs(psi_unsorted[reflmode0[0], reflmode0[1], reflmode0[2], 2])**2)
+
+        idx_bf = (np.abs(Cp_t1-Cp_t2) > self.qsd_thr)
+        idx_nbf = (np.abs(Cp_t1-Cp_t2) <= self.qsd_thr)
+        idx_bf_fliptrans = Cp_t2[idx_bf] > Cp_t1[idx_bf]
+        idx_bf_fliprefl = Cp_r1[idx_bf] > Cp_r2[idx_bf]
+        idx_nbf_fliptrans = Cp_te1[idx_nbf] > Cp_te2[idx_nbf]
+        idx_nbf_fliprefl = Cp_re1[idx_nbf] > Cp_re2[idx_nbf]
+
+        # birefringence
+        # transmission
+        temp = transmode1[2][idx_bf_fliptrans]
+        transmode1[2][idx_bf_fliptrans] = transmode0[2][idx_bf_fliptrans]
+        transmode0[2][idx_bf_fliptrans] = temp
+        # reflection
+        temp = reflmode1[2][idx_bf_fliprefl]
+        reflmode1[2][idx_bf_fliprefl] = reflmode0[2][idx_bf_fliprefl]
+        reflmode0[2][idx_bf_fliprefl] = temp
+
+        # no birefringence
+        # transmission
+        temp = transmode1[2][idx_nbf_fliptrans]
+        transmode1[2][idx_nbf_fliptrans] = transmode0[2][idx_nbf_fliptrans]
+        transmode0[2][idx_nbf_fliptrans] = temp
+        # reflection
+        temp = reflmode1[2][idx_nbf_fliprefl]
+        reflmode1[2][idx_nbf_fliprefl] = reflmode0[2][idx_nbf_fliprefl]
+        reflmode0[2][idx_nbf_fliprefl] = temp
+
+        # finally store the sorted version
+        # q is (trans-p, trans-s, refl-p, refl-s)
+        qs[:, :, 0] = np.reshape(qs_unsorted[transmode0], (N, K), order='F')
+        qs[:, :, 1] = np.reshape(qs_unsorted[transmode1], (N, K), order='F')
+        qs[:, :, 2] = np.reshape(qs_unsorted[reflmode0], (N, K), order='F')
+        qs[:, :, 3] = np.reshape(qs_unsorted[reflmode1], (N, K), order='F')
+        Py_temp = Py.copy()
+        Py[:, :, 0] = np.reshape(Py_temp[transmode0], (N, K, 3), order='F')
+        Py[:, :, 1] = np.reshape(Py_temp[transmode1], (N, K, 3), order='F')
+        Py[:, :, 2] = np.reshape(Py_temp[reflmode0], (N, K, 3), order='F')
+        Py[:, :, 3] = np.reshape(Py_temp[reflmode1], (N, K, 3), order='F')
+        # # Store the (sorted) Berreman modes
+        Berreman[:, :, 0] = np.reshape(Berreman_unsorted[transmode0], (N, K, 3), order='F')
+        Berreman[:, :, 1] = np.reshape(Berreman_unsorted[transmode1], (N, K, 3), order='F')
+        Berreman[:, :, 2] = np.reshape(Berreman_unsorted[reflmode0], (N, K, 3), order='F')
+        Berreman[:, :, 3] = np.reshape(Berreman_unsorted[reflmode1], (N, K, 3), order='F')
+
+        return qs, Py, Berreman, idx_bf
+
+    def calculate_layer_gamma(self, layer):
+        """
+        Calculate the gamma matrix
+
+        Parameters
+        ----------
+        zeta : complex
+             in-plane reduced wavevector kx/k0
+
+        Returns
+        -------
+        None
+        """
+
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        mu = 1
+        layer_epsilon_matrix = np.repeat(np.expand_dims(
+            layer.get_epsilon_matrix(self._frequency), 1), K, 1)
+        qs, Py, Berreman, idx_bf = self.calculate_layer_q(layer)
+
+        gamma = np.zeros((N, K, 4, 3), dtype=np.complex128)
+
+        # this whole function is eqn (20)
+        gamma[:, :, 0, 0] = 1.0 + 0.0j
+        gamma[:, :, 1, 1] = 1.0 + 0.0j
+        gamma[:, :, 3, 1] = 1.0 + 0.0j
+        gamma[:, :, 2, 0] = -1.0 + 0.0j
+
+        # convenience definition of the repetitive factor
+        mu_eps33_zeta2 = (mu*layer_epsilon_matrix[:, :, 2, 2]-self.zeta**2)
+
+        #########################################
+        idx_qs0le1 = np.abs(qs[:, :, 0]-qs[:, :, 1]) < self.qsd_thr
+
+        gamma12 = np.zeros((N, K), dtype=np.complex128)
+        gamma12_num = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma12_denom = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma13 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma21 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma21_num = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma21_denom = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma23 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma32 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma32_num = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma32_denom = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma33 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma41 = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma41_num = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma41_denom = np.zeros_like(gamma12, dtype=np.complex128)
+        gamma43 = np.zeros_like(gamma12, dtype=np.complex128)
+
+        gamma12[idx_qs0le1] = 0.0 + 0.0j
+        gamma13[idx_qs0le1] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0le1]
+                                + self.zeta[idx_qs0le1]*qs[idx_qs0le1, 0]) \
+            / mu_eps33_zeta2[idx_qs0le1]
+
+        gamma21[idx_qs0le1] = 0.0 + 0.0j
+        gamma23[idx_qs0le1] = -mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0le1] \
+            / mu_eps33_zeta2[idx_qs0le1]
+
+        #########################################
+        idx_qs0geq1 = np.abs(qs[:, :, 0]-qs[:, :, 1]) >= self.qsd_thr
+
+        gamma12_num[idx_qs0geq1] = mu*layer_epsilon_matrix[:, :, 1, 2][idx_qs0geq1] \
+            * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
+               + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 0])
+        gamma12_num[idx_qs0geq1] = gamma12_num[idx_qs0geq1] \
+            - mu*layer_epsilon_matrix[:, :, 1, 0][idx_qs0geq1]*mu_eps33_zeta2[idx_qs0geq1]
+        gamma12_denom[idx_qs0geq1] = mu_eps33_zeta2[idx_qs0geq1] \
+            * (mu*layer_epsilon_matrix[:, :, 1, 1][idx_qs0geq1]
+               - self.zeta[idx_qs0geq1]**2-qs[idx_qs0geq1, 0]**2)
+        gamma12_denom[idx_qs0geq1] = gamma12_denom[idx_qs0geq1] \
+            - mu**2*layer_epsilon_matrix[:, :, 1, 2][idx_qs0geq1] \
+            * layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]
+        gamma12[idx_qs0geq1] = gamma12_num[idx_qs0geq1]/gamma12_denom[idx_qs0geq1]
+        # remove nans
+        gamma12[np.logical_and(np.isnan(gamma12), idx_qs0geq1)] = 0.0 + 0.0j
+
+        gamma13[idx_qs0geq1] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
+                                 + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 0])
+        gamma13[idx_qs0geq1] = gamma13[idx_qs0geq1] \
+            - mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]*gamma12[idx_qs0geq1]
+        gamma13[idx_qs0geq1] = gamma13[idx_qs0geq1]/mu_eps33_zeta2[idx_qs0geq1]
+
+        # remove nans
+        idx_nans = np.logical_and(np.isnan(gamma13), idx_qs0geq1)
+        gamma13[idx_nans] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_nans]
+                              + self.zeta[idx_nans]*qs[idx_nans, 0])/mu_eps33_zeta2[idx_nans]
+
+        gamma21_num[idx_qs0geq1] = mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1] \
+            * (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs0geq1]
+               + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1])
+        gamma21_num[idx_qs0geq1] = gamma21_num[idx_qs0geq1] \
+            - mu*layer_epsilon_matrix[:, :, 0, 1][idx_qs0geq1]*mu_eps33_zeta2[idx_qs0geq1]
+        gamma21_denom[idx_qs0geq1] = mu_eps33_zeta2[idx_qs0geq1] \
+            * (mu*layer_epsilon_matrix[:, :, 0, 0][idx_qs0geq1]-qs[idx_qs0geq1, 1]**2)
+        gamma21_denom[idx_qs0geq1] = gamma21_denom[idx_qs0geq1] \
+            - (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs0geq1]
+               + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1]) \
+            * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
+               + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1])
+        gamma21[idx_qs0geq1] = gamma21_num[idx_qs0geq1]/gamma21_denom[idx_qs0geq1]
+        # remove nans
+        gamma21[np.logical_and(np.isnan(gamma21), idx_qs0geq1)] = 0.0 + 0.0j
+
+        gamma23[idx_qs0geq1] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs0geq1]
+                                 + self.zeta[idx_qs0geq1]*qs[idx_qs0geq1, 1]) \
+            * gamma21[idx_qs0geq1]-mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs0geq1]
+        gamma23[idx_qs0geq1] = gamma23[idx_qs0geq1]/mu_eps33_zeta2[idx_qs0geq1]
+        # remove nans
+        idx_nans = np.logical_and(np.isnan(gamma23), idx_qs0geq1)
+        gamma23[idx_nans] = -mu*layer_epsilon_matrix[:, :, 2, 1][idx_nans] \
+            / mu_eps33_zeta2[idx_nans]
+
+        #########################################
+        idx_qs2le3 = np.abs(qs[:, :, 2]-qs[:, :, 3]) < self.qsd_thr
+
+        gamma32[idx_qs2le3] = 0.0 + 0.0j
+        gamma33[idx_qs2le3] = (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2le3]
+                               + self.zeta[idx_qs2le3]*qs[idx_qs2le3, 2]) \
+            / mu_eps33_zeta2[idx_qs2le3]
+        gamma41[idx_qs2le3] = 0.0 + 0.0j
+        gamma43[idx_qs2le3] = -mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2le3] \
+            / mu_eps33_zeta2[idx_qs2le3]
+
+        #########################################
+        idx_qs2geq3 = np.abs(qs[:, :, 2]-qs[:, :, 3]) >= self.qsd_thr
+
+        gamma32_num[idx_qs2geq3] = mu*layer_epsilon_matrix[:, :, 1, 0][idx_qs2geq3] \
+            * mu_eps33_zeta2[idx_qs2geq3]
+        gamma32_num[idx_qs2geq3] = gamma32_num[idx_qs2geq3] \
+            - mu*layer_epsilon_matrix[:, :, 1, 2][idx_qs2geq3] \
+                * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3]
+                   + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 2])
+        gamma32_denom[idx_qs2geq3] = mu_eps33_zeta2[idx_qs2geq3] \
+            * (mu*layer_epsilon_matrix[:, :, 1, 1][idx_qs2geq3]
+               - self.zeta[idx_qs2geq3]**2-qs[idx_qs2geq3, 2]**2)
+        gamma32_denom[idx_qs2geq3] = gamma32_denom[idx_qs2geq3] \
+            - mu**2*layer_epsilon_matrix[:, :, 1, 2][idx_qs2geq3] \
+            * layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3]
+        gamma32[idx_qs2geq3] = gamma32_num[idx_qs2geq3]/gamma32_denom[idx_qs2geq3]
+        # remove nans
+        gamma32[np.logical_and(np.isnan(gamma32), idx_qs2geq3)] = 0.0 + 0.0j
+
+        gamma33[idx_qs2geq3] = mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3] \
+            + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 2]
+        gamma33[idx_qs2geq3] = gamma33[idx_qs2geq3] \
+            + mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3]*gamma32[idx_qs2geq3]
+        gamma33[idx_qs2geq3] = gamma33[idx_qs2geq3]/mu_eps33_zeta2[idx_qs2geq3]
+        # remove nans
+        idx_nans = np.logical_and(np.isnan(gamma33), idx_qs2geq3)
+        gamma33[idx_nans] = (mu*layer_epsilon_matrix[:, :, 2, 0][idx_nans]
+                             + self.zeta[idx_nans]*qs[idx_nans, 2])/mu_eps33_zeta2[idx_nans]
+
+        gamma41_num[idx_qs2geq3] = mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3] \
+            * (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs2geq3]
+               + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])
+        gamma41_num[idx_qs2geq3] = gamma41_num[idx_qs2geq3] \
+            - mu*layer_epsilon_matrix[:, :, 0, 1][idx_qs2geq3]*mu_eps33_zeta2[idx_qs2geq3]
+        gamma41_denom[idx_qs2geq3] = mu_eps33_zeta2[idx_qs2geq3] \
+            * (mu*layer_epsilon_matrix[:, :, 0, 0][idx_qs2geq3]-qs[idx_qs2geq3, 3]**2)
+        gamma41_denom[idx_qs2geq3] = gamma41_denom[idx_qs2geq3] \
+            - (mu*layer_epsilon_matrix[:, :, 0, 2][idx_qs2geq3]
+               + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3]) \
+            * (mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3]
+               + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])
+        gamma41[idx_qs2geq3] = gamma41_num[idx_qs2geq3]/gamma41_denom[idx_qs2geq3]
+        # remove nans
+        gamma41[np.logical_and(np.isnan(gamma41), idx_qs2geq3)] = 0.0 + 0.0j
+
+        gamma43[idx_qs2geq3] = -(mu*layer_epsilon_matrix[:, :, 2, 0][idx_qs2geq3]
+                                 + self.zeta[idx_qs2geq3]*qs[idx_qs2geq3, 3])*gamma41[idx_qs2geq3]
+        gamma43[idx_qs2geq3] = gamma43[idx_qs2geq3] \
+            - mu*layer_epsilon_matrix[:, :, 2, 1][idx_qs2geq3]
+        gamma43[idx_qs2geq3] = gamma43[idx_qs2geq3]/mu_eps33_zeta2[idx_qs2geq3]
+        # remove nans
+        idx_nans = np.logical_and(np.isnan(gamma43), idx_qs2geq3)
+        gamma43[idx_nans] = -mu*layer_epsilon_matrix[:, :, 2, 1][idx_nans]/mu_eps33_zeta2[idx_nans]
+
+        # gamma field vectors should be normalized to avoid any birefringence problems
+        gamma1 = np.stack([gamma[:, :, 0, 0], gamma12, gamma13], axis=2)
+        gamma2 = np.stack([gamma21, gamma[:, :, 1, 1], gamma23], axis=2)
+        gamma3 = np.stack([gamma[:, :, 2, 0], gamma32, gamma33], axis=2)
+        gamma4 = np.stack([gamma41, gamma[:, :, 3, 1], gamma43], axis=2)
+
+        # Regular case, no birefringence, we keep the Xu fields
+        gamma[:, :, 0, :] = gamma1/np.repeat(np.linalg.norm(
+            gamma1, axis=2)[:, :, np.newaxis], 3, axis=2)
+        gamma[:, :, 1, :] = gamma2/np.repeat(np.linalg.norm(
+            gamma2, axis=2)[:, :, np.newaxis], 3, axis=2)
+        gamma[:, :, 2, :] = gamma3/np.repeat(np.linalg.norm(
+            gamma3, axis=2)[:, :, np.newaxis], 3, axis=2)
+        gamma[:, :, 3, :] = gamma4/np.repeat(np.linalg.norm(
+            gamma4, axis=2)[:, :, np.newaxis], 3, axis=2)
+
+        # In case of birefringence, use Berreman fields
+        idx_bf = np.reshape(idx_bf, (N, K), order='F')
+        gamma[idx_bf] = Berreman[idx_bf]/np.repeat(np.linalg.norm(
+           Berreman[idx_bf], axis=2)[:, :, np.newaxis], 3, axis=2)
+
+        return gamma, qs
+
+    def calculate_layer_transfer_matrix(self, layer):
+        """
+        Compute the transfer matrix of the whole layer :math:`T_i=A_iP_iA_i^{-1}`
+
+        Parameters
+        ----------
+        f : float
+            frequency (in Hz)
+        zeta : complex
+               reduced in-plane wavevector kx/k0
+        Returns
+        -------
+        None
+
+        """
+
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+        mu = 1
+        gamma, qs = self.calculate_layer_gamma(layer)
+
+        Ai = np.zeros((N, K, 4, 4), dtype=np.complex128)
+        Ki = np.zeros((N, K, 4, 4), dtype=np.complex128)
+        Ti = np.zeros((N, K, 4, 4), dtype=np.complex128)  # Layer transfer matrix
+
+        # eqn(22)
+        Ai[:, :, 0, :] = gamma[:, :, :, 0]
+        Ai[:, :, 1, :] = gamma[:, :, :, 1]
+
+        Ai[:, :, 2, :] = (qs*gamma[:, :, :, 0]
+                          - np.repeat(self.zeta[:, :, np.newaxis], 4, axis=2)*gamma[:, :, :, 2])/mu
+        Ai[:, :, 3, :] = qs*gamma[:, :, :, 1]/mu
+
+        f = np.tile(self._frequency[:, np.newaxis, np.newaxis], [1, K, 4])
+        Ki[:, :, np.array([0, 1, 2, 3]), np.array([0, 1, 2, 3])] = np.exp(
+            -1.0j*(2.0*np.pi*f*qs[:, :, :]*layer._thickness)/c_0)
+
+        Ai_inv = self.calc_inv(Ai)
+        # eqn (26)
+        Ti = m_times_n(Ai, m_times_n(Ki, Ai_inv))
+
+        return Ai, Ki, Ai_inv, Ti
+
+    def calculate_GammaStar(self):
+        """
+        Calculate the whole system's transfer matrix.
+
+        Parameters
+        -----------
+        f : float
+            Frequency (Hz)
+        zeta_sys : complex
+            In-plane wavevector kx/k0
+
+        Returns
+        -------
+        GammaStar: 4x4 complex matrix
+                   System transfer matrix :math:`\Gamma^{*}`
+        """
+
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        Ai_super, Ki_super, Ai_inv_super, T_super = self.calculate_layer_transfer_matrix(
+            self.S.get_layer_handle(0))
+        Ai_sub, Ki_sub, Ai_inv_sub, T_sub = self.calculate_layer_transfer_matrix(
+            self.S.get_layer_handle(-1))
+
+        Delta1234 = np.tile(np.array([[1, 0, 0, 0],
+                                     [0, 0, 1, 0],
+                                     [0, 1, 0, 0],
+                                     [0, 0, 0, 1]])[np.newaxis, np.newaxis, :, :], [N, K, 1, 1])
+        Gamma = np.zeros((N, K, 4, 4), dtype=np.complex128)
+        GammaStar = np.zeros((N, K, 4, 4), dtype=np.complex128)
+
+        Tloc = np.tile(np.identity(4, dtype=np.complex128)[np.newaxis, np.newaxis, :, :],
+                       [N, K, 1, 1])
+
+        for ii in range(self.S.get_number_of_layers())[-2:0:-1]:
+            Ai, Ki, Ai_inv, T_ii = self.calculate_layer_transfer_matrix(
+                self.S.get_layer_handle(ii))
+            Tloc = m_times_n(T_ii, Tloc)
+
+        Gamma = m_times_n(Ai_inv_super, m_times_n(Tloc, Ai_sub))
+        GammaStar = m_times_n(self.calc_inv(Delta1234),
+                              m_times_n(Gamma, Delta1234))
+
+        return GammaStar
+
+    def calculate_r_t(self):
+        """ Calculate various field and intensity reflection and transmission
+        coefficients, as well as the 4-valued vector of transmitted field.
+
+        Parameters
+        -----------
+        zeta_sys : complex
+            Incident in-plane wavevector
+        Returns
+        -------
+        r_out : len(4)-array
+                Complex *field* reflection coefficients r_out=([rpp,rps,rss,rsp])
+        R_out : len(4)-array
+                Real *intensity* reflection coefficients R_out=([Rpp,Rss,Rsp,Tps])
+        t_out : len(4)-array
+                Complex *field* transmition coefficients t=([tpp, tps, tsp, tss])
+        T_out : len(4)-array
+                Real *intensity* transmition coefficients T_out=([Tp,Ts]) (mode-inselective)
+
+        Notes
+        -----
+        **IMPORTANT**
+        ..version 19-03-2020:
+        All intensity coefficients are now well defined. Transmission is defined
+        mode-independently. It could be defined mode-dependently for non-birefringent
+        substrates in future versions.
+        The new definition of this function **BREAKS compatibility** with the previous
+        one.
+
+        ..version 13-09-2019:
+        Note that the field reflectivity and transmission coefficients
+        r and t are well defined. The intensity reflection coefficient is also correct.
+        However, the intensity transmission coefficients T are ill-defined so far.
+        This will be corrected upon future publication of the correct intensity coefficients.
+
+        Note also the different ordering of the coefficients,
+        for consistency w/ Passler's matlab code
+
+        """
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+        eps = np.repeat(self.S.get_layer_handle(0).epsilon[0](
+            self._frequency[:])[:, np.newaxis], K, 1)
+        self.zeta = np.sin(self._theta)*np.sqrt((eps))
+
+        GammaStar = self.calculate_GammaStar()
+        # common denominator for all coefficients
+        Denom = GammaStar[:, :, 0, 0]*GammaStar[:, :, 2, 2] \
+            - GammaStar[:, :, 0, 2]*GammaStar[:, :, 2, 0]
+        # field reflection coefficients
+        rpp = GammaStar[:, :, 1, 0]*GammaStar[:, :, 2, 2] \
+            - GammaStar[:, :, 1, 2]*GammaStar[:, :, 2, 0]
+        rpp = np.nan_to_num(rpp/Denom)
+
+        rss = GammaStar[:, :, 0, 0]*GammaStar[:, :, 3, 2] \
+            - GammaStar[:, :, 3, 0]*GammaStar[:, :, 0, 2]
+        rss = np.nan_to_num(rss/Denom)
+
+        rps = GammaStar[:, :, 3, 0]*GammaStar[:, :, 2, 2] \
+            - GammaStar[:, :, 3, 2]*GammaStar[:, :, 2, 0]
+        rps = np.nan_to_num(rps/Denom)
+
+        rsp = GammaStar[:, :, 0, 0]*GammaStar[:, :, 1, 2] \
+            - GammaStar[:, :, 1, 0]*GammaStar[:, :, 0, 2]
+        rsp = np.nan_to_num(rsp/Denom)
+
+        # Intensity reflection coefficients are just square moduli
+        Rpp = np.abs(rpp)**2
+        Rss = np.abs(rss)**2
+        Rps = np.abs(rps)**2
+        Rsp = np.abs(rsp)**2
+        r_out = np.stack([rpp, rps, rss, rsp], axis=2)  # order matching Passler Matlab code
+        R_out = np.stack([Rpp, Rss, Rsp, Rps], axis=2)  # order matching Passler Matlab code
+
+        # field transmission coefficients
+        tpp = np.nan_to_num(GammaStar[:, :, 2, 2]/Denom)
+        tss = np.nan_to_num(GammaStar[:, :, 0, 0]/Denom)
+        tps = np.nan_to_num(-GammaStar[:, :, 2, 0]/Denom)
+        tsp = np.nan_to_num(-GammaStar[:, :, 0, 2]/Denom)
+        t_out = np.stack([tpp, tps, tsp, tss], axis=2)
+
+        # Intensity transmission requires Poyting vector analysis
+        # N.B: could be done mode-dependentely later
+        # start with the superstrate
+        # Incident fields are either p or s polarized
+        ksup = np.zeros((N, K, 4, 3), dtype=np.complex128)  # wavevector in superstrate
+        ksup[:, :, :, 0] = np.repeat(self.zeta[:, :, np.newaxis], 4, axis=2)
+
+        gamma_sup, qs_sup = self.calculate_layer_gamma(self.S.get_layer_handle(0))
+        gamma_sub, qs_sub = self.calculate_layer_gamma(self.S.get_layer_handle(-1))
+
+        ksup[:, :, :, 2] = qs_sup
+
+        ksup = ksup/c_0  # omega simplifies in the H field formula
+        Einc_pin = gamma_sup[:, :, 0, :]  # p-pol incident electric field
+        Einc_sin = gamma_sup[:, :, 1, :]  # s-pol incident electric field
+        # Poyting vector in superstrate (incident, p-in and s-in)
+        Sinc_pin = 0.5*np.real(np.cross(Einc_pin, np.conj(np.cross(ksup[:, :, 0, :], Einc_pin))))
+        Sinc_sin = 0.5*np.real(np.cross(Einc_sin, np.conj(np.cross(ksup[:, :, 1, :], Einc_sin))))
+
+        # Substrate Poyting vector
+        # Outgoing fields (eqn 17)
+        Eout_pin = np.repeat(t_out[:, :, 0][:, :, np.newaxis], 3, 2)*gamma_sub[:, :, 0, :] \
+            + np.repeat(t_out[:, :, 1][:, :, np.newaxis], 3, 2) \
+            * gamma_sub[:, :, 1, :]  # p-in, p or s out
+        Eout_sin = np.repeat(t_out[:, :, 2][:, :, np.newaxis], 3, 2)*gamma_sub[:, :, 0, :] \
+            + np.repeat(t_out[:, :, 3][:, :, np.newaxis], 3, 2) \
+            * gamma_sub[:, :, 1, :]  # s-in, p or s out
+        ksub = np.zeros((N, K, 4, 3), dtype=np.complex128)
+        ksub[:, :, :, 0] = np.repeat(self.zeta[:, :, np.newaxis], 4, axis=2)
+        ksub[:, :, :, 2] = qs_sub
+        ksub = ksub/c_0  # omega simplifies in the H field formula
+
+        # outgoing Poyting vectors, 2 formulations
+        Sout_pin = 0.5*np.real(np.cross(Eout_pin, np.conj(np.cross(ksub[:, :, 0, :], Eout_pin))))
+        Sout_sin = 0.5*np.real(np.cross(Eout_sin, np.conj(np.cross(ksub[:, :, 1, :], Eout_sin))))
+        # Intensity transmission coefficients are only the z-component of S !
+        T_pp = np.real(Sout_pin[:, :, 2]/Sinc_pin[:, :, 2])  # z-component only
+        T_ss = np.real(Sout_sin[:, :, 2]/Sinc_sin[:, :, 2])  # z-component only
+
+        T_out = np.stack([T_pp, T_ss], axis=2)
+
+        return r_out, R_out, t_out, T_out
+
+    def calculate_Efield(self, r, R, t, T, z_vect=None, x=0.0,
+                         magnetic=False, dz=None):
+        """
+        Calculate the electric field profiles for both s-pol and p-pol excitation.
+
+        Parameters
+        ----------
+        f : float
+            frequency (Hz)
+        zeta_sys : complex
+            in-plane normalized wavevector kx/k0
+        z_vect : 1Darray
+            Coordinates at which the calculation is done.
+            if None, the layers boundaries are used.
+        x : float or 1D array
+            x-coordinates for (future) 2D plot of the electric field. Not yet implemented
+        magnetic : bool
+            Boolean to skip or compute the magnetic field vector
+        dz : float (optional)
+            Space resolution along propagation (z) axis. Superseed z_vect
+
+        Returns
+        --------
+        z : 1Darray
+            1D array of z-coordinates according to dz
+        E_out : (len(z),3)-Array
+            Total electric field in the structure
+        H_out (opt): (len(z),3)-Array
+            Total magnetic field in the structure
+        zn : list
+            Positions of the different interfaces
+
+        Notes
+        -----
+        ..Version 19-03-2020:
+            changed keywords to add z_vect
+            z_vect is used for either minimal computation (using get_layers_boundaries)
+            or hand-defined z-positions (e.g. irregular spacing for improved resolution)
+            if dz is given, a regular grid is used.
+            A sketch of the definition of all fields and algorithm is supplied in the module,
+            to better get a grasp on where Fft and Fbk are defined.
+        ..Version 28-01-2020:
+            Added Magnetic field keyword to save time.
+            Poyting and absorption defined in a separate function
+        ..Version 06-01-2020:
+            Added Magnetic field and Poyting vector.
+        ..Version 13-09-2019:
+            the 2D field profile is not implemented yet. x should be left to default
+
+        """
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+        # Nb of layers
+        num_layers = self.S.get_number_of_layers()
+        zn = np.zeros(num_layers)  # superstrate+layers+substrate
+
+        # 4-components field tensor at the front and
+        # back interfaces of the layer
+        # correspond to E0 and E1
+        # defined by (37*)
+        # E0 (E^(p/o)_t, E^(s/e)_t, E^(p/o)_r, E^(s/e)_r)
+        # twice for p-pol in and s-pol in
+        F_ft = np.zeros((N, K, 8, num_layers), dtype=np.complex128)
+        # E1 (E^(p/o)_t, E^(s/e)_t, E^(p/o)_r, E^(s/e)_r)
+        # twice for p-pol in and s-pol in
+        F_bk = np.zeros((N, K, 8, num_layers), dtype=np.complex128)
+
+        zn[-1] = 0.0  # initially with the substrate
+
+        # First step of the algorithm starts from the top of the substrate
+        # a sketch is provided to better visualize the steps
+        # red quantities in sketch
+        # (37*) with p-pol excitation
+        F_ft[:, :, 0, -1] = t[:, :, 0]  # t_pp
+        F_ft[:, :, 1, -1] = t[:, :, 1]  # t_ps
+        # (37*) with s-pol excitation
+        F_ft[:, :, 4, -1] = t[:, :, 2]  # t_sp
+        F_ft[:, :, 5, -1] = t[:, :, 3]  # t_ss
+
+        # propagate to the "end" of the substrate
+        # F_bk[-1] for plot purpose (see Fig. 1.(a))
+        Ai, Ki_sub, _, _ = self.calculate_layer_transfer_matrix(
+            self.S.get_layer_handle(-1))
+        F_bk[:, :, :4, -1] = np.einsum("lmij,lmj->lmi", self.calc_inv(Ki_sub), F_ft[:, :, :4, -1])
+        F_bk[:, :, 4:, -1] = np.einsum("lmij,lmj->lmi", self.calc_inv(Ki_sub), F_ft[:, :, 4:, -1])
+
+        if num_layers > 2:
+            # First layer is a special case to handle System.substrate
+            # purple quantities in sketch
+            zn[-2] = zn[-1]-self.S.get_layer_handle(-1)._thickness
+
+            Aim1, Kim1, _, _ = self.calculate_layer_transfer_matrix(
+                self.S.get_layer_handle(-2))
+            Li = m_times_n(self.calc_inv(Aim1), Ai)
+
+            F_bk[:, :, :4, -2] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, :4, -1])
+            F_bk[:, :, 4:, -2] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, 4:, -1])
+            F_ft[:, :, :4, -2] = np.einsum("lmij,lmj->lmi", Kim1, F_bk[:, :, :4, -2])
+            F_ft[:, :, 4:, -2] = np.einsum("lmij,lmj->lmi", Kim1, F_bk[:, :, 4:, -2])
+
+            # From here we start recursively computing the fields
+            # blue quantities in sketch
+            for kl in range(1, num_layers-2)[::-1]:
+                # subtract the thickness (building thickness array backwards)
+                zn[kl] = zn[kl+1]-self.S.get_layer_handle(kl+1)._thickness
+
+                Aim1, Kim1, _, _ = self.calculate_layer_transfer_matrix(
+                    self.S.get_layer_handle(kl))
+                Ai, _, _, _ = self.calculate_layer_transfer_matrix(
+                    self.S.get_layer_handle(kl+1))
+
+                Li = m_times_n(self.calc_inv(Aim1), Ai)
+                # F_ft == E0  //  F_bk == E1
+                F_bk[:, :, :4, kl] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, :4, kl+1])
+                F_bk[:, :, 4:, kl] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, 4:, kl+1])
+                F_ft[:, :, :4, kl] = np.einsum("lmij,lmj->lmi", Kim1, F_bk[:, :, :4, kl])
+                F_ft[:, :, 4:, kl] = np.einsum("lmij,lmj->lmi", Kim1, F_bk[:, :, 4:, kl])
+
+            zn[0] = zn[1]-self.S.get_layer_handle(1)._thickness
+
+            Aim1, Ki_sup, _, _ = self.calculate_layer_transfer_matrix(
+                self.S.get_layer_handle(0))
+            Ai, _, _, _ = self.calculate_layer_transfer_matrix(
+                self.S.get_layer_handle(1))
+            Li = m_times_n(self.calc_inv(Aim1), Ai)
+
+            # F_ft == E0  //  F_bk == E1
+            F_bk[:, :, :4, 0] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, :4, 1])
+            F_bk[:, :, 4:, 0] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, 4:, 1])
+            F_ft[:, :, :4, 0] = np.einsum("lmij,lmj->lmi", Ki_sup, F_bk[:, :, :4, 0])
+            F_ft[:, :, 4:, 0] = np.einsum("lmij,lmj->lmi", Ki_sup, F_bk[:, :, 4:, 0])
+        else:
+            zn[0] = -self.S.get_layer_handle(-1)._thickness
+            Ai, Ki_sub, _, _ = self.calculate_layer_transfer_matrix(
+                self.S.get_layer_handle(-1))
+            Aim1, Ki_sup, _, _ = self.calculate_layer_transfer_matrix(
+                self.S.get_layer_handle(0))
+            Li = m_times_n(self.calc_inv(Aim1), Ai)
+            # F_ft == E0  //  F_bk == E1
+            F_bk[:, :, :4, 0] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, :4, 1])
+            F_bk[:, :, 4:, 0] = np.einsum("lmij,lmj->lmi", Li, F_ft[:, :, 4:, 1])
+            F_ft[:, :, :4, 0] = np.einsum("lmij,lmj->lmi", Ki_sup, F_bk[:, :, :4, 0])
+            F_ft[:, :, 4:, 0] = np.einsum("lmij,lmj->lmi", Ki_sup, F_bk[:, :, 4:, 0])
+
+        # shift everything so that incident boundary is at z=0
+        zn = zn-zn[0]
+        # define the spatial points where the computation is performed
+        if dz is None:
+            # print('No dz given, \n')
+            if z_vect is None:
+                # print('Resorting to minimal computation on boundaries')
+                z = self.S.get_distances_of_interfaces().magnitude
+                z -= self.S.get_layer_handle(0)._thickness  # shift interface 0-1 to 0
+            else:
+                print('using manually given z-vector')
+                z = z_vect
+        else:
+            # print('using dz=%.2e'%(dz))
+            z = np.arange(-self.S.get_layer_handle(0)._thickness, zn[-1], dz)
+
+        # 2x4 component field tensor E_prop propagated from front surface
+        E_prop = np.empty((N, K, 8), dtype=np.complex128)
+        # 4-component field tensor F_tens for each direction and polarization
+        F_tens = np.zeros((N, K, 24, len(z)), dtype=np.complex128)
+        if magnetic is True:
+            H_tens = np.zeros((N, K, 24, len(z)), dtype=np.complex128)
+        # final component electric field E_out = (E_x, Ey, Ez)
+        # for p-pol and s-pol excitation
+        E_out = np.zeros((N, K, 6, len(z)), dtype=np.complex128)
+        if magnetic is True:
+            H_out = np.zeros((N, K, 6, len(z)), dtype=np.complex128)
+        # Elementary propagation
+        dKiz = np.zeros((N, K, 4, 4), dtype=np.complex128)
+        # starting from the superstrate:
+        current_layer = 0
+        L = self.S.get_layer_handle(0)
+        gamma, qs = self.calculate_layer_gamma(L)
+        f = np.tile(self._frequency[:, np.newaxis, np.newaxis], [1, K, 4])
+        for ii, zc in enumerate(z):  # enumerates returns a tuple (index, value)
+            if zc > zn[current_layer]:
+                # change the layer
+                # important to count here until num_layers+1 to get the correct zn
+                # in the substrate for dKiz
+                current_layer += 1
+
+                if current_layer == num_layers-1:  # reached substrate
+                    L = self.S.get_layer_handle(-1)
+                else:
+                    L = self.S.get_layer_handle(current_layer)
+
+                gamma, qs = self.calculate_layer_gamma(L)
+
+            # use the conjugate of the K matrix => exp(+1.0j...)
+            dKiz[:, :, [0, 1, 2, 3], [0, 1, 2, 3]] = np.exp(1.0j*(
+                2.0*np.pi*f*qs*(zc-zn[current_layer]))/c_0)
+
+            # E_prop propagated from front surface to back of next layer
+            # n.b: unclear why using F_bk and not F_ft works... but it works !
+            E_prop[:, :, :4] = np.einsum("lmij,lmj->lmi", dKiz, F_bk[:, :, :4, current_layer])
+            E_prop[:, :, 4:] = np.einsum("lmij,lmj->lmi", dKiz, F_bk[:, :, 4:, current_layer])
+
+            # wave vector for each mode in layer L
+            k_lay = np.zeros((N, K, 4, 3), dtype=np.complex128)
+            k_lay[:, :, :, 0] = np.repeat(self.zeta[:, :, np.newaxis], 4, 2)
+            k_lay[:, :, :, 2] = qs
+            # no normalization by c_const eases the visualization of H
+            # k_lay = k_lay/(c_const) ## omega simplifies in the H field formula
+
+            # p-pol in
+            # forward, o/p
+            mu = 1
+            F_tens[:, :, :3, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 0], gamma[:, :, 0, :])
+            if magnetic is True:
+                H_tens[:, :, :3, ii] = (1./mu)*np.cross(k_lay[:, :, 0, :], F_tens[:, :, :3, ii])
+            # forward, e/s
+            F_tens[:, :, 3:6, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 1], gamma[:, :, 1, :])
+            if magnetic is True:
+                H_tens[:, :, 3:6, ii] = (1./mu)*np.cross(k_lay[:, :, 1, :], F_tens[:, :, 3:6, ii])
+            # backward, o/p
+            F_tens[:, :, 6:9, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 2], gamma[:, :, 2, :])
+            if magnetic is True:
+                H_tens[:, :, 6:9, ii] = (1./mu)*np.cross(k_lay[:, :, 2, :], F_tens[:, :, 6:9, ii])
+            # backward, e/s
+            F_tens[:, :, 9:12, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 3], gamma[:, :, 3, :])
+            if magnetic is True:
+                H_tens[:, :, 9:12, ii] = (1./mu)*np.cross(k_lay[:, :, 3, :],
+                                                          F_tens[:, :, 9:12, ii])
+            # s-pol in
+            # forward, o/p
+            F_tens[:, :, 12:15, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 4], gamma[:, :, 0, :])
+            if magnetic is True:
+                H_tens[:, :, 12:15, ii] = (1./mu)*np.cross(k_lay[:, :, 0, :],
+                                                           F_tens[:, :, 12:15, ii])
+            # forward, e/s
+            F_tens[:, :, 15:18, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 5], gamma[:, :, 1, :])
+            if magnetic is True:
+                H_tens[:, :, 15:18, ii] = (1./mu)*np.cross(k_lay[:, :, 1, :],
+                                                           F_tens[:, :, 15:18, ii])
+            # backward, o/p
+            F_tens[:, :, 18:21, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 6], gamma[:, :, 2, :])
+            if magnetic is True:
+                H_tens[:, :, 18:21, ii] = (1./mu)*np.cross(k_lay[:, :, 2, :],
+                                                           F_tens[:, :, 18:21, ii])
+            # backward, e/s
+            F_tens[:, :, 21:, ii] = np.einsum('lm,lmj->lmj', E_prop[:, :, 7], gamma[:, :, 3, :])
+            if magnetic is True:
+                H_tens[:, :, 21:, ii] = (1./mu)*np.cross(k_lay[:, :, 3, :],
+                                                         F_tens[:, :, 21:, ii])
+            # Total electric field (note that sign flip for
+            # backward propagation is already in gamma)
+            # p in
+            E_out[:, :, :3, ii] = F_tens[:, :, :3, ii] + F_tens[:, :, 3:6, ii] \
+                + F_tens[:, :, 6:9, ii] + F_tens[:, :, 9:12, ii]
+            if magnetic is True:
+                H_out[:, :, :3, ii] = H_tens[:, :, :3, ii] + H_tens[:, :, 3:6, ii] \
+                    + H_tens[:, :, 6:9, ii] + H_tens[:, :, 9:12, ii]
+            # s in
+            E_out[:, :, 3:, ii] = F_tens[:, :, 12:15, ii] + F_tens[:, :, 15:18, ii] \
+                + F_tens[:, :, 18:21, ii] + F_tens[:, :, 21:, ii]
+            if magnetic is True:
+                H_out[:, :, 3:, ii] = H_tens[:, :, 12:15, ii] + H_tens[:, :, 15:18, ii] \
+                    + H_tens[:, :, 18:21, ii] + H_tens[:, :, 21:, ii]
+
+        if magnetic is True:
+            return z, E_out, H_out, zn[:-1]  # last interface is useless, substrate=infinite
+        else:
+            return z, E_out, zn[:-1]  # last interface is useless, substrate=infinite
+
+    def calculate_Poynting_Absorption_vs_z(self, z, E, H, R):
+        """
+        Calculate the z-dependent Poynting vector and cumulated absorption.
+
+        Parameters
+        ----------
+        z : 1Darray
+            Spatial coordinate for the fields
+        E : 1Darray
+            6-components Electric field vector (p- or s- in) along z
+        H : 1Darray
+            6-components Magnetic field vector (p- or s- in) along z
+        R : len(4)-array
+            Reflectivity from :py:func:`calculate_r_t`
+        S_out : 6xlen(z) array
+            6 components (p//s) Poyting vector along z
+        A_out : 2xlen(z)
+            2 components (p//s) absorption along z
+        """
+        N = np.size(self._qz, 0)  # energy steps
+        K = np.size(self._qz, 1)  # qz steps
+
+        S_out = np.zeros((N, K, 6, len(z)))  # Poynting vector
+        A_out = np.zeros((N, K, 2, len(z)))  # z-dependent absorption
+        # Tp_z = np.zeros((N, K, len(z)))  # z-dependent absorption
+        # Ts_z = np.zeros((N, K, len(z)))  # z-dependent absorption
+        Tp_z = np.zeros((len(z)))  # z-dependent absorption
+        Ts_z = np.zeros((len(z)))  # z-dependent absorption
+
+        # S=0.5*Re(ExB)
+        S_out[:, :, :3, :] = 0.5*np.real(np.cross(E[:, :, :3, :], np.conj(H[:, :, :3, :]),
+                                         axisa=2, axisb=2, axisc=2))
+        S_out[:, :, 3:, :] = 0.5*np.real(np.cross(E[:, :, 3:, :], np.conj(H[:, :, 3:, :]),
+                                         axisa=2, axisb=2, axisc=2))
+
+        z1 = np.abs(z).argmin()+1  # index where z>0, first interface
+        # layer-resolved transmittance p-pol
+        Tp_z = S_out[:, :, 2, :]/np.repeat(S_out[:, :, 2, 0][:, :, np.newaxis], len(z), 2) \
+            * np.repeat((1-(R[:, :, 0]+R[:, :, 2]))[:, :, np.newaxis], len(z), 2)
+        # layer-resolved transmittance s-pol
+        Ts_z = S_out[:, :, 5, :]/np.repeat(S_out[:, :, 5, 0][:, :, np.newaxis], len(z), 2) \
+            * np.repeat((1-(R[:, :, 1]+R[:, :, 3]))[:, :, np.newaxis], len(z), 2)
+        A_out[:, :, 0, z1:] = 1.0-np.repeat(
+            (R[:, :, 0]+R[:, :, 2])[:, :, np.newaxis], len(z)-z1, 2)-Tp_z[:, :, z1:]
+        A_out[:, :, 1, z1:] = 1.0-np.repeat(
+            (R[:, :, 1]+R[:, :, 3])[:, :, np.newaxis], len(z)-z1, 2)-Ts_z[:, :, z1:]
+
+        return S_out, A_out
+
+
+class XrayKin(Scattering):
     r"""XrayKin
 
     Kinetic X-ray scattering simulations.
@@ -657,7 +1967,7 @@ class XrayKin(Xray):
         return Ep
 
 
-class XrayDyn(Xray):
+class XrayDyn(Scattering):
     r"""XrayDyn
 
     Dynamical X-ray scattering simulations.
@@ -1499,7 +2809,7 @@ class XrayDyn(Xray):
         return np.abs(M[:, :, 0, 1]/M[:, :, 1, 1])**2
 
 
-class XrayDynMag(Xray):
+class XrayDynMag(Scattering):
     r"""XrayDynMag
 
     Dynamical magnetic X-ray scattering simulations.
@@ -2601,8 +3911,8 @@ class XrayDynMag(Xray):
             A_phi[:, :, :, :],
             np.sqrt(2) * eps[:, :, 0, 0][:, :, np.newaxis, np.newaxis])
 
-        A_inv = np.linalg.inv(A)
-        A_inv_phi = np.linalg.inv(A_phi)
+        A_inv = self.calc_inv(A)
+        A_inv_phi = self.calc_inv(A_phi)
 
         phase = self._k * distance
         phase = phase[:, np.newaxis]
