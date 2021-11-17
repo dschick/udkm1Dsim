@@ -1132,7 +1132,7 @@ class Heat(Simulation):
                 try:
                     # temperature argument should be scalar
                     ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
-                except IndexError:
+                except (IndexError, TypeError):
                     # temperature argument should be a vector
                     ks[ii, iii] = thermal_conds[idx][iii](u[ii, :])
 
