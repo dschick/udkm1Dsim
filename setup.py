@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='udkm1Dsim',
-    version='1.5.1',
+    version='1.5.2',
     packages=find_packages(),
     package_data={
         'udkm1Dsim': ['parameters/atomic_form_factors/chantler/*.cf',
@@ -19,8 +19,8 @@ setup(
     install_requires=['tqdm>=4.43.0',
                       'numpy>=1.18.2',
                       'pint>=0.9',
-                      'scipy>=1.5.1',
-                      'sympy>=1.5.1',
+                      'scipy>=1.5.2',
+                      'sympy>=1.5.2',
                       'tabulate',
                       'matplotlib>=2.0.0'],
     extras_require={
