@@ -14,3 +14,5 @@ from .simulations.xrays import Xray, XrayKin, XrayDyn, XrayDynMag
 __all__ = ['Atom', 'AtomMixed', 'Layer', 'AmorphousLayer', 'UnitCell', 'Structure',
            'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization',
            'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
+
+__version__ = '1.5.1'
