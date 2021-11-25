@@ -19,8 +19,8 @@ setup(
     install_requires=['tqdm>=4.43.0',
                       'numpy>=1.18.2',
                       'pint>=0.9',
-                      'scipy>=1.5.2',
-                      'sympy>=1.5.2',
+                      'scipy>=1.4.1',
+                      'sympy>=1.5.1',
                       'tabulate',
                       'matplotlib>=2.0.0'],
     extras_require={
