@@ -7,6 +7,7 @@ Welcome to udkm1Dsim documentation!
     Project Page <https://github.com/dschick/udkm1Dsim>
     Download from PyPI <http://pypi.python.org/pypi/udkm1Dsim>
     User Guide <user_guide>
+    Publications <publications>
     Examples <examples>
     API Documentation <api>
 
@@ -55,7 +56,7 @@ You can also cite the original publication if appropriate:
 D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Bargheer,
 *udkm1Dsim - A Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter*,
 `Comput. Phys. Commun. 185, 651 (2014) <http://doi.org/10.1016/j.cpc.2013.10.009>`_
-`(preprint) <http://www.udkm.physik.uni-potsdam.de/medien/udkm1Dsim/udkm1DsimManuscriptPrePrint.pdf>`_.
+`(preprint) <_static/udkm1DsimManuscriptPrePrint.pdf>`_.
 
 
 Installation
