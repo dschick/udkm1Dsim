@@ -4,3 +4,4 @@ nbsphinx
 ipywidgets
 IProgress
 autodocsumm
+sphinxcontrib.bibtex
