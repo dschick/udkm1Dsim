@@ -84,12 +84,8 @@ class Layer:
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
            expansion coefficient (relative).
-        int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
-           linear thermal expansion coefficient.
         heat_capacity (list[@lambda]): list of T-dependent heat capacity
            function [J/(kg K)].
-        int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
-           capacity function.
         sub_system_coupling (list[@lambda]): list of of coupling functions of
            different subsystems [W/m³].
         num_sub_systems (int): number of subsystems for heat and phonons
@@ -228,10 +224,9 @@ class Layer:
         properties_by_types = {'heat': ['_thickness', '_mass_unit_area', '_density',
                                         '_opt_pen_depth', 'opt_ref_index',
                                         'therm_cond_str', 'heat_capacity_str',
-                                        'int_heat_capacity_str', 'sub_system_coupling_str',
-                                        'num_sub_systems'],
-                               'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
-                                          '_mass_unit_area', 'spring_const', '_phonon_damping'],
+                                        'sub_system_coupling_str', 'num_sub_systems'],
+                               'phonon': ['num_sub_systems', '_thickness', '_mass_unit_area',
+                                          'spring_const', '_phonon_damping'],
                                'xray': ['num_atoms', '_area', '_mass', '_deb_wal_fac',
                                         '_thickness'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
@@ -405,10 +400,6 @@ class Layer:
     def heat_capacity(self, heat_capacity):
         # (re)calculate the integrated heat capacity
         self._heat_capacity, self.heat_capacity_str = self.check_input(heat_capacity)
-        # delete last anti-derivative
-        self._int_heat_capacity = None
-        # recalculate the anti-derivative
-        self.int_heat_capacity
 
     @property
     def therm_cond(self):
@@ -419,34 +410,6 @@ class Layer:
         self._therm_cond, self.therm_cond_str = self.check_input(therm_cond)
 
     @property
-    def int_heat_capacity(self):
-        if hasattr(self, '_int_heat_capacity') and isinstance(self._int_heat_capacity, list):
-            return self._int_heat_capacity
-        else:
-            self._int_heat_capacity = []
-            self.int_heat_capacity_str = []
-            T = symbols('T')
-            try:
-                for hcs in self.heat_capacity_str:
-                    integral = integrate(hcs, T)
-                    self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
-                    self.int_heat_capacity_str.append(str(integral))
-            except Exception as e:
-                print('The sympy integration did not work. You can set the '
-                      'analytical anti-derivative of the heat capacity '
-                      'of your layer as function str of the temperature '
-                      'T by typing layer.int_heat_capacity = \'c(T)\' '
-                      'where layer is the name of the layer object.')
-                print(e)
-
-        return self._int_heat_capacity
-
-    @int_heat_capacity.setter
-    def int_heat_capacity(self, int_heat_capacity):
-        self._int_heat_capacity, self.int_heat_capacity_str = self.check_input(
-                int_heat_capacity)
-
-    @property
     def lin_therm_exp(self):
         return self._lin_therm_exp
 
@@ -454,38 +417,6 @@ class Layer:
     def lin_therm_exp(self, lin_therm_exp):
         # (re)calculate the integrated linear thermal expansion coefficient
         self._lin_therm_exp, self.lin_therm_exp_str = self.check_input(lin_therm_exp)
-        # delete last anti-derivative
-        self._int_lin_therm_exp = None
-        # recalculate the anti-derivative
-        self.int_lin_therm_exp
-
-    @property
-    def int_lin_therm_exp(self):
-        if hasattr(self, '_int_lin_therm_exp') and isinstance(self._int_lin_therm_exp, list):
-            return self._int_lin_therm_exp
-        else:
-            self._int_lin_therm_exp = []
-            self.int_lin_therm_exp_str = []
-            T = symbols('T')
-            try:
-                for ltes in self.lin_therm_exp_str:
-                    integral = integrate(ltes, T)
-                    self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
-                    self.int_lin_therm_exp_str.append(str(integral))
-            except Exception as e:
-                print('The sympy integration did not work. You can set the '
-                      'analytical anti-derivative of the linear thermal expansion '
-                      'of your unit cells as lambda function of the temperature '
-                      'T by typing layer.int_lin_therm_exp = \'c(T)\' '
-                      'where layer is the name of the layer object.')
-                print(e)
-
-        return self._int_lin_therm_exp
-
-    @int_lin_therm_exp.setter
-    def int_lin_therm_exp(self, int_lin_therm_exp):
-        self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_input(
-                int_lin_therm_exp)
 
     @property
     def sub_system_coupling(self):
@@ -549,12 +480,8 @@ class AmorphousLayer(Layer):
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
            expansion coefficient (relative).
-        int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
-           linear thermal expansion coefficient.
         heat_capacity (list[@lambda]): list of T-dependent heat capacity
            function [J/(kg K)].
-        int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
-           capacity function.
         sub_system_coupling (list[@lambda]): list of of coupling functions of
            different subsystems [W/m³].
         num_sub_systems (int): number of subsystems for heat and phonons
@@ -677,12 +604,8 @@ class UnitCell(Layer):
            conductivity [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
            expansion coefficient (relative).
-        int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
-           linear thermal expansion coefficient.
         heat_capacity (list[@lambda]): list of T-dependent heat capacity
            function [J/(kg K)].
-        int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
-           capacity function.
         sub_system_coupling (list[@lambda]): list of of coupling functions of
            different subsystems [W/m³].
         num_sub_systems (int): number of subsystems for heat and phonons
