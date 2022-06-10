@@ -30,7 +30,7 @@ from .atoms import Atom, AtomMixed
 from .. import u, Q_
 import numpy as np
 from inspect import isfunction
-from sympy import integrate, lambdify, symbols, symarray
+from sympy import lambdify, symbols, symarray
 from tabulate import tabulate
 
 

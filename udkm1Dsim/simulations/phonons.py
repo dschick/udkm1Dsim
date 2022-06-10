@@ -279,7 +279,8 @@ class Phonon(Simulation):
                     for iii in range(K):
                         sticks_sub_systems[i, ii, iii] = \
                             thicknesses[iii] * np.exp(quad(lin_therm_exps[ii][iii],
-                                                           temp_map[0, ii, iii] - delta_temp_map[0, ii, iii],
+                                                           temp_map[0, ii, iii] -
+                                                           delta_temp_map[0, ii, iii],
                                                            temp_map[i, ii, iii])[0]) \
                             - thicknesses[iii]
 
