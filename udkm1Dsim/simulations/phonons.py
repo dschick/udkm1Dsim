@@ -31,7 +31,7 @@ from ..helpers import make_hash_md5, finderb
 import numpy as np
 from os import path
 from time import time
-from scipy.integrate import solve_ivp
+from scipy.integrate import solve_ivp, quad
 from tqdm.notebook import tqdm, trange
 
 
@@ -262,38 +262,29 @@ class Phonon(Simulation):
         delta_temp_map = np.reshape(delta_temp_map, [M, L, K])
 
         thicknesses = self.S.get_layer_property_vector('_thickness')
-        int_lin_therm_exps = self.S.get_layer_property_vector('_int_lin_therm_exp')
+        lin_therm_exps = self.S.get_layer_property_vector('_lin_therm_exp')
 
-        # evaluated initial integrated linear thermal expansion from T1 to T2
-        int_alpha_T0 = np.zeros([L, K])
-        # evaluated integrated linear thermal expansion from T1 to T2
-        int_alpha_T = np.zeros([L, K])
         sticks = np.zeros([M, L])  # the sticks inserted in the unit cells
         sticks_sub_systems = np.zeros([M, L, K])  # the sticks for each thermodynamic subsystem
-
-        # calculate initial integrated linear thermal expansion from T1 to T2
-        # traverse subsystems
-        for ii in range(L):
-            for iii in range(K):
-                int_alpha_T0[ii, iii] = int_lin_therm_exps[ii][iii](temp_map[0, ii, iii]
-                                                                    - delta_temp_map[0, ii, iii])
 
         # calculate sticks for all subsystems for all delay steps
         # traverse time
         for i in range(M):
             if np.any(delta_temp_map[i, :]):  # there is a temperature change
-                # Calculate new sticks from the integrated linear thermal
+                # Calculate new sticks from integrating the linear thermal
                 # expansion from initial temperature to current temperature for
                 # each subsystem
                 # traverse subsystems
                 for ii in range(L):
                     for iii in range(K):
-                        int_alpha_T[ii, iii] = int_lin_therm_exps[ii][iii](temp_map[i, ii, iii])
+                        sticks_sub_systems[i, ii, iii] = \
+                            thicknesses[iii] * np.exp(quad(lin_therm_exps[ii][iii],
+                                                           temp_map[0, ii, iii] - delta_temp_map[0, ii, iii],
+                                                           temp_map[i, ii, iii])[0]) \
+                            - thicknesses[iii]
 
                 # calculate the length of the sticks of each subsystem and sum
                 # them up
-                sticks_sub_systems[i, :, :] = np.tile(thicknesses, (K, 1)).T \
-                    * np.exp(int_alpha_T-int_alpha_T0) - np.tile(thicknesses, (K, 1)).T
                 sticks[i, :] = np.sum(sticks_sub_systems[i, :, :], 1)
             else:  # no temperature change, so keep the current sticks
                 if i > 0:
