@@ -12,8 +12,10 @@ before_install:
   # install it using pip in order to get the newest version
   - sudo apt-get update -qq
   - sudo apt-get install -qq python-pip
+  - pip install -U pip
+  - pip install -U importlib
   - pip install -U flake8
-  - pip install -U pytest
+  - pip install -U pytest 
 install:
   - pip install ".[parallel]" .
 
