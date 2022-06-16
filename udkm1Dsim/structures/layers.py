@@ -185,19 +185,20 @@ class Layer:
                     # check for presence of indexing and use symarray as argument
                     if '_' in input:
                         T = symarray('T', k)
-                        output.append(lambdify([T], input, modules='numpy'))
+                        output.append(lambdify([T], input, modules=['numpy', 'scipy']))
                     else:
-                        output.append(lambdify(T, input, modules='numpy'))
+                        output.append(lambdify(T, input, modules=['numpy', 'scipy']))
                     output_strs.append(input.strip())
                 except Exception as e:
                     print('String input for layer property ' + input + ' \
                         cannot be converted to function handle!')
                     print(e)
             elif isinstance(input, (int, float)):
-                output.append(lambdify(T, input, modules='numpy'))
+                output.append(lambdify(T, input, modules=['numpy', 'scipy']))
                 output_strs.append(str(input))
             elif isinstance(input, object):
-                output.append(lambdify(T, input.to_base_units().magnitude, modules='numpy'))
+                output.append(lambdify(T, input.to_base_units().magnitude,
+                                       modules=['numpy', 'scipy']))
                 output_strs.append(str(input.to_base_units().magnitude))
             else:
                 raise ValueError('Layer property input has to be a single or '
