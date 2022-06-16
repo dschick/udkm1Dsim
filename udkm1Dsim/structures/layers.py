@@ -172,6 +172,7 @@ class Layer:
         # traverse each list element and convert it to a function handle
         for input in inputs:
             T = symbols('T')
+            argument = T
             if isfunction(input):
                 raise ValueError('Please use string representation of function!')
             elif isinstance(input, str):
@@ -185,26 +186,23 @@ class Layer:
                     # check for presence of indexing and use symarray as argument
                     if '_' in input:
                         T = symarray('T', k)
-                        output.append(lambdify([T], input, modules=['numpy', 'scipy']))
-                    else:
-                        output.append(lambdify(T, input, modules=['numpy', 'scipy']))
-                    output_strs.append(input.strip())
+                        argument = [T]
                 except Exception as e:
                     print('String input for layer property ' + input + ' \
                         cannot be converted to function handle!')
                     print(e)
             elif isinstance(input, (int, float)):
-                output.append(lambdify(T, input, modules=['numpy', 'scipy']))
-                output_strs.append(str(input))
+                # nothing to do here
+                pass
             elif isinstance(input, object):
-                output.append(lambdify(T, input.to_base_units().magnitude,
-                                       modules=['numpy', 'scipy']))
-                output_strs.append(str(input.to_base_units().magnitude))
+                input = input.to_base_units().magnitude
             else:
                 raise ValueError('Layer property input has to be a single or '
                                  'list of numerics, Quantities, or function handle strings '
                                  'which can be converted into a lambda function!')
 
+            output.append(lambdify(argument, input, modules=['numpy', 'scipy']))
+            output_strs.append(str(input).strip())
         return output, output_strs
 
     def get_property_dict(self, **kwargs):
