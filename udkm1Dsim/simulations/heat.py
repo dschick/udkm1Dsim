@@ -567,16 +567,16 @@ class Heat(Simulation):
 
         # Total transmission and reflection of the multilayer
         R_total = np.abs(S[1, 0]/S[0, 0])**2
-        T_total = np.asscalar(np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
-                                      / (opt_ref_indices[0]*np.cos(alpha[0])))
-                              * np.abs(1/S[0, 0])**2)
+        T_total = (np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
+                           / (opt_ref_indices[0]*np.cos(alpha[0])))
+                   * np.abs(1/S[0, 0])**2)
 
         # calculating D matrix for intermediate field
         Dn = np.empty((2, 2, M), dtype=complex)
-        Dn[0, 0, M-1] = np.asscalar(1.0/S[0, 0])
+        Dn[0, 0, M-1] = 1.0/S[0, 0]
         Dn[0, 1, M-1] = 0.0
         Dn[1, 0, M-1] = 0.0
-        Dn[1, 1, M-1] = np.asscalar(1.0/S[0, 0])
+        Dn[1, 1, M-1] = 1.0/S[0, 0]
         for i in range(M-2, -1, -1):
             Temp = np.dot(Ln[:, :, i], np.dot(Jnm[:, :, i], Dn[:, :, i+1]))
             Dn[0, 0, i] = Temp[0, 0]
