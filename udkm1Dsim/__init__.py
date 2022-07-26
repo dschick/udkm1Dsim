@@ -15,4 +15,4 @@ __all__ = ['Atom', 'AtomMixed', 'Layer', 'AmorphousLayer', 'UnitCell', 'Structur
            'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization',
            'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
 
-__version__ = '1.5.4'
+__version__ = '1.5.5'
