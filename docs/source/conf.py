@@ -33,7 +33,7 @@ release = version
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
-needs_sphinx = '4.0.2'
+needs_sphinx = '4.3'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -43,9 +43,12 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.todo',
+    'myst_nb',
     'sphinxcontrib.bibtex',
-    'nbsphinx',
     'autodocsumm',
+    'sphinx.ext.viewcode',
+    'sphinx_copybutton',
+    'sphinx_design',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -58,7 +61,7 @@ bibtex_default_style = 'unsrt'
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = '.rst'
+source_suffix = ['.rst', '.md']
 
 # The master toctree document.
 master_doc = 'index'
@@ -84,7 +87,7 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinx_book_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

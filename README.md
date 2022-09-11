@@ -1,5 +1,10 @@
 # udkm1Dsim
 
+[![Documentation Status](https://readthedocs.org/projects/udkm1Dsim/badge/?version=latest)](https://udkm1Dsim.readthedocs.io/en/latest/?badge=latest)
+![CI](https://github.com/dschick/udkm1Dsim/actions/workflows/main.yml/badge.svg)
+![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
+[![codecov](https://codecov.io/gh/dschick/udkm1Dsim/branch/develop/graph/badge.svg?token=B73OXF4YRI)](https://codecov.io/gh/dschick/udkm1Dsim)
+
 The *udkm1Dsim* toolbox is a collection of Python classes and routines to
 simulate the thermal, structural, and magnetic dynamics after laser excitation
 as well as the according X-ray scattering response in one-dimensional sample
