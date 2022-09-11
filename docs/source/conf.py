@@ -111,9 +111,12 @@ html_static_path = ['_static']
 # html_sidebars = {}
 
 html_theme_options = {
-    "navigation_depth": 5,
-    "collapse_navigation": False
+    'navigation_depth': 5,
+    'collapse_navigation': False,
+    'logo_only': True,
 }
+
+html_logo = '_static/logo.png'
 
 
 # -- Options for HTMLHelp output ---------------------------------------------
