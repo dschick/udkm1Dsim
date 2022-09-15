@@ -1,9 +1,9 @@
-# udkm1Dsim
+# Welcome to udkm1Dsim
 
-[![Documentation Status](https://readthedocs.org/projects/udkm1Dsim/badge/?version=latest)](https://udkm1Dsim.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/udkm1dsim/badge/?version=latest)](https://udkm1dsim.readthedocs.io/en/latest/?badge=latest)
 ![CI](https://github.com/dschick/udkm1Dsim/actions/workflows/main.yml/badge.svg)
 ![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
-[![codecov](https://codecov.io/gh/dschick/udkm1Dsim/branch/develop/graph/badge.svg?token=B73OXF4YRI)](https://codecov.io/gh/dschick/udkm1Dsim)
+[![codecov](https://codecov.io/gh/dschick/udkm1Dsim/branch/develop/graph/badge.svg?token=9J3BQYE6CE)](https://codecov.io/gh/dschick/udkm1Dsim)
 
 The *udkm1Dsim* toolbox is a collection of Python classes and routines to
 simulate the thermal, structural, and magnetic dynamics after laser excitation
@@ -81,4 +81,15 @@ computations, unit tests, as well as building the documentation:
     pip install udkm1Dsim[parallel]
     pip install udkm1Dsim[testing]
     pip install udkm1Dsim[documentation]
-    
+
+## Contribute & Support
+
+If you are having issues please let us know via the
+[issue tracker](https://github.com/dschick/udkm1Dsim/issues).
+
+You can contribute to the project via pull-requests following the
+[GitHub flow concept](https://docs.github.com/en/get-started/quickstart/github-flow).
+
+## License
+
+The project is licensed under the MIT license.

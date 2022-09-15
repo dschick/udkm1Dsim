@@ -12,9 +12,9 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-import os
-import sys
-sys.path.insert(0, os.path.abspath('../../'))
+# import os
+# import sys
+# sys.path.insert(0, os.path.abspath('../../'))
 
 
 # -- Project information -----------------------------------------------------
@@ -80,14 +80,24 @@ exclude_patterns = ['_build', '**.ipynb_checkpoints']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
+suppress_warnings = ['myst.mathjax']
 
+myst_enable_extensions = [
+    "amsmath",
+    "colon_fence",
+    "deflist",
+    "dollarmath",
+    "html_image",
+]
 
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
+html_title = 'udkm1Dsim ' + version
 html_theme = 'sphinx_book_theme'
+html_favicon = 'favicon.ico'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -176,10 +186,8 @@ texinfo_documents = [
 ]
 
 todo_include_todos = True
-# -- Extension configuration -------------------------------------------------
-# increase timeout of nbsphinx from 30 to 3000s
-nbsphinx_execute = 'never'
-nbsphinx_timeout = 3000
+# -- Extension configuration --
+jupyter_execute_notebooks = "off"
 
 # Autodoc setting
 autodoc_default_options = {
