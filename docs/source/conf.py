@@ -24,7 +24,7 @@ copyright = '2022, Daniel Schick'
 author = 'Daniel Schick'
 
 # The short X.Y version
-version = '1.5.5'
+version = '1.5.6'
 # The full version, including alpha/beta/rc tags
 release = version
 
