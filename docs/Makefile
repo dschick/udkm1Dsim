@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = udkm1Dsimpy
+SPHINXPROJ    = udkm1Dsim
 SOURCEDIR     = source
 BUILDDIR      = build
 
