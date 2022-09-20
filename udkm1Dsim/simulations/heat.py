@@ -32,7 +32,7 @@ from ..helpers import make_hash_md5, finderb, multi_gauss
 import numpy as np
 from scipy.optimize import brentq
 from scipy.interpolate import interp2d
-from scipy.integrate import solve_ivp
+from scipy.integrate import solve_ivp, quad
 from time import time
 from os import path
 import warnings
@@ -677,7 +677,7 @@ class Heat(Simulation):
         except AttributeError:
             pass
 
-        int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
+        heat_capacities = self.S.get_layer_property_vector('_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
         masses = self.S.get_layer_property_vector('_mass_unit_area')
         # masses are normalized to 1Ang^2
@@ -694,8 +694,9 @@ class Heat(Simulation):
                 del_E = dalpha_dz[i]*E0*thicknesses[idx]
 
                 def fun(final_temp):
-                    return (masses[idx]*(int_heat_capacities[idx][0](final_temp)
-                                         - int_heat_capacities[idx][0](init_temp[i, 0]))
+                    return (masses[idx]*quad(heat_capacities[idx][0],
+                                             init_temp[i, 0],
+                                             final_temp)[0]
                             - del_E)
                 final_temp[i, 0] = brentq(fun, init_temp[i, 0], 1e5)
         delta_T = final_temp - init_temp  # this is the temperature change
