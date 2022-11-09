@@ -115,7 +115,8 @@ class Simulation:
             filename = os.path.basename(full_filename)
             self.disp_message('{:s} saved to file:\n\t {:s}'.format(var_name, filename))
 
-    def conv_with_function(self, y, x, handle):
+    @staticmethod
+    def conv_with_function(y, x, handle):
         """conv_with_function
 
         Convolutes the array :math:`y(x)` with a function given by the handle
