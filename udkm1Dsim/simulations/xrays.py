@@ -1814,6 +1814,7 @@ class XrayDynMag(Xray):
                                                             strains[layer_counter]+1),
                                                         layer._thickness*(
                                                             strains[layer_counter]+1),
+                                                        False,
                                                         magnetizations[layer_counter])
 
                 roughness = layer._roughness
@@ -2281,7 +2282,7 @@ class XrayDynMag(Xray):
 
         """
         K = uc.num_atoms  # number of atoms
-        force_recalc = True
+        # force_recalc = True
         for j in range(K):
             if j == (K-1):  # its the last atom
                 del_dist = (strain+1)-uc.atoms[j][1](strain)
