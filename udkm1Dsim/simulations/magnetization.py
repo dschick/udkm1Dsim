@@ -27,10 +27,15 @@ __all__ = ['Magnetization']
 __docformat__ = 'restructuredtext'
 
 from .simulation import Simulation
-from ..helpers import make_hash_md5
+from .. import u, Q_
+from ..helpers import make_hash_md5, finderb
 import numpy as np
+from scipy.interpolate import interp2d
+from scipy.integrate import solve_ivp
 from time import time
 from os import path
+import warnings
+from tqdm.notebook import tqdm
 
 
 class Magnetization(Simulation):
@@ -57,14 +62,23 @@ class Magnetization(Simulation):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
+        ode_options (dict): options for scipy solve_ivp ode solver
 
     """
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
+        self.ode_options = {
+            'method': 'RK45',
+            'first_step': None,
+            'max_step': np.inf,
+            'rtol': 1e-3,
+            'atol': 1e-6,
+            }
 
     def __str__(self, output=[]):
         """String representation of this class"""
+
         class_str = 'Magnetization simulation properties:\n\n'
         class_str += super().__str__(output)
         return class_str
@@ -218,7 +232,7 @@ class LLB(Magnetization):
         class_str = 'Landau-Lifshitz-Bloch Magnetization Dynamics simulation ' \
                     'properties:\n\n'
         class_str += super().__str__()
-        return class_str#
+        return class_str
 
     def calc_magnetization_map(self, delays, temp_map):
         """calc_magnetization_map
@@ -234,9 +248,13 @@ class LLB(Magnetization):
 
         """
         t1 = time()
+        try:
+            delays = delays.to('s').magnitude
+        except AttributeError:
+            pass
         M = len(delays)
-        d_start, _, _ = self.S.get_distances_of_layers(False)
 
+        distances, _, _ = self.S.get_distances_of_layers(False)
         d_distances = np.diff(distances)
         N = len(distances)
 
@@ -248,16 +266,17 @@ class LLB(Magnetization):
             pbar = None
             state = None
 
-        indices = finderb(distances, d_start)
+        init_mag = np.zeros([N])
         # solve pdepe with method-of-lines
         sol = solve_ivp(
             LLB.odefunc,
             [delays[0], delays[-1]],
-            np.reshape(init_temp, K*N, order='F'),
+            init_mag,
             args=(N,
-                    d_distances,
-                    d_start,
-                    pbar, state),
+                  d_distances,
+                  distances,
+                  temp_map,
+                  pbar, state),
             t_eval=delays,
             **self.ode_options)
 
@@ -271,7 +290,7 @@ class LLB(Magnetization):
         return magnetization_map
 
     @staticmethod
-    def odefunc(t, m, N, d_x_grid, x, params,
+    def odefunc(t, m, N, d_x_grid, x, temp_map,
                 pbar, state):
         """odefunc
 
@@ -283,11 +302,12 @@ class LLB(Magnetization):
             N (int): number of spatial grid points.
             d_x_grid (ndarray[float]): derivative of spatial grid.
             x (ndarray[float]): start point of actual layers.
+            temp_map (ndarray[float]): spatio-temporal temperature map.
             pbar (tqdm): tqdm progressbar.
             state (list[float]): state variables for progress bar.
 
         Returns:
-            dudt (ndarray[float]): temporal derivative of internal variable.
+            dmdt (ndarray[float]): temporal derivative of internal variable.
 
         """
         # state is a list containing last updated time t:
@@ -309,7 +329,13 @@ class LLB(Magnetization):
 
         # initialize arrays
         dmdt = np.zeros([N])
-        ks = np.zeros([N])
-        cs = np.zeros([N])
 
         return dmdt
+
+    @property
+    def distances(self):
+        return Q_(self._distances, u.meter).to('nm')
+
+    @distances.setter
+    def distances(self, distances):
+        self._distances = distances.to_base_units().magnitude
