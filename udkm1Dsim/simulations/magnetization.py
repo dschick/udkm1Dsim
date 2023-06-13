@@ -234,6 +234,16 @@ class LLB(Magnetization):
         class_str += super().__str__()
         return class_str
 
+    def calc_mean_field_mag_map(self, temp_map):
+        """calc_mean_field_mag_map
+
+        Args:
+            temp_map (_type_): _description_
+
+        calculate the mean-field mean magnetization map
+        """
+        return None
+
     def calc_magnetization_map(self, delays, temp_map):
         """calc_magnetization_map
 
@@ -267,6 +277,9 @@ class LLB(Magnetization):
             state = None
 
         init_mag = np.zeros([N])
+        # calculate the mean magnetization maps for each unique layer
+        # and all relevant parameters
+        mean_mag_map = self.calc_mean_field_mag_map(temp_map)
         # solve pdepe with method-of-lines
         sol = solve_ivp(
             LLB.odefunc,
