@@ -22,18 +22,15 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Magnetization', 'LLB']
+__all__ = ['Magnetization']
 
 __docformat__ = 'restructuredtext'
 
 from .simulation import Simulation
-from .. import u, Q_
 from ..helpers import make_hash_md5
 import numpy as np
-from scipy.integrate import solve_ivp
 from time import time
 from os import path
-from tqdm.notebook import tqdm
 
 
 class Magnetization(Simulation):
@@ -60,23 +57,14 @@ class Magnetization(Simulation):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        ode_options (dict): options for scipy solve_ivp ode solver
 
     """
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-        self.ode_options = {
-            'method': 'RK45',
-            'first_step': None,
-            'max_step': np.inf,
-            'rtol': 1e-3,
-            'atol': 1e-6,
-            }
 
     def __str__(self, output=[]):
         """String representation of this class"""
-
         class_str = 'Magnetization simulation properties:\n\n'
         class_str += super().__str__(output)
         return class_str
@@ -191,165 +179,3 @@ class Magnetization(Simulation):
 
         """
         raise NotImplementedError
-
-
-class LLB(Magnetization):
-    """LLB
-
-    Mean-Field Quantum Landau-Lifshitz-Bloch simulations.
-
-    In collaboration with Theodor Griepe (@Nilodirf)
-
-    Args:
-        S (Structure): sample to do simulations with.
-        force_recalc (boolean): force recalculation of results.
-
-    Keyword Args:
-        save_data (boolean): true to save simulation results.
-        cache_dir (str): path to cached data.
-        disp_messages (boolean): true to display messages from within the
-            simulations.
-        progress_bar (boolean): enable tqdm progress bar.
-
-    Attributes:
-        S (Structure): sample structure to calculate simulations on.
-        force_recalc (boolean): force recalculation of results.
-        save_data (boolean): true to save simulation results.
-        cache_dir (str): path to cached data.
-        disp_messages (boolean): true to display messages from within the
-            simulations.
-        progress_bar (boolean): enable tqdm progress bar.
-
-    """
-
-    def __init__(self, S, force_recalc, **kwargs):
-        super().__init__(S, force_recalc, **kwargs)
-
-    def __str__(self):
-        """String representation of this class"""
-        class_str = 'Landau-Lifshitz-Bloch Magnetization Dynamics simulation ' \
-                    'properties:\n\n'
-        class_str += super().__str__()
-        return class_str
-
-    def calc_mean_field_mag_map(self, temp_map):
-        """calc_mean_field_mag_map
-
-        Args:
-            temp_map (_type_): _description_
-
-        calculate the mean-field mean magnetization map
-        """
-        return None
-
-    def calc_magnetization_map(self, delays, temp_map):
-        """calc_magnetization_map
-
-        Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
-            **kwargs (ndarray[float], optional): optional strain and
-                temperature profile.
-
-        Returns:
-            magnetization_map (ndarray[float]): spatio-temporal absolute
-            magnetization profile.
-
-        """
-        t1 = time()
-        try:
-            delays = delays.to('s').magnitude
-        except AttributeError:
-            pass
-        M = len(delays)
-
-        distances, _, _ = self.S.get_distances_of_layers(False)
-        d_distances = np.diff(distances)
-        N = len(distances)
-
-        if self.progress_bar:  # with tqdm progressbar
-            pbar = tqdm()
-            pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
-            state = [delays[0], abs(delays[-1]-delays[0])/100]
-        else:  # without progressbar
-            pbar = None
-            state = None
-
-        init_mag = np.zeros([N])
-        # calculate the mean magnetization maps for each unique layer
-        # and all relevant parameters
-        mean_mag_map = self.calc_mean_field_mag_map(temp_map)
-        # solve pdepe with method-of-lines
-        sol = solve_ivp(
-            LLB.odefunc,
-            [delays[0], delays[-1]],
-            init_mag,
-            args=(N,
-                  d_distances,
-                  distances,
-                  temp_map,
-                  mean_mag_map,
-                  pbar, state),
-            t_eval=delays,
-            **self.ode_options)
-
-        if pbar is not None:  # close tqdm progressbar if used
-            pbar.close()
-        magnetization_map = sol.y.T
-
-        magnetization_map = np.array(magnetization_map).reshape([M, N], order='F')
-        self.disp_message('Elapsed time for _LLB_: {:f} s'.format(time()-t1))
-
-        return magnetization_map
-
-    @staticmethod
-    def odefunc(t, m, N, d_x_grid, x, temp_map, mean_mag_map,
-                pbar, state):
-        """odefunc
-
-        Ordinary differential equation that is solved for 1D LLB.
-
-        Args:
-            t (ndarray[float]): internal time steps of the ode solver.
-            m (ndarray[float]): internal variable of the ode solver.
-            N (int): number of spatial grid points.
-            d_x_grid (ndarray[float]): derivative of spatial grid.
-            x (ndarray[float]): start point of actual layers.
-            temp_map (ndarray[float]): spatio-temporal temperature map.
-            mean_mag_map (ndarray[float]): spatio-temporal
-                mean-field magnetization map.
-            pbar (tqdm): tqdm progressbar.
-            state (list[float]): state variables for progress bar.
-
-        Returns:
-            dmdt (ndarray[float]): temporal derivative of internal variable.
-
-        """
-        # state is a list containing last updated time t:
-        # state = [last_t, dt]
-        # I used a list because its values can be carried between function
-        # calls throughout the ODE integration
-        last_t, dt = state
-        try:
-            n = int((t - last_t)/dt)
-        except ValueError:
-            n = 0
-
-        if n >= 1:
-            pbar.update(n)
-            pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
-            state[0] = t
-        elif n < 0:
-            state[0] = t
-
-        # initialize arrays
-        dmdt = np.zeros([N])
-
-        return dmdt
-
-    @property
-    def distances(self):
-        return Q_(self._distances, u.meter).to('nm')
-
-    @distances.setter
-    def distances(self, distances):
-        self._distances = distances.to_base_units().magnitude
