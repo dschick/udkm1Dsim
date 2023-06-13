@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Magnetization', 'LLB']
+__all__ = ['Magnetization']
 
 __docformat__ = 'restructuredtext'
 
@@ -30,10 +30,8 @@ from .simulation import Simulation
 from .. import u, Q_
 from ..helpers import make_hash_md5, finderb
 import numpy as np
-from scipy.integrate import solve_ivp
 from time import time
 from os import path
-from tqdm.notebook import tqdm
 
 
 class Magnetization(Simulation):
@@ -60,23 +58,14 @@ class Magnetization(Simulation):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        ode_options (dict): options for scipy solve_ivp ode solver
 
     """
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-        self.ode_options = {
-            'method': 'RK45',
-            'first_step': None,
-            'max_step': np.inf,
-            'rtol': 1e-3,
-            'atol': 1e-6,
-            }
 
     def __str__(self, output=[]):
         """String representation of this class"""
-
         class_str = 'Magnetization simulation properties:\n\n'
         class_str += super().__str__(output)
         return class_str
