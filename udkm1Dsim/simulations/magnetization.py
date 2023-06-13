@@ -358,17 +358,18 @@ class LLB(Magnetization):
         # otc = ~utc
 
         # m = m_flat.reshape(len(sample), 3)
-        # 
         # m_diff_down = np.concatenate((np.diff(m, axis=0), np.zeros((1, 3))), axis=0)
         # m_diff_up = -np.roll(m_diff_down, 1)
 
-        # H_es = e_s(t).T[:, 0][:, np.newaxis] * m_diff_up + e_s(t).T[:, 1][:, np.newaxis] * m_diff_down
+        # H_es = e_s(t).T[:, 0][:, np.newaxis] * m_diff_up
+        #   + e_s(t).T[:, 1][:, np.newaxis] * m_diff_down
         # H_ani = ani(t)[:, np.newaxis] * (m * ani_perp_sam)
 
         # factor = 1 / x_p(t)
         # H_th_pref = np.zeros(len(sample))
         # H_th_pref[utc] = (1 - m_squared[utc] / mmag_sam_T(t)[utc] ** 2) * factor[utc] / 2
-        # H_th_pref[otc] = -(1 + 3 / 5 * Tc_sam[t_index, otc] / (tes_T(t)[otc] - Tc_sam[t_index, otc] + 1e-1)) * \
+        # H_th_pref[otc] = -(1 + 3 / 5 * Tc_sam[t_index, otc] / (tes_T(t)[otc]
+        #   - Tc_sam[t_index, otc] + 1e-1)) * \
         #                  m_squared[otc] * factor[otc]
         # H_th = np.multiply(H_th_pref[:, np.newaxis], m)
 
