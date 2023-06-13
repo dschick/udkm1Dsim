@@ -32,8 +32,6 @@ import numpy as np
 from inspect import isfunction
 from sympy import integrate, lambdify, symbols, symarray
 from tabulate import tabulate
-import scipy.constants as constants
-import warnings
 
 
 class Layer:
@@ -92,20 +90,10 @@ class Layer:
            function [J/(kg K)].
         int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
            capacity function.
-        sub_system_coupling (list[@lambda]): list of coupling functions of
+        sub_system_coupling (list[@lambda]): list of of coupling functions of
            different subsystems [W/m³].
         num_sub_systems (int): number of subsystems for heat and phonons
            (electrons, lattice, spins, ...).
-        eff_spin (float): effective spin.
-        curie_temp (float): Curie temperature [K].
-        mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
-        lamda (float): intrinsic coupling to bath parameter.
-        mag_moment (float): atomic magnetic moment [mu_Bohr].
-        aniso_exponents(ndarray[float]): exponents of T-dependence uniaxial
-            anisotropy as x,y,z component vector
-        ansiotropy (float): anisotropy at T=0 K [J/m³].
-        exch_stiffness (float): exchange stiffness at T=0 K [J/m].
-        mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
 
     """
 
@@ -134,15 +122,6 @@ class Layer:
                              'thermal expansion and subsystem coupling have not '
                              'the same number of elements!')
 
-        self.eff_spin = kwargs.get('eff_spin', 0)
-        self.curie_temp = kwargs.get('curie_temp', 0.0*u.K)
-        self.lamda = kwargs.get('lamda', 0)
-        self.mag_moment = kwargs.get('mag_moment', 0)
-        self.aniso_exponents = kwargs.get('aniso_exponents', [0, 0, 0])
-        self.ansiotropy = kwargs.get('ansiotropy', 0*u.J/u.m**3)
-        self.exch_stiffness = kwargs.get('exch_stiffness', 0*u.J/u.m)
-        self.mag_saturation = kwargs.get('mag_saturation', 0*u.J/u.T/u.m**3)
-
     def __str__(self):
         """String representation of this class"""
         output = [
@@ -162,17 +141,7 @@ class Layer:
                   ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
                   ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
                   ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
-                  ['subsystem coupling', ' W/m³\n'.join(self.sub_system_coupling_str) + ' W/m³'],
-                  ['effective spin', self.eff_spin],
-                  ['Curie temperature', '{:.4~P}'.format(self.curie_temp.to('K'))],
-                  ['mean-field exch. coupling', self.mf_exch_coupling*u.m**2*u.kg/u.s**2],
-                  ['coupling to bath parameter', self.lamda],
-                  ['atomic magnetic moment', self.mag_moment, ' $\mu_{Bohr}$'],
-                  ['uniaxial anisotropy exponents', self.aniso_exponents],
-                  ['anisotropy', self.ansiotropy],
-                  ['exchange stiffness', self.exch_stiffness],
-                  ['saturation magnetization', self.mag_saturation],
-                ]
+                  ['subsystem coupling', ' W/m³\n'.join(self.sub_system_coupling_str) + ' W/m³']]
 
         return output
 
@@ -267,9 +236,7 @@ class Layer:
                                         '_thickness'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
-                               'magnetic': ['_thickness', 'magnetization', 'eff_spin',
-                                            '_curie_temp', '_aniso_exponents', '_ansiotropy',
-                                            '_exch_stiffness', '_mag_saturation'],
+                               'magnetic': ['_thickness', 'magnetization'],
                                }
 
         types = (kwargs.get('types', 'all'))
@@ -339,20 +306,6 @@ class Layer:
 
         """
         self.spring_const[0] = (self._mass_unit_area * (self._sound_vel/self._thickness)**2)
-
-    def calc_mf_exchange_coupling(self):
-        r"""calc_mf_exchange_coupling
-
-        Calculate the mean-field exchange coupling constant
-
-        .. math:: J = \frac{3}{S_{eff}+1} k_B T_C
-
-        """
-        try:
-            self.mf_exch_coupling = 3*self.eff_spin/(self.eff_spin+1)*constants.k*self._curie_temp
-        except AttributeError:
-            # on initialization self._curie_temp
-            self.mf_exch_coupling = 0
 
     @property
     def thickness(self):
@@ -543,62 +496,6 @@ class Layer:
         self._sub_system_coupling, self.sub_system_coupling_str = \
             self.check_input(sub_system_coupling)
 
-    @property
-    def eff_spin(self):
-        return self._eff_spin
-
-    @eff_spin.setter
-    def eff_spin(self, eff_spin):
-        self._eff_spin = eff_spin
-        self.calc_mf_exchange_coupling()
-
-    @property
-    def curie_temp(self):
-        return Q_(self._curie_temp, u.K)
-
-    @curie_temp.setter
-    def curie_temp(self, curie_temp):
-        self._curie_temp = curie_temp.to_base_units().magnitude
-        self.calc_mf_exchange_coupling()
-
-    @property
-    def aniso_exponents(self):
-        return self._aniso_exponents
-
-    @aniso_exponents.setter
-    def aniso_exponents(self, aniso_exponents):
-        self._aniso_exponents = np.zeros([3])
-        if len(aniso_exponents) <= 3:
-            self._aniso_exponents[0:len(aniso_exponents)] = aniso_exponents
-        else:
-            warnings.warn('aniso_exponents must be an array of length <= 3.\n'
-                          'Skipping all pointless elements.')
-            self._aniso_exponents[0:3] = aniso_exponents[0:3]
-
-    @property
-    def ansiotropy(self):
-        return Q_(self._ansiotropy, u.J/u.m**3)
-
-    @ansiotropy.setter
-    def ansiotropy(self, ansiotropy):
-        self._ansiotropy = ansiotropy.to_base_units().magnitude
-
-    @property
-    def exch_stiffness(self):
-        return Q_(self._exch_stiffness, u.J/u.m)
-
-    @exch_stiffness.setter
-    def exch_stiffness(self, exch_stiffness):
-        self._exch_stiffness = exch_stiffness.to_base_units().magnitude
-
-    @property
-    def mag_saturation(self):
-        return Q_(self._mag_saturation, u.J/u.T/u.m**3)
-
-    @mag_saturation.setter
-    def mag_saturation(self, mag_saturation):
-        self._mag_saturation = mag_saturation.to_base_units().magnitude
-
 
 class AmorphousLayer(Layer):
     r"""AmorphousLayer
@@ -662,16 +559,6 @@ class AmorphousLayer(Layer):
            different subsystems [W/m³].
         num_sub_systems (int): number of subsystems for heat and phonons
            (electrons, lattice, spins, ...).
-        eff_spin (float): effective spin.
-        curie_temp (float): Curie temperature [K].
-        mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
-        lamda (float): intrinsic coupling to bath parameter.
-        mag_moment (float): atomic magnetic moment [mu_Bohr].
-        aniso_exponents(ndarray[float]): exponents of T-dependence uniaxial
-            anisotropy as x,y,z component vector
-        ansiotropy (float): anisotropy at T=0 K [J/m³].
-        exch_stiffness (float): exchange stiffness at T=0 K [J/m].
-        mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
         magnetization (dict[float]): magnetization amplitude, phi and
            gamma angle inherited from the atom.
         atom (object): Atom or AtomMixed in the layer.
@@ -803,17 +690,7 @@ class UnitCell(Layer):
         atoms (list[atom, @lambda]): list of atoms and function handle
            for strain dependent displacement.
         num_atoms (int): number of atoms in unit cell.
-        eff_spin (float): effective spin.
-        curie_temp (float): Curie temperature [K].
-        mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
-        lamda (float): intrinsic coupling to bath parameter.
-        mag_moment (float): atomic magnetic moment [mu_Bohr].
-        aniso_exponents(ndarray[float]): exponents of T-dependence uniaxial
-            anisotropy as x,y,z component vector
-        ansiotropy (float): anisotropy at T=0 K [J/m³].
-        exch_stiffness (float): exchange stiffness at T=0 K [J/m].
-        mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
-        magnetization (list[float]): magnetization amplitudes, phi, and
+        magnetization (list[float]): magnetization amplitutes, phi, and
            gamma angle of each atom in the unit cell.
 
     """
