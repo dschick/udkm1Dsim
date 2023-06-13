@@ -349,8 +349,7 @@ class Layer:
 
         """
         try:
-            self.mf_exch_coupling = 3*self.eff_spin/(self.eff_spin+1) \
-                *constants.k*self._curie_temp
+            self.mf_exch_coupling = 3*self.eff_spin/(self.eff_spin+1)*constants.k*self._curie_temp
         except AttributeError:
             # on initialization self._curie_temp
             self.mf_exch_coupling = 0

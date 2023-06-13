@@ -28,13 +28,11 @@ __docformat__ = 'restructuredtext'
 
 from .simulation import Simulation
 from .. import u, Q_
-from ..helpers import make_hash_md5, finderb
+from ..helpers import make_hash_md5
 import numpy as np
-from scipy.interpolate import interp2d
 from scipy.integrate import solve_ivp
 from time import time
 from os import path
-import warnings
 from tqdm.notebook import tqdm
 
 
@@ -289,6 +287,7 @@ class LLB(Magnetization):
                   d_distances,
                   distances,
                   temp_map,
+                  mean_mag_map,
                   pbar, state),
             t_eval=delays,
             **self.ode_options)
@@ -303,7 +302,7 @@ class LLB(Magnetization):
         return magnetization_map
 
     @staticmethod
-    def odefunc(t, m, N, d_x_grid, x, temp_map,
+    def odefunc(t, m, N, d_x_grid, x, temp_map, mean_mag_map,
                 pbar, state):
         """odefunc
 
@@ -316,6 +315,8 @@ class LLB(Magnetization):
             d_x_grid (ndarray[float]): derivative of spatial grid.
             x (ndarray[float]): start point of actual layers.
             temp_map (ndarray[float]): spatio-temporal temperature map.
+            mean_mag_map (ndarray[float]): spatio-temporal
+                mean-field magnetization map.
             pbar (tqdm): tqdm progressbar.
             state (list[float]): state variables for progress bar.
 
