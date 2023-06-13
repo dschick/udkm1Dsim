@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Magnetization']
+__all__ = ['Magnetization', 'LLB']
 
 __docformat__ = 'restructuredtext'
 
