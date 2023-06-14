@@ -126,15 +126,16 @@ class Magnetization(Simulation):
         arrays.
         The `magnetization_map` can depend on the ``temp_map`` and
         ``strain_map`` that can be also calculated for the sample structure.
+        More over an external magnetic field ``H_ext`` can be provided.
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile.
+                temperature profile as well external magnetic field.
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
-            magnetization profile.
+               magnetization profile.
 
         """
         # create a hash of all simulation parameters
@@ -159,6 +160,12 @@ class Magnetization(Simulation):
             if ('temp_map' in kwargs):
                 if not isinstance(kwargs['temp_map'], np.ndarray):
                     raise TypeError('temp_map must be a numpy ndarray!')
+            if ('H_ext' in kwargs):
+                if not isinstance(kwargs['H_ext'], np.ndarray):
+                    raise TypeError('H_ext must be a numpy ndarray!')
+                if kwargs['H_ext'].shape != (3,):
+                    raise TypeError('H_ext must be a vector with 3 components '
+                                    '(H_x, H_y, H_z)!')
 
             magnetization_map = self.calc_magnetization_map(delays, **kwargs)
 
@@ -232,7 +239,9 @@ class LLB(Magnetization):
         class_str += super().__str__()
         return class_str
 
-    def calc_magnetization_map(self, delays, temp_map):
+    def calc_magnetization_map(self, delays, temp_map,
+                               H_ext=np.array([0, 0, 0])
+                               ):
         r"""calc_magnetization_map
 
         Calculates the magnetization map using the mean-field quantum
@@ -279,12 +288,13 @@ class LLB(Magnetization):
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
-            **kwargs (ndarray[float], optional): optional strain and
-                temperature profile.
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            H_ext (ndarray[float], optional): external magnetic field
+                (H_x, H_y, H_z) [T].
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
-            magnetization profile.
+                magnetization profile.
 
         """
         t1 = time()
@@ -317,9 +327,7 @@ class LLB(Magnetization):
             np.reshape(init_mag, N*3, order='F'),
             args=(delays,
                   N,
-                  d_distances,
-                  distances,
-                  temp_map,
+                  H_ext,
                   mean_mag_map,
                   pbar, state),
             t_eval=delays,
@@ -335,8 +343,7 @@ class LLB(Magnetization):
         return magnetization_map
 
     @staticmethod
-    def odefunc(t, m, delays, N, d_x_grid, x, temp_map, mean_mag_map,
-                pbar, state):
+    def odefunc(t, m, delays, N, H_ext, mean_mag_map, pbar, state):
         """odefunc
 
         Ordinary differential equation that is solved for 1D LLB.
@@ -346,9 +353,8 @@ class LLB(Magnetization):
             m (ndarray[float]): internal variable of the ode solver.
             delays (ndarray[float]): delays range of simulation [s].
             N (int): number of spatial grid points.
-            d_x_grid (ndarray[float]): derivative of spatial grid.
-            x (ndarray[float]): start point of actual layers.
-            temp_map (ndarray[float]): spatio-temporal temperature map.
+            H_ext (ndarray[float]): external magnetic field
+                (H_x, H_y, H_z) [T].
             mean_mag_map (ndarray[float]): spatio-temporal
                 mean-field magnetization map.
             pbar (tqdm): tqdm progressbar.
@@ -381,15 +387,13 @@ class LLB(Magnetization):
 
         # nearest delay index for current time t
         # idt = finderb(t, delays)[0]
-        # current electron temperature profile
-        # temps = temp_map[idt, :]
 
         # actual calculations
         m_squared = np.sum(np.power(m, 2), axis=1)
         gamma_e = -1.761e11
 
         # calculate external field
-        H_ext = np.ones([N, 3])
+        # is given as external input
         # calculate uniaxial anisotropy field
         H_A = np.ones([N, 3])
         # calculate exchange field
