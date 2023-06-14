@@ -232,18 +232,50 @@ class LLB(Magnetization):
         class_str += super().__str__()
         return class_str
 
-    def calc_mean_field_mag_map(self, temp_map):
-        """calc_mean_field_mag_map
-
-        Args:
-            temp_map (_type_): _description_
-
-        calculate the mean-field mean magnetization map
-        """
-        return None
-
     def calc_magnetization_map(self, delays, temp_map):
-        """calc_magnetization_map
+        r"""calc_magnetization_map
+
+        Calculates the magnetization map using the mean-field quantum
+        Landau-Lifshitz-Bloch equation (LLB) for a given delay range and
+        according temperature map:
+
+        .. math::
+
+            \frac{d\mathbf{m}}{dt}=\gamma_e \left(\mathbf{m} \times
+              \mathbf{H}_\mathrm{eff} + \frac{\alpha_{\perp}}{m^2}\mathbf{m}
+              \times (\mathbf{m} \times \mathbf{H}_\mathrm{eff}) -
+              \frac{\alpha_{\parallel}}{m^2}(\mathbf{m} \cdot
+              \mathbf{H}_\mathrm{eff}) \cdot \mathbf{m}\right)
+
+        The three terms describe
+
+        #. **precession** at Larmor frequency,
+        #. **transversal damping** (conserving the macrospin length), and
+        #. **longitudinal damping** (changing macrospin length due to incoherent
+           atomistic spin excitations within the layer the macrospin is
+           defined on).
+
+        :math:`\alpha_{\parallel}` and :math:`\alpha_{\perp}` are the
+        longitudinal and transversal damping parameters, respectively.
+        :math:`\gamma_e = -1.761\,\mathrm{rad\,s^{-1}\,T^{-1}}` is the
+        gyromagnetic ratio of an electron.
+
+        The effective magnetic field is the sum of all relevant magnetic
+        interactions:
+
+        .. math::
+
+            \mathbf{H}_\mathrm{eff} = \mathbf{H}_\mathrm{ext}
+              + \mathbf{H}_\mathrm{A}
+              + \mathbf{H}_\mathrm{ex}
+              + \mathbf{H}_\mathrm{th}
+
+        where
+
+        * :math:`\mathbf{H}_\mathrm{ext}` is the external magnetic field
+        * :math:`\mathbf{H}_\mathrm{A}` is the uniaxial anisotropy field
+        * :math:`\mathbf{H}_\mathrm{ex}` is the exchange field
+        * :math:`\mathbf{H}_\mathrm{th}` is the thermal field
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
@@ -353,6 +385,7 @@ class LLB(Magnetization):
 
         # actual calculations
         m_squared = np.sum(np.power(m, 2), axis=1)
+        dmdt = idt*m_squared
         ##########
         # utc = under_tc[t_index, :]
         # otc = ~utc
@@ -360,7 +393,6 @@ class LLB(Magnetization):
         # m = m_flat.reshape(len(sample), 3)
         # m_diff_down = np.concatenate((np.diff(m, axis=0), np.zeros((1, 3))), axis=0)
         # m_diff_up = -np.roll(m_diff_down, 1)
-
         # H_es = e_s(t).T[:, 0][:, np.newaxis] * m_diff_up
         #   + e_s(t).T[:, 1][:, np.newaxis] * m_diff_down
         # H_ani = ani(t)[:, np.newaxis] * (m * ani_perp_sam)
@@ -390,6 +422,22 @@ class LLB(Magnetization):
         # dmdt = np.zeros([N])
 
         return np.reshape(dmdt, N*3, order='F')
+
+    @staticmethod
+    def calc_mean_field_mag_map(temp_map):
+        """calc_mean_field_mag_map
+
+        Calculate the mean-field mean magnetization map.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature
+
+        Returns:
+            mf_mag_map (ndarray[float]): spatio-temporal mean_field
+                magnetization map.
+
+        """
+        return None
 
     @property
     def distances(self):

@@ -931,7 +931,7 @@ class Heat(Simulation):
         :math:`S(z,t)` is a source term [W/m³].
         The energy flow between the subsystems is given by the ``sub_system_coupling``
         parameter :math:`G_i(T_1,...,T_N)` of the individual layers.
-        The index :math:`i` referrs to the :math:`i`-th subsystem.
+        The index :math:`i` refers to the :math:`i`-th subsystem.
 
         The 1D heat diffusion equation can be either solved with SciPy or
         Matlab as backend.
