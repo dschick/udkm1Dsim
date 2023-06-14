@@ -409,13 +409,13 @@ class LLB(Magnetization):
         m_rot = np.cross(m, H_eff)
 
         # transversal damping
-        alpha_trans = np.ones([N])  # transversal damping
+        alpha_trans = LLB.calc_transverse_damping()
         trans_damping = np.multiply(
             np.divide(alpha_trans, m_squared)[:, np.newaxis],
             np.cross(m, m_rot)
             )
         # longitudinal damping
-        alpha_long = np.ones([N])
+        alpha_long = LLB.calc_longitudinal_damping()
         long_damping = np.multiply(
             np.divide(alpha_long, m_squared)[:, np.newaxis],
             np.multiply(np.einsum('ij,ij->i', m, H_eff)[:, np.newaxis], m)
@@ -437,6 +437,30 @@ class LLB(Magnetization):
         Returns:
             mf_mag_map (ndarray[float]): spatio-temporal mean_field
                 magnetization map.
+
+        """
+        return None
+
+    @staticmethod
+    def calc_transverse_damping():
+        r"""calc_transverse_damping
+
+        Calculate the transverse damping parameter:
+
+        .. math::
+
+            \alpha_{\parallel} & = &_{T<T_c} \frac{2\lambda}{S+1}\frac{1}{\sinh(2q_s)}\\
+            \alpha_{\perp} & = &_{T<T_c} \frac{\lambda}{m_{eq}(T)}(\frac{\tanh(q_s)}{q_s}-\frac{T}{3T_C})\\
+            \alpha_{\parallel, \perp} & = & _{T>T_c} \frac{2 \lambda}{3} \frac{T}{T_C}
+
+        where
+
+        .. math::
+
+            q_s=\frac{3 T_C m_{eq}(T)}{(2S+1)T}
+
+        Returns:
+            alpha_trans (ndarray[float]): transverse damping parameter.
 
         """
         return None
