@@ -257,8 +257,8 @@ class LLB(Magnetization):
 
         :math:`\alpha_{\parallel}` and :math:`\alpha_{\perp}` are the
         longitudinal and transversal damping parameters, respectively.
-        :math:`\gamma_e = -1.761\,\mathrm{rad\,s^{-1}\,T^{-1}}` is the
-        gyromagnetic ratio of an electron.
+        :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,T^{-1}}` is
+        the gyromagnetic ratio of an electron.
 
         The effective magnetic field is the sum of all relevant magnetic
         interactions:
@@ -382,44 +382,43 @@ class LLB(Magnetization):
 
         # nearest delay index for current time t
         idt = finderb(t, delays)[0]
+        # current electron temperature profile
+        temps = temp_map[idt, :]
 
         # actual calculations
         m_squared = np.sum(np.power(m, 2), axis=1)
-        dmdt = idt*m_squared
-        ##########
-        # utc = under_tc[t_index, :]
-        # otc = ~utc
+        gamma_e = -1.761e11
 
-        # m = m_flat.reshape(len(sample), 3)
-        # m_diff_down = np.concatenate((np.diff(m, axis=0), np.zeros((1, 3))), axis=0)
-        # m_diff_up = -np.roll(m_diff_down, 1)
-        # H_es = e_s(t).T[:, 0][:, np.newaxis] * m_diff_up
-        #   + e_s(t).T[:, 1][:, np.newaxis] * m_diff_down
-        # H_ani = ani(t)[:, np.newaxis] * (m * ani_perp_sam)
+        # calculate external field
+        H_ext = np.zeros([N, 3])
+        # calculate uniaxial anisotropy field
+        H_A = np.zeros([N, 3])
+        # calculate exchange field
+        H_ex = np.zeros([N, 3])
+        # calculate thermal field
+        H_th = np.zeros([N, 3])
 
-        # factor = 1 / x_p(t)
-        # H_th_pref = np.zeros(len(sample))
-        # H_th_pref[utc] = (1 - m_squared[utc] / mmag_sam_T(t)[utc] ** 2) * factor[utc] / 2
-        # H_th_pref[otc] = -(1 + 3 / 5 * Tc_sam[t_index, otc] / (tes_T(t)[otc]
-        #   - Tc_sam[t_index, otc] + 1e-1)) * \
-        #                  m_squared[otc] * factor[otc]
-        # H_th = np.multiply(H_th_pref[:, np.newaxis], m)
+        # calculate the effective field
+        H_eff = H_ext + H_A + H_ex + H_th
 
-        # H_eff = H_ani + H_es + H_th
+        # calculate components of LLB
+        # precessional term:
+        m_rot = np.cross(m, H_eff)
 
-        # pref_trans = np.divide(a_t(t), m_squared)
-        # pref_long = np.multiply(np.divide(a_p(t), m_squared), np.einsum('ij,ij->i', m, H_eff))
+        # transversal damping
+        alpha_trans = np.zeros([N])  # transversal damping
+        trans_damping = np.multiply(
+            np.divide(alpha_trans, m_squared)[:, np.newaxis],
+            np.cross(m, m_rot)
+            )
+        # longitudinal damping
+        alpha_long = np.zeros([N])
+        long_damping = np.multiply(
+            np.divide(alpha_long, m_squared)[:, np.newaxis],
+            np.einsum('ij,ij->i', m, H_eff)  # ((m*H_eff) * m)
+            )
 
-        # # and all the cross products:
-        # m_rot = np.cross(m, H_eff)  # precessional term
-        # m_trans = np.cross(m, m_rot)  # transverse damping term
-
-        # trans_damp = np.multiply(pref_trans[:, np.newaxis], m_trans)
-        # long_damp = np.multiply(pref_long[:, np.newaxis], m)
-
-        # # Now compute the magnetization increment
-        # dm_dt = gamma * (-m_rot - trans_damp + long_damp)
-        # dmdt = np.zeros([N])
+        dmdt = gamma_e * (m_rot + trans_damping - long_damping)
 
         return np.reshape(dmdt, N*3, order='F')
 
