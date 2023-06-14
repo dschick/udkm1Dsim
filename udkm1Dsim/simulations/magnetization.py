@@ -28,7 +28,7 @@ __docformat__ = 'restructuredtext'
 
 from .simulation import Simulation
 from .. import u, Q_
-from ..helpers import make_hash_md5, finderb
+from ..helpers import make_hash_md5
 import numpy as np
 from scipy.integrate import solve_ivp
 from time import time
@@ -377,26 +377,25 @@ class LLB(Magnetization):
 
         # initialize arrays
         # reshape input temperature
-        m = np.array(m).reshape([N, 3], order='F')
-        dmdt = np.zeros([N, 3])
+        m = np.ones([N, 3])  # np.array(m).reshape([N, 3], order='F')
 
         # nearest delay index for current time t
-        idt = finderb(t, delays)[0]
+        # idt = finderb(t, delays)[0]
         # current electron temperature profile
-        temps = temp_map[idt, :]
+        # temps = temp_map[idt, :]
 
         # actual calculations
         m_squared = np.sum(np.power(m, 2), axis=1)
         gamma_e = -1.761e11
 
         # calculate external field
-        H_ext = np.zeros([N, 3])
+        H_ext = np.ones([N, 3])
         # calculate uniaxial anisotropy field
-        H_A = np.zeros([N, 3])
+        H_A = np.ones([N, 3])
         # calculate exchange field
-        H_ex = np.zeros([N, 3])
+        H_ex = np.ones([N, 3])
         # calculate thermal field
-        H_th = np.zeros([N, 3])
+        H_th = np.ones([N, 3])
 
         # calculate the effective field
         H_eff = H_ext + H_A + H_ex + H_th
@@ -406,16 +405,16 @@ class LLB(Magnetization):
         m_rot = np.cross(m, H_eff)
 
         # transversal damping
-        alpha_trans = np.zeros([N])  # transversal damping
+        alpha_trans = np.ones([N])  # transversal damping
         trans_damping = np.multiply(
             np.divide(alpha_trans, m_squared)[:, np.newaxis],
             np.cross(m, m_rot)
             )
         # longitudinal damping
-        alpha_long = np.zeros([N])
+        alpha_long = np.ones([N])
         long_damping = np.multiply(
             np.divide(alpha_long, m_squared)[:, np.newaxis],
-            np.einsum('ij,ij->i', m, H_eff)  # ((m*H_eff) * m)
+            np.multiply(np.einsum('ij,ij->i', m, H_eff)[:, np.newaxis], m)
             )
 
         dmdt = gamma_e * (m_rot + trans_damping - long_damping)
