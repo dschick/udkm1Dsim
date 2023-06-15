@@ -28,7 +28,7 @@ __docformat__ = 'restructuredtext'
 
 from .simulation import Simulation
 from .. import u, Q_
-from ..helpers import make_hash_md5
+from ..helpers import make_hash_md5, finderb
 import numpy as np
 from scipy.integrate import solve_ivp
 from time import time
@@ -305,7 +305,7 @@ class LLB(Magnetization):
         M = len(delays)
 
         distances, _, _ = self.S.get_distances_of_layers(False)
-        d_distances = np.diff(distances)
+        # d_distances = np.diff(distances)
         N = len(distances)
 
         if self.progress_bar:  # with tqdm progressbar
@@ -319,7 +319,11 @@ class LLB(Magnetization):
         init_mag = np.zeros([N, 3])
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
-        mean_mag_map = self.calc_mean_field_mag_map(temp_map)
+        mean_mag_map = self.calc_mean_field_mag_map(temp_map[:, :, 0])
+        # get layer properties
+        curie_temps = self.S.get_layer_property_vector('_curie_temp')
+        eff_spins = self.S.get_layer_property_vector('eff_spin')
+        lambdas = self.S.get_layer_property_vector('lamda')
         # solve pdepe with method-of-lines
         sol = solve_ivp(
             LLB.odefunc,
@@ -328,7 +332,11 @@ class LLB(Magnetization):
             args=(delays,
                   N,
                   H_ext,
+                  temp_map[:, :, 0],  # provide only the electron temperature
                   mean_mag_map,
+                  curie_temps,
+                  eff_spins,
+                  lambdas,
                   pbar, state),
             t_eval=delays,
             **self.ode_options)
@@ -343,7 +351,10 @@ class LLB(Magnetization):
         return magnetization_map
 
     @staticmethod
-    def odefunc(t, m, delays, N, H_ext, mean_mag_map, pbar, state):
+    def odefunc(t, m,
+                delays, N, H_ext, temp_map, mean_mag_map, curie_temps, eff_spins,
+                lambdas,
+                pbar, state):
         """odefunc
 
         Ordinary differential equation that is solved for 1D LLB.
@@ -355,8 +366,12 @@ class LLB(Magnetization):
             N (int): number of spatial grid points.
             H_ext (ndarray[float]): external magnetic field
                 (H_x, H_y, H_z) [T].
+            temp_map (ndarray[float]): spatio-temporal electron temperature map.
             mean_mag_map (ndarray[float]): spatio-temporal
                 mean-field magnetization map.
+            curie_temps (ndarray[float]): Curie temperatures of layers.
+            eff_spins (ndarray[float]): effective spins of layers.
+            lambdas (ndarray[float]): coupling-to-bath parameter of layers.
             pbar (tqdm): tqdm progressbar.
             state (list[float]): state variables for progress bar.
 
@@ -386,7 +401,13 @@ class LLB(Magnetization):
         m = np.ones([N, 3])  # np.array(m).reshape([N, 3], order='F')
 
         # nearest delay index for current time t
-        # idt = finderb(t, delays)[0]
+        idt = finderb(t, delays)[0]
+        temps = temp_map[idt, :].flatten()
+        # binary masks for layers being under or over its Curie temperature
+        under_tc = temps < curie_temps
+        over_tc = ~under_tc
+        # get the current mean-field magnetization
+        mf_magnetization = mean_mag_map[idt, :]
 
         # actual calculations
         m_squared = np.sum(np.power(m, 2), axis=1)
@@ -408,14 +429,21 @@ class LLB(Magnetization):
         # precessional term:
         m_rot = np.cross(m, H_eff)
 
+        # damping
+        qs = LLB.calc_qs(temps, curie_temps, eff_spins, mf_magnetization,
+                         under_tc)
         # transversal damping
-        alpha_trans = LLB.calc_transverse_damping()
+        alpha_trans = LLB.calc_transverse_damping(temps, curie_temps, lambdas,
+                                                  qs, mf_magnetization,
+                                                  under_tc, over_tc)
         trans_damping = np.multiply(
             np.divide(alpha_trans, m_squared)[:, np.newaxis],
             np.cross(m, m_rot)
             )
         # longitudinal damping
-        alpha_long = LLB.calc_longitudinal_damping()
+        alpha_long = LLB.calc_longitudinal_damping(temps, curie_temps,
+                                                   eff_spins, lambdas, qs,
+                                                   under_tc, over_tc)
         long_damping = np.multiply(
             np.divide(alpha_long, m_squared)[:, np.newaxis],
             np.multiply(np.einsum('ij,ij->i', m, H_eff)[:, np.newaxis], m)
@@ -432,38 +460,129 @@ class LLB(Magnetization):
         Calculate the mean-field mean magnetization map.
 
         Args:
-            temp_map (ndarray[float]): spatio-temporal temperature
+            temp_map (ndarray[float]): spatio-temporal temperature map.
 
         Returns:
             mf_mag_map (ndarray[float]): spatio-temporal mean_field
                 magnetization map.
 
         """
-        return None
+        return np.zeros_like(temp_map)
 
     @staticmethod
-    def calc_transverse_damping():
+    def calc_transverse_damping(temp_map, curie_temps, lambdas, qs,
+                                mf_magnetization, under_tc, over_tc):
         r"""calc_transverse_damping
 
         Calculate the transverse damping parameter:
 
         .. math::
 
-            \alpha_{\parallel} & = &_{T<T_c} \frac{2\lambda}{S+1}\frac{1}{\sinh(2q_s)}\\
-            \alpha_{\perp} & = &_{T<T_c} \frac{\lambda}{m_{eq}(T)}(\frac{\tanh(q_s)}{q_s}-\frac{T}{3T_C})\\
-            \alpha_{\parallel, \perp} & = & _{T>T_c} \frac{2 \lambda}{3} \frac{T}{T_C}
+            \alpha_{\perp} = \begin{cases}
+                \frac{\lambda}{m_{eq}(T)}\left(\frac{\tanh(q_s)}{q_s}-
+                    \frac{T}{3T_C}\right) & \mathrm{for}\ T < T_C \\
+                \frac{2 \lambda}{3}\frac{T}{T_C} & \mathrm{for}\ T \geq T_C
+            \end{cases}
 
-        where
-
-        .. math::
-
-            q_s=\frac{3 T_C m_{eq}(T)}{(2S+1)T}
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature map
+                - possibly for a single delay.
+            curie_temps (ndarray[float]): Curie temperatures of layers.
+            lambdas (ndarray[float]): coupling-to-bath parameter of layers.
+            qs (ndarray[float]): qs parameter.
+            mf_magnetization (ndarray[float]): mean-field magnetization of
+                layers.
+            under_tc (ndarray[boolean]): mask temperatures under the Curie
+                temperature.
+            over_tc (ndarray[boolean]): mask temperatures over the Curie
+                temperature.
 
         Returns:
             alpha_trans (ndarray[float]): transverse damping parameter.
 
         """
-        return None
+        alpha_trans = np.zeros_like(temp_map)
+        alpha_trans[under_tc] = np.multiply(
+            np.divide(lambdas[under_tc], mf_magnetization[under_tc]), (
+                np.divide(np.tanh(qs), qs)
+                - np.divide(temp_map[under_tc], 3*curie_temps[under_tc])
+                )
+            )
+        alpha_trans[over_tc] = lambdas[over_tc]*2/3*np.divide(
+            temp_map[over_tc], curie_temps[over_tc]
+            )
+        return alpha_trans
+
+    @staticmethod
+    def calc_longitudinal_damping(temp_map, curie_temps, eff_spins, lambdas, qs,
+                                  under_tc, over_tc):
+        r"""calc_transverse_damping
+
+        Calculate the transverse damping parameter:
+
+        .. math::
+
+            \alpha_{\parallel} = \begin{cases}
+                \frac{2\lambda}{S+1}
+                \frac{1}{\sinh(2q_s)} & \mathrm{for}\ T < T_C \\
+                \frac{2 \lambda}{3}\frac{T}{T_C} & \mathrm{for}\ T \geq T_C
+            \end{cases}
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature map
+                - possibly for a single delay.
+            curie_temps (ndarray[float]): Curie temperatures of layers.
+            eff_spins (ndarray[float]): effective spins of layers.
+            lambdas (ndarray[float]): coupling-to-bath parameter of layers.
+            qs (ndarray[float]): qs parameter.
+            under_tc (ndarray[boolean]): mask temperatures under the Curie
+                temperature.
+            over_tc (ndarray[boolean]): mask temperatures over the Curie
+                temperature.
+
+        Returns:
+            alpha_long (ndarray[float]): transverse damping parameter.
+
+        """
+        alpha_long = np.zeros_like(temp_map)
+        alpha_long[under_tc] = np.divide(2*np.divide(lambdas[under_tc],
+                                                     (eff_spins[under_tc]+1)),
+                                         np.sinh(2*qs)
+                                         )
+        alpha_long[over_tc] = lambdas[over_tc]*2/3*np.divide(
+            temp_map[over_tc], curie_temps[over_tc]
+            )
+
+        return alpha_long
+
+    @staticmethod
+    def calc_qs(temp_map, curie_temps, eff_spins, mf_magnetization, under_tc):
+        r"""calc_qs
+
+        Calculate the qs parameter:
+
+        .. math::
+
+            q_s=\frac{3 T_C m_\mathrm{eq}(T)}{(2S+1)T}
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature map
+                - possibly for a single delay.
+            curie_temps (ndarray[float]): Curie temperatures of layers.
+            eff_spins (ndarray[float]): effective spins of layers.
+            mf_magnetization (ndarray[float]): mean-field magnetization of
+                layers.
+            under_tc (ndarray[boolean]): mask temperatures below the Curie
+                temperature.
+
+        Returns:
+            qs (ndarray[float]): qs parameter.
+
+        """
+        return np.divide(
+            3*curie_temps[under_tc] * mf_magnetization[under_tc],
+            (2*eff_spins[under_tc] + 1)*temp_map[under_tc]
+            )
 
     @property
     def distances(self):
