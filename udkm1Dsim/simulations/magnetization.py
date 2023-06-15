@@ -398,7 +398,7 @@ class LLB(Magnetization):
 
         # initialize arrays
         # reshape input temperature
-        m = np.ones([N, 3])  # np.array(m).reshape([N, 3], order='F')
+        m = np.array(m).reshape([N, 3], order='F')
 
         # nearest delay index for current time t
         idt = finderb(t, delays)[0]
@@ -455,9 +455,27 @@ class LLB(Magnetization):
 
     @staticmethod
     def calc_mean_field_mag_map(temp_map):
-        """calc_mean_field_mag_map
+        r"""calc_mean_field_mag_map
 
-        Calculate the mean-field mean magnetization map.
+        Calculate the mean-field magnetization map :math:`m_\mathrm{eq}` by
+        solving the self consistent equation
+
+        .. math::
+
+            m_\mathrm{eq}(T) & = B_S(m_\mathrm{eq}, T) \\
+            B_S(m, T) & = \frac{2 S+1}{2S} \coth{\left(\frac{2S+1}{2S}
+            \frac{J \, m}{k_B\, T}\right)}
+            - \frac{1}{2S}\coth{\left(\frac{1}{2S}
+            \frac{J \, m}{k_B\,T}\right)}
+
+        where
+
+        .. math::
+
+            J = 3\frac{S}{S+1}k_B \, T_C
+
+        is the mean field exchange coupling constant for effective spin
+        :math:`S` and Curie temperature :math:`T_C`.
 
         Args:
             temp_map (ndarray[float]): spatio-temporal temperature map.
