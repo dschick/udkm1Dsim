@@ -549,7 +549,7 @@ class Layer:
 
     @eff_spin.setter
     def eff_spin(self, eff_spin):
-        self._eff_spin = eff_spin
+        self._eff_spin = float(eff_spin)
         self.calc_mf_exchange_coupling()
 
     @property
@@ -558,7 +558,7 @@ class Layer:
 
     @curie_temp.setter
     def curie_temp(self, curie_temp):
-        self._curie_temp = curie_temp.to_base_units().magnitude
+        self._curie_temp = float(curie_temp.to_base_units().magnitude)
         self.calc_mf_exchange_coupling()
 
     @property
@@ -581,7 +581,7 @@ class Layer:
 
     @ansiotropy.setter
     def ansiotropy(self, ansiotropy):
-        self._ansiotropy = ansiotropy.to_base_units().magnitude
+        self._ansiotropy = float(ansiotropy.to_base_units().magnitude)
 
     @property
     def exch_stiffness(self):
@@ -589,7 +589,7 @@ class Layer:
 
     @exch_stiffness.setter
     def exch_stiffness(self, exch_stiffness):
-        self._exch_stiffness = exch_stiffness.to_base_units().magnitude
+        self._exch_stiffness = float(exch_stiffness.to_base_units().magnitude)
 
     @property
     def mag_saturation(self):
@@ -597,7 +597,7 @@ class Layer:
 
     @mag_saturation.setter
     def mag_saturation(self, mag_saturation):
-        self._mag_saturation = mag_saturation.to_base_units().magnitude
+        self._mag_saturation = float(mag_saturation.to_base_units().magnitude)
 
 
 class AmorphousLayer(Layer):
