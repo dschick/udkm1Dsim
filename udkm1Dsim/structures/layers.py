@@ -167,7 +167,7 @@ class Layer:
                   ['Curie temperature', '{:.4~P}'.format(self.curie_temp.to('K'))],
                   ['mean-field exch. coupling', self.mf_exch_coupling*u.m**2*u.kg/u.s**2],
                   ['coupling to bath parameter', self.lamda],
-                  ['atomic magnetic moment', self.mag_moment, ' $\mu_{Bohr}$'],
+                  ['atomic magnetic moment', '{:.4f} µBohr'.format(self.mag_moment)],
                   ['uniaxial anisotropy exponents', self.aniso_exponents],
                   ['anisotropy', self.ansiotropy],
                   ['exchange stiffness', self.exch_stiffness],
