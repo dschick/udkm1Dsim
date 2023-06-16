@@ -512,7 +512,9 @@ class LLB(Magnetization):
     def calc_Brillouin(m, T, eff_spin, mf_exch_coupling, curie_temp):
         r"""calc_Brillouin
 
-        B_S(m, T) = \frac{2 S+1}{2S} \coth{\left(\frac{2S+1}{2S}
+        .. math::
+
+            B_S(m, T) = \frac{2 S+1}{2S} \coth{\left(\frac{2S+1}{2S}
             \frac{J \, m}{k_B\, T}\right)}
             - \frac{1}{2S}\coth{\left(\frac{1}{2S}
             \frac{J \, m}{k_B\,T}\right)}
@@ -542,7 +544,8 @@ class LLB(Magnetization):
         eta = mf_exch_coupling * m / constants.k / T / curie_temp
         c1 = (2 * eff_spin + 1) / (2 * eff_spin)
         c2 = 1 / (2 * eff_spin)
-        return c1 / np.tanh(c1 * eta) - c2 / np.tanh(c2 * eta)
+        brillouin = c1 / np.tanh(c1 * eta) - c2 / np.tanh(c2 * eta)
+        return brillouin
 
     @staticmethod
     def calc_transverse_damping(temp_map, curie_temps, lambdas, qs,
