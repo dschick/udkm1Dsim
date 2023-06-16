@@ -31,6 +31,8 @@ from .. import u, Q_
 from ..helpers import make_hash_md5, finderb
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.optimize import fsolve
+import scipy.constants as constants
 from time import time
 from os import path
 from tqdm.notebook import tqdm
@@ -308,6 +310,24 @@ class LLB(Magnetization):
         # d_distances = np.diff(distances)
         N = len(distances)
 
+        init_mag = np.zeros([N, 3])
+        # get layer properties
+        curie_temps = self.S.get_layer_property_vector('_curie_temp')
+        eff_spins = self.S.get_layer_property_vector('eff_spin')
+        mf_exch_couplings = self.S.get_layer_property_vector('mf_exch_coupling')
+        lambdas = self.S.get_layer_property_vector('lamda')
+        # calculate the mean magnetization maps for each unique layer
+        # and all relevant parameters
+        t1 = time()
+        self.disp_message('Calculating _mean_field_magnetization_map_ ...')
+        mean_mag_map = self.calc_mean_field_mag_map(temp_map[:, :, 0],
+                                                    eff_spins,
+                                                    mf_exch_couplings,
+                                                    curie_temps
+                                                    )
+        self.disp_message('Elapsed time for _mean_field_magnetization_map_: '
+                          '{:f} s'.format(time()-t1))
+
         if self.progress_bar:  # with tqdm progressbar
             pbar = tqdm()
             pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
@@ -315,15 +335,6 @@ class LLB(Magnetization):
         else:  # without progressbar
             pbar = None
             state = None
-
-        init_mag = np.zeros([N, 3])
-        # calculate the mean magnetization maps for each unique layer
-        # and all relevant parameters
-        mean_mag_map = self.calc_mean_field_mag_map(temp_map[:, :, 0])
-        # get layer properties
-        curie_temps = self.S.get_layer_property_vector('_curie_temp')
-        eff_spins = self.S.get_layer_property_vector('eff_spin')
-        lambdas = self.S.get_layer_property_vector('lamda')
         # solve pdepe with method-of-lines
         sol = solve_ivp(
             LLB.odefunc,
@@ -416,11 +427,11 @@ class LLB(Magnetization):
         # calculate external field
         # is given as external input
         # calculate uniaxial anisotropy field
-        H_A = np.ones([N, 3])
+        H_A = np.zeros([N, 3])
         # calculate exchange field
-        H_ex = np.ones([N, 3])
+        H_ex = np.zeros([N, 3])
         # calculate thermal field
-        H_th = np.ones([N, 3])
+        H_th = np.zeros([N, 3])
 
         # calculate the effective field
         H_eff = H_ext + H_A + H_ex + H_th
@@ -454,7 +465,8 @@ class LLB(Magnetization):
         return np.reshape(dmdt, N*3, order='F')
 
     @staticmethod
-    def calc_mean_field_mag_map(temp_map):
+    def calc_mean_field_mag_map(temp_map, eff_spins, mf_exch_couplings,
+                                curie_temps):
         r"""calc_mean_field_mag_map
 
         Calculate the mean-field magnetization map :math:`m_\mathrm{eq}` by
@@ -463,7 +475,44 @@ class LLB(Magnetization):
         .. math::
 
             m_\mathrm{eq}(T) & = B_S(m_\mathrm{eq}, T) \\
-            B_S(m, T) & = \frac{2 S+1}{2S} \coth{\left(\frac{2S+1}{2S}
+
+        where :math:`B_S` is the Brillouin function.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal electron temperature map.
+            eff_spins (ndarray[float]): effective spin of layer.
+            mf_exch_couplings (ndarray[float]): mean-field exch. coupling of
+                layer.
+            curie_temps (ndarray[float]): Curie temperature of layer.
+
+        Returns:
+            mf_mag_map (ndarray[float]): spatio-temporal mean_field
+                magnetization map.
+
+        """
+        (M, N) = temp_map.shape  # M - number of delays, N - number of layers
+
+        mf_mag_map = np.zeros_like(temp_map)
+
+        for i in range(N):
+            for j in range(M):
+                T = temp_map[j, i]/curie_temps[i]
+                if T > 1:
+                    mf_mag_map[j, i] = 0
+                else:
+                    mf_mag_map[j, i] = fsolve(
+                        lambda x: x - LLB.calc_Brillouin(x, T, eff_spins[i],
+                                                         mf_exch_couplings[i],
+                                                         curie_temps[i]),
+                        np.sqrt(1-T))
+
+        return mf_mag_map
+
+    @staticmethod
+    def calc_Brillouin(m, T, eff_spin, mf_exch_coupling, curie_temp):
+        r"""calc_Brillouin
+
+        B_S(m, T) = \frac{2 S+1}{2S} \coth{\left(\frac{2S+1}{2S}
             \frac{J \, m}{k_B\, T}\right)}
             - \frac{1}{2S}\coth{\left(\frac{1}{2S}
             \frac{J \, m}{k_B\,T}\right)}
@@ -478,14 +527,22 @@ class LLB(Magnetization):
         :math:`S` and Curie temperature :math:`T_C`.
 
         Args:
-            temp_map (ndarray[float]): spatio-temporal temperature map.
+            m (ndarray[float]): magnetization of layer.
+            T (ndarray[float]): electron temperature of layer.
+            eff_spin (ndarray[float]): effective spin of layer.
+            mf_exch_coupling (ndarray[float]): mean-field exch. coupling of
+                layer.
+            curie_temp (ndarray[float]): Curie temperature of layer.
 
         Returns:
-            mf_mag_map (ndarray[float]): spatio-temporal mean_field
-                magnetization map.
+            brillouin (ndarray[float]): brillouin function.
 
         """
-        return np.zeros_like(temp_map)
+
+        eta = mf_exch_coupling * m / constants.k / T / curie_temp
+        c1 = (2 * eff_spin + 1) / (2 * eff_spin)
+        c2 = 1 / (2 * eff_spin)
+        return c1 / np.tanh(c1 * eta) - c2 / np.tanh(c2 * eta)
 
     @staticmethod
     def calc_transverse_damping(temp_map, curie_temps, lambdas, qs,
