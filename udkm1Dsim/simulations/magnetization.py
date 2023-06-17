@@ -288,6 +288,28 @@ class LLB(Magnetization):
         * :math:`\mathbf{H}_\mathrm{ex}` is the exchange field
         * :math:`\mathbf{H}_\mathrm{th}` is the thermal field
 
+          .. math::
+
+            \mathbf{H}_\mathrm{th} = \begin{cases}
+                \frac{1}{2\chi_{\parallel}}\left(1-\frac{m^2}{m_\mathrm{eq}^2}
+                    \right)\mathbf{m} & \mathrm{for}\ T < T_C \\
+                -\frac{1}{\chi_{\parallel}}\left(1+\frac{3}{5}\frac{T_C}{T-T_C}
+                    m^2\right)\mathbf{m} & \mathrm{for}\ T \geq T_C
+            \end{cases}
+
+          with :math:`\chi_{\parallel}` as the longitudinal susceptibility
+
+          .. math::
+
+            \chi_{\parallel} = \begin{cases}
+                \frac{\beta \mu_{\rm{at}} B_S'(m_{eq},T)}{1-\beta J
+                    B_S'(m_{eq}, T)} & \mathrm{for}\ T < T_C \\
+                \frac{\mu_{\rm{at}}T_C}{J(T-T_C)} & \mathrm{for}\ T \geq T_C
+            \end{cases}
+
+          and :math:`B_S'(m_{eq},T)` being the derivative of the Brillouin
+          function.
+
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             temp_map (ndarray[float]): spatio-temporal temperature map.
@@ -467,13 +489,14 @@ class LLB(Magnetization):
         # calculate exchange field
         H_ex = np.zeros([N, 3])
         # calculate thermal field
-        factor = 1/x_p(t)
+        chi_long = np.ones([N])
         H_th_pref = np.zeros([N])
-        H_th_pref[under_tc] = (1-m_squared[under_tc]/mf_magnetization[under_tc]**2) \
-            * factor[under_tc]/2
-        H_th_pref[over_tc] = -(1 + 3/5*curie_temps[over_tc]/(
-            temps[over_tc]-curie_temps[over_tc]+1e-1)
-                               ) * m_squared[otc]*factor[over_tc]
+        H_th_pref[under_tc] = 1/(2 * chi_long[under_tc]) * (
+            1 - m_squared[under_tc]/mf_magnetization[under_tc]**2
+            )
+        H_th_pref[over_tc] = -1/chi_long[over_tc] * (
+            1 + 3/5 * curie_temps[over_tc]/(temps[over_tc]-curie_temps[over_tc])
+            ) * m_squared[over_tc]
         H_th = np.multiply(H_th_pref[:, np.newaxis], m)
 
         # calculate the effective field
@@ -660,6 +683,40 @@ class LLB(Magnetization):
             3*curie_temps[under_tc] * mf_magnetization[under_tc],
             (2*eff_spins[under_tc] + 1)*temp_map[under_tc]
             )
+
+    @staticmethod
+    def dBrillouin_dx(temp_map, eff_spins, mf_magnetization, Js):
+        r"""dBrillouin_dx
+
+        Calculate the derivative of the Brillouin function at
+        :math:`m = m_\mathrm{eq}` required for the longitudinal susceptibility
+        :math:`\chi_{\parallel}`:
+
+        .. math::
+
+            \frac{dB}{dx} = \frac{1}{4S^2\sinh^2(x/2S)}
+                -\frac{(2S+1)^2}{4S^2\sinh^2(\frac{(2S+1)x}{2S})}
+
+        with :math:`x=\frac{Jm}{k_BT}`.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature map
+                - possibly for a single delay.
+            curie_temps (ndarray[float]): Curie temperatures of layers.
+            eff_spins (ndarray[float]): effective spins of layers.
+            mf_magnetization (ndarray[float]): mean-field magnetization of
+                layers.
+            under_tc (ndarray[boolean]): mask temperatures below the Curie
+                temperature.
+
+        Returns:
+            dBdx (ndarray[float]): derivative of Brillouin function.
+
+        """
+        cpsT = np.zeros((len(times), len(sample)))
+        cpsT[under_tc]=np.multiply(chi_par_num_sam[under_tc], np.divide(dbrillouin_arr.T[under_tc], tes_arr.T[under_tc]-np.multiply(chi_par_denomm1_sam[under_tc], dbrillouin_arr.T[under_tc])))
+        cpsT[over_tc]=np.divide(np.multiply(muat_sam[over_tc]*9.274e-24, Tc_sam[over_tc]), J_sam[over_tc]*(tes_arr.T[over_tc]-Tc_sam[over_tc]+1e-1))
+        return ip.interp1d(t, cpsT.T)
 
     @property
     def distances(self):
