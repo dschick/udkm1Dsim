@@ -137,7 +137,7 @@ class Layer:
         self.eff_spin = kwargs.get('eff_spin', 0)
         self.curie_temp = kwargs.get('curie_temp', 0.0*u.K)
         self.lamda = kwargs.get('lamda', 0)
-        self.mag_moment = kwargs.get('mag_moment', 0)
+        self.mag_moment = kwargs.get('mag_moment', 0*u.bohr_magneton)
         self.aniso_exponents = kwargs.get('aniso_exponents', [0, 0, 0])
         self.ansiotropy = kwargs.get('ansiotropy', 0*u.J/u.m**3)
         self.exch_stiffness = kwargs.get('exch_stiffness', 0*u.J/u.m)
