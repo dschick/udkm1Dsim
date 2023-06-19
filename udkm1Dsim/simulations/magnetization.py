@@ -317,7 +317,7 @@ class LLB(Magnetization):
         eff_spins = self.S.get_layer_property_vector('eff_spin')
         lambdas = self.S.get_layer_property_vector('lamda')
         mf_exch_couplings = self.S.get_layer_property_vector('mf_exch_coupling')
-        mag_moments = self.S.get_layer_property_vector('mag_moments')
+        mag_moments = self.S.get_layer_property_vector('_mag_moment')
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
         t1 = time()
@@ -463,7 +463,7 @@ class LLB(Magnetization):
         under_tc = temps < curie_temps
         over_tc = ~under_tc
         # get the current mean-field magnetization
-        mf_magnetization = mean_mag_map[idt, :]
+        mf_magnetizations = mean_mag_map[idt, :]
 
         # actual calculations
         m_squared = np.sum(np.power(m, 2), axis=1)
@@ -475,7 +475,9 @@ class LLB(Magnetization):
         # calculate exchange field
         H_ex = np.zeros([N, 3])
         # calculate thermal field
-        H_th = LLB.calc_thermal_field(mf_exch_couplings)
+        H_th = LLB.calc_thermal_field(m, m_squared, temps, mf_magnetizations, eff_spins,
+                                      curie_temps, mf_exch_couplings, mag_moments, under_tc,
+                                      over_tc)
 
         # calculate the effective field
         H_eff = H_ext + H_A + H_ex + H_th
@@ -485,11 +487,11 @@ class LLB(Magnetization):
         m_rot = np.cross(m, H_eff)
 
         # damping
-        qs = LLB.calc_qs(temps, curie_temps, eff_spins, mf_magnetization,
+        qs = LLB.calc_qs(temps, curie_temps, eff_spins, mf_magnetizations,
                          under_tc)
         # transversal damping
         alpha_trans = LLB.calc_transverse_damping(temps, curie_temps, lambdas,
-                                                  qs, mf_magnetization,
+                                                  qs, mf_magnetizations,
                                                   under_tc, over_tc)
         trans_damping = np.multiply(
             np.divide(alpha_trans, m_squared)[:, np.newaxis],
@@ -519,9 +521,10 @@ class LLB(Magnetization):
 
             \mathbf{H}_\mathrm{th} = \begin{cases}
                 \frac{1}{2\chi_{\parallel}}\left(1-\frac{m^2}{m_\mathrm{eq}^2}
-                    \right)\mathbf{m} & \mathrm{for}\ T < T_C \\
-                -\frac{1}{\chi_{\parallel}}\left(1+\frac{3}{5}\frac{T_C}{T-T_C}
-                    m^2\right)\mathbf{m} & \mathrm{for}\ T \geq T_C
+                    \right)\mathbf{m} & \mathrm{for}\ T < T_\mathrm{C} \\
+                -\frac{1}{\chi_{\parallel}}\left(1+\frac{3}{5}
+                    \frac{T_\mathrm{C}}{T-T_\mathrm{C}}m^2\right)\mathbf{m}
+                    & \mathrm{for}\ T \geq T_\mathrm{C}
             \end{cases}
 
         with :math:`\chi_{\parallel}` being the
@@ -554,16 +557,15 @@ class LLB(Magnetization):
                                                 eff_spins, mf_exch_couplings, mag_moments,
                                                 under_tc, over_tc)
 
-        H_th_pref = np.zeros_like(temp_map)
-        H_th_pref[under_tc] = 1/(2 * chi_long[under_tc]) * (
+        H_th = np.zeros_like(temp_map)
+        H_th[under_tc] = 1/(2 * chi_long[under_tc]) * (
             1 - mag_map_squared[under_tc]/mf_magnetizations[under_tc]**2
             )
-        H_th_pref[over_tc] = -1/chi_long[over_tc] * (
+        H_th[over_tc] = -1/chi_long[over_tc] * (
             1 + 3/5 * curie_temps[over_tc]/(temp_map[over_tc]-curie_temps[over_tc])
             ) * mag_map_squared[over_tc]
-        H_th = np.multiply(H_th_pref[:, np.newaxis], mag_map)
 
-        return H_th
+        return np.multiply(H_th[:, np.newaxis], mag_map)
 
     @staticmethod
     def calc_Brillouin(mag, temp, eff_spin, mf_exch_coupling, curie_temp):
@@ -572,18 +574,18 @@ class LLB(Magnetization):
         .. math::
 
             B_S(m, T) = \frac{2 S+1}{2S} \coth{\left(\frac{2S+1}{2S}
-            \frac{J \, m}{k_B\, T}\right)}
+            \frac{J \, m}{k_\mathrm{B}\, T}\right)}
             - \frac{1}{2S}\coth{\left(\frac{1}{2S}
-            \frac{J \, m}{k_B\,T}\right)}
+            \frac{J \, m}{k_\mathrm{B}\,T}\right)}
 
         where
 
         .. math::
 
-            J = 3\frac{S}{S+1}k_B \, T_C
+            J = 3\frac{S}{S+1}k_\mathrm{B} \, T_\mathrm{C}
 
         is the mean field exchange coupling constant for effective spin
-        :math:`S` and Curie temperature :math:`T_C`.
+        :math:`S` and Curie temperature :math:`T_\mathrm{C}`.
 
         Args:
             mag (ndarray[float]): magnetization of layer.
@@ -616,7 +618,7 @@ class LLB(Magnetization):
             B_x = \frac{dB}{dx} = \frac{1}{4S^2\sinh^2(x/2S)}
                 -\frac{(2S+1)^2}{4S^2\sinh^2(\frac{(2S+1)x}{2S})}
 
-        with :math:`x=\frac{J\,m}{k_B\,T}`.
+        with :math:`x=\frac{J\,m}{k_\mathrm{B}\,T}`.
 
         Args:
             temp_map (ndarray[float]): spatio-temporal temperature map
@@ -631,20 +633,14 @@ class LLB(Magnetization):
             dBdx (ndarray[float]): derivative of Brillouin function.
 
         """
-        eta = np.divide(mf_exch_couplings*mf_magnetizations,
-                        constants.k*temp_map)
+        x = np.divide(mf_exch_couplings*mf_magnetizations,
+                      constants.k*temp_map)
 
-        dbrillouin_t1 = 1/4/eff_spins**2
-        dbrillouin_t2 = (2*eff_spins+1)**2/4/eff_spins**2
+        two_eff_spins = 2*eff_spins
+        dBdx = 1 / (two_eff_spins**2 * np.sinh(x / (two_eff_spins))**2) \
+            - (two_eff_spins + 1)**2 / \
+            (two_eff_spins**2 * np.sinh(((two_eff_spins + 1) * x) / (two_eff_spins))**2)
 
-        two_S_sam=2*eff_spins
-        x1=np.divide(eta, two_S_sam)
-        x2=np.divide(
-            np.multiply(eta,
-                        (two_S_sam + 1)
-                        ), two_S_sam)
-        sinh_func=1/np.sinh(np.array([x1,x2]))**2
-        dBdx = dbrillouin_t1*sinh_func[0]-dbrillouin_t2*sinh_func[1]
         return dBdx
 
     @staticmethod
@@ -657,9 +653,11 @@ class LLB(Magnetization):
         .. math::
 
             \alpha_{\perp} = \begin{cases}
-                \frac{\lambda}{m_{eq}(T)}\left(\frac{\tanh(q_s)}{q_s}-
-                    \frac{T}{3T_C}\right) & \mathrm{for}\ T < T_C \\
-                \frac{2 \lambda}{3}\frac{T}{T_C} & \mathrm{for}\ T \geq T_C
+                \frac{\lambda}{m_\mathrm{eq}(T)}\left(\frac{\tanh(q_s)}{q_s}-
+                    \frac{T}{3T_\mathrm{C}}\right)
+                    & \mathrm{for}\ T < T_\mathrm{C} \\
+                \frac{2 \lambda}{3}\frac{T}{T_\mathrm{C}}
+                    & \mathrm{for}\ T \geq T_\mathrm{C}
             \end{cases}
 
         Args:
@@ -702,8 +700,9 @@ class LLB(Magnetization):
 
             \alpha_{\parallel} = \begin{cases}
                 \frac{2\lambda}{S+1}
-                \frac{1}{\sinh(2q_s)} & \mathrm{for}\ T < T_C \\
-                \frac{2 \lambda}{3}\frac{T}{T_C} & \mathrm{for}\ T \geq T_C
+                \frac{1}{\sinh(2q_s)} & \mathrm{for}\ T < T_\mathrm{C} \\
+                \frac{2 \lambda}{3}\frac{T}{T_\mathrm{C}}
+                    & \mathrm{for}\ T \geq T_\mathrm{C}
             \end{cases}
 
         Args:
@@ -741,7 +740,7 @@ class LLB(Magnetization):
 
         .. math::
 
-            q_s=\frac{3 T_C m_\mathrm{eq}(T)}{(2S+1)T}
+            q_s=\frac{3 T_\mathrm{C} m_\mathrm{eq}(T)}{(2S+1)T}
 
         Args:
             temp_map (ndarray[float]): spatio-temporal temperature map
@@ -772,9 +771,11 @@ class LLB(Magnetization):
         .. math::
 
             \chi_{\parallel} = \begin{cases}
-                \frac{\beta \mu_{\rm{at}} B_x(m_{eq},T)}{1-\beta J
-                    B_x(m_{eq}, T)} & \mathrm{for}\ T < T_C \\
-                \frac{\mu_{\rm{at}}T_C}{J(T-T_C)} & \mathrm{for}\ T \geq T_C
+                \frac{\mu_{\rm{B}}\,B_x(m_{eq}, T)}{
+                    T\,k_\mathrm{B}-J\,B_x(m_{eq}, T)}
+                    & \mathrm{for}\ T < T_\mathrm{C} \\
+                \frac{\mu_{\rm{B}}T_\mathrm{C}}{J(T-T_\mathrm{C})}
+                    & \mathrm{for}\ T \geq T_\mathrm{C}
             \end{cases}
 
         with :math:`B_x(m_{eq},T)` being the :meth:`derivative of the Brillouin
@@ -800,30 +801,22 @@ class LLB(Magnetization):
 
         """
 
-        dBdx = LLB.calc_dBrillouin_dx(temp_map, mf_magnetizations, eff_spins, mf_exch_couplings)
+        dBdx = LLB.calc_dBrillouin_dx(temp_map[under_tc],
+                                      mf_magnetizations[under_tc],
+                                      eff_spins[under_tc],
+                                      mf_exch_couplings[under_tc])
+
         chi_long = np.zeros_like(temp_map)
-        cpsT = np.zeros((len(times), len(sample)))
-
-        chi_par_num = 1/sp.k*self.muat*9.274e-24
-        chi_par_denomm1 = self.J/sp.k
-
-        cpsT[under_tc] = np.multiply(
-            chi_par_num_sam[under_tc],
-            np.divide(dbrillouin_arr.T[under_tc],
-                      tes_arr.T[under_tc]-np.multiply(
-                          chi_par_denomm1_sam[under_tc],
-                          dbrillouin_arr.T[under_tc]
-                          )
-                      )
+        chi_long[under_tc] = np.divide(
+            mag_moments[under_tc]*dBdx,
+            temp_map[under_tc]*constants.k - mf_exch_couplings[under_tc]*dBdx
             )
-        cpsT[over_tc] = np.divide(
-            np.multiply(
-                muat_sam[over_tc]*9.274e-24,
-                Tc_sam[over_tc]
-                ),
-            J_sam[over_tc]*(tes_arr.T[over_tc]-Tc_sam[over_tc]+1e-1)
+        chi_long[over_tc] = np.divide(
+            mag_moments[over_tc]*curie_temps[over_tc],
+            mf_exch_couplings[over_tc]*(temp_map[over_tc]-curie_temps[over_tc])
             )
-        return ip.interp1d(t, cpsT.T) 
+
+        return chi_long
 
     @property
     def distances(self):
