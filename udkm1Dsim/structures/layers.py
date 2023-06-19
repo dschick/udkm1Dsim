@@ -167,7 +167,8 @@ class Layer:
                   ['Curie temperature', '{:.4~P}'.format(self.curie_temp.to('K'))],
                   ['mean-field exch. coupling', self.mf_exch_coupling*u.m**2*u.kg/u.s**2],
                   ['coupling to bath parameter', self.lamda],
-                  ['atomic magnetic moment', '{:.4f} µBohr'.format(self.mag_moment)],
+                  ['atomic magnetic moment', '{:.4~P}'.format(self.mag_moment.to(
+                      'bohr_magneton'))],
                   ['uniaxial anisotropy exponents', self.aniso_exponents],
                   ['anisotropy', self.ansiotropy],
                   ['exchange stiffness', self.exch_stiffness],
@@ -560,6 +561,14 @@ class Layer:
     def curie_temp(self, curie_temp):
         self._curie_temp = float(curie_temp.to_base_units().magnitude)
         self.calc_mf_exchange_coupling()
+
+    @property
+    def mag_moment(self):
+        return Q_(self._mag_moment, u.A*u.m**2).to('bohr_magneton')
+
+    @mag_moment.setter
+    def mag_moment(self, mag_moment):
+        self._mag_moment = float(mag_moment.to_base_units().magnitude)
 
     @property
     def aniso_exponents(self):
