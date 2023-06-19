@@ -267,7 +267,9 @@ class LLB(Magnetization):
            defined on).
 
         :math:`\alpha_{\parallel}` and :math:`\alpha_{\perp}` are the
-        longitudinal and transversal damping parameters, respectively.
+        :meth:`longitudinal damping<calc_longitudinal_damping>` and
+        :meth:`transverse damping<calc_transverse_damping>` parameters,
+        respectively.
         :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,T^{-1}}` is
         the gyromagnetic ratio of an electron.
 
@@ -284,8 +286,10 @@ class LLB(Magnetization):
         where
 
         * :math:`\mathbf{H}_\mathrm{ext}` is the external magnetic field
-        * :math:`\mathbf{H}_\mathrm{A}` is the uniaxial anisotropy field
-        * :math:`\mathbf{H}_\mathrm{ex}` is the exchange field
+        * :math:`\mathbf{H}_\mathrm{A}` is the :meth:`uniaxial anisotropy field
+          <calc_uniaxial_anisotropy_field>`
+        * :math:`\mathbf{H}_\mathrm{ex}` is the :meth:`exchange field
+          <calc_exchange_field>`
         * :math:`\mathbf{H}_\mathrm{th}` is the :meth:`thermal field
           <calc_thermal_field>`
 
@@ -471,9 +475,9 @@ class LLB(Magnetization):
 
         # external field H_ext is given as input
         # calculate uniaxial anisotropy field
-        H_A = np.zeros([N, 3])
+        H_A = LLB.calc_uniaxial_anisotropy_field(N)
         # calculate exchange field
-        H_ex = np.zeros([N, 3])
+        H_ex = LLB.calc_exchange_field(N)
         # calculate thermal field
         H_th = LLB.calc_thermal_field(m, m_squared, temps, mf_magnetizations, eff_spins,
                                       curie_temps, mf_exch_couplings, mag_moments, under_tc,
@@ -509,6 +513,30 @@ class LLB(Magnetization):
         dmdt = gamma_e * (m_rot + trans_damping - long_damping)
 
         return np.reshape(dmdt, N*3, order='F')
+
+    @staticmethod
+    def calc_uniaxial_anisotropy_field(N):
+        r"""calc_uniaxial_anisotropy_field
+
+        Calculate the uniaxial anisotropy component of the effective field.
+
+        Returns:
+            H_A (ndarray[float]): uniaxial anisotropy field.
+
+        """
+        return np.zeros([N, 3])
+
+    @staticmethod
+    def calc_exchange_field(N):
+        r"""calc_exchange_field
+
+        Calculate the exchange component of the effective field.
+
+        Returns:
+            H_ex (ndarray[float]): exchange field.
+
+        """
+        return np.zeros([N, 3])
 
     @staticmethod
     def calc_thermal_field(mag_map, mag_map_squared, temp_map, mf_magnetizations, eff_spins,
