@@ -286,29 +286,8 @@ class LLB(Magnetization):
         * :math:`\mathbf{H}_\mathrm{ext}` is the external magnetic field
         * :math:`\mathbf{H}_\mathrm{A}` is the uniaxial anisotropy field
         * :math:`\mathbf{H}_\mathrm{ex}` is the exchange field
-        * :math:`\mathbf{H}_\mathrm{th}` is the thermal field
-
-          .. math::
-
-            \mathbf{H}_\mathrm{th} = \begin{cases}
-                \frac{1}{2\chi_{\parallel}}\left(1-\frac{m^2}{m_\mathrm{eq}^2}
-                    \right)\mathbf{m} & \mathrm{for}\ T < T_C \\
-                -\frac{1}{\chi_{\parallel}}\left(1+\frac{3}{5}\frac{T_C}{T-T_C}
-                    m^2\right)\mathbf{m} & \mathrm{for}\ T \geq T_C
-            \end{cases}
-
-          with :math:`\chi_{\parallel}` as the longitudinal susceptibility
-
-          .. math::
-
-            \chi_{\parallel} = \begin{cases}
-                \frac{\beta \mu_{\rm{at}} B_S'(m_{eq},T)}{1-\beta J
-                    B_S'(m_{eq}, T)} & \mathrm{for}\ T < T_C \\
-                \frac{\mu_{\rm{at}}T_C}{J(T-T_C)} & \mathrm{for}\ T \geq T_C
-            \end{cases}
-
-          and :math:`B_S'(m_{eq},T)` being the derivative of the Brillouin
-          function.
+        * :math:`\mathbf{H}_\mathrm{th}` is the :meth:`thermal field
+          <calc_thermal_field>`
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
@@ -337,6 +316,8 @@ class LLB(Magnetization):
         curie_temps = self.S.get_layer_property_vector('_curie_temp')
         eff_spins = self.S.get_layer_property_vector('eff_spin')
         lambdas = self.S.get_layer_property_vector('lamda')
+        mf_exch_couplings = self.S.get_layer_property_vector('mf_exch_coupling')
+        mag_moments = self.S.get_layer_property_vector('mag_moments')
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
         t1 = time()
@@ -365,6 +346,8 @@ class LLB(Magnetization):
                   curie_temps,
                   eff_spins,
                   lambdas,
+                  mf_exch_couplings,
+                  mag_moments,
                   pbar, state),
             t_eval=delays,
             **self.ode_options)
@@ -423,7 +406,7 @@ class LLB(Magnetization):
     @staticmethod
     def odefunc(t, m,
                 delays, N, H_ext, temp_map, mean_mag_map, curie_temps, eff_spins,
-                lambdas,
+                lambdas, mf_exch_couplings, mag_moments,
                 pbar, state):
         """odefunc
 
@@ -442,6 +425,9 @@ class LLB(Magnetization):
             curie_temps (ndarray[float]): Curie temperatures of layers.
             eff_spins (ndarray[float]): effective spins of layers.
             lambdas (ndarray[float]): coupling-to-bath parameter of layers.
+            mf_exch_couplings (ndarray[float]): mean-field exchange couplings of
+                 layers.
+            mag_moments (ndarray[float]): atomic magnetic moments of layers.
             pbar (tqdm): tqdm progressbar.
             state (list[float]): state variables for progress bar.
 
@@ -489,15 +475,7 @@ class LLB(Magnetization):
         # calculate exchange field
         H_ex = np.zeros([N, 3])
         # calculate thermal field
-        chi_long = np.ones([N])
-        H_th_pref = np.zeros([N])
-        H_th_pref[under_tc] = 1/(2 * chi_long[under_tc]) * (
-            1 - m_squared[under_tc]/mf_magnetization[under_tc]**2
-            )
-        H_th_pref[over_tc] = -1/chi_long[over_tc] * (
-            1 + 3/5 * curie_temps[over_tc]/(temps[over_tc]-curie_temps[over_tc])
-            ) * m_squared[over_tc]
-        H_th = np.multiply(H_th_pref[:, np.newaxis], m)
+        H_th = LLB.calc_thermal_field(mf_exch_couplings)
 
         # calculate the effective field
         H_eff = H_ext + H_A + H_ex + H_th
@@ -531,7 +509,64 @@ class LLB(Magnetization):
         return np.reshape(dmdt, N*3, order='F')
 
     @staticmethod
-    def calc_Brillouin(m, T, eff_spin, mf_exch_coupling, curie_temp):
+    def calc_thermal_field(mag_map, mag_map_squared, temp_map, mf_magnetizations, eff_spins,
+                           curie_temps, mf_exch_couplings, mag_moments, under_tc, over_tc):
+        r"""calc_thermal_field
+
+        Calculate the thermal component of the effective field.
+
+        .. math::
+
+            \mathbf{H}_\mathrm{th} = \begin{cases}
+                \frac{1}{2\chi_{\parallel}}\left(1-\frac{m^2}{m_\mathrm{eq}^2}
+                    \right)\mathbf{m} & \mathrm{for}\ T < T_C \\
+                -\frac{1}{\chi_{\parallel}}\left(1+\frac{3}{5}\frac{T_C}{T-T_C}
+                    m^2\right)\mathbf{m} & \mathrm{for}\ T \geq T_C
+            \end{cases}
+
+        with :math:`\chi_{\parallel}` being the
+        :meth:`longitudinal susceptibility<calc_long_susceptibility>`.
+
+        Args:
+            mag_map (ndarray[float]): spatio-temporal magnetization map
+                - possibly for a single delay.
+            mag_map_squared (ndarray[float]): spatio-temporal magnetization map
+                squared- possibly for a single delay.
+            temp_map (ndarray[float]): spatio-temporal temperature map
+                - possibly for a single delay.
+            mf_magnetizations (ndarray[float]): mean-field magnetization of
+                layers.
+            eff_spins (ndarray[float]): effective spin of layers.
+            curie_temps (ndarray[float]): Curie temperature of layers.
+            mf_exch_couplings (ndarray[float]): mean-field exch. coupling of
+                layers.
+            mag_moments (ndarray[float]): atomic magnetic moments of layers.
+            under_tc (ndarray[boolean]): mask temperatures under the Curie
+                temperature.
+            over_tc (ndarray[boolean]): mask temperatures over the Curie
+                temperature.
+
+        Returns:
+            H_th (ndarray[float]): thermal field.
+
+        """
+        chi_long = LLB.calc_long_susceptibility(temp_map, mf_magnetizations, curie_temps,
+                                                eff_spins, mf_exch_couplings, mag_moments,
+                                                under_tc, over_tc)
+
+        H_th_pref = np.zeros_like(temp_map)
+        H_th_pref[under_tc] = 1/(2 * chi_long[under_tc]) * (
+            1 - mag_map_squared[under_tc]/mf_magnetizations[under_tc]**2
+            )
+        H_th_pref[over_tc] = -1/chi_long[over_tc] * (
+            1 + 3/5 * curie_temps[over_tc]/(temp_map[over_tc]-curie_temps[over_tc])
+            ) * mag_map_squared[over_tc]
+        H_th = np.multiply(H_th_pref[:, np.newaxis], mag_map)
+
+        return H_th
+
+    @staticmethod
+    def calc_Brillouin(mag, temp, eff_spin, mf_exch_coupling, curie_temp):
         r"""calc_Brillouin
 
         .. math::
@@ -551,11 +586,11 @@ class LLB(Magnetization):
         :math:`S` and Curie temperature :math:`T_C`.
 
         Args:
-            m (ndarray[float]): magnetization of layer.
-            T (ndarray[float]): electron temperature of layer.
+            mag (ndarray[float]): magnetization of layer.
+            temp (ndarray[float]): electron temperature of layer.
             eff_spin (ndarray[float]): effective spin of layer.
             mf_exch_coupling (ndarray[float]): mean-field exch. coupling of
-                layer.
+                layers.
             curie_temp (ndarray[float]): Curie temperature of layer.
 
         Returns:
@@ -563,15 +598,58 @@ class LLB(Magnetization):
 
         """
 
-        eta = mf_exch_coupling * m / constants.k / T / curie_temp
+        eta = mf_exch_coupling * mag / constants.k / temp / curie_temp
         c1 = (2 * eff_spin + 1) / (2 * eff_spin)
         c2 = 1 / (2 * eff_spin)
         brillouin = c1 / np.tanh(c1 * eta) - c2 / np.tanh(c2 * eta)
         return brillouin
 
     @staticmethod
+    def calc_dBrillouin_dx(temp_map, mf_magnetizations, eff_spins, mf_exch_couplings):
+        r"""calc_dBrillouin_dx
+
+        Calculate the derivative of the Brillouin function :math:`B_x` at
+        :math:`m = m_\mathrm{eq}`:
+
+        .. math::
+
+            B_x = \frac{dB}{dx} = \frac{1}{4S^2\sinh^2(x/2S)}
+                -\frac{(2S+1)^2}{4S^2\sinh^2(\frac{(2S+1)x}{2S})}
+
+        with :math:`x=\frac{J\,m}{k_B\,T}`.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature map
+                - possibly for a single delay.
+            mf_magnetizations (ndarray[float]): mean-field magnetization of
+                layers.
+            eff_spins (ndarray[float]): effective spin of layers.
+            mf_exch_couplings (ndarray[float]): mean-field exchange couplings of
+                layers.
+
+        Returns:
+            dBdx (ndarray[float]): derivative of Brillouin function.
+
+        """
+        eta = np.divide(mf_exch_couplings*mf_magnetizations,
+                        constants.k*temp_map)
+
+        dbrillouin_t1 = 1/4/eff_spins**2
+        dbrillouin_t2 = (2*eff_spins+1)**2/4/eff_spins**2
+
+        two_S_sam=2*eff_spins
+        x1=np.divide(eta, two_S_sam)
+        x2=np.divide(
+            np.multiply(eta,
+                        (two_S_sam + 1)
+                        ), two_S_sam)
+        sinh_func=1/np.sinh(np.array([x1,x2]))**2
+        dBdx = dbrillouin_t1*sinh_func[0]-dbrillouin_t2*sinh_func[1]
+        return dBdx
+
+    @staticmethod
     def calc_transverse_damping(temp_map, curie_temps, lambdas, qs,
-                                mf_magnetization, under_tc, over_tc):
+                                mf_magnetizations, under_tc, over_tc):
         r"""calc_transverse_damping
 
         Calculate the transverse damping parameter:
@@ -590,7 +668,7 @@ class LLB(Magnetization):
             curie_temps (ndarray[float]): Curie temperatures of layers.
             lambdas (ndarray[float]): coupling-to-bath parameter of layers.
             qs (ndarray[float]): qs parameter.
-            mf_magnetization (ndarray[float]): mean-field magnetization of
+            mf_magnetizations (ndarray[float]): mean-field magnetization of
                 layers.
             under_tc (ndarray[boolean]): mask temperatures under the Curie
                 temperature.
@@ -603,7 +681,7 @@ class LLB(Magnetization):
         """
         alpha_trans = np.zeros_like(temp_map)
         alpha_trans[under_tc] = np.multiply(
-            np.divide(lambdas[under_tc], mf_magnetization[under_tc]), (
+            np.divide(lambdas[under_tc], mf_magnetizations[under_tc]), (
                 np.divide(np.tanh(qs), qs)
                 - np.divide(temp_map[under_tc], 3*curie_temps[under_tc])
                 )
@@ -656,7 +734,7 @@ class LLB(Magnetization):
         return alpha_long
 
     @staticmethod
-    def calc_qs(temp_map, curie_temps, eff_spins, mf_magnetization, under_tc):
+    def calc_qs(temp_map, mf_magnetizations, curie_temps, eff_spins, under_tc):
         r"""calc_qs
 
         Calculate the qs parameter:
@@ -668,10 +746,10 @@ class LLB(Magnetization):
         Args:
             temp_map (ndarray[float]): spatio-temporal temperature map
                 - possibly for a single delay.
+            mf_magnetizations (ndarray[float]): mean-field magnetization of
+                layers.
             curie_temps (ndarray[float]): Curie temperatures of layers.
             eff_spins (ndarray[float]): effective spins of layers.
-            mf_magnetization (ndarray[float]): mean-field magnetization of
-                layers.
             under_tc (ndarray[boolean]): mask temperatures below the Curie
                 temperature.
 
@@ -680,43 +758,72 @@ class LLB(Magnetization):
 
         """
         return np.divide(
-            3*curie_temps[under_tc] * mf_magnetization[under_tc],
+            3*curie_temps[under_tc] * mf_magnetizations[under_tc],
             (2*eff_spins[under_tc] + 1)*temp_map[under_tc]
             )
 
     @staticmethod
-    def dBrillouin_dx(temp_map, eff_spins, mf_magnetization, Js):
-        r"""dBrillouin_dx
+    def calc_long_susceptibility(temp_map, mf_magnetizations, curie_temps, eff_spins,
+                                 mf_exch_couplings, mag_moments, under_tc, over_tc):
+        r"""calc_long_susceptibility
 
-        Calculate the derivative of the Brillouin function at
-        :math:`m = m_\mathrm{eq}` required for the longitudinal susceptibility
-        :math:`\chi_{\parallel}`:
+        Calculate the the longitudinal susceptibility
 
         .. math::
 
-            \frac{dB}{dx} = \frac{1}{4S^2\sinh^2(x/2S)}
-                -\frac{(2S+1)^2}{4S^2\sinh^2(\frac{(2S+1)x}{2S})}
+            \chi_{\parallel} = \begin{cases}
+                \frac{\beta \mu_{\rm{at}} B_x(m_{eq},T)}{1-\beta J
+                    B_x(m_{eq}, T)} & \mathrm{for}\ T < T_C \\
+                \frac{\mu_{\rm{at}}T_C}{J(T-T_C)} & \mathrm{for}\ T \geq T_C
+            \end{cases}
 
-        with :math:`x=\frac{Jm}{k_BT}`.
+        with :math:`B_x(m_{eq},T)` being the :meth:`derivative of the Brillouin
+        function<calc_dBrillouin_dx>`.
 
         Args:
             temp_map (ndarray[float]): spatio-temporal temperature map
                 - possibly for a single delay.
+            mf_magnetizations (ndarray[float]): mean-field magnetization of
+                layers.
             curie_temps (ndarray[float]): Curie temperatures of layers.
             eff_spins (ndarray[float]): effective spins of layers.
-            mf_magnetization (ndarray[float]): mean-field magnetization of
+            mf_exch_couplings (ndarray[float]): mean-field exchange couplings of
                 layers.
+            mag_moments (ndarray[float]): atomic magnetic moments of layers.
             under_tc (ndarray[boolean]): mask temperatures below the Curie
+                temperature.
+            over_tc (ndarray[boolean]): mask temperatures over the Curie
                 temperature.
 
         Returns:
-            dBdx (ndarray[float]): derivative of Brillouin function.
+            chi_long (ndarray[float]): longitudinal susceptibility.
 
         """
+
+        dBdx = LLB.calc_dBrillouin_dx(temp_map, mf_magnetizations, eff_spins, mf_exch_couplings)
+        chi_long = np.zeros_like(temp_map)
         cpsT = np.zeros((len(times), len(sample)))
-        cpsT[under_tc]=np.multiply(chi_par_num_sam[under_tc], np.divide(dbrillouin_arr.T[under_tc], tes_arr.T[under_tc]-np.multiply(chi_par_denomm1_sam[under_tc], dbrillouin_arr.T[under_tc])))
-        cpsT[over_tc]=np.divide(np.multiply(muat_sam[over_tc]*9.274e-24, Tc_sam[over_tc]), J_sam[over_tc]*(tes_arr.T[over_tc]-Tc_sam[over_tc]+1e-1))
-        return ip.interp1d(t, cpsT.T)
+
+        chi_par_num = 1/sp.k*self.muat*9.274e-24
+        chi_par_denomm1 = self.J/sp.k
+
+        cpsT[under_tc] = np.multiply(
+            chi_par_num_sam[under_tc],
+            np.divide(dbrillouin_arr.T[under_tc],
+                      tes_arr.T[under_tc]-np.multiply(
+                          chi_par_denomm1_sam[under_tc],
+                          dbrillouin_arr.T[under_tc]
+                          )
+                      )
+            )
+        cpsT[over_tc] = np.divide(
+            np.multiply(
+                muat_sam[over_tc]*9.274e-24,
+                Tc_sam[over_tc]
+                ),
+            J_sam[over_tc]*(tes_arr.T[over_tc]-Tc_sam[over_tc]+1e-1)
+            )
+        return ip.interp1d(t, cpsT.T) 
 
     @property
     def distances(self):
