@@ -241,9 +241,7 @@ class LLB(Magnetization):
         class_str += super().__str__()
         return class_str
 
-    def calc_magnetization_map(self, delays, temp_map,
-                               H_ext=np.array([0, 0, 0])
-                               ):
+    def calc_magnetization_map(self, delays, temp_map, H_ext=np.array([0, 0, 0])):
         r"""calc_magnetization_map
 
         Calculates the magnetization map using the mean-field quantum
@@ -322,6 +320,9 @@ class LLB(Magnetization):
         lambdas = self.S.get_layer_property_vector('lamda')
         mf_exch_couplings = self.S.get_layer_property_vector('mf_exch_coupling')
         mag_moments = self.S.get_layer_property_vector('_mag_moment')
+        aniso_exponents = self.S.get_layer_property_vector('aniso_exponents')
+        anisotropies = self.S.get_layer_property_vector('_anisotropy')
+        mag_saturations = self.S.get_layer_property_vector('_mag_saturation')
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
         t1 = time()
@@ -352,6 +353,9 @@ class LLB(Magnetization):
                   lambdas,
                   mf_exch_couplings,
                   mag_moments,
+                  aniso_exponents,
+                  anisotropies,
+                  mag_saturations,
                   pbar, state),
             t_eval=delays,
             **self.ode_options)
@@ -409,8 +413,8 @@ class LLB(Magnetization):
 
     @staticmethod
     def odefunc(t, m,
-                delays, N, H_ext, temp_map, mean_mag_map, curie_temps, eff_spins,
-                lambdas, mf_exch_couplings, mag_moments,
+                delays, N, H_ext, temp_map, mean_mag_map, curie_temps, eff_spins, lambdas,
+                mf_exch_couplings, mag_moments, aniso_exponents, anisotropies, mag_saturations,
                 pbar, state):
         """odefunc
 
@@ -432,6 +436,11 @@ class LLB(Magnetization):
             mf_exch_couplings (ndarray[float]): mean-field exchange couplings of
                  layers.
             mag_moments (ndarray[float]): atomic magnetic moments of layers.
+            aniso_exponents (ndarray[float]): exponent vector of uniaxial
+                anisotropy of layers.
+            anisotropies (ndarray[float]): anisotropies of layers.
+            mag_saturations (ndarray[float]): saturation magnetization of
+                layers.
             pbar (tqdm): tqdm progressbar.
             state (list[float]): state variables for progress bar.
 
@@ -475,7 +484,8 @@ class LLB(Magnetization):
 
         # external field H_ext is given as input
         # calculate uniaxial anisotropy field
-        H_A = LLB.calc_uniaxial_anisotropy_field(N)
+        H_A = LLB.calc_uniaxial_anisotropy_field(m, mf_magnetizations, aniso_exponents,
+                                                 anisotropies, mag_saturations)
         # calculate exchange field
         H_ex = LLB.calc_exchange_field(N)
         # calculate thermal field
@@ -515,16 +525,50 @@ class LLB(Magnetization):
         return np.reshape(dmdt, N*3, order='F')
 
     @staticmethod
-    def calc_uniaxial_anisotropy_field(N):
+    def calc_uniaxial_anisotropy_field(mag_map, mf_magnetizations, aniso_exponents, anisotropies,
+                                       mag_saturations):
         r"""calc_uniaxial_anisotropy_field
 
         Calculate the uniaxial anisotropy component of the effective field.
+
+        .. math::
+
+            \mathbf{H}_\mathrm{A} = -
+            \frac{2 K_0}{M_s(0)}
+            \begin{bmatrix}
+            m_\mathrm{eq}(T)^{\kappa_x} \left( m_{y} +  m_{z} \right)\mathbf{e}_x \\
+            m_\mathrm{eq}(T)^{\kappa_y} \left( m_{x} +  m_{z} \right)\mathbf{e}_y \\
+            m_\mathrm{eq}(T)^{\kappa_z} \left( m_{x} +  m_{y} \right)\mathbf{e}_z
+            \end{bmatrix}
+
+        with :math:`K_i(T) = K_0 \ `
+
+        Args:
+            mag_map (ndarray[float]): spatio-temporal magnetization map
+                - possibly for a single delay.
+            mf_magnetizations (ndarray[float]): mean-field magnetization of
+                layers.
+            aniso_exponents (ndarray[float]): exponent vector of uniaxial
+                anisotropy of layers.
+            anisotropies (ndarray[float]): anisotropies of layers.
+            mag_saturations (ndarray[float]): saturation magnetization of
+                layers.
 
         Returns:
             H_A (ndarray[float]): uniaxial anisotropy field.
 
         """
-        return np.zeros([N, 3])
+        H_A = np.zeros_like(mag_map)
+
+        factor = -2*anisotropies/mag_saturations
+        H_A[:, 0] = factor*np.power(mf_magnetizations, aniso_exponents[:, 0]-2) \
+            * (mag_map[:, 1] + mag_map[:, 2])
+        H_A[:, 1] = factor*np.power(mf_magnetizations, aniso_exponents[:, 1]-2) \
+            * (mag_map[:, 0] + mag_map[:, 2])
+        H_A[:, 2] = factor*np.power(mf_magnetizations, aniso_exponents[:, 2]-2) \
+            * (mag_map[:, 0] + mag_map[:, 1])
+
+        return H_A
 
     @staticmethod
     def calc_exchange_field(N):
@@ -644,7 +688,7 @@ class LLB(Magnetization):
         .. math::
 
             B_x = \frac{dB}{dx} = \frac{1}{4S^2\sinh^2(x/2S)}
-                -\frac{(2S+1)^2}{4S^2\sinh^2(\frac{(2S+1)x}{2S})}
+                -\frac{(2S+1)^2}{4S^2\sinh^2\left(\frac{(2S+1)x}{2S}\right)}
 
         with :math:`x=\frac{J\,m}{k_\mathrm{B}\,T}`.
 
