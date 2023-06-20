@@ -82,8 +82,8 @@ class Layer:
         opt_ref_index_per_strain (ndarray[float]): optical refractive
            index change per strain - real and imagenary part
            :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
-        therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
-           conductivity [W/(m K)].
+        therm_cond (list[@lambda]): list of T-dependent thermal conductivity
+            [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
            expansion coefficient (relative).
         int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
@@ -103,7 +103,7 @@ class Layer:
         mag_moment (float): atomic magnetic moment [mu_Bohr].
         aniso_exponents(ndarray[float]): exponents of T-dependence uniaxial
             anisotropy as x,y,z component vector
-        ansiotropy (float): anisotropy at T=0 K [J/m³].
+        anisotropy (float): anisotropy at T=0 K [J/m³].
         exch_stiffness (float): exchange stiffness at T=0 K [J/m].
         mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
 
@@ -139,7 +139,7 @@ class Layer:
         self.lamda = kwargs.get('lamda', 0)
         self.mag_moment = kwargs.get('mag_moment', 0*u.bohr_magneton)
         self.aniso_exponents = kwargs.get('aniso_exponents', [0, 0, 0])
-        self.ansiotropy = kwargs.get('ansiotropy', 0*u.J/u.m**3)
+        self.anisotropy = kwargs.get('anisotropy', 0*u.J/u.m**3)
         self.exch_stiffness = kwargs.get('exch_stiffness', 0*u.J/u.m)
         self.mag_saturation = kwargs.get('mag_saturation', 0*u.J/u.T/u.m**3)
 
@@ -170,7 +170,7 @@ class Layer:
                   ['atomic magnetic moment', '{:.4~P}'.format(self.mag_moment.to(
                       'bohr_magneton'))],
                   ['uniaxial anisotropy exponents', self.aniso_exponents],
-                  ['anisotropy', self.ansiotropy],
+                  ['anisotropy', self.anisotropy],
                   ['exchange stiffness', self.exch_stiffness],
                   ['saturation magnetization', self.mag_saturation],
                 ]
@@ -269,7 +269,7 @@ class Layer:
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
                                'magnetic': ['_thickness', 'magnetization', 'eff_spin',
-                                            '_curie_temp', '_aniso_exponents', '_ansiotropy',
+                                            '_curie_temp', '_aniso_exponents', '_anisotropy',
                                             '_exch_stiffness', '_mag_saturation'],
                                }
 
@@ -585,12 +585,12 @@ class Layer:
             self._aniso_exponents[0:3] = aniso_exponents[0:3]
 
     @property
-    def ansiotropy(self):
-        return Q_(self._ansiotropy, u.J/u.m**3)
+    def anisotropy(self):
+        return Q_(self._anisotropy, u.J/u.m**3)
 
-    @ansiotropy.setter
-    def ansiotropy(self, ansiotropy):
-        self._ansiotropy = float(ansiotropy.to_base_units().magnitude)
+    @anisotropy.setter
+    def anisotropy(self, anisotropy):
+        self._anisotropy = float(anisotropy.to_base_units().magnitude)
 
     @property
     def exch_stiffness(self):
