@@ -534,14 +534,15 @@ class LLB(Magnetization):
         .. math::
 
             \mathbf{H}_\mathrm{A} = -
-            \frac{2 K_0}{M_s(0)}
-            \begin{bmatrix}
-            m_\mathrm{eq}(T)^{\kappa_x} \left( m_{y} +  m_{z} \right)\mathbf{e}_x \\
-            m_\mathrm{eq}(T)^{\kappa_y} \left( m_{x} +  m_{z} \right)\mathbf{e}_y \\
-            m_\mathrm{eq}(T)^{\kappa_z} \left( m_{x} +  m_{y} \right)\mathbf{e}_z
-            \end{bmatrix}
-
-        with :math:`K_i(T) = K_0 \ `
+            \frac{2 K_0}{M_s}
+            \left(
+                m_\mathrm{eq}(T)^{\kappa_x-2}
+                    \begin{bmatrix}0\\m_y\\m_z\end{bmatrix}
+                + m_\mathrm{eq}(T)^{\kappa_y-2}
+                    \begin{bmatrix}m_x\\0\\m_z\end{bmatrix}
+                + m_\mathrm{eq}(T)^{\kappa_z-2}
+                    \begin{bmatrix}m_x\\m_y\\0\end{bmatrix}
+            \right)
 
         Args:
             mag_map (ndarray[float]): spatio-temporal magnetization map
@@ -561,12 +562,12 @@ class LLB(Magnetization):
         H_A = np.zeros_like(mag_map)
 
         factor = -2*anisotropies/mag_saturations
-        H_A[:, 0] = factor*np.power(mf_magnetizations, aniso_exponents[:, 0]-2) \
-            * (mag_map[:, 1] + mag_map[:, 2])
-        H_A[:, 1] = factor*np.power(mf_magnetizations, aniso_exponents[:, 1]-2) \
-            * (mag_map[:, 0] + mag_map[:, 2])
-        H_A[:, 2] = factor*np.power(mf_magnetizations, aniso_exponents[:, 2]-2) \
-            * (mag_map[:, 0] + mag_map[:, 1])
+        unit_vector = np.array([0, 1, 1])[np.newaxis, :]
+        for i in range(3):
+            H_A += factor[:, np.newaxis] \
+                * np.power(mf_magnetizations,
+                           aniso_exponents[:, i]-2)[:, np.newaxis] \
+                * mag_map*np.roll(unit_vector, i, axis=1)
 
         return H_A
 
