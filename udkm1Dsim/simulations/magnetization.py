@@ -93,7 +93,8 @@ class Magnetization(Simulation):
         Args:
             delays (ndarray[float]): delay grid for the simulation.
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile.
+                temperature profile as well as external magnetic field and
+                initial magnetization.
 
         Returns:
             hash (str): unique hash.
@@ -133,7 +134,8 @@ class Magnetization(Simulation):
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile as well external magnetic field.
+                temperature profile as well external magnetic field and initial
+                magnetization.
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
@@ -165,9 +167,15 @@ class Magnetization(Simulation):
             if ('H_ext' in kwargs):
                 if not isinstance(kwargs['H_ext'], np.ndarray):
                     raise TypeError('H_ext must be a numpy ndarray!')
-                if kwargs['H_ext'].shape != (3,):
-                    raise TypeError('H_ext must be a vector with 3 components '
-                                    '(H_x, H_y, H_z)!')
+                elif kwargs['H_ext'].shape != (3,):
+                    raise ValueError('H_ext must be a vector with 3 components '
+                                     '(H_x, H_y, H_z)!')
+            if ('init_mag' in kwargs):
+                if not isinstance(kwargs['init_mag'], np.ndarray):
+                    raise TypeError('init_mag must be a numpy ndarray!')
+                elif kwargs['init_mag'].shape != (3,):
+                    raise ValueError('init_mag must be a vector with Nx3 '
+                                     'with N being the number of layers.')
 
             magnetization_map = self.calc_magnetization_map(delays, **kwargs)
 
@@ -192,7 +200,8 @@ class Magnetization(Simulation):
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile.
+                temperature profile as well external magnetic field and initial
+                magnetization.
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
@@ -241,7 +250,7 @@ class LLB(Magnetization):
         class_str += super().__str__()
         return class_str
 
-    def calc_magnetization_map(self, delays, temp_map, H_ext=np.array([0, 0, 0])):
+    def calc_magnetization_map(self, delays, temp_map, H_ext=np.array([0, 0, 0]), init_mag=[]):
         r"""calc_magnetization_map
 
         Calculates the magnetization map using the mean-field quantum
@@ -313,7 +322,14 @@ class LLB(Magnetization):
         # d_distances = np.diff(distances)
         N = len(distances)
 
-        init_mag = np.zeros([N, 3])
+        if len(init_mag) == 0:
+            self.disp_message('no initial magnetization given')
+            
+        init_mag = np.ones([N, 3])
+        init_mag[:, 0] = 0
+        init_mag[:, 1] = 0
+
+        return
         # get layer properties
         curie_temps = self.S.get_layer_property_vector('_curie_temp')
         eff_spins = self.S.get_layer_property_vector('eff_spin')
