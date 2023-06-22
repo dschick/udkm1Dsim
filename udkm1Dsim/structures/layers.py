@@ -743,6 +743,20 @@ class AmorphousLayer(Layer):
                               'gamma': atom.mag_gamma,
                               }
 
+    @property
+    def magnetization(self):
+        return {'amplitude': self._magnetization['amplitude'],
+                'phi': Q_(self._magnetization['phi'], u.rad).to('deg'),
+                'gamma': Q_(self._magnetization['gamma'], u.rad).to('deg')
+                }
+
+    @magnetization.setter
+    def magnetization(self, magnetization):
+        self._magnetization = {'amplitude': magnetization['amplitude'],
+                               'phi': magnetization['phi'].to_base_units().magnitude,
+                               'gamma': magnetization['gamma'].to_base_units().magnitude
+                               }
+
 
 class UnitCell(Layer):
     r"""UnitCell
