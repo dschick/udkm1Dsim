@@ -191,20 +191,25 @@ class Magnetization(Simulation):
         return init_mag
 
     def get_magnetization_map(self, delays, **kwargs):
-        """get_magnetization_map
+        r"""get_magnetization_map
 
-        Returns an absolute `magnetization_map` for the sample structure.
-        The angles for `gamma` and `phi` must be in radians as pure numpy
-        arrays.
-        The `magnetization_map` can depend on the ``temp_map`` and
+        Returns an absolute ``magnetization_map`` for the sample structure with
+        the dimension :math:`M \times N \times 3` with :math:`M` being the
+        number of delays and :math:`N` the number of layers in the structure or
+        the length of the given spatial grid. Each element of the map contains
+        the three magnetization components ``[amplitude, phi, gamma]``.
+        The angles ``phi`` and ``gamma`` must be returned in radians as pure
+        numpy arrays.
+        The ``magnetization_map`` can depend on the ``temp_map`` and
         ``strain_map`` that can be also calculated for the sample structure.
-        More over an external magnetic field ``H_ext`` can be provided.
+        More over an external magnetic field ``H_ext`` and initial magnetization
+        profile ``init_mag`` can be provided.
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile as well external magnetic field and initial
-                magnetization.
+                temperature profile as well external magnetic field in [T] and
+                initial magnetization.
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
@@ -241,7 +246,8 @@ class Magnetization(Simulation):
                                      '(H_x, H_y, H_z)!')
             if ('init_mag' in kwargs):
                 if not isinstance(kwargs['init_mag'], np.ndarray):
-                    raise TypeError('init_mag must be a numpy ndarray!')
+                    raise TypeError('init_mag must be a numpy ndarray with '
+                                    'all in radians without units!')
                 elif kwargs['init_mag'].shape != (3,):
                     raise ValueError('init_mag must be a vector with Nx3 '
                                      'with N being the number of layers.')
@@ -257,11 +263,8 @@ class Magnetization(Simulation):
     def calc_magnetization_map(self, delays, **kwargs):
         """calc_magnetization_map
 
-        Calculates an absolute ``magnetization_map`` for the sample structure.
-        The angles for `gamma` and `phi` must be in radians as pure numpy
-        arrays.
-        The ``magnetization_map`` can depend on the ``temp_map`` and
-        ``strain_map`` that can be also calculated for the sample structure.
+        Calculates an absolute ``magnetization_map`` - see
+        :meth:`get_magnetization_map` for details.
 
         This method is just an interface and should be overwritten for the
         actual simulations.
@@ -274,7 +277,7 @@ class Magnetization(Simulation):
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
-            magnetization profile.
+                magnetization profile.
 
         """
         raise NotImplementedError
@@ -388,10 +391,11 @@ class LLB(Magnetization):
         M = len(delays)
 
         distances, _, _ = self.S.get_distances_of_layers(False)
-        # d_distances = np.diff(distances)
         N = len(distances)
-        init_mag = self.check_initial_magnetization(init_mag, distances)
 
+        init_mag = self.check_initial_magnetization(init_mag, distances)
+        # convert initial magnetization from polar to cartesian coordinates
+        init_mag = LLB.convert_polar_to_cartesian(init_mag)
         # get layer properties
         curie_temps = self.S.get_layer_property_vector('_curie_temp')
         eff_spins = self.S.get_layer_property_vector('eff_spin')
@@ -968,6 +972,48 @@ class LLB(Magnetization):
             )
 
         return chi_long
+
+    @staticmethod
+    def convert_polar_to_cartesian(polar):
+        r"""convert_polar_to_cartesian
+
+        Convert a vector or field from polar coordinates
+        ``[amplitude, phi, gamma]`` to cartesian coordinates ``[x, y, z]``.
+
+        Args:
+            polar (ndarray[float]): vector of field to convert.
+
+        Returns:
+            cartesian (ndarray[float]): converted vector or field.
+
+        """
+        cartesian = np.zeros_like(polar)
+
+        amplitudes = polar[..., 0]
+        phis = polar[..., 1]
+        gammas = polar[..., 2]
+        cartesian[..., 0] = amplitudes*np.sin(phis)*np.cos(gammas)
+        cartesian[..., 1] = amplitudes*np.sin(phis)*np.sin(gammas)
+        cartesian[..., 2] = amplitudes*np.cos(phis)
+
+        return cartesian
+
+    @staticmethod
+    def convert_cartesian_to_polar(cartesian):
+        r"""convert_cartesian_to_polar
+
+        Convert a vector or field from cartesian coordinates ``[x, y, z]`` to
+        polar coordinates ``[amplitude, phi, gamma]``.
+
+        Args:
+            cartesian (ndarray[float]): vector of field to convert.
+
+        Returns:
+            polar (ndarray[float]): converted vector or field.
+
+        """
+        polar = np.zeros_like(cartesian)
+        return polar
 
     @property
     def distances(self):
