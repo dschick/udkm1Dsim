@@ -121,6 +121,75 @@ class Magnetization(Simulation):
 
         return self.S.get_hash(types='magnetic') + '_' + make_hash_md5(param)
 
+    def check_initial_magnetization(self, init_mag, distances=[]):
+        """check_initial_magnetization
+
+        Check if a given initial magnetization profile is valid. The profile
+        must be either a vector `[amplitude, phi, gamma]` describing a global
+        initial magnetization or an array of shape `[Nx3]` with N being the
+        number of layers or the length of the specific spatial grid. If no
+        initial magnetization is given, the initial profile is determined from
+        the magnetization of the layers on creation. In addition, a spatial
+        grid can be provided.
+
+        Args:
+            init_mag (ndarray[float]): initial global or local magnetization
+                profile.
+            distances (ndarray[float, Quantity], optional): spatial grid of the
+                initial magnetization.
+
+        Returns:
+            init_mag (ndarray[float]): checked initial magnetization as array on
+                the according spatial grid.
+
+        """
+        try:
+            distances = distances.to('m').magnitude
+        except AttributeError:
+            pass
+
+        if distances == []:
+            # no spatial grid is provided
+            N = self.S.get_number_of_layers()
+            [distances, _, _] = self.S.get_distances_of_layers(False)
+        else:
+            N = len(distances)
+
+        if len(init_mag) == 0:
+            self.disp_message('No explicit initial magnetization given '
+                              '- use magnetization of layers instead.')
+            init_mag = np.zeros([N, 3])
+            # use finderb search to find the corresponding indices between the
+            # internal and external spatial grids
+            [d_start, _, _] = self.S.get_distances_of_layers(False)
+            idx = finderb(distances, d_start)
+
+            magnetizations = self.S.get_layer_property_vector('_magnetization')
+            init_mag[:, 0] = np.array([mag['amplitude'] for mag in magnetizations])[idx]
+            init_mag[:, 1] = np.array([mag['phi'] for mag in magnetizations])[idx]
+            init_mag[:, 2] = np.array([mag['gamma'] for mag in magnetizations])[idx]
+        else:
+            if np.size(init_mag) == 3:
+                # it is the same initial magnetization for all layers
+                init_mag = np.tile(init_mag, (N, 1))
+            elif np.shape(init_mag) != (N, 3):
+                # init_temp is a vector but has not as many elements as layers
+                raise ValueError('The initial magnetization array must have 3 or '
+                                 'Nx3 elements, where N is the number of layers '
+                                 'in the structure or the length of the spatial '
+                                 'grid provided as distances vector!')
+
+            # convert phi and gamma to rad and store only magnitudes
+            try:
+                init_mag[:, 1] = init_mag[:, 1].to('rad').magnitude
+            except AttributeError:
+                pass
+            try:
+                init_mag[:, 2] = init_mag[:, 2].to('rad').magnitude
+            except AttributeError:
+                pass
+        return init_mag
+
     def get_magnetization_map(self, delays, **kwargs):
         """get_magnetization_map
 
@@ -321,15 +390,8 @@ class LLB(Magnetization):
         distances, _, _ = self.S.get_distances_of_layers(False)
         # d_distances = np.diff(distances)
         N = len(distances)
+        init_mag = self.check_initial_magnetization(init_mag, distances)
 
-        if len(init_mag) == 0:
-            self.disp_message('no initial magnetization given')
-            
-        init_mag = np.ones([N, 3])
-        init_mag[:, 0] = 0
-        init_mag[:, 1] = 0
-
-        return
         # get layer properties
         curie_temps = self.S.get_layer_property_vector('_curie_temp')
         eff_spins = self.S.get_layer_property_vector('eff_spin')
