@@ -578,7 +578,8 @@ class Structure:
             for i in range(self.get_number_of_layers()):
                 prop[i] = getattr(handles[i], property_name)
         elif ((type(getattr(handles[0], property_name)) is list) or
-                (type(getattr(handles[0], property_name)) is str)):
+                (type(getattr(handles[0], property_name)) is str) or
+                (type(getattr(handles[0], property_name)) is dict)):
             # it's a list of functions or str
             prop = []
             for i in range(self.get_number_of_layers()):
