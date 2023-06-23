@@ -1021,7 +1021,7 @@ class LLB(Magnetization):
         amplitudes=np.hypot(trans_amplitudes, zs)
         polar[..., 0]=amplitudes   
         polar[..., 1]=np.arctan2(ys, xs)               
-        polar[..., 2]=np.arccos(np.divide(zs,amplitudes))          
+        polar[..., 2]=np.arccos(np.divide(zs,amplitudes))          #r=0 still ill defined
         
         return polar
 
