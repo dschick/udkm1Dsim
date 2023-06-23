@@ -1013,6 +1013,16 @@ class LLB(Magnetization):
 
         """
         polar = np.zeros_like(cartesian)
+
+        xs=cartesian[..., 0]
+        ys=cartesian[..., 1]
+        zs=cartesian[..., ]
+        trans_amplitudes=np.hypot(xs, ys)
+        amplitudes=np.hypot(trans_amplitudes, zs)
+        polar[..., 0]=amplitudes   
+        polar[..., 1]=np.arctan2(ys, xs)               
+        polar[..., 2]=np.arccos(np.divide(zs,amplitudes))          
+        
         return polar
 
     @property
