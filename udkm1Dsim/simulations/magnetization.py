@@ -474,22 +474,39 @@ class LLB(Magnetization):
         (M, N) = temp_map.shape  # M - number of delays, N - number of layers
 
         mf_mag_map = np.zeros_like(temp_map)
-        # get layer properties
-        curie_temps = self.S.get_layer_property_vector('_curie_temp')
-        eff_spins = self.S.get_layer_property_vector('eff_spin')
-        mf_exch_couplings = self.S.get_layer_property_vector('mf_exch_coupling')
 
-        for i in range(N):
-            for j in range(M):
-                T = temp_map[j, i]/curie_temps[i]
-                if T > 1:
-                    mf_mag_map[j, i] = 0
+        unique_layers = self.S.get_unique_layers()
+        relevant_temps = {}
+        # iterate over all positions per unique layers
+        for i, (k, v) in enumerate(self.S.get_all_positions_per_unique_layer().items()):
+            relevant_temps[k] = []
+            # unique layer properties
+            curie_temp = unique_layers[1][i]._curie_temp
+            eff_spin = unique_layers[1][i].eff_spin
+            mf_exch_coupling = unique_layers[1][i].mf_exch_coupling
+
+            # simple round for down-sampling
+            unique_temps = np.unique(np.round(temp_map[:, v].flatten(), decimals=1))
+            # only temperatures below T_C are relevant
+            unique_temps = unique_temps[unique_temps <= curie_temp]
+            #  are normalized by T_C
+            reduced_temps = unique_temps/curie_temp
+            mf_mags = np.zeros_like(reduced_temps)
+
+            for j, T in enumerate(reduced_temps):
+                if T == 1:
+                    mf_mags[j] = 0
                 else:
-                    mf_mag_map[j, i] = fsolve(
-                        lambda x: x - LLB.calc_Brillouin(x, T, eff_spins[i],
-                                                         mf_exch_couplings[i],
-                                                         curie_temps[i]),
-                        np.sqrt(1-T))
+                    mf_mags[j] = fsolve(
+                        lambda x: x - LLB.calc_Brillouin(x, T, eff_spin, mf_exch_coupling,
+                                                         curie_temp), np.sqrt(1-T))
+
+            relevant_temps[k] = np.stack((unique_temps, mf_mags))
+
+            # for every temperature in temp_map search for best match in
+            # relevant_temps and assign according mf_mag into mf_mag_map
+            idx = finderb(np.round(temp_map[:, v].flatten(), decimals=1), relevant_temps[k][0, :])
+            mf_mag_map[:, v] = np.reshape(relevant_temps[k][1, idx], (M, len(v)))
 
         return mf_mag_map
 
