@@ -83,7 +83,7 @@ class Magnetization(Simulation):
         class_str += super().__str__(output)
         return class_str
 
-    def get_hash(self, delays, **kwargs):
+    def get_hash(self, **kwargs):
         """get_hash
 
         Calculates an unique hash given by the delays as well as the sample
@@ -92,7 +92,7 @@ class Magnetization(Simulation):
 
         Args:
             delays (ndarray[float]): delay grid for the simulation.
-            **kwargs (ndarray[float], optional): optional strain and
+            **kwargs (ndarray[float], optional): optional delays, strain and
                 temperature profile as well as external magnetic field and
                 initial magnetization.
 
@@ -100,7 +100,7 @@ class Magnetization(Simulation):
             hash (str): unique hash.
 
         """
-        param = [delays]
+        param = []
 
         if 'strain_map' in kwargs:
             strain_map = kwargs.get('strain_map')
@@ -218,7 +218,7 @@ class Magnetization(Simulation):
         """
         # create a hash of all simulation parameters
         filename = 'magnetization_map_' \
-                   + self.get_hash(delays, **kwargs) \
+                   + self.get_hash(delays=delays, **kwargs) \
                    + '.npz'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
@@ -407,11 +407,7 @@ class LLB(Magnetization):
         mag_saturations = self.S.get_layer_property_vector('_mag_saturation')
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
-        t1 = time()
-        self.disp_message('Calculating _mean_field_magnetization_map_ ...')
-        mean_mag_map = self.calc_mean_field_mag_map(temp_map[:, :, 0])
-        self.disp_message('Elapsed time for _mean_field_magnetization_map_: '
-                          '{:f} s'.format(time()-t1))
+        mean_mag_map = self.get_mean_field_mag_map(temp_map[:, :, 0])
 
         if self.progress_bar:  # with tqdm progressbar
             pbar = tqdm()
@@ -450,6 +446,55 @@ class LLB(Magnetization):
         self.disp_message('Elapsed time for _LLB_: {:f} s'.format(time()-t1))
 
         return magnetization_map
+
+    def get_mean_field_mag_map(self, temp_map):
+        r"""get_mean_field_mag_map
+
+        Returns the mean-field magnetization map :math:`m_\mathrm{eq}` by
+        solving the self consistent equation
+
+        .. math::
+
+            m_\mathrm{eq}(T) & = B_S(m_\mathrm{eq}, T) \\
+
+        where :math:`B_S` is the Brillouin function.
+        The dimension of the map are  :math:`M \times N` with :math:`M` being
+        the number of delays and :math:`N` the number of layers in the
+        structure.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal electron temperature map.
+
+        Returns:
+            mf_mag_map (ndarray[float]): spatio-temporal mean_field
+                magnetization map.
+
+        """
+        # create a hash of all simulation parameters
+        filename = 'mf_magnetization_map_' \
+                   + self.get_hash(temp_map=temp_map) \
+                   + '.npz'
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        # check if we find some corresponding data in the cache dir
+        if path.exists(full_filename) and not self.force_recalc:
+            # found something so load it
+            tmp = np.load(full_filename)
+            mf_mag_map = tmp['mf_mag_map']
+            self.disp_message('_mean_field_magnetization_map_ loaded from file:\n\t' + filename)
+        else:
+            t1 = time()
+            self.disp_message('Calculating _mean_field_magnetization_map_ ...')
+            # parse the input arguments
+            if not isinstance(temp_map, np.ndarray):
+                raise TypeError('temp_map must be a numpy ndarray!')
+
+            mf_mag_map = self.calc_mean_field_mag_map(temp_map)
+
+            self.disp_message('Elapsed time for _mean_field_magnetization_map_:'
+                              ' {:f} s'.format(time()-t1))
+            self.save(full_filename, {'mf_mag_map': mf_mag_map},
+                      '_mean_field_magnetization_map_')
+        return mf_mag_map
 
     def calc_mean_field_mag_map(self, temp_map):
         r"""calc_mean_field_mag_map
