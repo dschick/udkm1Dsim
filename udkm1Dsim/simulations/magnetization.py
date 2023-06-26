@@ -1071,9 +1071,9 @@ class LLB(Magnetization):
 
         .. math::
 
-            F_r= \sqrt{F_x^2+F_y^2+F_z^2}
-            F_{\gamma}=\arccos(\frac{F_z}{F_r})
-            F_{\phi}=\begin{cases}
+            F_r= \sqrt{F_x^2+F_y^2+F_z^2}\\
+            F_{\gamma}=\arccos(\frac{F_z}{F_r})\\
+            F_{\phi}=\begin{cases}\\
             \arctan{\frac{F_y}{F_x}} & \mathrm{for} F_x>0 \\
             \pi + \arctan{\frac{F_y}{F_x}} \mathrm{for} F_x<0 \mathrm{and} F_y \geq 0 \\
             \arctan{\frac{F_y}{F_x}} \mathrm{for} F_x<0 and F_y<0 \\
