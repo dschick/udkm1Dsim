@@ -1069,7 +1069,7 @@ class LLB(Magnetization):
         Convert a vector or field from cartesian coordinates ``[x, y, z]`` to
         polar coordinates ``[amplitude, phi, gamma]``.
 
-        ..math::
+        .. math::
 
             F_r= \sqrt{F_x^2+F_y^2+F_z^2}
             F_{\gamma}=\arccos(\frac{F_z}{F_r})
