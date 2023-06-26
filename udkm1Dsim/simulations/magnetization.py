@@ -1076,7 +1076,7 @@ class LLB(Magnetization):
             F_{\phi} = \begin{cases}\\
             \arctan\left(\frac{F_y}{F_x} \right) & \mathrm{for}\ F_x > 0 \\
             \pi + \arctan\left(\frac{F_y}{F_x}\right)
-            & \mathrm{for}\ F_x < 0 \mathrm{and}\ F_y \geq 0 \\
+            & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y \geq 0 \\
             \arctan\left(\frac{F_y}{F_x}\right) - \pi
             & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y < 0 \\
             0 & \mathrm{for}\ F_x = F_y = 0
