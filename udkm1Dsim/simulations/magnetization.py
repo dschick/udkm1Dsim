@@ -1078,8 +1078,8 @@ class LLB(Magnetization):
             \pi + \arctan\left(\frac{F_y}{F_x}\right)
             & \mathrm{for}\ F_x < 0 \mathrm{and}\ F_y \geq 0 \\
             \arctan\left(\frac{F_y}{F_x}\right) - \pi
-            & \mathrm{for}\ F_x < 0 and F_y < 0 \\
-            0 & \mathrm{ for } F_x = F_y = 0
+            & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y < 0 \\
+            0 & \mathrm{for}\ F_x = F_y = 0
             \end{cases}
 
         where :math:`F_r`, :math:`F_{\phi}`, :math:`F_{\gamma}` are the radial, azimutal
