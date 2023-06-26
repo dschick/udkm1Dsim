@@ -443,6 +443,8 @@ class LLB(Magnetization):
         magnetization_map = sol.y.T
 
         magnetization_map = np.array(magnetization_map).reshape([M, N, 3], order='F')
+        # convert to polar coordinates
+        magnetization_map = LLB.convert_cartesian_to_polar(magnetization_map)
         self.disp_message('Elapsed time for _LLB_: {:f} s'.format(time()-t1))
 
         return magnetization_map
