@@ -1083,8 +1083,8 @@ class LLB(Magnetization):
         amplitudes = np.hypot(np.hypot(xs, ys), zs)
         mask = amplitudes != 0.  # mask for non-zero amplitudes
         polar[..., 0] = amplitudes
-        polar[..., 1] = np.arctan2(ys, xs)
-        polar[mask, 2] = np.arccos(np.divide(zs[mask], amplitudes[mask]))
+        polar[..., 1] = np.arccos(np.divide(zs[mask], amplitudes[mask]))
+        polar[mask, 2] = np.arctan2(ys, xs)
 
         return polar
 
