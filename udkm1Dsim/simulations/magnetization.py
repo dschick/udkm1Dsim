@@ -1042,7 +1042,17 @@ class LLB(Magnetization):
         r"""convert_polar_to_cartesian
 
         Convert a vector or field from polar coordinates
-        ``[amplitude, phi, gamma]`` to cartesian coordinates ``[x, y, z]``.
+        :math:`(r, \phi, \gamma)` to cartesian coordinates :math:`(x, y, z)`:
+
+        .. math::
+
+            F_x & = r \sin(\phi)\cos(\gamma) \\
+            F_y & = r \sin(\phi)\sin(\gamma) \\
+            F_z & = r \cos(\phi)
+
+        where :math:`r`, :math:`\phi`, :math:`\gamma` are the radius
+        (amplitude), azimuthal, and polar angles of vector field
+        :math:`\mathbf{F}`, respectively.
 
         Args:
             polar (ndarray[float]): vector of field to convert.
@@ -1066,14 +1076,14 @@ class LLB(Magnetization):
     def convert_cartesian_to_polar(cartesian):
         r"""convert_cartesian_to_polar
 
-        Convert a vector or field from cartesian coordinates ``[x, y, z]`` to
-        polar coordinates ``[amplitude, phi, gamma]``.
+        Convert a vector or field from cartesian coordinates :math:`(x, y, z)`
+        to polar coordinates :math:`(r, \phi, \gamma)`:
 
         .. math::
 
-            F_r = \sqrt{F_x^2 + F_y^2+F_z^2}\\
-            F_{\gamma} = \arccos\left(\frac{F_z}{F_r} \right) \\
-            F_{\phi} = \begin{cases}\\
+            F_r & = \sqrt{F_x^2 + F_y^2+F_z^2}\\
+            F_{\gamma} & = \arccos\left(\frac{F_z}{F_r} \right) \\
+            F_{\phi} & = \begin{cases}\\
             \arctan\left(\frac{F_y}{F_x} \right) & \mathrm{for}\ F_x > 0 \\
             \pi + \arctan\left(\frac{F_y}{F_x}\right)
             & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y \geq 0 \\
@@ -1082,8 +1092,9 @@ class LLB(Magnetization):
             0 & \mathrm{for}\ F_x = F_y = 0
             \end{cases}
 
-        where :math:`F_r`, :math:`F_{\phi}`, :math:`F_{\gamma}` are the radial, azimutal
-        and polar component of vector field :math:`\mathbf{F}`, respectively.
+        where :math:`F_r`, :math:`F_{\phi}`, :math:`F_{\gamma}` are the radial
+        (amplitude), azimuthal, and polar component of vector field
+        :math:`\mathbf{F}`, respectively.
 
         Args:
             cartesian (ndarray[float]): vector of field to convert.
