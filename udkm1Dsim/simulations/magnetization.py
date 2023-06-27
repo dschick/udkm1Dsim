@@ -452,17 +452,10 @@ class LLB(Magnetization):
     def get_mean_field_mag_map(self, temp_map):
         r"""get_mean_field_mag_map
 
-        Returns the mean-field magnetization map :math:`m_\mathrm{eq}` by
-        solving the self consistent equation
-
-        .. math::
-
-            m_\mathrm{eq}(T) & = B_S(m_\mathrm{eq}, T) \\
-
-        where :math:`B_S` is the Brillouin function.
-        The dimension of the map are  :math:`M \times N` with :math:`M` being
-        the number of delays and :math:`N` the number of layers in the
-        structure.
+        Returns the mean-field magnetization map see
+        :meth:`calc_mean_field_mag_map` for details. The dimension of the map
+        are :math:`M \times N` with :math:`M` being the number of delays and
+        :math:`N` the number of layers in the structure.
 
         Args:
             temp_map (ndarray[float]): spatio-temporal electron temperature map.
