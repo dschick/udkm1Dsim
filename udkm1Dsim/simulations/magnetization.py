@@ -380,7 +380,7 @@ class LLB(Magnetization):
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
-                magnetization profile.
+            magnetization profile.
 
         """
         t1 = time()
@@ -402,7 +402,7 @@ class LLB(Magnetization):
         lambdas = self.S.get_layer_property_vector('lamda')
         mf_exch_couplings = self.S.get_layer_property_vector('mf_exch_coupling')
         mag_moments = self.S.get_layer_property_vector('_mag_moment')
-        aniso_exponents = self.S.get_layer_property_vector('aniso_exponents')
+        aniso_exponents = self.S.get_layer_property_vector('aniso_exponent')
         anisotropies = self.S.get_layer_property_vector('_anisotropy')
         mag_saturations = self.S.get_layer_property_vector('_mag_saturation')
         # calculate the mean magnetization maps for each unique layer
@@ -462,7 +462,7 @@ class LLB(Magnetization):
 
         Returns:
             mf_mag_map (ndarray[float]): spatio-temporal mean_field
-                magnetization map.
+            magnetization map.
 
         """
         # create a hash of all simulation parameters
@@ -508,7 +508,7 @@ class LLB(Magnetization):
 
         Returns:
             mf_mag_map (ndarray[float]): spatio-temporal mean_field
-                magnetization map.
+            magnetization map.
 
         """
         (M, N) = temp_map.shape  # M - number of delays, N - number of layers
@@ -575,9 +575,9 @@ class LLB(Magnetization):
             mf_exch_couplings (ndarray[float]): mean-field exchange couplings of
                  layers.
             mag_moments (ndarray[float]): atomic magnetic moments of layers.
-            aniso_exponents (ndarray[float]): exponent vector of uniaxial
-                anisotropy of layers.
-            anisotropies (ndarray[float]): anisotropies of layers.
+            aniso_exponents (ndarray[float]): exponent of uniaxial anisotropy of
+                layers.
+            anisotropies (ndarray[float]): anisotropy vectors of layers.
             mag_saturations (ndarray[float]): saturation magnetization of
                 layers.
             pbar (tqdm): tqdm progressbar.
@@ -673,24 +673,27 @@ class LLB(Magnetization):
         .. math::
 
             \mathbf{H}_\mathrm{A} = -
-            \frac{2 K_0}{M_s}
+            \frac{2}{M_s}
             \left(
-                m_\mathrm{eq}(T)^{\kappa_x-2}
+                K_x\,m_\mathrm{eq}(T)^{\kappa-2}
                     \begin{bmatrix}0\\m_y\\m_z\end{bmatrix}
-                + m_\mathrm{eq}(T)^{\kappa_y-2}
+                + K_y\,m_\mathrm{eq}(T)^{\kappa-2}
                     \begin{bmatrix}m_x\\0\\m_z\end{bmatrix}
-                + m_\mathrm{eq}(T)^{\kappa_z-2}
+                + K_z\,m_\mathrm{eq}(T)^{\kappa-2}
                     \begin{bmatrix}m_x\\m_y\\0\end{bmatrix}
             \right)
+
+        with :math:`K = (K_x, K_y, K_z)` as the anisotropy and :math:`\kappa` as
+        the uniaxial anisotropy exponent.
 
         Args:
             mag_map (ndarray[float]): spatio-temporal magnetization map
                 - possibly for a single delay.
             mf_magnetizations (ndarray[float]): mean-field magnetization of
                 layers.
-            aniso_exponents (ndarray[float]): exponent vector of uniaxial
+            aniso_exponents (ndarray[float]): exponent of uniaxial
                 anisotropy of layers.
-            anisotropies (ndarray[float]): anisotropies of layers.
+            anisotropies (ndarray[float]): anisotropy vectors of layers.
             mag_saturations (ndarray[float]): saturation magnetization of
                 layers.
 
@@ -700,12 +703,12 @@ class LLB(Magnetization):
         """
         H_A = np.zeros_like(mag_map)
 
-        factor = -2*anisotropies/mag_saturations
+        factor = -2/mag_saturations
         unit_vector = np.array([0, 1, 1])[np.newaxis, :]
         for i in range(3):
-            H_A += factor[:, np.newaxis] \
+            H_A += factor[:, np.newaxis] * anisotropies[:, i, np.newaxis]\
                 * np.power(mf_magnetizations,
-                           aniso_exponents[:, i]-2)[:, np.newaxis] \
+                           aniso_exponents-2)[:, np.newaxis] \
                 * mag_map*np.roll(unit_vector, i, axis=1)
 
         return H_A
@@ -1075,7 +1078,6 @@ class LLB(Magnetization):
         .. math::
 
             F_r & = \sqrt{F_x^2 + F_y^2+F_z^2}\\
-            F_{\gamma} & = \arccos\left(\frac{F_z}{F_r} \right) \\
             F_{\phi} & = \begin{cases}\\
             \arctan\left(\frac{F_y}{F_x} \right) & \mathrm{for}\ F_x > 0 \\
             \pi + \arctan\left(\frac{F_y}{F_x}\right)
@@ -1083,7 +1085,8 @@ class LLB(Magnetization):
             \arctan\left(\frac{F_y}{F_x}\right) - \pi
             & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y < 0 \\
             0 & \mathrm{for}\ F_x = F_y = 0
-            \end{cases}
+            \end{cases} \\
+            F_{\gamma} & = \arccos\left(\frac{F_z}{F_r} \right)
 
         where :math:`F_r`, :math:`F_{\phi}`, :math:`F_{\gamma}` are the radial
         (amplitude), azimuthal, and polar component of vector field
@@ -1100,11 +1103,11 @@ class LLB(Magnetization):
         xs = cartesian[..., 0]
         ys = cartesian[..., 1]
         zs = cartesian[..., 2]
-        amplitudes = np.hypot(np.hypot(xs, ys), zs)
+        amplitudes = np.sqrt(xs**2 + ys**2 + zs**2)
         mask = amplitudes != 0.  # mask for non-zero amplitudes
         polar[..., 0] = amplitudes
-        polar[..., 1] = np.arccos(np.divide(zs[mask], amplitudes[mask]))
-        polar[mask, 2] = np.arctan2(ys, xs)
+        polar[mask, 1] = np.arccos(np.divide(zs[mask], amplitudes[mask]))
+        polar[..., 2] = np.arctan2(ys, xs)
 
         return polar
 
