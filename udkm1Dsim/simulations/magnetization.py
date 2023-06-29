@@ -483,7 +483,7 @@ class LLB(Magnetization):
         aniso_exponents = self.S.get_layer_property_vector('aniso_exponent')
         anisotropies = self.S.get_layer_property_vector('_anisotropy')
         mag_saturations = self.S.get_layer_property_vector('_mag_saturation')
-        exch_stiffnesses = self.S.get_layer_property_vector('_exch_stiffness')
+        exch_stiffnesses = self.get_directional_exchange_stiffnesses()
         thicknesses = self.S.get_layer_property_vector('_thickness')
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
@@ -631,6 +631,29 @@ class LLB(Magnetization):
             mf_mag_map[:, v] = np.reshape(relevant_temps[k][1, idx], (M, len(v)))
 
         return mf_mag_map
+
+    def get_directional_exchange_stiffnesses(self):
+        """get_directional_exchange_stiffnesses _summary_
+
+        Returns:
+            _type_: _description_
+        """
+        exch_stiffnesses = self.S.get_layer_property_vector('_exch_stiffness')
+
+        indices, _, _ = self.S.get_layer_vectors()
+
+        A = np.zeros([len(indices), 2])
+        interafaces = (np.r_[1, np.diff(indices), 1])
+        interafaces[interafaces != 0] = -1
+        select = (interafaces+1).astype(np.int16)
+
+        A[:, 0] = exch_stiffnesses[np.arange(len(select[0:-1])), select[0:-1]]
+
+        interafaces[interafaces != 0] = 1
+        select = (interafaces+1).astype(np.int16)
+        A[:, 1] = exch_stiffnesses[np.arange(len(select[1:])), select[1:]]
+
+        return A
 
     @staticmethod
     def odefunc(t, m,
@@ -833,9 +856,10 @@ class LLB(Magnetization):
         m_diff_down = np.concatenate((np.diff(mag_map, axis=0), np.zeros((1, 3))), axis=0)
         m_diff_up = -np.roll(m_diff_down, 1)
 
-        es = np.divide(2*exch_stiffnesses, np.multiply(mag_saturations, thicknesses**2))
+        es = np.divide(2, np.multiply(mag_saturations, thicknesses**2))
 
-        H_ex = es[:, np.newaxis]*m_diff_up + es[:, np.newaxis]*m_diff_down
+        H_ex = es[:, np.newaxis]*exch_stiffnesses[:, 0, np.newaxis]*m_diff_up \
+            + es[:, np.newaxis]*exch_stiffnesses[:, 1, np.newaxis]*m_diff_down
 
         return H_ex
 
