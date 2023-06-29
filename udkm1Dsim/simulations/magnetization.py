@@ -484,6 +484,7 @@ class LLB(Magnetization):
         anisotropies = self.S.get_layer_property_vector('_anisotropy')
         mag_saturations = self.S.get_layer_property_vector('_mag_saturation')
         exch_stiffnesses = self.S.get_layer_property_vector('_exch_stiffness')
+        thicknesses = self.S.get_layer_property_vector('_thickness')
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
         mean_mag_map = self.get_mean_field_mag_map(temp_map[:, :, 0])
@@ -514,6 +515,7 @@ class LLB(Magnetization):
                   anisotropies,
                   mag_saturations,
                   exch_stiffnesses,
+                  thicknesses,
                   pbar, state),
             t_eval=delays,
             **self.ode_options)
@@ -634,7 +636,7 @@ class LLB(Magnetization):
     def odefunc(t, m,
                 delays, N, H_ext, temp_map, mean_mag_map, curie_temps, eff_spins, lambdas,
                 mf_exch_couplings, mag_moments, aniso_exponents, anisotropies, mag_saturations,
-                exch_stiffnesses, pbar, state):
+                exch_stiffnesses, thicknesses, pbar, state):
         """odefunc
 
         Ordinary differential equation that is solved for 1D LLB.
@@ -662,6 +664,7 @@ class LLB(Magnetization):
                 layers.
             exch_stiffnesses (ndarray[float]): exchange stiffness of layers
                 towards the upper and lower layer.
+            thicknesses (ndarray[float]): thicknesses of layers.
             pbar (tqdm): tqdm progressbar.
             state (list[float]): state variables for progress bar.
 
@@ -708,7 +711,7 @@ class LLB(Magnetization):
         H_A = LLB.calc_uniaxial_anisotropy_field(m, mf_magnetizations, aniso_exponents,
                                                  anisotropies, mag_saturations)
         # calculate exchange field
-        H_ex = LLB.calc_exchange_field(m, exch_stiffnesses, mag_saturations)
+        H_ex = LLB.calc_exchange_field(m, exch_stiffnesses, mag_saturations, thicknesses)
         # calculate thermal field
         H_th = LLB.calc_thermal_field(m, m_squared, temps, mf_magnetizations, eff_spins,
                                       curie_temps, mf_exch_couplings, mag_moments, under_tc,
@@ -796,7 +799,7 @@ class LLB(Magnetization):
         return H_A
 
     @staticmethod
-    def calc_exchange_field(mag_map, exch_stiffnesses, mag_saturations):
+    def calc_exchange_field(mag_map, exch_stiffnesses, mag_saturations, thicknesses):
         r"""calc_exchange_field
 
         Calculate the exchange component of the effective field, which is
@@ -827,37 +830,13 @@ class LLB(Magnetization):
         """
         H_ex = np.zeros_like(mag_map)
 
-        # def get_ex_stiff_sample_map(materials, sample, mat_loc, Ms_sam, Delta2_sam, N):
-        #     #This computes a grid for the exchange stiffness in analogous fashion to get_exch_coup_sam()
-        #     A_mat=np.zeros((len(materials), len(materials)))
-        #     for i, mat in enumerate(materials):
-        #         A_mat[i][i]=mat.A_0
-                
-        #     A_mat[0][1]=1e-11
-        #     A_mat[1][2]=5e-11
-        #     A_mat[0][2]=2.5e-11
-            
-        #     for i in range(1, len(materials)):
-        #         for j in range(i):
-        #             A_mat[i][j]=A_mat[j][i]
-                    
-        #     ex_stiff_arr=np.ones((N, len(sample),2))*A_mat[0][0]
-            
-        #     for i, grain in enumerate(sample):
-        #         if i>0:
-        #             ex_stiff_arr[:, i, 0]=A_mat[mat_loc[i]][mat_loc[i-1]]
-        #         if i<len(sample)-1:
-        #             ex_stiff_arr[:, i, 1]=A_mat[mat_loc[i]][mat_loc[i+1]]
-        #     return np.divide(ex_stiff_arr, np.multiply(Ms_sam, Delta2_sam)[:,:,np.newaxis])
+        m_diff_down = np.concatenate((np.diff(mag_map, axis=0), np.zeros((1, 3))), axis=0)
+        m_diff_up = -np.roll(m_diff_down, 1)
 
-        
-        # def ex_stiff(t):
-        #     return ip.interp1d(t, np.multiply(np.power(mmag_arr.T[:, :, np.newaxis],2-2),ex_stiff_sam).T)
+        es = np.divide(2*exch_stiffnesses, np.multiply(mag_saturations, thicknesses**2))
 
-        # m_diff_down=np.concatenate((np.diff(m, axis=0), np.zeros((1, 3))), axis=0)
-        # m_diff_up=-np.roll(m_diff_down, 1)
-        # H_es= e_s(t).T[:,0][:,np.newaxis]*m_diff_up+e_s(t).T[:,1][:,np.newaxis]*m_diff_down
-        
+        H_ex = es[:, np.newaxis]*m_diff_up + es[:, np.newaxis]*m_diff_down
+
         return H_ex
 
     @staticmethod
