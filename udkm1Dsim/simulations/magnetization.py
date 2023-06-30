@@ -633,24 +633,36 @@ class LLB(Magnetization):
         return mf_mag_map
 
     def get_directional_exchange_stiffnesses(self):
-        """get_directional_exchange_stiffnesses _summary_
+        r"""get_directional_exchange_stiffnesses
+
+        Returns the directional exchange stiffnesses with size
+        :math:`N \times 2`, with :math:`N` being the number of layers, between
+        the :math:`(i-1)^\mathrm{th}` and :math:`i^\mathrm{th}` layers as well
+        as between the :math:`i^\mathrm{th}` and :math:`(i+1)^\mathrm{th}`
+        layers in the structure.
+        In case two neighboring layers are identical the center entry
+        of the 3-component `exchange_stiffness` is used. In case of an interface
+        to the top :math:`(i-1)\rightarrow i` it will be the first entry and
+        for an interface to the bottom :math:`i\rightarrow (i+1)` it will be
+        the third entry.
 
         Returns:
-            _type_: _description_
+            A (ndarray[float]): directional exchange stiffnesses.
+
         """
         exch_stiffnesses = self.S.get_layer_property_vector('_exch_stiffness')
 
         indices, _, _ = self.S.get_layer_vectors()
 
         A = np.zeros([len(indices), 2])
-        interafaces = (np.r_[1, np.diff(indices), 1])
-        interafaces[interafaces != 0] = -1
-        select = (interafaces+1).astype(np.int16)
+        interfaces = (np.r_[1, np.diff(indices), 1])
+        interfaces[interfaces != 0] = -1
+        select = (interfaces+1).astype(np.int16)
 
         A[:, 0] = exch_stiffnesses[np.arange(len(select[0:-1])), select[0:-1]]
 
-        interafaces[interafaces != 0] = 1
-        select = (interafaces+1).astype(np.int16)
+        interfaces[interfaces != 0] = 1
+        select = (interfaces+1).astype(np.int16)
         A[:, 1] = exch_stiffnesses[np.arange(len(select[1:])), select[1:]]
 
         return A
@@ -831,13 +843,14 @@ class LLB(Magnetization):
         .. math::
 
             H_{\mathrm{ex}, i}=\frac{2}{M_{s,i} \Delta z_i^2}
-                \left(A_{i}^{i-1}\left(m_{i-1}-m_{i}\right)
-                + A_i^{i+1}\left(m_{i+1}-m_{i}\right) \right),
+                \left(A_{i}^{i-1}\left(\mathbf{m}_{i-1}-\mathbf{m}_{i}\right)
+                + A_i^{i+1}\left(\mathbf{m}_{i+1}-\mathbf{m}_{i}\right) \right),
 
         where :math:`\Delta z` is the thickness of the layers or magnetic grains
         and :math:`M_s` is the saturation magnetization. :math:`A_{i}^{i-1}` and
         :math:`A_i^{i+1}` describe the exchange stiffness between the nearest
-        neighboring layers.
+        neighboring layers provided by
+        :meth:`get_directional_exchange_stiffnesses`.
 
         Args:
             mag_map (ndarray[float]): spatio-temporal magnetization map
