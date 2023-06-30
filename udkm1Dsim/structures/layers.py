@@ -591,7 +591,14 @@ class Layer:
 
     @exch_stiffness.setter
     def exch_stiffness(self, exch_stiffness):
-        self._exch_stiffness = float(exch_stiffness.to_base_units().magnitude)
+        self._exch_stiffness = np.zeros(3)
+        try:
+            if len(exch_stiffness) == 3:
+                self._exch_stiffness = exch_stiffness.to_base_units().magnitude
+            else:
+                warnings.warn('Exchange stiffness must be a scalar or vector of length 3!')
+        except TypeError:
+            self._exch_stiffness[:] = exch_stiffness.to_base_units().magnitude
 
     @property
     def mag_saturation(self):
