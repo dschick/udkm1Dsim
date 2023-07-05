@@ -443,7 +443,7 @@ class AtomMixed(Atom):
                 be 1.
 
         """
-        if type(atom) ==  Atom:
+        if type(atom) == Atom:
             self.atoms.append([atom, fraction])
             self.num_atoms = self.num_atoms + 1
             # calculate the mixed atomic properties of the atomMixed instance
