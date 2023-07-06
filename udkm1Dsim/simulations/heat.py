@@ -75,7 +75,7 @@ class Heat(Simulation):
         backend (str): pde solver backend - either default scipy or matlab.
         excitation (dict{ndarray[float, Quantity]}): excitation parameters
             fluence, delay_pump, pulse_width, wavelength, theta, polarization,
-            multilayer_absorption
+            multilayer_absorption, backside
         boundary_conditions (dict{str, float, Quantity}): boundary conditions of
             the top and bottom boundary for the heat diffusion calculation.
             ``top_type`` or ``bottom_type`` must be one of ``boundary_types``.
@@ -105,7 +105,8 @@ class Heat(Simulation):
         self._excitation = {'fluence': [], 'delay_pump': [0], 'pulse_width': [0],
                             'wavelength': 800e-9, 'theta': np.pi/2,
                             # 'polarization': 'p',
-                            'multilayer_absorption': True}
+                            'multilayer_absorption': True,
+                            'backside': False}
         self._distances = np.array([])
         self.boundary_types = ['isolator', 'temperature', 'flux']
         self._boundary_conditions = {
@@ -134,6 +135,7 @@ class Heat(Simulation):
                   ['excitation theta', self.excitation['theta']],
                   # ['excitation polarization', self.excitation['polarization']],
                   ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
+                  ['excitation backside', self.excitation['backside']],
                   ['heat diffusion', self.heat_diffusion],
                   ['interpolate at interfaces', self.intp_at_interface],
                   ['backend', self.backend],
@@ -247,7 +249,7 @@ class Heat(Simulation):
             [t_p(i)-\mbox{window}\cdot w(i)]:[t_p(i)+\mbox{window}\cdot w(i)]:
             [w(i)/\mbox{intp}]
 
-        and to combine excitations which have overlapping intervalls.
+        and to combine excitations which have overlapping intervals.
 
         Moreover the incidence angle :math:`\vartheta` is taken into account for
         the user-defined incidence fluence in order to project the laser
@@ -317,13 +319,13 @@ class Heat(Simulation):
             if delta_delay == 0:
                 # its pulse_width = 0 or no heat diffusion was enabled
                 # so calculate just at a single delay step
-                intervall = np.array([delay_pump[i]])
+                interval = np.array([delay_pump[i]])
             else:
-                intervall = np.r_[(delay_pump[i] - window*pulse_width[i]):
-                                  (delay_pump[k] + window*pulse_width[k]):
-                                  delta_delay]
+                interval = np.r_[(delay_pump[i] - window*pulse_width[i]):
+                                 (delay_pump[k] + window*pulse_width[k]):
+                                 delta_delay]
             # update the new excitation list
-            n_excitation.append([intervall,
+            n_excitation.append([interval,
                                  [t[0] for t in temp],
                                  [t[1] for t in temp],
                                  [t[2] for t in temp]])
@@ -359,26 +361,28 @@ class Heat(Simulation):
                     res.append(temp)
         return res, fluence, delay_pump, pulse_width
 
-    def get_absorption_profile(self, distances=[]):
+    def get_absorption_profile(self, distances=[], backside=False):
         r"""get_absorption_profile
 
-        Returns the spatial absorption profile :math:`\mbox{d}A/\mbox{d}z`.
+        Returns the differential absorption profile :math:`\mbox{d}A/\mbox{d}z`.
 
         Args:
             distances (ndarray[float], optional): spatial grid for calculation.
+            backside (boolean, optional): backside or frontside excitation.
 
         Returns:
-            absorption_profile (ndarray[float]): absorption profile calculated
-            either by Lambert-Beers law or by a multilayer absorption formalism.
+            dAdz (ndarray[float]): differential absorption within each layer
+            calculated either by Lambert-Beers law or by a multilayer absorption
+            formalism.
 
         """
         if self._excitation['multilayer_absorption']:
-            dAdz, _, _, _ = self.get_multilayers_absorption_profile(distances)
+            dAdz, _, _, _ = self.get_multilayers_absorption_profile(distances, backside)
             return dAdz
         else:
-            return self.get_Lambert_Beer_absorption_profile(distances)
+            return self.get_Lambert_Beer_absorption_profile(distances, backside)
 
-    def get_Lambert_Beer_absorption_profile(self, distances=[]):
+    def get_Lambert_Beer_absorption_profile(self, distances=[], backside=False):
         r"""get_Lambert_Beer_absorption_profile
 
         The transmission is given by:
@@ -387,41 +391,51 @@ class Heat(Simulation):
 
         and the absorption by:
 
-        .. math:: \alpha = 1 - \tau =  1 - \exp(-z/\zeta)
+        .. math:: A = 1 - \tau =  1 - \exp(-z/\zeta)
 
         The absorption profile can be derived from the spatial derivative:
 
         .. math::
 
-            \frac{\mbox{d}\alpha(z)}{\mbox{d}z} = \frac{1}{\zeta}
+            \frac{\mbox{d}A(z)}{\mbox{d}z} = \frac{1}{\zeta}
             \exp(-z/\zeta)
 
         Args:
             distances (ndarray[float], optional): spatial grid for calculation.
+            backside (boolean, optional): backside or frontside excitation.
 
         Returns:
-            absorption_profile (ndarray[float]): absorption profile calculated
-            by Lambert-Beers law.
+            dAdz (ndarray[float]): differential absorption within each layer
+            calculated by Lambert-Beers law.
 
         """
         self.disp_message('Absorption profile is calculated by Lambert-Beer\'s law.')
+
+        if backside:
+            self.disp_message('Backside excitation is enabled.')
+            structure = self.S.reverse()
+        else:
+            structure = self.S
+
         if distances == []:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
-            d_start, _, distances = self.S.get_distances_of_layers(False)
+            d_start, _, distances = structure.get_distances_of_layers(False)
         else:
-            d_start, _, _ = self.S.get_distances_of_layers(False)
+            d_start, d_end, _ = structure.get_distances_of_layers(False)
+            if backside:
+                distances = np.flip(d_end[-1]-distances)
 
-        interfaces = self.S.get_distances_of_interfaces(False)
+        interfaces = structure.get_distances_of_interfaces(False)
 
         N = len(distances)
-        dalpha_dz = np.zeros(N)  # initialize relative absorbed energies
+        dAdz = np.zeros(N)  # initialize relative absorbed energies
         I0 = 1  # initial intensity
         k = 0  # counter for first layer
         for i in range(len(interfaces)-1):
             # find the first layer and get properties
             index = finderb(interfaces[i], d_start)
-            layer = self.S.get_layer_handle(index[0])
+            layer = structure.get_layer_handle(index[0])
             opt_pen_depth = layer.opt_pen_depth.to('m').magnitude
 
             # get all distances in the current layer we have to
@@ -435,29 +449,33 @@ class Heat(Simulation):
             m = len(z)
             if not np.isinf(opt_pen_depth):
                 # the layer is absorbing
-                dalpha_dz[k:k+m] = I0/opt_pen_depth*np.exp(-(z-interfaces[i])/opt_pen_depth)
+                dAdz[k:k+m] = I0/opt_pen_depth*np.exp(-(z-interfaces[i])/opt_pen_depth)
                 # calculate the remaining intensity for the next layer
                 I0 = I0*np.exp(-(interfaces[i+1]-interfaces[i])/opt_pen_depth)
             k = k+m  # set the counter
 
-        return dalpha_dz
+        if backside:
+            # for backside excitation the result must be reversed
+            dAdz = np.flip(dAdz)
 
-    def get_multilayers_absorption_profile(self, distances=[]):
+        return dAdz
+
+    def get_multilayers_absorption_profile(self, distances=[], backside=False):
         """get_multilayers_absorption_profile
 
-        Calculates the intensity, absorption and temperature increase profiles
-        in each layer of a multilayers structure for p-polarized light.
-
-        Calculation of intensity, absorption and temperature increase profiles
-        in multilayers.
+        Calculates the intensity, differential absorption and temperature
+        increase profiles in each layer of a multilayers structure for :math:`p`
+        -polarized light.
 
         Calculation based on the method in Ref [5]_ and code developed Matlab
         by L. Le Guyader, see Ref [6]_.
 
-        Copyright (2012-2014) Loïc Le Guyader <loic.le_guyader@helmholtz-berlin.de>
+        Copyright (2012-2014) Loïc Le Guyader
+        <loic.le_guyader@helmholtz-berlin.de>
 
         Args:
             distances (ndarray[float], optional): spatial grid for calculation.
+            backside (boolean, optional): backside or frontside excitation.
 
         Returns:
             (tuple):
@@ -483,17 +501,25 @@ class Heat(Simulation):
 
         """
         self.disp_message('Absorption profile is calculated by multilayer formalism.')
+        if backside:
+            self.disp_message('Backside excitation is enabled.')
+            structure = self.S.reverse()
+        else:
+            structure = self.S
+
         if distances == []:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
-            d_start, _, distances = self.S.get_distances_of_layers(False)
+            d_start, _, distances = structure.get_distances_of_layers(False)
         else:
-            d_start, _, _ = self.S.get_distances_of_layers(False)
+            d_start, d_end, _ = structure.get_distances_of_layers(False)
+            if backside:
+                distances = np.flip(d_end[-1]-distances)
 
-        interfaces = self.S.get_distances_of_interfaces(False)
+        interfaces = structure.get_distances_of_interfaces(False)
         N = len(interfaces)
         # if a substrate is included add it at the end
-        if self.S.substrate != []:
+        if structure.substrate != []:
             M = N + 1
         else:
             M = N
@@ -507,13 +533,13 @@ class Heat(Simulation):
 
         for i in range(N-1):
             index = finderb(interfaces[i], d_start)
-            layer = self.S.get_layer_handle(index[0])
+            layer = structure.get_layer_handle(index[0])
             opt_ref_indices[i+1] = layer.opt_ref_index
             thicknesses[i+1] = interfaces[i+1]-interfaces[i]
 
         if M != N:
-            opt_ref_indices[N] = self.S.substrate.get_layer_handle(0).opt_ref_index
-            thicknesses[N] = self.S.substrate.get_thickness(False)
+            opt_ref_indices[N] = structure.substrate.get_layer_handle(0).opt_ref_index
+            thicknesses[N] = structure.substrate.get_thickness(False)
 
         # Snell laws
         alpha = np.empty(M, dtype=complex)
@@ -615,6 +641,12 @@ class Heat(Simulation):
         self.disp_message('Total reflectivity of {:0.1f} % and transmission '
                           'of {:0.1f} %.'.format(np.round(R_total*100, 1),
                                                  np.round(T_total*100, 1)))
+
+        if backside:
+            # for backside excitation the results must be reversed
+            dAdz = np.flip(dAdz)
+            Ints = np.flip(Ints)
+
         return dAdz, Ints, R_total, T_total
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp, distances=[]):
@@ -662,6 +694,7 @@ class Heat(Simulation):
         """
         # initialize
         t1 = time()
+        backside = self._excitation['backside']
         if distances == []:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
@@ -670,7 +703,7 @@ class Heat(Simulation):
             d_start, _, _ = self.S.get_distances_of_layers(False)
 
         # absorption profile from Lambert-Beer's law or multilayer absorption
-        dalpha_dz = self.get_absorption_profile(distances)
+        dAdz = self.get_absorption_profile(distances=distances, backside=backside)
 
         try:
             fluence = fluence.to('J/m**2').magnitude
@@ -689,9 +722,9 @@ class Heat(Simulation):
         # traverse layers
         for i, dist in enumerate(distances):
             idx = finderb(dist, d_start)[0]
-            if dalpha_dz[i] > 0:
+            if dAdz[i] > 0:
                 # if there is absorption in the current layer
-                del_E = dalpha_dz[i]*E0*thicknesses[idx]
+                del_E = dAdz[i]*E0*thicknesses[idx]
 
                 def fun(final_temp):
                     return (masses[idx]*(int_heat_capacities[idx][0](final_temp)
@@ -931,7 +964,7 @@ class Heat(Simulation):
         :math:`S(z,t)` is a source term [W/m³].
         The energy flow between the subsystems is given by the ``sub_system_coupling``
         parameter :math:`G_i(T_1,...,T_N)` of the individual layers.
-        The index :math:`i` referrs to the :math:`i`-th subsystem.
+        The index :math:`i` refers to the :math:`i`-th subsystem.
 
         The 1D heat diffusion equation can be either solved with SciPy or
         Matlab as backend.
@@ -952,15 +985,17 @@ class Heat(Simulation):
         t1 = time()
         M = len(delays)
         K = self.S.num_sub_systems
+        backside = self._excitation['backside']
         init_temp = self.check_initial_temperature(init_temp, distances)
         d_start, _, _ = self.S.get_distances_of_layers(False)
 
         d_distances = np.diff(distances)
         N = len(distances)
         if fluence != []:
-            dalpha_dz = self.get_absorption_profile(distances)
+            dAdz = self.get_absorption_profile(distances=distances,
+                                               backside=backside)
         else:
-            dalpha_dz = np.zeros_like(distances)
+            dAdz = np.zeros_like(distances)
 
         if self.backend == 'matlab':
             # use of matlab backend for heat diffusion calculation
@@ -991,7 +1026,7 @@ class Heat(Simulation):
                 matlab.double(fluence),
                 matlab.double(pulse_width),
                 matlab.double(delay_pump),
-                matlab.double(dalpha_dz.tolist()),
+                matlab.double(dAdz.tolist()),
                 matlab.double(delays.tolist()),
                 self.S.get_layer_property_vector('therm_cond_str'),
                 self.S.get_layer_property_vector('heat_capacity_str'),
@@ -1029,7 +1064,7 @@ class Heat(Simulation):
                       self.S.get_layer_property_vector('sub_system_coupling'),
                       densities[indices],
                       indices,
-                      dalpha_dz,
+                      dAdz,
                       fluence,
                       delay_pump,
                       pulse_width,
@@ -1056,7 +1091,7 @@ class Heat(Simulation):
 
     @staticmethod
     def odefunc(t, u, N, K, d_x_grid, x, thermal_conds, heat_capacities,
-                sub_system_coupling, densities, indices, dalpha_dz, fluence,
+                sub_system_coupling, densities, indices, dAdz, fluence,
                 delay_pump, pulse_length, bc_top_type, bc_top_value,
                 bc_bottom_type, bc_bottom_value, pbar, state):
         """odefunc
@@ -1079,7 +1114,7 @@ class Heat(Simulation):
             densities (ndarray[float]): density of layers.
             indices (ndarray[int]): indices of actual layers in respect to
                 interpolated spatial grid.
-            dalpha_dz (ndarray[float]): absorption profile.
+            dAdz (ndarray[float]): differential absorption profile.
             fluence (ndarray[float]): excitation fluences.
             delay_pump (ndarray[float]): delay of excitations.
             pulse_length (ndarray[float]): pulse widths of excitations.
@@ -1123,7 +1158,7 @@ class Heat(Simulation):
         source = np.zeros([N, K])
         if fluence != []:
             source[:, 0] = \
-                dalpha_dz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
+                dAdz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
 
         # calculate temperature-dependent parameters
         for ii in range(N):
@@ -1191,7 +1226,8 @@ class Heat(Simulation):
                       'wavelength': Q_(self._excitation['wavelength'], u.m).to('nm'),
                       'theta': Q_(self._excitation['theta'], u.rad).to('deg'),
                       # 'polarization': self._excitation['polarization'],
-                      'multilayer_absorption': self._excitation['multilayer_absorption']}
+                      'multilayer_absorption': self._excitation['multilayer_absorption'],
+                      'backside': self._excitation['backside']}
 
         return excitation
 
@@ -1221,6 +1257,9 @@ class Heat(Simulation):
             if 'multilayer_absorption' in excitation:
                 self._excitation['multilayer_absorption'] = \
                     bool(excitation['multilayer_absorption'])
+            if 'backside' in excitation:
+                self._excitation['backside'] = \
+                    bool(excitation['backside'])
         else:
             raise ValueError('_excitation_ must be either a float/int or dict!')
 

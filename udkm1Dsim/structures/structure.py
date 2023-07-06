@@ -637,3 +637,41 @@ class Structure:
         """
         handles = self.get_layer_vectors()[2]
         return handles[i]
+
+    def reverse(self):
+        """reverse
+
+        Returns a reversed structure also reversing all nested sub_structure.
+
+        Returns:
+            reversed (Structure): reversed structure.
+
+        """
+        from copy import deepcopy
+
+        reversed = deepcopy(self)
+        # need to handle superstrate and substrate
+        return self.reverse_sub_structures(reversed)
+
+    def reverse_sub_structures(self, structure):
+        """reverse_sub_structures
+
+        Reverse a `Structure` and recursively call itself if a
+        sub_structure is a `Structure` itself.
+
+        Args:
+            structure (Structure): structure to be reversed.
+
+        Returns:
+            structure (Structure): reversed structure.
+
+        """
+        # reverse the list of sub_structures
+        structure.sub_structures.reverse()
+        for (sub_structure, N) in structure.sub_structures:
+            if isinstance(sub_structure, Structure):
+                # recursive call
+                self.reverse_sub_structures(sub_structure)
+            else:
+                pass
+        return structure
