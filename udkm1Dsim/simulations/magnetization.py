@@ -897,7 +897,7 @@ class LLB(Magnetization):
         H_ex = es[:, np.newaxis]*exch_stiffnesses[:, 0, np.newaxis]*m_diff_up \
             + es[:, np.newaxis]*exch_stiffnesses[:, 1, np.newaxis]*m_diff_down
 
-        return H_ex
+        return -H_ex
 
     @staticmethod
     def calc_thermal_field(mag_map, mag_map_squared, temp_map, mf_magnetizations, eff_spins,
