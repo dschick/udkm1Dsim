@@ -469,7 +469,6 @@ class LLB(Magnetization):
         M = len(delays)
 
         distances, _, _ = self.S.get_distances_of_layers(False)
-        N = len(distances)
 
         init_mag = self.check_initial_magnetization(init_mag, distances)
         # convert initial magnetization from polar to cartesian coordinates
@@ -488,6 +487,9 @@ class LLB(Magnetization):
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
         mean_mag_map = self.get_mean_field_mag_map(temp_map[:, :, 0])
+        # mask for magnetic layers only
+        is_magnetic = curie_temps > 0
+        N = np.count_nonzero(is_magnetic)
 
         if self.progress_bar:  # with tqdm progressbar
             pbar = tqdm()
@@ -500,31 +502,33 @@ class LLB(Magnetization):
         sol = solve_ivp(
             LLB.odefunc,
             [delays[0], delays[-1]],
-            np.reshape(init_mag, N*3, order='F'),
+            np.reshape(init_mag[is_magnetic, :], N*3, order='F'),
             args=(delays,
                   N,
                   H_ext,
-                  temp_map[:, :, 0],  # provide only the electron temperature
-                  mean_mag_map,
-                  curie_temps,
-                  eff_spins,
-                  lambdas,
-                  mf_exch_couplings,
-                  mag_moments,
-                  aniso_exponents,
-                  anisotropies,
-                  mag_saturations,
-                  exch_stiffnesses,
-                  thicknesses,
+                  temp_map[:, is_magnetic, 0],  # provide only the electron temperature
+                  mean_mag_map[:, is_magnetic],
+                  curie_temps[is_magnetic],
+                  eff_spins[is_magnetic],
+                  lambdas[is_magnetic],
+                  mf_exch_couplings[is_magnetic],
+                  mag_moments[is_magnetic],
+                  aniso_exponents[is_magnetic],
+                  anisotropies[is_magnetic],
+                  mag_saturations[is_magnetic],
+                  exch_stiffnesses[is_magnetic],
+                  thicknesses[is_magnetic],
                   pbar, state),
             t_eval=delays,
             **self.ode_options)
 
         if pbar is not None:  # close tqdm progressbar if used
             pbar.close()
-        magnetization_map = sol.y.T
-
-        magnetization_map = np.array(magnetization_map).reshape([M, N, 3], order='F')
+        temp = sol.y.T
+        # final magnetization map is zero for all non-magnetic layers
+        magnetization_map = np.zeros([M, len(distances), 3])
+        # reshape results and set only for magnetic layers
+        magnetization_map[:, is_magnetic, :] = np.array(temp).reshape([M, N, 3], order='F')
         # convert to polar coordinates
         magnetization_map = LLB.convert_cartesian_to_polar(magnetization_map)
         self.disp_message('Elapsed time for _LLB_: {:f} s'.format(time()-t1))
@@ -604,31 +608,38 @@ class LLB(Magnetization):
             relevant_temps[k] = []
             # unique layer properties
             curie_temp = unique_layers[1][i]._curie_temp
-            eff_spin = unique_layers[1][i].eff_spin
-            mf_exch_coupling = unique_layers[1][i].mf_exch_coupling
+            # mean-field magnetization is only calculated for a non-zero Curie
+            # temperature of magnetic layers
+            if curie_temp > 0:
+                eff_spin = unique_layers[1][i].eff_spin
+                mf_exch_coupling = unique_layers[1][i].mf_exch_coupling
 
-            # simple round for down-sampling
-            unique_temps = np.unique(np.round(temp_map[:, v].flatten(), decimals=1))
-            # only temperatures below T_C are relevant
-            unique_temps = unique_temps[unique_temps <= curie_temp]
-            #  are normalized by T_C
-            reduced_temps = unique_temps/curie_temp
-            mf_mags = np.zeros_like(reduced_temps)
+                # simple round for down-sampling
+                unique_temps = np.unique(np.round(temp_map[:, v].flatten(), decimals=1))
+                # only temperatures below T_C are relevant
+                unique_temps = unique_temps[unique_temps <= curie_temp]
+                #  are normalized by T_C
+                reduced_temps = unique_temps/curie_temp
+                mf_mags = np.zeros_like(reduced_temps)
 
-            for j, T in enumerate(reduced_temps):
-                if T == 1:
-                    mf_mags[j] = 0
-                else:
-                    mf_mags[j] = fsolve(
-                        lambda x: x - LLB.calc_Brillouin(x, T, eff_spin, mf_exch_coupling,
-                                                         curie_temp), np.sqrt(1-T))
+                for j, T in enumerate(reduced_temps):
+                    if T == 1:
+                        mf_mags[j] = 0
+                    else:
+                        mf_mags[j] = fsolve(
+                            lambda x: x - LLB.calc_Brillouin(x, T, eff_spin, mf_exch_coupling,
+                                                             curie_temp), np.sqrt(1-T))
 
-            relevant_temps[k] = np.stack((unique_temps, mf_mags))
+                relevant_temps[k] = np.stack((unique_temps, mf_mags))
 
-            # for every temperature in temp_map search for best match in
-            # relevant_temps and assign according mf_mag into mf_mag_map
-            idx = finderb(np.round(temp_map[:, v].flatten(), decimals=1), relevant_temps[k][0, :])
-            mf_mag_map[:, v] = np.reshape(relevant_temps[k][1, idx], (M, len(v)))
+                # for every temperature in temp_map search for best match in
+                # relevant_temps and assign according mf_mag into mf_mag_map
+                idx = finderb(np.round(temp_map[:, v].flatten(), decimals=1),
+                              relevant_temps[k][0, :])
+                mf_mag_map[:, v] = np.reshape(relevant_temps[k][1, idx], (M, len(v)))
+            else:
+                # non-magnetic layers with Curie temperature = 0
+                mf_mag_map[:, v] = 0
 
         return mf_mag_map
 
@@ -732,7 +743,7 @@ class LLB(Magnetization):
         idt = finderb(t, delays)[0]
         temps = temp_map[idt, :].flatten()
         # binary masks for layers being under or over its Curie temperature
-        under_tc = temps < curie_temps
+        under_tc = (temps < curie_temps)
         over_tc = ~under_tc
         # get the current mean-field magnetization
         mf_magnetizations = mean_mag_map[idt, :]
