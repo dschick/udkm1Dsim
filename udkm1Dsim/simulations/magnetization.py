@@ -318,7 +318,7 @@ class LLB(Magnetization):
 
     References:
 
-        .. [11] [1] U. Atxitia, D. Hinzke, and U. Nowak,
+        .. [11] U. Atxitia, D. Hinzke, and U. Nowak,
            *Fundamentals and Applications of the Landau-Lifshitz-Bloch Equation*,
            `J. Phys. D. Appl. Phys. 50, (2017).
            <https://www.doi.org/10.1088/1361-6463/50/3/033003>`_
