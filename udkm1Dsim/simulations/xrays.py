@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag']
+__all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'XrayStepanovSinha']
 
 __docformat__ = 'restructuredtext'
 
@@ -1502,7 +1502,7 @@ class XrayDyn(Xray):
 class XrayDynMag(Xray):
     r"""XrayDynMag
 
-    Dynamical magnetic X-ray scattering simulations.
+    Dynamical magnetic X-ray scattering simulations by Elzo et al. [10]_.
 
     Adapted from Elzo et.al. [10]_ and initially realized in `Project Dyna
     <http://dyna.neel.cnrs.fr>`_.
@@ -2738,9 +2738,11 @@ class XrayDynMag(Xray):
 class XrayStepanovSinha(Xray):
     r"""XrayStepanovSinha
 
-    Stepanov-Sinha magnetic X-ray scattering simulations.
+    Dynamical magnetic X-ray scattering simulations by
+    Stepanov & Sinha [12]_.
 
-    Adapted from Stepanov & Sinha [11]_.
+    In collaboration with Samuel Flewett
+    (`@sflewett <https://github.com/sflewett>`_)
 
     Args:
         S (Structure): sample to do simulations with.
@@ -2779,21 +2781,16 @@ class XrayStepanovSinha(Xray):
 
     References:
 
-        .. [11] Stepanov, Sinha
+        .. [12] S. A. Stepanov and S. K. Sinha,
+           *X-Ray Resonant Reflection from Magnetic Multilayers: Recursion
+           Matrix Algorithm*,
+           `Phys. Rev. B 61, 15302 (2000).
+           <https://doi.org/10.1103/PhysRevB.61.15302>`_
 
     """
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-        self.last_atom_ref_trans_matrices = {'atom_ids': [],
-                                             'hashes': [],
-                                             'A': [],
-                                             'A_phi': [],
-                                             'P': [],
-                                             'P_phi': [],
-                                             'A_inv': [],
-                                             'A_inv_phi': [],
-                                             'k_z': []}
 
     def __str__(self):
         """String representation of this class"""
@@ -2862,14 +2859,6 @@ class XrayStepanovSinha(Xray):
         Calculates the reflectivity :math:`R` of the whole sample structure
         allowing only for homogeneous strain and magnetization.
 
-        The reflection-transmission matrices
-
-        .. math:: RT = A_f^{-1} \prod_m \left( A_m P_m A_m^{-1} \right) A_0
-
-        are calculated for every substructure :math:`m` before post-processing
-        the incoming and analyzer polarizations and calculating the actual
-        reflectivities as function of energy and :math:`q_z`.
-
         Args:
             args (ndarray[float], optional): strains and magnetization for each
                 sub-structure.
@@ -2883,284 +2872,111 @@ class XrayStepanovSinha(Xray):
         """
         pass
 
-    def calc_homogeneous_matrix(self, S, last_A, last_A_phi, last_k_z, *args):
-        r"""calc_homogeneous_matrix
+    def calculate_chi(self, atom, density, *args):
+        r"""calculate_chi
 
-        Calculates the product of all reflection-transmission matrices of the
-        sample structure
+        Calculates the dielectric susceptibility tensor :math:`\chi_{ij}` of a
+        layer following Eq. (17) of Ref. [12]_:
 
-        .. math:: RT = \prod_m \left(P_m A_m^{-1} A_{m-1} \right)
+        .. math::
 
-        If the sub-structure :math:`m` consists of :math:`N` unit cells
-        the matrix exponential rule is applied:
+            \chi_{ij} = (\chi_0 + A) \delta_{ij} - i B \varepsilon_{ijk} M_k
+                + C M_i M_k
 
-        .. math:: RT_m = \left( P_{UC} A_{UC}^{-1} A_{UC} \right)^N
+        with the :math:`\chi_0` being the mean dielectric susceptibility.
 
-        Roughness is also included by a gaussian width
-
-        Args:
-            S (Structure, UnitCell, AmorphousLayer): structure, sub-structure,
-                unit cell or amorphous layer to calculate on.
-            last_A (ndarray[complex]): last atom boundary matrix.
-            last_A_phi (ndarray[complex]): last atom boundary matrix for opposite
-                magnetization.
-            last_k_z (ndarray[float]): last internal wave vector
-            args (ndarray[float], optional): strains and magnetization for each
-                sub-structure.
-
-        Return:
-            (tuple):
-            - *RT (ndarray[complex])* - reflection-transmission matrix.
-            - *RT_phi (ndarray[complex])* - reflection-transmission matrix for
-              opposite magnetization.
-            - *A (ndarray[complex])* - atom boundary matrix.
-            - *A_phi (ndarray[complex])* - atom boundary matrix for opposite
-              magnetization.
-            - *A_inv (ndarray[complex])* - inverted atom boundary matrix.
-            - *A_inv_phi (ndarray[complex])* - inverted atom boundary matrix for
-              opposite magnetization.
-            - *k_z (ndarray[float])* - internal wave vector.
-
-        """
-        pass
-
-    def inhomogeneous_reflectivity(self, strain_map=np.array([]),
-                                   magnetization_map=np.array([]), **kwargs):
-        """inhomogeneous_reflectivity
-
-        Returns the reflectivity and transmissivity of an inhomogeneously
-        strained and magnetized sample structure for a given _strain_map_
-        and _magnetization_map_ in space and time for each unit cell or
-        amorphous layer in the sample structure. If no reflectivity is
-        saved in the cache it is caluclated. Providing the ``calc_type``
-        for the calculation the corresponding sub-routines for the
-        reflectivity computation are called:
-
-        * ``parallel`` parallelization over the time steps utilizing
-          `Dask <https://dask.org/>`_
-        * ``distributed`` not implemented in Python, but should be possible
-          with `Dask <https://dask.org/>`_ as well
-        * ``sequential`` no parallelization at all
-
-        Args:
-            strain_map (ndarray[float], optional): spatio-temporal strain
-                profile.
-            magnetization_map (ndarray[float], optional): spatio-temporal
-                magnetization profile.
-            **kwargs:
-                - *calc_type (str)* - type of calculation.
-                - *dask_client (Dask.Client)* - Dask client.
-                - *job (Dask.job)* - Dask job.
-                - *num_workers (int)* - Dask number of workers.
-
-        Returns:
-            (tuple):
-            - *R (ndarray[float])* - inhomogeneous reflectivity.
-            - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
-              magnetization.
-            - *T (ndarray[float])* - inhomogeneous transmissivity.
-            - *T_phi (ndarray[float])* - inhomogeneous transmissivity for opposite
-              magnetization.
-
-        """
-        pass
-
-    def sequential_inhomogeneous_reflectivity(self, strain_map, magnetization_map):
-        """sequential_inhomogeneous_reflectivity
-
-        Returns the reflectivity and transmission of an inhomogeneously strained
-        sample structure for a given ``strain_map`` and ``magnetization_map`` in
-        space and time. The function calculates the results sequentially for every
-        layer without parallelization.
-
-        Args:
-            strain_map (ndarray[float]): spatio-temporal strain profile.
-            magnetization_map (ndarray[float]): spatio-temporal magnetization
-                profile.
-
-        Returns:
-            (tuple):
-            - *R (ndarray[float])* - inhomogeneous reflectivity.
-            - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
-              magnetization.
-            - *T (ndarray[float])* - inhomogeneous transmission.
-            - *T_phi (ndarray[float])* - inhomogeneous transmission for opposite
-              magnetization.
-
-        """
-        pass
-
-    def distributed_inhomogeneous_reflectivity(self, strain_map, magnetization_map,
-                                               job, num_worker,):
-        """distributed_inhomogeneous_reflectivity
-
-        This is a stub. Not yet implemented in python.
-
-        Args:
-            strain_map (ndarray[float]): spatio-temporal strain profile.
-            magnetization_map (ndarray[float]): spatio-temporal magnetization
-                profile.
-            job (Dask.job): Dask job.
-            num_workers (int): Dask number of workers.
-
-        Returns:
-            (tuple):
-            - *R (ndarray[float])* - inhomogeneous reflectivity.
-            - *R_phi (ndarray[float])* - inhomogeneous reflectivity for opposite
-              magnetization.
-
-        """
-        raise NotImplementedError
-
-    def calc_inhomogeneous_matrix(self, last_A, last_A_phi, last_k_z, strains, magnetizations):
-        r"""calc_inhomogeneous_matrix
-
-        Calculates the product of all reflection-transmission matrices of the
-        sample structure for every atomic layer.
-
-        .. math:: RT = \prod_m \left( P_m A_m^{-1} A_{m-1}  \right)
-
-        Args:
-            last_A (ndarray[complex]): last atom boundary matrix.
-            last_A_phi (ndarray[complex]): last atom boundary matrix for opposite
-              magnetization.
-            last_k_z (ndarray[float]): last internal wave vector
-            strains (ndarray[float]): spatial strain profile for single time
-                step.
-            magnetizations (ndarray[float]): spatial magnetization profile for
-                single time step.
-
-        Returns:
-            (tuple):
-            - *RT (ndarray[complex])* - reflection-transmission matrix.
-            - *RT_phi (ndarray[complex])* - reflection-transmission matrix for
-              opposite magnetization.
-            - *A (ndarray[complex])* - atom boundary matrix.
-            - *A_phi (ndarray[complex])* - atom boundary matrix for opposite
-              magnetization.
-            - *A_inv (ndarray[complex])* - inverted atom boundary matrix.
-            - *A_inv_phi (ndarray[complex])* - inverted atom boundary matrix for
-              opposite magnetization.
-            - *k_z (ndarray[float])* - internal wave vector.
-
-        """
-        pass
-
-    def get_atom_boundary_phase_matrix(self, atom, density, distance,
-                                       force_recalc=False, *args):
-        """get_atom_boundary_phase_matrix
-
-        Returns the boundary and phase matrices of an atom from Elzo
-        formalism [10]_. The results for a given atom, energy, :math:`q_z`,
-        polarization, and magnetization are stored to RAM to avoid recalculation.
+        Add more details from the paper here!
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
             density (float): density around the atom [kg/m³].
-            distance (float): distance towards the next atomic [m].
-            force_recalc (boolean, optional): force recalculation of boundary
-                phase matrix if True. Defaults to False.
-            args (ndarray[float]): magnetization vector.
 
         Returns:
             (tuple):
-            - *A (ndarray[complex])* - atom boundary matrix.
-            - *A_phi (ndarray[complex])* - atom boundary matrix for opposite
-              magnetization.
-            - *P (ndarray[complex])* - atom phase matrix.
-            - *P_phi (ndarray[complex])* - atom phase matrix for opposite
-              magnetization.
-            - *A_inv (ndarray[complex])* - inverted atom boundary matrix.
-            - *A_inv_phi (ndarray[complex])* - inverted atom boundary matrix for
-              opposite magnetization.
-            - *k_z (ndarray[float])* - internal wave vector.
+            - *chi (ndarray[complex])* - dielectric susceptibility tensor.
+            - *chi_zero (ndarray[complex])* - mean dielectric susceptibility.
 
         """
-        pass
+        try:
+            magnetization = args[0]
+            mag_amplitude = magnetization[0]
+            mag_phi = magnetization[1]
+            mag_gamma = magnetization[2]
+        except IndexError:
+            # here we catch magnetizations with only one instead of three
+            # elements
+            try:
+                mag_amplitude = atom.mag_amplitude
+            except AttributeError:
+                mag_amplitude = 0
+            try:
+                mag_phi = atom._mag_phi
+            except AttributeError:
+                mag_phi = 0
+            try:
+                mag_gamma = atom._mag_gamma
+            except AttributeError:
+                mag_gamma = 0
 
-    def calc_atom_boundary_phase_matrix(self, atom, density, distance, *args):
-        """calc_atom_boundary_phase_matrix
+        M = len(self._energy)  # number of energies
+        N = np.shape(self._qz)[1]  # number of q_z
 
-        Calculates the boundary and phase matrices of an atom from Elzo
-        formalism [10]_.
+        chi = np.zeros([M, N, 3, 3], dtype=np.cfloat)
+        chi_zero = np.zeros([M, N], dtype=np.cfloat)
 
-        Args:
-            atom (Atom, AtomMixed): atom or mixed atom.
-            density (float): density around the atom [kg/m³].
-            distance (float): distance towards the next atomic [m].
-            args (ndarray[float]): magnetization vector.
+        energy = self._energy
+        wl = self._wl
 
-        Returns:
-            (tuple):
-            - *A (ndarray[complex])* - atom boundary matrix.
-            - *A_phi (ndarray[complex])* - atom boundary matrix for opposite
-              magnetization.
-            - *P (ndarray[complex])* - atom phase matrix.
-            - *P_phi (ndarray[complex])* - atom phase matrix for opposite
-              magnetization.
-            - *A_inv (ndarray[complex])* - inverted atom boundary matrix.
-            - *A_inv_phi (ndarray[complex])* - inverted atom boundary matrix for
-              opposite magnetization.
-            - *k_z (ndarray[float])* - internal wave vector.
+        try:
+            cf = atom.get_atomic_form_factor(energy)
+        except AttributeError:
+            cf = np.zeros_like(energy, dtype=np.cfloat)
+        try:
+            mf = atom.get_magnetic_form_factor(energy)
+        except AttributeError:
+            mf = np.zeros_like(energy, dtype=np.cfloat)
 
-        """
-        pass
+        try:
+            molar_density = density/(atom.mass_number_a/1000)*6.0222e23
+        except AttributeError:
+            molar_density = 0
+        r0 = 2.82e-15  # classical electron radius
+        multiplier = wl**2*r0/np.pi
 
-    @staticmethod
-    def calc_reflectivity_transmissivity_from_matrix(RT, pol_in, pol_out):
-        """calc_reflectivity_transmissivity_from_matrix
+        chi_zero = molar_density*multiplier*cf
 
-        Calculates the actual reflectivity and transmissivity from the
-        reflectivity-transmission matrix for a given incoming and analyzer
-        polarization from Elzo formalism [10]_.
+        B = molar_density*multiplier*mf
+        C = 0
+        # This needs to be set in the case that a quadratic term is present
+        # And should be set in the initialization routine as a global parameter
 
-        Args:
-            RT (ndarray[complex]): reflection-transmission matrix.
-            pol_in (ndarray[complex]): incoming polarization factor.
-            pol_out (ndarray[complex]): outgoing polarization factor.
+        # magnetization is possibly in cartesian coordinates
+        # need to be converted
 
-        Returns:
-            (tuple):
-            - *R (ndarray[float])* - reflectivity.
-            - *T (ndarray[float])* - transmissivity.
+        # m1=np.array(M[0,...])
+        # m2=np.array(M[1,...])
+        # m3=np.array(M[2,...])
+        # empty=np.zeros(m1.shape)
+        # ones=empty+1
+        # delta=np.array([[ones,empty,empty],
+        #                 [empty,ones,empty],
+        #                 [empty,empty,ones]])
+        # m_epsilon1=np.array([[empty,empty,empty],
+        #         [empty,empty,m1],
+        #         [empty,-m1,empty]])
+        # m_epsilon2=np.array([[empty,empty,-m2],
+        #         [empty,empty,empty],
+        #         [m2,empty,empty]])
+        # m_epsilon3=np.array([[empty,m3,empty],
+        #         [-m3,empty,empty],
+        #         [empty,empty,empty]])
+        # temp=m_epsilon1+m_epsilon2+m_epsilon3
+        # MM = np.array([[M[j,...]*M[i,...] for i in range(3)] for j in range(3)])
+        # chi = (chi_zero)*delta\
+        #     -complex(0,1)*B*temp+C*MM
+        # self.chi=chi
+        # self.chi_zero=chi_zero*ones
 
-        """
+        chi = mag_amplitude*mag_gamma*mag_phi*B*C
 
-        pass
-
-    @staticmethod
-    def calc_kerr_effect_from_matrix(RT):
-        """calc_kerr_effect_from_matrix
-
-        Calculates the Kerr rotation and ellipticity for sigma and pi
-        incident polarization from the reflectivity-transmission
-        matrix independent of the given incoming and analyzer polarization
-        from Elzo formalism [10]_.
-
-        Args:
-            RT (ndarray[complex]): reflection-transmission matrix.
-
-        Returns:
-            K (ndarray[float]): kerr.
-
-        """
-
-        raise NotImplementedError
-
-    @staticmethod
-    def calc_roughness_matrix(roughness, k_z, last_k_z):
-        """calc_roughness_matrix
-
-        Calculates the roughness matrix for an interface with a gaussian
-        roughness for the Elzo formalism [10]_.
-
-        Args:
-            roughness (float): gaussian roughness of the interface [m].
-            k_z (ndarray[float)]: internal wave vector.
-            last_k_z (ndarray[float)]: last internal wave vector.
-
-        Returns:
-            W (ndarray[float]): roughness matrix.
-
-        """
-        pass
+        return chi, chi_zero
