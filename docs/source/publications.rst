@@ -1,6 +1,13 @@
 Publications
 ============
 
+2023
+----
+.. bibliography::
+   :list: enumerated
+   :enumtype: arabic
+   :filter: year == "2023"
+
 2022
 ----
 .. bibliography::
