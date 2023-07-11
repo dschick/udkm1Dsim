@@ -29,6 +29,7 @@ __docformat__ = 'restructuredtext'
 from .simulation import Simulation
 from .. import u, Q_
 from ..helpers import make_hash_md5, finderb
+from ..helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve
@@ -282,84 +283,6 @@ class Magnetization(Simulation):
         """
         raise NotImplementedError
 
-    @staticmethod
-    def convert_polar_to_cartesian(polar):
-        r"""convert_polar_to_cartesian
-
-        Convert a vector or field from polar coordinates
-        :math:`(r, \phi, \gamma)` to cartesian coordinates :math:`(x, y, z)`:
-
-        .. math::
-
-            F_x & = r \sin(\phi)\cos(\gamma) \\
-            F_y & = r \sin(\phi)\sin(\gamma) \\
-            F_z & = r \cos(\phi)
-
-        where :math:`r`, :math:`\phi`, :math:`\gamma` are the radius
-        (amplitude), azimuthal, and polar angles of vector field
-        :math:`\mathbf{F}`, respectively.
-
-        Args:
-            polar (ndarray[float]): vector of field to convert.
-
-        Returns:
-            cartesian (ndarray[float]): converted vector or field.
-
-        """
-        cartesian = np.zeros_like(polar)
-
-        amplitudes = polar[..., 0]
-        phis = polar[..., 1]
-        gammas = polar[..., 2]
-        cartesian[..., 0] = amplitudes*np.sin(phis)*np.cos(gammas)
-        cartesian[..., 1] = amplitudes*np.sin(phis)*np.sin(gammas)
-        cartesian[..., 2] = amplitudes*np.cos(phis)
-
-        return cartesian
-
-    @staticmethod
-    def convert_cartesian_to_polar(cartesian):
-        r"""convert_cartesian_to_polar
-
-        Convert a vector or field from cartesian coordinates :math:`(x, y, z)`
-        to polar coordinates :math:`(r, \phi, \gamma)`:
-
-        .. math::
-
-            F_r & = \sqrt{F_x^2 + F_y^2+F_z^2}\\
-            F_{\phi} & = \begin{cases}\\
-            \arctan\left(\frac{F_y}{F_x} \right) & \mathrm{for}\ F_x > 0 \\
-            \pi + \arctan\left(\frac{F_y}{F_x}\right)
-            & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y \geq 0 \\
-            \arctan\left(\frac{F_y}{F_x}\right) - \pi
-            & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y < 0 \\
-            0 & \mathrm{for}\ F_x = F_y = 0
-            \end{cases} \\
-            F_{\gamma} & = \arccos\left(\frac{F_z}{F_r} \right)
-
-        where :math:`F_r`, :math:`F_{\phi}`, :math:`F_{\gamma}` are the radial
-        (amplitude), azimuthal, and polar component of vector field
-        :math:`\mathbf{F}`, respectively.
-
-        Args:
-            cartesian (ndarray[float]): vector of field to convert.
-
-        Returns:
-            polar (ndarray[float]): converted vector or field.
-
-        """
-        polar = np.zeros_like(cartesian)
-        xs = cartesian[..., 0]
-        ys = cartesian[..., 1]
-        zs = cartesian[..., 2]
-        amplitudes = np.sqrt(xs**2 + ys**2 + zs**2)
-        mask = amplitudes != 0.  # mask for non-zero amplitudes
-        polar[..., 0] = amplitudes
-        polar[mask, 1] = np.arccos(np.divide(zs[mask], amplitudes[mask]))
-        polar[..., 2] = np.arctan2(ys, xs)
-
-        return polar
-
 
 class LLB(Magnetization):
     """LLB
@@ -484,7 +407,7 @@ class LLB(Magnetization):
 
         init_mag = self.check_initial_magnetization(init_mag, distances)
         # convert initial magnetization from polar to cartesian coordinates
-        init_mag = LLB.convert_polar_to_cartesian(init_mag)
+        init_mag = convert_polar_to_cartesian(init_mag)
         # get layer properties
         curie_temps = self.S.get_layer_property_vector('_curie_temp')
         eff_spins = self.S.get_layer_property_vector('eff_spin')
@@ -542,7 +465,7 @@ class LLB(Magnetization):
         # reshape results and set only for magnetic layers
         magnetization_map[:, is_magnetic, :] = np.array(temp).reshape([M, N, 3], order='F')
         # convert to polar coordinates
-        magnetization_map = LLB.convert_cartesian_to_polar(magnetization_map)
+        magnetization_map = convert_cartesian_to_polar(magnetization_map)
         self.disp_message('Elapsed time for _LLB_: {:f} s'.format(time()-t1))
 
         return magnetization_map
