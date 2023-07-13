@@ -30,6 +30,7 @@ from .simulation import Simulation
 from ..structures.layers import AmorphousLayer, UnitCell
 from .. import u, Q_
 from ..helpers import make_hash_md5, m_power_x, m_times_n, finderb
+from ..helpers import convert_polar_to_cartesian
 import numpy as np
 import scipy.constants as constants
 from time import time
@@ -2876,16 +2877,33 @@ class XrayStepanovSinha(Xray):
         r"""calculate_chi
 
         Calculates the dielectric susceptibility tensor :math:`\chi_{ij}` of a
-        layer following Eq. (17) of Ref. [12]_:
+        layer following with magnetization :math:`\mathbf{m}`, see Eq. (17) of
+        Ref. [12]_:
 
         .. math::
 
-            \chi_{ij} = (\chi_0 + A) \delta_{ij} - i B \varepsilon_{ijk} M_k
-                + C M_i M_k
+            \chi_{ij} = (\chi_0 + A) \delta_{ij} - i B \varepsilon_{ijk} m_k
+                + C m_i m_k
 
-        with the :math:`\chi_0` being the mean dielectric susceptibility.
+        with the :math:`\chi_0` being the mean dielectric susceptibility and the
+        parameters :math:`A,B,C` as definded below
 
-        Add more details from the paper here!
+        .. math::
+
+            \chi_0 & = -\frac{\lambda^2 r_0}{\pi}
+                \sum_a n_a(Z_a + f_a' + i f_a'') \\
+            A & = \frac{\lambda^2 r_0}{\pi} n_M \left[\widetilde{F}_{11}
+                + \widetilde{F}_{1-1} \right] \\
+            B & = \frac{\lambda^2 r_0}{\pi} n_M \left[\widetilde{F}_{11}
+                - \widetilde{F}_{1-1} \right]\\
+            C & = \frac{\lambda^2 r_0}{\pi} n_M \left[2\widetilde{F}_{10}
+                - \widetilde{F}_{11} - \widetilde{F}_{1-1} \right]
+
+        with :math:`r_0` being the classical electron radius, :math:`\lambda`
+        the X-ray wavelength, and :math:`n_a` and :math:`n_M` the number
+        densities of all and only the magnetic atoms, in the layers,
+        respectively. :math:`\delta_{ij}` is the *Kronecker* symbol and
+        :math:`\varepsilon_{ijk}` is the *Levi-Cevita* symbol.
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
@@ -2898,10 +2916,7 @@ class XrayStepanovSinha(Xray):
 
         """
         try:
-            magnetization = args[0]
-            mag_amplitude = magnetization[0]
-            mag_phi = magnetization[1]
-            mag_gamma = magnetization[2]
+            m = convert_polar_to_cartesian(args[0])
         except IndexError:
             # here we catch magnetizations with only one instead of three
             # elements
@@ -2917,6 +2932,8 @@ class XrayStepanovSinha(Xray):
                 mag_gamma = atom._mag_gamma
             except AttributeError:
                 mag_gamma = 0
+            m = convert_polar_to_cartesian(
+                np.array([mag_amplitude, mag_phi, mag_gamma]))
 
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
@@ -2932,51 +2949,27 @@ class XrayStepanovSinha(Xray):
         except AttributeError:
             cf = np.zeros_like(energy, dtype=np.cfloat)
         try:
-            mf = atom.get_magnetic_form_factor(energy)
+            mf = -atom.get_magnetic_form_factor(energy)
         except AttributeError:
             mf = np.zeros_like(energy, dtype=np.cfloat)
 
         try:
-            molar_density = density/(atom.mass_number_a/1000)*6.0222e23
+            number_density = density/(atom.mass_number_a/1000)*6.0222e23
         except AttributeError:
-            molar_density = 0
+            number_density = 0
         r0 = 2.82e-15  # classical electron radius
         multiplier = wl**2*r0/np.pi
 
-        chi_zero = molar_density*multiplier*cf
+        # for a AtomMixed, this should be the sum over all types of atoms in the
+        # material respecting the density of each type of atom in the layer
+        chi_zero = number_density*multiplier*cf
 
-        B = molar_density*multiplier*mf
-        C = 0
-        # This needs to be set in the case that a quadratic term is present
-        # And should be set in the initialization routine as a global parameter
-
-        # magnetization is possibly in cartesian coordinates
-        # need to be converted
-
-        # m1=np.array(M[0,...])
-        # m2=np.array(M[1,...])
-        # m3=np.array(M[2,...])
-        # empty=np.zeros(m1.shape)
-        # ones=empty+1
-        # delta=np.array([[ones,empty,empty],
-        #                 [empty,ones,empty],
-        #                 [empty,empty,ones]])
-        # m_epsilon1=np.array([[empty,empty,empty],
-        #         [empty,empty,m1],
-        #         [empty,-m1,empty]])
-        # m_epsilon2=np.array([[empty,empty,-m2],
-        #         [empty,empty,empty],
-        #         [m2,empty,empty]])
-        # m_epsilon3=np.array([[empty,m3,empty],
-        #         [-m3,empty,empty],
-        #         [empty,empty,empty]])
-        # temp=m_epsilon1+m_epsilon2+m_epsilon3
-        # MM = np.array([[M[j,...]*M[i,...] for i in range(3)] for j in range(3)])
-        # chi = (chi_zero)*delta\
-        #     -complex(0,1)*B*temp+C*MM
-        # self.chi=chi
-        # self.chi_zero=chi_zero*ones
-
-        chi = mag_amplitude*mag_gamma*mag_phi*B*C
+        A = 0  # why is that?
+        B = number_density*multiplier*mf
+        C = 0  # XMLD term, see Eq (21)
+        delta = np.eye(3)
+        epsilon = np.array([[[
+            int((i-j)*(j-k)*(k-i)/2) for k in range(3)] for j in range(3)] for i in range(3)])
+        chi = (chi_zero + A)*delta - complex(0, 1)*B*np.dot(epsilon, m) + C*np.outer(m, m)
 
         return chi, chi_zero
