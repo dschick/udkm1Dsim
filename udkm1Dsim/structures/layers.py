@@ -115,7 +115,7 @@ class Layer:
         self.num_sub_systems = 1
         self.roughness = kwargs.get('roughness', 0*u.nm)
         self.spring_const = np.array([0.0])
-        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0*u.m**2)
+        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0)
         self.sound_vel = kwargs.get('sound_vel', 0*u.m/u.s)
         self.phonon_damping = kwargs.get('phonon_damping', 0*u.kg/u.s)
         self.opt_pen_depth = kwargs.get('opt_pen_depth', 0*u.nm)
@@ -152,7 +152,7 @@ class Layer:
                   ['mass per unit area', '{:4~P}'.format(self.mass_unit_area)],
                   ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
                   ['roughness', '{:.4~P}'.format(self.roughness.to('nm'))],
-                  ['Debye Waller Factor', self.deb_wal_fac.to('meter**2')],
+                  ['Debye Waller Factor', '\n'.join(self.deb_wal_fac_str) + 'm**2'],
                   ['sound velocity', '{:.4~P}'.format(self.sound_vel.to('meter/s'))],
                   ['spring constant', self.spring_const * u.kg/u.s**2],
                   ['phonon damping', self.phonon_damping.to('kg/s')],
@@ -264,7 +264,7 @@ class Layer:
                                         'num_sub_systems'],
                                'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
                                           '_mass_unit_area', 'spring_const', '_phonon_damping'],
-                               'xray': ['num_atoms', '_area', '_mass', '_deb_wal_fac',
+                               'xray': ['num_atoms', '_area', '_mass', 'deb_wal_fac_str',
                                         '_thickness'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
@@ -410,6 +410,15 @@ class Layer:
     @deb_wal_fac.setter
     def deb_wal_fac(self, deb_wal_fac):
         self._deb_wal_fac = deb_wal_fac.to_base_units().magnitude
+
+    @property
+    def deb_wal_fac(self):
+        return self._deb_wal_fac
+
+    @deb_wal_fac.setter
+    def deb_wal_fac(self, deb_wal_fac):
+        # (re)calculate the integrated heat capacity
+        self._deb_wal_fac, self.deb_wal_fac_str = self.check_input(deb_wal_fac)
 
     @property
     def sound_vel(self):
