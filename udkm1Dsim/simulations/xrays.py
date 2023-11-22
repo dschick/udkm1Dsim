@@ -1707,9 +1707,7 @@ class XrayDynDebyeWaller(XrayDyn):
 
         # create dask.delayed tasks for all delay steps
         for i in range(M):
-            RT = delayed(XrayDyn.calc_inhomogeneous_ref_trans_matrix)(
-                    remote_uc_indices,
-                    remote_RTU,
+            RT = delayed(self.calc_inhomogeneous_ref_trans_matrix)(
                     strain_map[i, :],
                     temp_map[i, :, :]
                     )
