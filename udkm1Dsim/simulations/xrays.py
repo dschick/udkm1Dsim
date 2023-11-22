@@ -760,7 +760,7 @@ class XrayDyn(Xray):
             self.disp_message('XrayDyn does only allow for NO analyzer polarizations')
             self.set_outgoing_polarization(0)
 
-    def homogeneous_reflectivity(self, *args):
+    def homogeneous_reflectivity(self, strains=[], temps=[]):
         r"""homogeneous_reflectivity
 
         Calculates the reflectivity :math:`R` of the whole sample structure
@@ -781,20 +781,22 @@ class XrayDyn(Xray):
 
         """
         # if no strains are given we assume no strain
-        if len(args) == 0:
+        if len(strains) == 0:
             strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
-        else:
-            strains = args[0]
+
+        if len(temps) == 0:
+            temps = np.zeros([self.S.get_number_of_sub_structures(), self.S.num_sub_systems])
+
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
         # get the reflectivity-transmission matrix of the structure
-        RT, A = self.homogeneous_ref_trans_matrix(self.S, strains)
+        RT, A = self.homogeneous_ref_trans_matrix(self.S, strains, temps)
         # calculate the real reflectivity from the RT matrix
         R = self.calc_reflectivity_from_matrix(RT)
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
         return R, A
 
-    def homogeneous_ref_trans_matrix(self, S, *args):
+    def homogeneous_ref_trans_matrix(self, S, strains=[], temps=[]):
         r"""homogeneous_ref_trans_matrix
 
         Calculates the reflectivity-transmission matrices :math:`M_{RT}` of
@@ -825,10 +827,12 @@ class XrayDyn(Xray):
 
         """
         # if no strains are given we assume no strain (1)
-        if len(args) == 0:
-            strains = np.zeros([S.get_number_of_sub_structures(), 1])
-        else:
-            strains = args[0]
+        if len(strains) == 0:
+            strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
+
+        if len(temps) == 0:
+            temps = np.zeros([self.S.get_number_of_sub_structures(), self.S.num_sub_systems])
+
         # initialize
         RT = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :],
                      (np.size(self._qz, 0), np.size(self._qz, 1), 1, 1))  # ref_trans_matrix
@@ -841,7 +845,7 @@ class XrayDyn(Xray):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
                 temp = m_power_x(self.get_uc_ref_trans_matrix(
-                        sub_structure[0], strains[strainCounter]),
+                        sub_structure[0], strains[strainCounter], temps[strainCounter]),
                         sub_structure[1])
                 strainCounter += 1
                 # remember the result
@@ -854,6 +858,8 @@ class XrayDyn(Xray):
                 temp, temp2 = self.homogeneous_ref_trans_matrix(
                         sub_structure[0],
                         strains[strainCounter:(strainCounter
+                                               + sub_structure[0].get_number_of_sub_structures())],
+                        temps[strainCounter:(strainCounter
                                                + sub_structure[0].get_number_of_sub_structures())])
                 A.append([temp2, sub_structure[0].name + ' substructures'])
                 strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
@@ -1591,6 +1597,11 @@ class XrayDynDebyeWaller(XrayDyn):
             if not isinstance(temp_map, np.ndarray):
                 raise TypeError('temp_map must be a numpy ndarray!')
 
+            (M, L) = strain_map.shape
+            K = self.S.num_sub_systems
+
+            temp_map = np.reshape(temp_map, [M, L, K])
+
             dask_client = kwargs.get('dask_client', [])
             calc_type = kwargs.get('calc_type', 'sequential')
             if calc_type not in ['parallel', 'sequential', 'distributed']:
@@ -1606,7 +1617,7 @@ class XrayDynDebyeWaller(XrayDyn):
                                                              dask_client)
             elif calc_type == 'distributed':
                 R = self.distributed_inhomogeneous_reflectivity(strain_map,
-                                                                stratemp_mapin_vectors,
+                                                                temp_map,
                                                                 job,
                                                                 num_workers
                                                                 )
@@ -1648,7 +1659,7 @@ class XrayDynDebyeWaller(XrayDyn):
         # structure for each time step of the strain map
         for i in iterator:
             R[i, :, :] = self.calc_inhomogeneous_reflectivity(strain_map[i, :],
-                                                              temp_map[i, :])
+                                                              temp_map[i, :, :])
         return R
 
     def parallel_inhomogeneous_reflectivity(self, strain_map, temp_map,
@@ -1788,7 +1799,7 @@ class XrayDynDebyeWaller(XrayDyn):
 
             if not isinstance(uc, UnitCell):
                 raise ValueError('All layers  must be UnitCells!')
-            RT = m_times_n(RT, self.get_uc_ref_trans_matrix(uc, strains[i], temps[i]))
+            RT = m_times_n(RT, self.get_uc_ref_trans_matrix(uc, strains[i], temps[i, :]))
 
         return RT
 
@@ -1805,13 +1816,18 @@ class XrayDynDebyeWaller(XrayDyn):
 
         Args:
             uc (UnitCell): unit cell object.
-            args (float, optional): strain of unit cell.
+            args (float, optional): strain/temperature of unit cell.
 
         Returns:
             RTM (list[ndarray[complex]]): reflection-transmission matrices for
                 all given strains per unique layer.
 
         """
+        M = len(self._energy)  # number of energies
+        L = np.shape(self._qz)[1]  # number of q_z
+        K = self.S.num_sub_systems
+        N = uc.num_atoms  # number of atoms
+
         try:
             strain = args[0]
         except IndexError:
@@ -1819,21 +1835,18 @@ class XrayDynDebyeWaller(XrayDyn):
         try:
             temp = args[1]
         except IndexError:
-            temp = 0
+            temp = np.zeros([K])
 
-        M = len(self._energy)  # number of energies
-        N = np.shape(self._qz)[1]  # number of q_z
-        K = uc.num_atoms  # number of atoms
         # initialize matrices
-        RTM = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
+        RTM = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, L, 1, 1))
         # traverse all atoms of the unit cell
-        for i in range(K):
+        for i in range(N):
             # Calculate the relative distance between the atoms.
             # The relative position is calculated by the function handle
             # stored in the atoms list as 3rd element. This
             # function returns a relative postion dependent on the
             # applied strain.
-            if i == (K-1):  # its the last atom
+            if i == (N-1):  # its the last atom
                 del_dist = (strain+1)-uc.atoms[i][1](strain)
             else:
                 del_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
@@ -1841,10 +1854,15 @@ class XrayDynDebyeWaller(XrayDyn):
             # get the reflection-transmission matrix and phase matrix
             # from all atoms in the unit cell and multiply them
             # together
+
+            deb_wal_fac = 0
+            for j in range(K):
+                deb_wal_fac += uc._deb_wal_fac[j](temp[j])
+
             RTM = m_times_n(RTM,
                             self.get_atom_ref_trans_matrix(uc.atoms[i][0],
                                                            uc._area,
-                                                           uc._deb_wal_fac[0](temp)))
+                                                           deb_wal_fac))
             RTM = m_times_n(RTM,
                             self.get_atom_phase_matrix(del_dist*uc._c_axis))
         return RTM
