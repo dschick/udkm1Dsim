@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag']
+__all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynDebyeWaller', 'XrayDynMag']
 
 __docformat__ = 'restructuredtext'
 
@@ -1510,6 +1510,37 @@ class XrayDynDebyeWaller(XrayDyn):
         class_str += super().__str__()
         return class_str
 
+    def get_hash(self, **kwargs):
+        """get_hash
+
+        Calculates an unique hash given by the energy :math:`E`,
+        :math:`q_z` range, polarization states and the ``strain_vectors`` as
+        well as the sample structure hash for relevant x-ray parameters.
+        Optionally, part of the strain_map is used.
+
+        Args:
+            **kwargs (ndarray[float]): spatio-temporal strain and temperature profile.
+
+        Returns:
+            hash (str): unique hash.
+
+        """
+        param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy]
+
+        if 'strain_map' in kwargs:
+            strain_map = kwargs.get('strain_map')
+            if np.size(strain_map) > 1e6:
+                strain_map = strain_map.flatten()[0:1000000]
+            param.append(strain_map)
+
+        if 'temp_map' in kwargs:
+            temp_map = kwargs.get('temp_map')
+            if np.size(temp_map) > 1e6:
+                temp_map = temp_map.flatten()[0:1000000]
+            param.append(temp_map)
+
+        return self.S.get_hash(types='xray') + '_' + make_hash_md5(param)
+
     def inhomogeneous_reflectivity(self, strain_map, temp_map, **kwargs):
         """inhomogeneous_reflectivity
 
@@ -1617,7 +1648,7 @@ class XrayDynDebyeWaller(XrayDyn):
         # structure for each time step of the strain map
         for i in iterator:
             R[i, :, :] = self.calc_inhomogeneous_reflectivity(strain_map[i, :],
-                                                              temp_map[i, :, :])
+                                                              temp_map[i, :])
         return R
 
     def parallel_inhomogeneous_reflectivity(self, strain_map, temp_map,
@@ -1716,19 +1747,7 @@ class XrayDynDebyeWaller(XrayDyn):
             R (ndarray[float]): inhomogeneous reflectivity.
 
         """
-        # initialize ref_trans_matrix
-        N = np.shape(self._qz)[1]  # number of q_z
-        M = np.shape(self._qz)[0]  # number of energies
-        uc_indices, _, _ = self.S.get_layer_vectors()
-
-        # initialize ref_trans_matrix
-        RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
-
-        RT = XrayDyn.calc_inhomogeneous_ref_trans_matrix(uc_indices,
-                                                         RTU,
-                                                         strains,
-                                                         temps
-                                                         )
+        RT = self.calc_inhomogeneous_ref_trans_matrix(strains, temps)
 
         # if a substrate is included add it at the end
         if self.S.substrate != []:
@@ -1738,8 +1757,7 @@ class XrayDynDebyeWaller(XrayDyn):
         R = self.calc_reflectivity_from_matrix(RT)
         return R
 
-    @staticmethod
-    def calc_inhomogeneous_ref_trans_matrix(uc_indices, RT, strains, temps):
+    def calc_inhomogeneous_ref_trans_matrix(self, strains, temps):
         r"""calc_inhomogeneous_ref_trans_matrix
 
         Sub-function of :meth:`calc_inhomogeneous_reflectivity` and for
@@ -1760,19 +1778,76 @@ class XrayDynDebyeWaller(XrayDyn):
             RT (ndarray[complex]): reflection-transmission matrix.
 
         """
+        _, _, uc_handles = self.S.get_layer_vectors()
+
+        N = np.shape(self._qz)[1]  # number of q_z
+        M = np.shape(self._qz)[0]  # number of energies
+        RT = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
         # traverse all unit cells in the sample structure
-        for i, uc_index in enumerate(uc_indices):
-            # Find the ref-trans matrix in the RTM cell array for the
-            # current unit_cell ID and applied strain. Use the
-            # ``knnsearch`` function to find the nearest strain value.
-            strain_index = finderb(strains[i], strain_vectors[int(uc_index)])[0]
-            temp = RTM[int(uc_index)][strain_index]
-            if temp is not []:
-                RT = m_times_n(RT, temp)
-            else:
-                raise ValueError('RTM not found')
+        for i, uc in enumerate(uc_handles):
+
+            if not isinstance(uc, UnitCell):
+                raise ValueError('All layers  must be UnitCells!')
+            RT = m_times_n(RT, self.get_uc_ref_trans_matrix(uc, strains[i], temps[i]))
 
         return RT
+
+    def get_uc_ref_trans_matrix(self, uc, *args):
+        r"""get_uc_ref_trans_matrix
+
+        Returns the reflection-transmission matrix of a unit cell:
+
+        .. math:: M_{RT} = \prod_i H_i \  L_i
+
+        where :math:`H_i` and :math:`L_i` are the atomic reflection-
+        transmission matrix and the phase matrix for the atomic distances,
+        respectively.
+
+        Args:
+            uc (UnitCell): unit cell object.
+            args (float, optional): strain of unit cell.
+
+        Returns:
+            RTM (list[ndarray[complex]]): reflection-transmission matrices for
+                all given strains per unique layer.
+
+        """
+        try:
+            strain = args[0]
+        except IndexError:
+            strain = 0
+        try:
+            temp = args[1]
+        except IndexError:
+            temp = 0
+
+        M = len(self._energy)  # number of energies
+        N = np.shape(self._qz)[1]  # number of q_z
+        K = uc.num_atoms  # number of atoms
+        # initialize matrices
+        RTM = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
+        # traverse all atoms of the unit cell
+        for i in range(K):
+            # Calculate the relative distance between the atoms.
+            # The relative position is calculated by the function handle
+            # stored in the atoms list as 3rd element. This
+            # function returns a relative postion dependent on the
+            # applied strain.
+            if i == (K-1):  # its the last atom
+                del_dist = (strain+1)-uc.atoms[i][1](strain)
+            else:
+                del_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
+
+            # get the reflection-transmission matrix and phase matrix
+            # from all atoms in the unit cell and multiply them
+            # together
+            RTM = m_times_n(RTM,
+                            self.get_atom_ref_trans_matrix(uc.atoms[i][0],
+                                                           uc._area,
+                                                           uc._deb_wal_fac[0](temp)))
+            RTM = m_times_n(RTM,
+                            self.get_atom_phase_matrix(del_dist*uc._c_axis))
+        return RTM
 
 class XrayDynMag(Xray):
     r"""XrayDynMag
