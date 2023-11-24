@@ -127,11 +127,13 @@ class Layer:
         self.sub_system_coupling = kwargs.get('sub_system_coupling', 0)
 
         if len(self.heat_capacity) == len(self.therm_cond) \
-                == len(self.lin_therm_exp) == len(self.sub_system_coupling):
+                == len(self.lin_therm_exp) == len(self.sub_system_coupling) \
+                    == len(self.deb_wal_fac):
             self.num_sub_systems = len(self.heat_capacity)
         else:
             raise ValueError('Heat capacity, thermal conductivity, linear '
-                             'thermal expansion and subsystem coupling have not '
+                             'thermal expansion, Debye-Waller factor and '
+                             'subsystem coupling have not '
                              'the same number of elements!')
 
         self.eff_spin = kwargs.get('eff_spin', 0)
@@ -181,7 +183,7 @@ class Layer:
         """check_input
 
         Checks the input and create a list of function handle strings with T as
-        argument. Inputs can be strings, floats, ints, or pint quantaties.
+        argument. Inputs can be strings, floats, ints, or pint quantities.
 
         Args:
             inputs (list[str, int, float, Quantity]): list of strings, int, floats,
