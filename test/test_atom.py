@@ -6,6 +6,18 @@ import numpy as np
 import pytest
 
 
+@pytest.mark.parametrize('atom, name, id, ionicity',
+                         [
+                          ('atom_oxygen', 'Oxygen', 'O', 0),
+                          ('atom_dysprosium', 'Dysprosium', 'Dy', 0),
+                         ])
+def test_atoms(atom, name, id, ionicity, request):
+    s = request.getfixturevalue(atom)
+    assert s.name == name
+    assert s.id == id
+    assert s.ionicity == ionicity
+
+
 def test_atom():
     Dy = Atom('Dy')
     assert Dy.symbol == 'Dy'
