@@ -920,7 +920,7 @@ class Heat(Simulation):
             if np.sum(fluence) > 0:
                 num_ex += len(fluence)
 
-        if not np.all(excitation_delays == delays.to('s').magnitude) or self.heat_diffusion:
+        if not np.array_equal(excitation_delays, delays.to('s').magnitude) or self.heat_diffusion:
             # if the time grid for the calculation is not the same as
             # the grid to return the results on. Then extrapolate the
             # results on the original delay array but keep the first
@@ -1155,7 +1155,7 @@ class Heat(Simulation):
 
         # calculate external source
         source = np.zeros([N, K])
-        if fluence != []:
+        if np.any(fluence):
             source[:, 0] = \
                 dAdz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
 
