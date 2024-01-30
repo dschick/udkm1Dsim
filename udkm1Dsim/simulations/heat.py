@@ -1085,7 +1085,7 @@ class Heat(Simulation):
                               'excitation(s): {:f} s'.format(len(fluence), time()-t1))
         else:
             self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
-            
+
         return temp_map
 
     @staticmethod
