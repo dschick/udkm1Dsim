@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.9", "3.9", "3.10", "3.11"]
         os: [ubuntu-latest, macOS-latest, windows-latest]
     env:
       OS: ${{ matrix.os }}
@@ -22,9 +22,9 @@ jobs:
     name: CI workflow
     steps:
       - name: checkout source repo
-        uses: actions/checkout@v2      
+        uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: "Installs dependencies"
@@ -42,7 +42,7 @@ jobs:
         run: |
           pytest --cov=./udkm1Dsim --cov-report=xml test/
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: OS, PYTHON

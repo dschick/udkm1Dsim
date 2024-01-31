@@ -216,10 +216,9 @@ class Heat(Simulation):
         except AttributeError:
             pass
 
-        if distances == []:
+        N = len(distances)
+        if N == 0:
             N = self.S.get_number_of_layers()
-        else:
-            N = len(distances)
 
         K = self.S.num_sub_systems
         # check size of initTemp
@@ -417,7 +416,7 @@ class Heat(Simulation):
         else:
             structure = self.S
 
-        if distances == []:
+        if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
             d_start, _, distances = structure.get_distances_of_layers(False)
@@ -507,7 +506,7 @@ class Heat(Simulation):
         else:
             structure = self.S
 
-        if distances == []:
+        if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
             d_start, _, distances = structure.get_distances_of_layers(False)
@@ -695,7 +694,7 @@ class Heat(Simulation):
         # initialize
         t1 = time()
         backside = self._excitation['backside']
-        if distances == []:
+        if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
             d_start, _, distances = self.S.get_distances_of_layers(False)
@@ -868,16 +867,16 @@ class Heat(Simulation):
                 start = 0
                 stop = 0
                 if i > 0:
-                    # check if there was a intervall before and add
-                    # last time of this intervall to the current
+                    # check if there was a interval before and add
+                    # last time of this interval to the current
                     sub_delays = np.r_[checked_excitation[i-1][0][-1], sub_delays]
                     start = 1
                 if i < len(checked_excitation)-1 and \
                         np.sum(checked_excitation[i+1][3]) > 0 and \
                         np.sum(checked_excitation[i+1][2]) == 0:
-                    # there is a next intervall of delta excitation so
+                    # there is a next interval of delta excitation so
                     # we add this time at the end of the current
-                    # intervall
+                    # interval
                     sub_delays = np.r_[sub_delays, checked_excitation[i+1][0][0]]
                     stop = 1
 
@@ -886,9 +885,9 @@ class Heat(Simulation):
                                                 pulse_width, fluence)
 
                 if stop == 1:
-                    # there is an upcomming delta excitation so we have
+                    # there is an upcoming delta excitation so we have
                     # to set the initial temperature for this next
-                    # intervall seperately
+                    # interval separately
                     special_init_temp = temp[-1, :, :]
                     temp = temp[start:-1, :, :]
                 else:
@@ -921,7 +920,7 @@ class Heat(Simulation):
             if np.sum(fluence) > 0:
                 num_ex += len(fluence)
 
-        if not np.all(excitation_delays == delays.to('s').magnitude) or self.heat_diffusion:
+        if not np.array_equal(excitation_delays, delays.to('s').magnitude) or self.heat_diffusion:
             # if the time grid for the calculation is not the same as
             # the grid to return the results on. Then extrapolate the
             # results on the original delay array but keep the first
@@ -991,7 +990,7 @@ class Heat(Simulation):
 
         d_distances = np.diff(distances)
         N = len(distances)
-        if fluence != []:
+        if np.any(fluence):
             dAdz = self.get_absorption_profile(distances=distances,
                                                backside=backside)
         else:
@@ -1081,11 +1080,11 @@ class Heat(Simulation):
             temp_map = sol.y.T
 
         temp_map = np.array(temp_map).reshape([M, N, K], order='F')
-        if fluence == []:
-            self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
-        else:
+        if np.any(fluence):
             self.disp_message('Elapsed time for _heat_diffusion_ with {:d} '
                               'excitation(s): {:f} s'.format(len(fluence), time()-t1))
+        else:
+            self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
 
         return temp_map
 
@@ -1156,7 +1155,7 @@ class Heat(Simulation):
 
         # calculate external source
         source = np.zeros([N, K])
-        if fluence != []:
+        if np.any(fluence):
             source[:, 0] = \
                 dAdz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
 
