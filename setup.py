@@ -18,7 +18,7 @@ setup(
     url='https://github.com/dschick/udkm1Dsim',
     install_requires=['tqdm>=4.43.0',
                       'numpy>=1.18.2',
-                      'pint>=0.9',
+                      'pint>=0.23',
                       'scipy>=1.4.1',
                       'sympy>=1.5.1',
                       'tabulate',
@@ -36,6 +36,6 @@ setup(
                 + 'in Condensed Matter',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    python_requires='>=3.5',
+    python_requires='>=3.9',
     keywords='ultrafast dynamics condensed matter 1D',
 )
