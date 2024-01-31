@@ -4,8 +4,8 @@ ipywidgets
 IProgress
 autodocsumm
 sphinxcontrib.bibtex
-pydata-sphinx-theme>=0.13.3
-sphinx-book-theme>=1.0.1
+pydata-sphinx-theme
+sphinx-book-theme
 sphinx_design
 sphinx_copybutton
 myst_nb

@@ -49,7 +49,6 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx_copybutton',
     'sphinx_design',
-    'sphinx-book-theme',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -124,7 +123,6 @@ html_static_path = ['_static']
 html_theme_options = {
     'navigation_depth': 5,
     'collapse_navigation': False,
-    'logo_only': True,
     'repository_url': 'https://github.com/dschick/udkm1Dsim',
     'use_repository_button': True,
 }
