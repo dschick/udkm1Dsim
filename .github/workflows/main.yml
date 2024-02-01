@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches:
+    - develop
+  pull_request:
+    branches:
+    - develop
+    - master
+
+jobs:
+  python-ci:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.9", "3.10", "3.11"]
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+    env:
+      OS: ${{ matrix.os }}
+      PYTHON: ${{ matrix.python-version }}
+    name: CI workflow
+    steps:
+      - name: checkout source repo
+        uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: "Installs dependencies"
+        run: |
+          # Upgrade pip
+          python3 -m pip install --upgrade pip
+          # Install build deps
+          pip install setuptools pytest pytest-cov flake8 ipython
+          # Install the package from setup.py
+          pip install .
+      - name: linting flake8
+        run: |
+          flake8
+      - name: Generate coverage report
+        run: |
+          pytest --cov=./udkm1Dsim --cov-report=xml test/
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: OS, PYTHON
+          fail_ci_if_error: true
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          verbose: false

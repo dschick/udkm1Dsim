@@ -1814,6 +1814,7 @@ class XrayDynMag(Xray):
                                                             strains[layer_counter]+1),
                                                         layer._thickness*(
                                                             strains[layer_counter]+1),
+                                                        False,
                                                         magnetizations[layer_counter])
 
                 roughness = layer._roughness
@@ -2215,7 +2216,7 @@ class XrayDynMag(Xray):
             elif isinstance(layer, AmorphousLayer):
                 A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
                     self.get_atom_boundary_phase_matrix(
-                        layer.atom, layer._density*(strains[i]+1), layer._thickness*(strains[i]+1),
+                        layer.atom, layer._density/(strains[i]+1), layer._thickness*(strains[i]+1),
                         force_recalc, magnetizations[i])
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
@@ -2281,7 +2282,7 @@ class XrayDynMag(Xray):
 
         """
         K = uc.num_atoms  # number of atoms
-        force_recalc = True
+        # force_recalc = True
         for j in range(K):
             if j == (K-1):  # its the last atom
                 del_dist = (strain+1)-uc.atoms[j][1](strain)

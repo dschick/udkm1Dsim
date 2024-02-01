@@ -578,7 +578,8 @@ class Structure:
             for i in range(self.get_number_of_layers()):
                 prop[i] = getattr(handles[i], property_name)
         elif ((type(getattr(handles[0], property_name)) is list) or
-                (type(getattr(handles[0], property_name)) is str)):
+                (type(getattr(handles[0], property_name)) is str) or
+                (type(getattr(handles[0], property_name)) is dict)):
             # it's a list of functions or str
             prop = []
             for i in range(self.get_number_of_layers()):
@@ -636,3 +637,41 @@ class Structure:
         """
         handles = self.get_layer_vectors()[2]
         return handles[i]
+
+    def reverse(self):
+        """reverse
+
+        Returns a reversed structure also reversing all nested sub_structure.
+
+        Returns:
+            reversed (Structure): reversed structure.
+
+        """
+        from copy import deepcopy
+
+        reversed = deepcopy(self)
+        # need to handle superstrate and substrate
+        return self.reverse_sub_structures(reversed)
+
+    def reverse_sub_structures(self, structure):
+        """reverse_sub_structures
+
+        Reverse a `Structure` and recursively call itself if a
+        sub_structure is a `Structure` itself.
+
+        Args:
+            structure (Structure): structure to be reversed.
+
+        Returns:
+            structure (Structure): reversed structure.
+
+        """
+        # reverse the list of sub_structures
+        structure.sub_structures.reverse()
+        for (sub_structure, N) in structure.sub_structures:
+            if isinstance(sub_structure, Structure):
+                # recursive call
+                self.reverse_sub_structures(sub_structure)
+            else:
+                pass
+        return structure

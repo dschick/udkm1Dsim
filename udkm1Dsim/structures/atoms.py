@@ -170,9 +170,9 @@ class Atom:
                                     '../parameters/atomic_form_factors/{:s}'.format(sub_path))
         try:
             f = np.genfromtxt(filename, skip_header=0)
-        except Exception as e:
-            print('File {:s} not found!'.format(filename))
-            print(e)
+        except OSError:
+            print('Atomic form factor file {:s} not found!'.format(filename))
+            raise
 
         return f
 
@@ -443,13 +443,16 @@ class AtomMixed(Atom):
                 be 1.
 
         """
-        self.atoms.append([atom, fraction])
-        self.num_atoms = self.num_atoms + 1
-        # calculate the mixed atomic properties of the atomMixed instance
-        self.atomic_number_z = self.atomic_number_z + fraction * atom.atomic_number_z
-        self.mass_number_a = self.mass_number_a + fraction * atom.mass_number_a
-        self.mass = self.mass + fraction * atom.mass
-        self.ionicity = self.ionicity + fraction * atom.ionicity
+        if isinstance(atom, Atom):
+            self.atoms.append([atom, fraction])
+            self.num_atoms = self.num_atoms + 1
+            # calculate the mixed atomic properties of the atomMixed instance
+            self.atomic_number_z = self.atomic_number_z + fraction * atom.atomic_number_z
+            self.mass_number_a = self.mass_number_a + fraction * atom.mass_number_a
+            self.mass = self.mass + fraction * atom.mass
+            self.ionicity = self.ionicity + fraction * atom.ionicity
+        else:
+            warnings.warn('Only Atom objects can be added to a MixedAtom!')
 
     def read_atomic_form_factor_coeff(self, filename=''):
         """read_atomic_form_factor_coeff
