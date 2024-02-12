@@ -9,10 +9,10 @@ from .simulations.simulation import Simulation
 from .simulations.heat import Heat
 from .simulations.phonons import Phonon, PhononNum, PhononAna
 from .simulations.magnetization import Magnetization, LLB
-from .simulations.xrays import Xray, XrayKin, XrayDyn, XrayDynMag
+from .simulations.xrays import Xray, XrayKin, XrayDyn, XrayDynMag, XrayStepanovSinha
 
 __all__ = ['Atom', 'AtomMixed', 'Layer', 'AmorphousLayer', 'UnitCell', 'Structure',
            'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization', 'LLB',
-           'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
+           'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'XrayStepanovSinha', 'u', 'Q_']
 
 __version__ = '2.0.1'

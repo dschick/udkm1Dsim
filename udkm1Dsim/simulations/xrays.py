@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag']
+__all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'XrayStepanovSinha']
 
 __docformat__ = 'restructuredtext'
 
@@ -30,6 +30,7 @@ from .simulation import Simulation
 from ..structures.layers import AmorphousLayer, UnitCell
 from .. import u, Q_
 from ..helpers import make_hash_md5, m_power_x, m_times_n, finderb
+from ..helpers import convert_polar_to_cartesian
 import numpy as np
 import scipy.constants as constants
 from time import time
@@ -1502,7 +1503,7 @@ class XrayDyn(Xray):
 class XrayDynMag(Xray):
     r"""XrayDynMag
 
-    Dynamical magnetic X-ray scattering simulations.
+    Dynamical magnetic X-ray scattering simulations by Elzo et al. [10]_.
 
     Adapted from Elzo et.al. [10]_ and initially realized in `Project Dyna
     <http://dyna.neel.cnrs.fr>`_.
@@ -2733,3 +2734,242 @@ class XrayDynMag(Xray):
         W[:, :, 3, 3] = rugosn
 
         return W
+
+
+class XrayStepanovSinha(Xray):
+    r"""XrayStepanovSinha
+
+    Dynamical magnetic X-ray scattering simulations by
+    Stepanov & Sinha [12]_.
+
+    In collaboration with Samuel Flewett
+    (`@sflewett <https://github.com/sflewett>`_)
+
+    Args:
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
+
+    Keyword Args:
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+
+    Attributes:
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): incidence angles :math:`\theta` of scattering
+            light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
+        polarizations (dict): polarization states and according names.
+        pol_in_state (int): incoming polarization state as defined in
+            polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in
+            polarizations dict.
+        pol_in (float): incoming polarization factor (can be a complex ndarray).
+        pol_out (float): outgoing polarization factor (can be a complex ndarray).
+        last_atom_ref_trans_matrices (list): remember last result of
+           atom ref_trans_matrices to speed up calculation.
+
+    References:
+
+        .. [12] S. A. Stepanov and S. K. Sinha,
+           *X-Ray Resonant Reflection from Magnetic Multilayers: Recursion
+           Matrix Algorithm*,
+           `Phys. Rev. B 61, 15302 (2000).
+           <https://doi.org/10.1103/PhysRevB.61.15302>`_
+
+    """
+
+    def __init__(self, S, force_recalc, **kwargs):
+        super().__init__(S, force_recalc, **kwargs)
+
+    def __str__(self):
+        """String representation of this class"""
+        class_str = 'Stepanov-Sinha Magnetic X-Ray Diffraction simulation properties:\n\n'
+        class_str += super().__str__()
+        return class_str
+
+    def get_hash(self, **kwargs):
+        """get_hash
+
+        Calculates an unique hash given by the energy :math:`E`, :math:`q_z`
+        range, polarization states as well as the sample structure hash for
+        relevant x-ray and magnetic parameters. Optionally, part of the
+        ``strain_map`` and ``magnetization_map`` are used.
+
+        Args:
+            **kwargs (ndarray[float]): spatio-temporal strain and magnetization
+                profile.
+
+        Returns:
+            hash (str): unique hash.
+
+        """
+        param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy]
+
+        if 'strain_map' in kwargs:
+            strain_map = kwargs.get('strain_map')
+            if np.size(strain_map) > 1e6:
+                strain_map = strain_map.flatten()[0:1000000]
+            param.append(strain_map)
+        if 'magnetization_map' in kwargs:
+            magnetization_map = kwargs.get('magnetization_map')
+            if np.size(magnetization_map) > 1e6:
+                magnetization_map = magnetization_map.flatten()[0:1000000]
+            param.append(magnetization_map)
+
+        return self.S.get_hash(types=['xray', 'magnetic']) + '_' + make_hash_md5(param)
+
+    def set_incoming_polarization(self, pol_in_state):
+        """set_incoming_polarization
+
+        Sets the incoming polarization factor for circular +, circular -, sigma,
+        pi, and unpolarized polarization.
+
+        Args:
+            pol_in_state (int): incoming polarization state id.
+
+        """
+        pass
+
+    def set_outgoing_polarization(self, pol_out_state):
+        """set_outgoing_polarization
+
+        Sets the outgoing polarization factor for circular +, circular -, sigma,
+        pi, and unpolarized polarization.
+
+        Args:
+            pol_out_state (int): outgoing polarization state id.
+
+        """
+        pass
+
+    def homogeneous_reflectivity(self, *args):
+        r"""homogeneous_reflectivity
+
+        Calculates the reflectivity :math:`R` of the whole sample structure
+        allowing only for homogeneous strain and magnetization.
+
+        Args:
+            args (ndarray[float], optional): strains and magnetization for each
+                sub-structure.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - homogeneous reflectivity.
+            - *R_phi (ndarray[float])* - homogeneous reflectivity for opposite
+              magnetization.
+
+        """
+        pass
+
+    def calculate_chi(self, atom, density, *args):
+        r"""calculate_chi
+
+        Calculates the dielectric susceptibility tensor :math:`\chi_{ij}` of a
+        layer following with magnetization :math:`\mathbf{m}`, see Eq. (17) of
+        Ref. [12]_:
+
+        .. math::
+
+            \chi_{ij} = (\chi_0 + A) \delta_{ij} - i B \varepsilon_{ijk} m_k
+                + C m_i m_k
+
+        with the :math:`\chi_0` being the mean dielectric susceptibility and the
+        parameters :math:`A,B,C` as definded below
+
+        .. math::
+
+            \chi_0 & = -\frac{\lambda^2 r_0}{\pi}
+                \sum_a n_a(Z_a + f_a' + i f_a'') \\
+            A & = \frac{\lambda^2 r_0}{\pi} n_M \left[\widetilde{F}_{11}
+                + \widetilde{F}_{1-1} \right] \\
+            B & = \frac{\lambda^2 r_0}{\pi} n_M \left[\widetilde{F}_{11}
+                - \widetilde{F}_{1-1} \right]\\
+            C & = \frac{\lambda^2 r_0}{\pi} n_M \left[2\widetilde{F}_{10}
+                - \widetilde{F}_{11} - \widetilde{F}_{1-1} \right]
+
+        with :math:`r_0` being the classical electron radius, :math:`\lambda`
+        the X-ray wavelength, and :math:`n_a` and :math:`n_M` the number
+        densities of all and only the magnetic atoms, in the layers,
+        respectively. :math:`\delta_{ij}` is the *Kronecker* symbol and
+        :math:`\varepsilon_{ijk}` is the *Levi-Cevita* symbol.
+
+        Args:
+            atom (Atom, AtomMixed): atom or mixed atom.
+            density (float): density around the atom [kg/m³].
+
+        Returns:
+            (tuple):
+            - *chi (ndarray[complex])* - dielectric susceptibility tensor.
+            - *chi_zero (ndarray[complex])* - mean dielectric susceptibility.
+
+        """
+        try:
+            m = convert_polar_to_cartesian(args[0])
+        except IndexError:
+            # here we catch magnetizations with only one instead of three
+            # elements
+            try:
+                mag_amplitude = atom.mag_amplitude
+            except AttributeError:
+                mag_amplitude = 0
+            try:
+                mag_phi = atom._mag_phi
+            except AttributeError:
+                mag_phi = 0
+            try:
+                mag_gamma = atom._mag_gamma
+            except AttributeError:
+                mag_gamma = 0
+            m = convert_polar_to_cartesian(
+                np.array([mag_amplitude, mag_phi, mag_gamma]))
+
+        M = len(self._energy)  # number of energies
+        N = np.shape(self._qz)[1]  # number of q_z
+
+        chi = np.zeros([M, N, 3, 3], dtype=np.cfloat)
+        chi_zero = np.zeros([M, N], dtype=np.cfloat)
+
+        energy = self._energy
+        wl = self._wl
+
+        try:
+            cf = atom.get_atomic_form_factor(energy)
+        except AttributeError:
+            cf = np.zeros_like(energy, dtype=np.cfloat)
+        try:
+            mf = -atom.get_magnetic_form_factor(energy)
+        except AttributeError:
+            mf = np.zeros_like(energy, dtype=np.cfloat)
+
+        try:
+            number_density = density/(atom.mass_number_a/1000)*6.0222e23
+        except AttributeError:
+            number_density = 0
+        r0 = 2.82e-15  # classical electron radius
+        multiplier = wl**2*r0/np.pi
+
+        # for a AtomMixed, this should be the sum over all types of atoms in the
+        # material respecting the density of each type of atom in the layer
+        chi_zero = number_density*multiplier*cf
+
+        A = 0  # why is that?
+        B = number_density*multiplier*mf
+        C = 0  # XMLD term, see Eq (21)
+        delta = np.eye(3)
+        epsilon = np.array([[[
+            int((i-j)*(j-k)*(k-i)/2) for k in range(3)] for j in range(3)] for i in range(3)])
+        chi = (chi_zero + A)*delta - complex(0, 1)*B*np.dot(epsilon, m) + C*np.outer(m, m)
+
+        return chi, chi_zero
