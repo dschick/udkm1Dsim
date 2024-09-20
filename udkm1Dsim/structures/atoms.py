@@ -97,9 +97,9 @@ class Atom:
         self.symbol = symbol
         self.id = kwargs.get('id', symbol)
         self.ionicity = kwargs.get('ionicity', 0)
-        self.mag_amplitude = kwargs.get('mag_amplitude', 0)
-        self.mag_phi = kwargs.get('mag_phi', 0*u.deg)
-        self.mag_gamma = kwargs.get('mag_gamma', 0*u.deg)
+        self.mag_amplitude = kwargs.get('mag_amplitude', 0.0)
+        self.mag_phi = kwargs.get('mag_phi', 0.0*u.deg)
+        self.mag_gamma = kwargs.get('mag_gamma', 0.0*u.deg)
 
         try:
             filename = os.path.join(os.path.dirname(__file__),
@@ -130,11 +130,12 @@ class Atom:
                                 'ionicity', 'Cromer Mann coeff', '', '',
                                 'magn. amplitude', 'magn. phi', 'magn. gamma'],
                   'value': [self.id, self.symbol, self.name, self.atomic_number_z,
-                            self.mass_number_a, '{:.4~P}'.format(self.mass), self.ionicity,
+                            self.mass_number_a, '{:.4f}'.format(self.mass.to('kg')), self.ionicity,
                             np.array_str(self.cromer_mann_coeff[0:4]),
                             np.array_str(self.cromer_mann_coeff[4:8]),
                             np.array_str(self.cromer_mann_coeff[8:]),
-                            self.mag_amplitude, self.mag_phi, self.mag_gamma]}
+                            self.mag_amplitude, '{:.4f}'.format(self.mag_phi.to('deg')),
+                            '{:.4f}'.format(self.mag_gamma.to('deg'))]}
 
         return 'Atom with the following properties\n' + \
                tabulate(output, colalign=('right',), tablefmt="rst", floatfmt=('.2f', '.2f'))
@@ -405,7 +406,7 @@ class AtomMixed(Atom):
         self.ionicity = 0
         self.atomic_number_z = 0
         self.mass_number_a = 0
-        self.mass = 0
+        self.mass = 0.0
         self.atoms = []
         self.num_atoms = 0
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
@@ -419,8 +420,9 @@ class AtomMixed(Atom):
         output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
                                 'ionicity', 'magn. amplitude', 'magn. phi', 'magn. gamma'],
                   'value': [self.id, self.symbol, self.name, self.atomic_number_z,
-                            self.mass_number_a, '{:.4~P}'.format(self.mass), self.ionicity,
-                            self.mag_amplitude, self.mag_phi, self.mag_gamma]}
+                            self.mass_number_a, '{:.4f}'.format(self.mass.to('kg')), self.ionicity,
+                            self.mag_amplitude, '{:.4f}'.format(self.mag_phi.to('deg')),
+                            '{:.4f}'.format(self.mag_gamma.to('deg'))]}
 
         output_atom = []
         for i in range(self.num_atoms):

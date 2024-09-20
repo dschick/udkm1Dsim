@@ -60,7 +60,7 @@ class Structure:
         self.num_sub_systems = 1
         self.sub_structures = []
         self.substrate = []
-        self.roughness = 0*u.nm
+        self.roughness = 0.0*u.nm
 
     def __str__(self, tabs=0):
         """String representation of this class"""
@@ -68,14 +68,14 @@ class Structure:
 
         class_str = tab_str + 'Structure properties:\n\n'
         class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
-        class_str += tab_str + 'Thickness : {:0.2f}\n'.format(self.get_thickness().to('nm'))
-        class_str += tab_str + 'Roughness : {:0.2f}\n'.format(self.roughness)
+        class_str += tab_str + 'Thickness : {:0.4f}\n'.format(self.get_thickness().to('nm'))
+        class_str += tab_str + 'Roughness : {:0.4f}\n'.format(self.roughness.to('nm'))
         class_str += tab_str + '----\n'
         # traverse all substructures
         for sub_structure in self.sub_structures:
             if isinstance(sub_structure[0], (AmorphousLayer, UnitCell)):
                 # the substructure is an unitCell
-                class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
+                class_str += tab_str + '{:d} times {:s}: {:0.4f}\n'.format(
                         sub_structure[1],
                         sub_structure[0].name,
                         sub_structure[1]*sub_structure[0].thickness.to('nm'))
@@ -90,7 +90,7 @@ class Structure:
         if isinstance(self.substrate, Structure):
             class_str += tab_str + 'Substrate:\n'
             class_str += tab_str + '----\n'
-            class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
+            class_str += tab_str + '{:d} times {:s}: {:0.4f}\n'.format(
                     self.substrate.sub_structures[0][1],
                     self.substrate.sub_structures[0][0].name,
                     self.substrate.sub_structures[0][1]
