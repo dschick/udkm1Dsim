@@ -2700,12 +2700,14 @@ class XrayDynMag(Xray):
         try:
             num_pol = pol_in.shape[1]
         except IndexError:
-            num_pol =1
+            num_pol = 1
+            # add second dimension to polarization vectors for iteration
+            pol_in = pol_in[:, np.newaxis]
 
         R = np.empty((Ref.shape[0], Ref.shape[1], num_pol))
         T = np.empty((Ref.shape[0], Ref.shape[1], num_pol))
 
-        for i in range(pol_in.shape[1]):
+        for i in range(num_pol):
             if pol_out.size == 0:
                 # no analyzer polarization
                 R[:, :, i] = np.real(np.matmul(np.square(np.absolute(np.matmul(Ref, pol_in[:, i]))),
