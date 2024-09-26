@@ -23,7 +23,8 @@
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
 __all__ = ['make_hash_md5', 'make_hashable', 'm_power_x',
-           'm_times_n', 'finderb', 'multi_gauss']
+           'm_times_n', 'finderb', 'multi_gauss', 'convert_cartesian_to_polar',
+           'convert_polar_to_cartesian']
 
 __docformat__ = 'restructuredtext'
 
@@ -196,3 +197,81 @@ def multi_gauss(x, s=[1], x0=[0], A=[1]):
     for i in range(len(s)):
         y = y + a[i] * np.exp(-((x-x0[i])**2)/(2*s[i]**2))
     return y
+
+
+def convert_polar_to_cartesian(polar):
+    r"""convert_polar_to_cartesian
+
+    Convert a vector or field from polar coordinates
+    :math:`(r, \phi, \gamma)` to cartesian coordinates :math:`(x, y, z)`:
+
+    .. math::
+
+        F_x & = r \sin(\phi)\cos(\gamma) \\
+        F_y & = r \sin(\phi)\sin(\gamma) \\
+        F_z & = r \cos(\phi)
+
+    where :math:`r`, :math:`\phi`, :math:`\gamma` are the radius
+    (amplitude), azimuthal, and polar angles of vector field
+    :math:`\mathbf{F}`, respectively.
+
+    Args:
+        polar (ndarray[float]): vector of field to convert.
+
+    Returns:
+        cartesian (ndarray[float]): converted vector or field.
+
+    """
+    cartesian = np.zeros_like(polar)
+
+    amplitudes = polar[..., 0]
+    phis = polar[..., 1]
+    gammas = polar[..., 2]
+    cartesian[..., 0] = amplitudes*np.sin(phis)*np.cos(gammas)
+    cartesian[..., 1] = amplitudes*np.sin(phis)*np.sin(gammas)
+    cartesian[..., 2] = amplitudes*np.cos(phis)
+
+    return cartesian
+
+
+def convert_cartesian_to_polar(cartesian):
+    r"""convert_cartesian_to_polar
+
+    Convert a vector or field from cartesian coordinates :math:`(x, y, z)`
+    to polar coordinates :math:`(r, \phi, \gamma)`:
+
+    .. math::
+
+        F_r & = \sqrt{F_x^2 + F_y^2+F_z^2}\\
+        F_{\phi} & = \begin{cases}\\
+        \arctan\left(\frac{F_y}{F_x} \right) & \mathrm{for}\ F_x > 0 \\
+        \pi + \arctan\left(\frac{F_y}{F_x}\right)
+        & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y \geq 0 \\
+        \arctan\left(\frac{F_y}{F_x}\right) - \pi
+        & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y < 0 \\
+        0 & \mathrm{for}\ F_x = F_y = 0
+        \end{cases} \\
+        F_{\gamma} & = \arccos\left(\frac{F_z}{F_r} \right)
+
+    where :math:`F_r`, :math:`F_{\phi}`, :math:`F_{\gamma}` are the radial
+    (amplitude), azimuthal, and polar component of vector field
+    :math:`\mathbf{F}`, respectively.
+
+    Args:
+        cartesian (ndarray[float]): vector of field to convert.
+
+    Returns:
+        polar (ndarray[float]): converted vector or field.
+
+    """
+    polar = np.zeros_like(cartesian)
+    xs = cartesian[..., 0]
+    ys = cartesian[..., 1]
+    zs = cartesian[..., 2]
+    amplitudes = np.sqrt(xs**2 + ys**2 + zs**2)
+    mask = amplitudes != 0.  # mask for non-zero amplitudes
+    polar[..., 0] = amplitudes
+    polar[mask, 1] = np.arccos(np.divide(zs[mask], amplitudes[mask]))
+    polar[..., 2] = np.arctan2(ys, xs)
+
+    return polar

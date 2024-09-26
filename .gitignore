@@ -20,8 +20,15 @@ docs/source/**/.ipynb_checkpoints
 # dask worker space
 docs/source/**/dask-worker-space
 
+# cached simulation results
+docs/source/**/cache
+
 # vscode
 .vscode
 
 #hypothesis
 .hypothesis
+
+# codecov
+coverage.xml
+.coverage
