@@ -8,5 +8,6 @@ Examples
     Microscopic 3-Temperature-Model <examples/m3tm.ipynb>
     Landau-Lifshitz-Bloch <examples/LLB.ipynb>
     Phonons <examples/phonons.ipynb>
+    General Transfer Matrix Formalism <examples/gtm.ipynb>
     Dynamical Xray Scattering <examples/dynamical_xray.ipynb>
     Dynamical Magnetic Xray Scattering <examples/dynamical_magnetic_xray.ipynb>
