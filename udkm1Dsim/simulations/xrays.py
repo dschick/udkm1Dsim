@@ -1357,7 +1357,7 @@ class XrayDyn(Xray):
             rho = self.get_atom_reflection_factor(atom, area, deb_wal_fac)
             tau = self.get_atom_transmission_factor(atom, area, deb_wal_fac)
             # calculate the reflection-transmission matrix
-            H = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.cfloat)
+            H = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.complex64)
             H[:, :, 0, 0] = (1/tau)*(tau**2-rho**2)
             H[:, :, 0, 1] = (1/tau)*(rho)
             H[:, :, 1, 0] = (1/tau)*(-rho)
@@ -1457,7 +1457,7 @@ class XrayDyn(Xray):
 
         """
         phi = self.get_atom_phase_factor(distance)
-        L = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.cfloat)
+        L = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.complex64)
         L[:, :, 0, 0] = np.exp(1j*phi)
         L[:, :, 1, 1] = np.exp(-1j*phi)
         return L
@@ -1634,16 +1634,16 @@ class XrayDynMag(Xray):
 
         self.pol_in_state = pol_in_state
         if (self.pol_in_state == 1):  # circ +
-            self.pol_in = np.array([-np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_in = np.array([-np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.complex64)
         elif (self.pol_in_state == 2):  # circ -
-            self.pol_in = np.array([np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_in = np.array([np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.complex64)
         elif (self.pol_in_state == 3):  # sigma
-            self.pol_in = np.array([1, 0], dtype=np.cfloat)
+            self.pol_in = np.array([1, 0], dtype=np.complex64)
         elif (self.pol_in_state == 4):  # pi
-            self.pol_in = np.array([0, 1], dtype=np.cfloat)
+            self.pol_in = np.array([0, 1], dtype=np.complex64)
         else:  # unpolarized
             self.pol_in_state = 0  # catch any number and set state to 0
-            self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=np.complex64)
 
         self.disp_message('incoming polarizations set to: {:s}'.format(
             self.polarizations[self.pol_in_state]))
@@ -1661,16 +1661,16 @@ class XrayDynMag(Xray):
 
         self.pol_out_state = pol_out_state
         if (self.pol_out_state == 1):  # circ +
-            self.pol_out = np.array([-np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_out = np.array([-np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.complex64)
         elif (self.pol_out_state == 2):  # circ -
-            self.pol_out = np.array([np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_out = np.array([np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.complex64)
         elif (self.pol_out_state == 3):  # sigma
-            self.pol_out = np.array([1, 0], dtype=np.cfloat)
+            self.pol_out = np.array([1, 0], dtype=np.complex64)
         elif (self.pol_out_state == 4):  # pi
-            self.pol_out = np.array([0, 1], dtype=np.cfloat)
+            self.pol_out = np.array([0, 1], dtype=np.complex64)
         else:  # no analyzer
             self.pol_out_state = 0  # catch any number and set state to 0
-            self.pol_out = np.array([], dtype=np.cfloat)
+            self.pol_out = np.array([], dtype=np.complex64)
 
         self.disp_message('analyzer polarizations set to: {:s}'.format(
             self.polarizations[self.pol_out_state]))
@@ -2475,11 +2475,11 @@ class XrayDynMag(Xray):
              np.sin(mag_gamma),
              np.cos(mag_phi)]
 
-        eps = np.zeros([M, N, 3, 3], dtype=np.cfloat)
-        A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
-        A_phi = np.zeros_like(A, dtype=np.cfloat)
-        P = np.zeros_like(A, dtype=np.cfloat)
-        P_phi = np.zeros_like(A, dtype=np.cfloat)
+        eps = np.zeros([M, N, 3, 3], dtype=np.complex64)
+        A = np.zeros([M, N, 4, 4], dtype=np.complex64)
+        A_phi = np.zeros_like(A, dtype=np.complex64)
+        P = np.zeros_like(A, dtype=np.complex64)
+        P_phi = np.zeros_like(A, dtype=np.complex64)
 
         try:
             molar_density = density/1000/atom.mass_number_a
@@ -2493,11 +2493,11 @@ class XrayDynMag(Xray):
         try:
             cf = atom.get_atomic_form_factor(energy)
         except AttributeError:
-            cf = np.zeros_like(energy, dtype=np.cfloat)
+            cf = np.zeros_like(energy, dtype=np.complex64)
         try:
             mf = atom.get_magnetic_form_factor(energy)
         except AttributeError:
-            mf = np.zeros_like(energy, dtype=np.cfloat)
+            mf = np.zeros_like(energy, dtype=np.complex64)
 
         mag = factor * molar_density * mag_amplitude * mf
         mag = np.tile(mag[:, np.newaxis], [1, N])

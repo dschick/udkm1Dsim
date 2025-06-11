@@ -17,7 +17,7 @@ setup(
     },
     url='https://github.com/dschick/udkm1Dsim',
     install_requires=['tqdm>=4.43.0',
-                      'numpy>=1.18.2,<2.0.0',
+                      'numpy>=1.18.2',
                       'pint>=0.23',
                       'scipy>=1.4.1',
                       'sympy>=1.5.1',

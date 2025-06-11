@@ -602,12 +602,12 @@ class LLB(Magnetization):
         A = np.zeros([len(indices), 2])
         interfaces = (np.r_[1, np.diff(indices), 1])
         interfaces[interfaces != 0] = -1
-        select = (interfaces+1).astype(np.int16)
+        select = (interfaces+1).astype(int)
 
         A[:, 0] = exch_stiffnesses[np.arange(len(select[0:-1])), select[0:-1]]
 
         interfaces[interfaces != 0] = 1
-        select = (interfaces+1).astype(np.int16)
+        select = (interfaces+1).astype(int)
         A[:, 1] = exch_stiffnesses[np.arange(len(select[1:])), select[1:]]
 
         return A
