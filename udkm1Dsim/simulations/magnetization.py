@@ -560,9 +560,10 @@ class LLB(Magnetization):
                     if T == 1:
                         mf_mags[j] = 0
                     else:
-                        mf_mags[j] = fsolve(
+                        root = fsolve(
                             lambda x: x - LLB.calc_Brillouin(x, T, eff_spin, mf_exch_coupling,
                                                              curie_temp), np.sqrt(1-T))
+                        mf_mags[j] = float(np.squeeze(root))
 
                 relevant_temps[k] = np.stack((unique_temps, mf_mags))
 

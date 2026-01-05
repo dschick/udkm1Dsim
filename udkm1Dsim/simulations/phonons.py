@@ -155,17 +155,22 @@ class Phonon(Simulation):
         L = len(all_strains)  # Nb. of unique layers
         strains = []
 
+        # normalize N to a 1D integer array of length L
         if np.size(N) == 1:
-            N = N*np.ones([L, 1])
-        elif np.size(N) != L:
-            raise ValueError('The dimension of N must be either 1 or the number '
-                             'of unique layers the structure!')
+            N = np.full(L, int(N))
+        else:
+            N = np.asarray(N).ravel()
+            if N.size != L:
+                raise ValueError('The dimension of N must be either 1 or the number '
+                                 'of unique layers the structure!')
+            N = N.astype(int)
 
         for i, value in enumerate(all_strains):
             min_strain = np.min(value)
             max_strain = np.max(value)
+            n_points = int(N[i]) if np.ndim(N) > 0 else int(N)
             strains.append(np.sort(np.unique(
-                np.r_[0, np.linspace(min_strain, max_strain, int(N[i]))])))
+                np.r_[0, np.linspace(min_strain, max_strain, n_points)])))
 
         return strains
 
@@ -1005,7 +1010,7 @@ class PhononAna(Phonon):
             # initialize
             L = self.S.get_number_of_layers()
             K = np.zeros([L, L])  # initializing three-diagonal springs-masses matrix.
-            omega = np.zeros([L, 1], dtype=np.cfloat)  # initializing a vector for eigenfrequencies
+            omega = np.zeros([L, 1], dtype=np.complex128)  # initializing a vector for eigenfrequencies
 
             masses = self.S.get_layer_property_vector('_mass_unit_area')
             spring_consts = self.S.get_layer_property_vector('spring_const')

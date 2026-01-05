@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='udkm1Dsim',
-    version='2.0.4',
+    version='2.0.5',
     packages=find_packages(),
     package_data={
         'udkm1Dsim': ['parameters/atomic_form_factors/chantler/*.cf',
@@ -17,7 +17,7 @@ setup(
     },
     url='https://github.com/dschick/udkm1Dsim',
     install_requires=['tqdm>=4.43.0',
-                      'numpy>=1.18.2,<2.0.0',
+                      'numpy>=2.0.0',
                       'pint>=0.23',
                       'scipy>=1.4.1',
                       'sympy>=1.5.1',

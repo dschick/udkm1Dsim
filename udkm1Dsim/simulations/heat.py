@@ -128,14 +128,25 @@ class Heat(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        output = [['excitation fluence', self.excitation['fluence']],
-                  ['excitation delay', self.excitation['delay_pump']],
-                  ['excitation pulse length', self.excitation['pulse_width']],
-                  ['excitation wavelength', self.excitation['wavelength']],
-                  ['excitation theta', self.excitation['theta']],
+        def _fmt_quantity(value, empty_msg='[]'):
+            try:
+                mag = np.asarray(value.magnitude)
+                if mag.size == 0:
+                    return empty_msg
+            except Exception:
+                return str(value)
+
+            return str(value)
+
+        excitation = self.excitation
+        output = [['excitation fluence', _fmt_quantity(excitation['fluence'], 'not set')],
+                  ['excitation delay', _fmt_quantity(excitation['delay_pump'])],
+                  ['excitation pulse length', _fmt_quantity(excitation['pulse_width'])],
+                  ['excitation wavelength', _fmt_quantity(excitation['wavelength'])],
+                  ['excitation theta', _fmt_quantity(excitation['theta'])],
                   # ['excitation polarization', self.excitation['polarization']],
-                  ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
-                  ['excitation backside', self.excitation['backside']],
+                  ['excitation multilayer absorption', excitation['multilayer_absorption']],
+                  ['excitation backside', excitation['backside']],
                   ['heat diffusion', self.heat_diffusion],
                   ['interpolate at interfaces', self.intp_at_interface],
                   ['backend', self.backend],
@@ -704,10 +715,15 @@ class Heat(Simulation):
         # absorption profile from Lambert-Beer's law or multilayer absorption
         dAdz = self.get_absorption_profile(distances=distances, backside=backside)
 
+        # normalize fluence to a scalar (single delta excitation)
         try:
             fluence = fluence.to('J/m**2').magnitude
         except AttributeError:
-            pass
+            # fluence might be a list/array; squeeze to scalar if possible
+            fluence = np.asarray(fluence, dtype=float).squeeze()
+        if np.ndim(fluence) != 0:
+            raise ValueError('Delta excitation expects a single fluence value; '
+                             'got shape {}'.format(np.shape(fluence)))
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
