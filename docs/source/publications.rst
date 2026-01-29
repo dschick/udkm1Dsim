@@ -13,6 +13,7 @@ Publications
 .. bibliography::
    :list: enumerated
    :enumtype: arabic
+   :start: continue
    :filter: year == "2025"
 
 2024
@@ -20,6 +21,7 @@ Publications
 .. bibliography::
    :list: enumerated
    :enumtype: arabic
+   :start: continue
    :filter: year == "2024"
 
 2023
@@ -27,6 +29,7 @@ Publications
 .. bibliography::
    :list: enumerated
    :enumtype: arabic
+   :start: continue
    :filter: year == "2023"
 
 2022
@@ -34,6 +37,7 @@ Publications
 .. bibliography::
    :list: enumerated
    :enumtype: arabic
+   :start: continue
    :filter: year == "2022"
 
 2021
