@@ -860,7 +860,7 @@ class XrayDyn(Xray):
                         strains[strainCounter:(strainCounter
                                                + sub_structure[0].get_number_of_sub_structures())],
                         temps[strainCounter:(strainCounter
-                                               + sub_structure[0].get_number_of_sub_structures())])
+                                             + sub_structure[0].get_number_of_sub_structures())])
                 A.append([temp2, sub_structure[0].name + ' substructures'])
                 strainCounter = strainCounter+sub_structure[0].get_number_of_sub_structures()
                 A.append([temp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
@@ -1512,7 +1512,8 @@ class XrayDynDebyeWaller(XrayDyn):
 
     def __str__(self):
         """String representation of this class"""
-        class_str = 'Dynamical X-Ray Diffraction with dynamic Debye-Waller factor simulation properties:\n\n'
+        class_str = 'Dynamical X-Ray Diffraction with dynamic ' \
+            'Debye-Waller factor simulation properties:\n\n'
         class_str += super().__str__()
         return class_str
 
@@ -1695,9 +1696,6 @@ class XrayDynDebyeWaller(XrayDyn):
         uc_indices, _, _ = self.S.get_layer_vectors()
         # init unity matrix for matrix multiplication
         RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (N, K, 1, 1))
-        # make RTM available for all works
-        remote_RTU = dask_client.scatter(RTU)
-        remote_uc_indices = dask_client.scatter(uc_indices)
 
         # precalculate the substrate ref_trans_matrix if present
         if self.S.substrate != []:
@@ -1864,6 +1862,7 @@ class XrayDynDebyeWaller(XrayDyn):
             RTM = m_times_n(RTM,
                             self.get_atom_phase_matrix(del_dist*uc._c_axis))
         return RTM
+
 
 class XrayDynMag(Xray):
     r"""XrayDynMag

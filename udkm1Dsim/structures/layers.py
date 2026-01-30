@@ -115,18 +115,6 @@ class Layer:
         self.num_sub_systems = 1
         self.roughness = kwargs.get('roughness', 0.0*u.nm)
         self.spring_const = np.array([0.0])
-<<<<<<< HEAD
-        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0)
-        self.sound_vel = kwargs.get('sound_vel', 0*u.m/u.s)
-        self.phonon_damping = kwargs.get('phonon_damping', 0*u.kg/u.s)
-        self.opt_pen_depth = kwargs.get('opt_pen_depth', 0*u.nm)
-        self.opt_ref_index = kwargs.get('opt_ref_index', 0)
-        self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0)
-        self.heat_capacity = kwargs.get('heat_capacity', 0)
-        self.therm_cond = kwargs.get('therm_cond', 0)
-        self.lin_therm_exp = kwargs.get('lin_therm_exp', 0)
-        self.sub_system_coupling = kwargs.get('sub_system_coupling', 0)
-=======
         self.deb_wal_fac = kwargs.get('deb_wal_fac', 0.0*u.m**2)
         self.sound_vel = kwargs.get('sound_vel', 0.0*u.m/u.s)
         self.phonon_damping = kwargs.get('phonon_damping', 0.0*u.kg/u.s)
@@ -137,11 +125,10 @@ class Layer:
         self.therm_cond = kwargs.get('therm_cond', 0.0)
         self.lin_therm_exp = kwargs.get('lin_therm_exp', 0.0)
         self.sub_system_coupling = kwargs.get('sub_system_coupling', 0.0)
->>>>>>> origin/develop
 
         if len(self.heat_capacity) == len(self.therm_cond) \
                 == len(self.lin_therm_exp) == len(self.sub_system_coupling) \
-                    == len(self.deb_wal_fac):
+                == len(self.deb_wal_fac):
             self.num_sub_systems = len(self.heat_capacity)
         else:
             raise ValueError('Heat capacity, thermal conductivity, linear '
@@ -161,21 +148,6 @@ class Layer:
     def __str__(self):
         """String representation of this class"""
         output = [
-<<<<<<< HEAD
-                  ['area', '{:.4~P}'.format(self.area.to('nm**2'))],
-                  ['volume', '{:.4~P}'.format(self.volume.to('nm**3'))],
-                  ['mass', '{:4~P}'.format(self.mass)],
-                  ['mass per unit area', '{:4~P}'.format(self.mass_unit_area)],
-                  ['density', '{:.4~P}'.format(self.density.to('kg/meter**3'))],
-                  ['roughness', '{:.4~P}'.format(self.roughness.to('nm'))],
-                  ['Debye Waller Factor', '\n'.join(self.deb_wal_fac_str) + 'm**2'],
-                  ['sound velocity', '{:.4~P}'.format(self.sound_vel.to('meter/s'))],
-                  ['spring constant', self.spring_const * u.kg/u.s**2],
-                  ['phonon damping', self.phonon_damping.to('kg/s')],
-                  ['opt. pen. depth', self.opt_pen_depth.to('nm')],
-                  ['opt. refractive index', self.opt_ref_index],
-                  ['opt. ref. index/strain', self.opt_ref_index_per_strain],
-=======
                   ['area', '{:.4f}'.format(self.area.to('nm**2'))],
                   ['volume', '{:.4f}'.format(self.volume.to('nm**3'))],
                   ['mass', '{:4f}'.format(self.mass)],
@@ -191,7 +163,6 @@ class Layer:
                       self.opt_ref_index)],
                   ['opt. ref. index/strain', '{0.real:.4f} + {0.imag:.4f}i'.format(
                       self.opt_ref_index_per_strain)],
->>>>>>> origin/develop
                   ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
                   ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
                   ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
