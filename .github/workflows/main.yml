@@ -52,5 +52,4 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           verbose: false
-        
         if: matrix.python-version == "3.9" && matrix.os == "ubuntu-latest"
