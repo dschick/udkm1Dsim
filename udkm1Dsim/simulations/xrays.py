@@ -102,15 +102,15 @@ class Xray(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
         output = [['energy', self.energy[0] if np.size(self.energy) == 1 else
-                   '{:f} .. {:f}'.format(np.min(self.energy), np.max(self.energy))],
+                   '{:.4f} .. {:.4f}'.format(np.min(self.energy), np.max(self.energy))],
                   ['wavelength', self.wl[0] if np.size(self.wl) == 1 else
-                   '{:f} .. {:f}'.format(np.min(self.wl), np.max(self.wl))],
+                   '{:.4f} .. {:.4f}'.format(np.min(self.wl), np.max(self.wl))],
                   ['wavenumber', self.k[0] if np.size(self.k) == 1 else
-                   '{:f} .. {:f}'.format(np.min(self.k), np.max(self.k))],
+                   '{:.4f} .. {:.4f}'.format(np.min(self.k), np.max(self.k))],
                   ['theta', self.theta[0] if np.size(self.theta) == 1 else
-                   '{:f} .. {:f}'.format(np.min(self.theta), np.max(self.theta))],
+                   '{:.4f} .. {:.4f}'.format(np.min(self.theta), np.max(self.theta))],
                   ['q_z', self.qz[0] if np.size(self.qz) == 1 else
-                   '{:f} .. {:f}'.format(np.min(self.qz), np.max(self.qz))],
+                   '{:.4f} .. {:.4f}'.format(np.min(self.qz), np.max(self.qz))],
                   ['incoming polarization', self.polarizations[self.pol_in_state]],
                   ['analyzer polarization', self.polarizations[self.pol_out_state]],
                   ] + output

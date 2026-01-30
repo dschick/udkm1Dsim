@@ -149,12 +149,11 @@ class Magnetization(Simulation):
         except AttributeError:
             pass
 
-        if distances == []:
+        N = len(distances)
+        if N == 0:
             # no spatial grid is provided
             N = self.S.get_number_of_layers()
             [distances, _, _] = self.S.get_distances_of_layers(False)
-        else:
-            N = len(distances)
 
         if len(init_mag) == 0:
             self.disp_message('No explicit initial magnetization given '
