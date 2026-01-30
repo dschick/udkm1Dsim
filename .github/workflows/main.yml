@@ -41,6 +41,7 @@ jobs:
       - name: Generate coverage report
         run: |
           pytest --cov=./udkm1Dsim --cov-report=xml test/
+        if: matrix.python-version == "3.9" && matrix.os == "ubuntu-latest"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -51,3 +52,5 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           verbose: false
+        
+        if: matrix.python-version == "3.9" && matrix.os == "ubuntu-latest"
