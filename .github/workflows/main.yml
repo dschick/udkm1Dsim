@@ -39,10 +39,11 @@ jobs:
         run: |
           flake8
       - name: Generate coverage report
+        if: matrix.python-version == '3.9' && matrix.os=='ubuntu-latest'
         run: |
           pytest --cov=./udkm1Dsim --cov-report=xml test/
-        if: matrix.python-version == "3.9" && matrix.os == "ubuntu-latest"
       - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.9' && matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -52,4 +53,4 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           verbose: false
-        if: matrix.python-version == "3.9" && matrix.os == "ubuntu-latest"
+        
