@@ -32,3 +32,9 @@ docs/source/**/cache
 # codecov
 coverage.xml
 .coverage
+
+# image files
+*.png
+
+# Jupyter notebooks
+*.ipynb
