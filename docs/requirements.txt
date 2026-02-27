@@ -1,9 +1,10 @@
-sphinx==4.3
+sphinx>=5.0
 ipykernel
 ipywidgets
 IProgress
 autodocsumm
 sphinxcontrib.bibtex
+pydata-sphinx-theme
 sphinx-book-theme
 sphinx_design
 sphinx_copybutton

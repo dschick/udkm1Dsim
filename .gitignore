@@ -20,6 +20,9 @@ docs/source/**/.ipynb_checkpoints
 # dask worker space
 docs/source/**/dask-worker-space
 
+# cached simulation results
+docs/source/**/cache
+
 # vscode
 .vscode
 
@@ -29,3 +32,6 @@ docs/source/**/dask-worker-space
 # codecov
 coverage.xml
 .coverage
+
+# nox
+.nox

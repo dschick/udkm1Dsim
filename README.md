@@ -87,6 +87,9 @@ computations, unit tests, as well as building the documentation:
 If you are having issues please let us know via the
 [issue tracker](https://github.com/dschick/udkm1Dsim/issues).
 
+You can also ask questions, share ideas, or engage with community members via the
+[discussions](https://github.com/dschick/udkm1Dsim/discussions).
+
 You can contribute to the project via pull-requests following the
 [GitHub flow concept](https://docs.github.com/en/get-started/quickstart/github-flow).
 
