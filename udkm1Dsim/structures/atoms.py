@@ -475,9 +475,9 @@ class AtomMixed(Atom):
             return None
         try:
             f = np.genfromtxt(filename, skip_header=0)
-        except Exception as e:
-            print('File {:s} not found!'.format(filename))
-            print(e)
+        except OSError:
+            print('Atomic form factor file {:s} not found!'.format(filename))
+            raise
 
         return f
 
