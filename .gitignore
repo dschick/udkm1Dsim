@@ -32,3 +32,6 @@ docs/source/**/cache
 # codecov
 coverage.xml
 .coverage
+
+# nox
+.nox
