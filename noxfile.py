@@ -23,4 +23,4 @@ def tests(session):
 def docs(session):
     session.install(".")
     session.install("-r", "./docs/requirements.txt")
-    session.run("make", "--directory", "./docs", "html")
+    session.run("make", "--directory", "./docs", "html", external=True)
