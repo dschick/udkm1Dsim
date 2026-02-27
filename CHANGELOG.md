@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- introduce `nox` automatic testing tool for local testing of multiple python and/or package versions in virtual environments (PR #171)
+
 ### Changed
 
 ### Deprecated
