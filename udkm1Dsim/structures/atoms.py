@@ -171,7 +171,7 @@ class Atom:
                                     '../parameters/atomic_form_factors/{:s}'.format(sub_path))
         try:
             f = np.genfromtxt(filename, skip_header=0)
-        except OSError:
+        except FileNotFoundError:
             print('Atomic form factor file {:s} not found!'.format(filename))
             raise
 
@@ -220,9 +220,9 @@ class Atom:
         try:
             cm = np.genfromtxt(filename, skip_header=1,
                                usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
-        except Exception as e:
-            print('File {:s} not found!'.format(filename))
-            print(e)
+        except FileNotFoundError:
+            print('Cromer Mann coefficient file {:s} not found!'.format(filename))
+            raise
 
         return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
 
@@ -307,9 +307,8 @@ class Atom:
                                             self.symbol))
         try:
             m = np.genfromtxt(filename)
-        except Exception as e:
-            print('File {:s} not found!'.format(filename))
-            print(e)
+        except FileNotFoundError:
+            print('Magnetic form factor file {:s} not found!'.format(filename))
             # return zero array
             m = np.zeros([1, 3])
 
@@ -475,7 +474,7 @@ class AtomMixed(Atom):
             return None
         try:
             f = np.genfromtxt(filename, skip_header=0)
-        except OSError:
+        except FileNotFoundError:
             print('Atomic form factor file {:s} not found!'.format(filename))
             raise
 
@@ -555,9 +554,8 @@ class AtomMixed(Atom):
             return None
         try:
             m = np.genfromtxt(filename)
-        except Exception as e:
-            print('File {:s} not found!'.format(filename))
-            print(e)
+        except FileNotFoundError:
+            print('Magnetic form factor file {:s} not found!'.format(filename))
             # return zero array
             m = np.zeros([1, 3])
 
