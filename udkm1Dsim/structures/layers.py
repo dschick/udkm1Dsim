@@ -906,7 +906,7 @@ class UnitCell(Layer):
                               tablefmt='rst')
         return class_str
 
-    def visualize(self, **kwargs):
+    def visualize(self, block=True, **kwargs):
         """visualize
 
         Allows for 3D presentation of unit cell by allow for a & b
@@ -960,7 +960,7 @@ class UnitCell(Layer):
             plt.ylabel('relative Position')
             plt.xlabel('# Atoms')
             plt.legend()
-            plt.show()
+            plt.show(block=block)
 
     def add_atom(self, atom, position):
         r"""add_atom
