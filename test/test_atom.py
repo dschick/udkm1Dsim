@@ -6,6 +6,8 @@ from udkm1Dsim import u
 import numpy as np
 from pathlib import Path
 import pytest
+from pint.testsuite.helpers import assert_quantity_almost_equal as assert_pint_approx
+from pint.testsuite.helpers import assert_quantity_equal as assert_pint_equal
 
 
 # fixtures
@@ -83,12 +85,12 @@ def test_atom_mass_number_a(request, fixture_name, expected):
 
 
 @pytest.mark.parametrize("fixture_name, expected",
-                         [("atom_iron", 9.273e-26),
-                          ("atom_dysprosium", 2.698e-25),
-                          ("atom_mixed", 1.636e-25)])
+                         [("atom_iron", 9.273e-26*u.kg),
+                          ("atom_dysprosium", 2.698e-25*u.kg),
+                          ("atom_mixed", 1.636e-25*u.kg)])
 def test_atom_mass(request, fixture_name, expected):
     atom = request.getfixturevalue(fixture_name)
-    assert atom.mass.magnitude == pytest.approx(expected, abs=1e-27)
+    assert_pint_approx(atom.mass, expected, rtol=1e-3)
 
 
 @pytest.mark.parametrize("fixture_name, expected",
@@ -165,14 +167,14 @@ def test_atom_get_magnetic_form_factor(request, fixture_name, expected):
 
 
 @pytest.mark.parametrize("fixture_name, expected",
-                         [("atom_iron", [0.5, 0, 180]),
-                          ("atom_dysprosium", [0, 0, 0]),
-                          ("atom_mixed", [0, 0, 0])])
+                         [("atom_iron", [0.5, 0*u.deg, 180*u.deg]),
+                          ("atom_dysprosium", [0, 0*u.deg, 0*u.deg]),
+                          ("atom_mixed", [0, 0*u.deg, 0*u.deg])])
 def test_atom_magnetization(request, fixture_name, expected):
     atom = request.getfixturevalue(fixture_name)
     assert atom.mag_amplitude == expected[0]
-    assert atom.mag_phi == expected[1]*u.deg
-    assert atom.mag_gamma == expected[2]*u.deg
+    assert_pint_equal(atom.mag_phi, expected[1])
+    assert_pint_equal(atom.mag_gamma, expected[2])
 
 
 @pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_dysprosium", "atom_mixed"])
