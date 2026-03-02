@@ -6,8 +6,8 @@ from udkm1Dsim import u
 import numpy as np
 from pathlib import Path
 import pytest
-from pint.testsuite.helpers import assert_quantity_almost_equal as assert_pint_approx
-from pint.testsuite.helpers import assert_quantity_equal as assert_pint_equal
+from pint.testing import assert_allclose as assert_approx
+from pint.testing import assert_equal
 
 
 # fixtures
@@ -90,7 +90,7 @@ def test_atom_mass_number_a(request, fixture_name, expected):
                           ("atom_mixed", 1.636e-25*u.kg)])
 def test_atom_mass(request, fixture_name, expected):
     atom = request.getfixturevalue(fixture_name)
-    assert_pint_approx(atom.mass, expected, rtol=1e-3)
+    assert_approx(atom.mass, expected, rtol=1e-3)
 
 
 @pytest.mark.parametrize("fixture_name, expected",
@@ -173,8 +173,8 @@ def test_atom_get_magnetic_form_factor(request, fixture_name, expected):
 def test_atom_magnetization(request, fixture_name, expected):
     atom = request.getfixturevalue(fixture_name)
     assert atom.mag_amplitude == expected[0]
-    assert_pint_equal(atom.mag_phi, expected[1])
-    assert_pint_equal(atom.mag_gamma, expected[2])
+    assert_equal(atom.mag_phi, expected[1])
+    assert_equal(atom.mag_gamma, expected[2])
 
 
 @pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_dysprosium", "atom_mixed"])
