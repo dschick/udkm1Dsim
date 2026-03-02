@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from udkm1Dsim import Atom, AtomMixed
+from udkm1Dsim import Atom
 from udkm1Dsim import Layer, AmorphousLayer, UnitCell
 from udkm1Dsim import u
 import numpy as np
@@ -65,7 +65,7 @@ def properties():
              "anisotropy": [1, 2, 3]*u.J/u.m**3,
              "exch_stiffness": 1*u.J/u.m,
              "mag_saturation": 1*u.J/u.T/u.m**3,
-            }
+             }
     return props
 
 
@@ -289,6 +289,7 @@ def test_layer_set_opt_pen_depth_from_ref_index(layer):
 def test_layer_to_str(request, fixture_name):
     layer = request.getfixturevalue(fixture_name)
     layer.__str__()
+
 
 @pytest.mark.parametrize("fixture_name, expected",
                          [("amorphous_layer", 1.0*u.nm),
