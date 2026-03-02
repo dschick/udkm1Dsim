@@ -363,10 +363,11 @@ class Layer:
 
         """
         try:
-            self.mf_exch_coupling = 3*self.eff_spin/(self.eff_spin+1)*constants.k*self._curie_temp
+            self.mf_exch_coupling = (3*self.eff_spin/(self.eff_spin+1)*constants.k*self._curie_temp
+                                     * u.m**2*u.kg/u.s**2)
         except AttributeError:
             # on initialization self._curie_temp
-            self.mf_exch_coupling = 0
+            self.mf_exch_coupling = 0*u.m**2*u.kg/u.s**2
 
     @property
     def thickness(self):
