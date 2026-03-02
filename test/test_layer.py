@@ -215,10 +215,6 @@ def test_layer_mag_saturation(layer):
     assert_equal(layer.mag_saturation, 1*u.J/u.T/u.m**3)
 
 
-def test_layer_to_str(layer):
-    layer.__str__()
-
-
 @pytest.mark.parametrize("input, expected, expected_str",
                          [(1, 1.0, "1.0"),
                           (1.0, 1.0, "1.0"),
@@ -287,6 +283,12 @@ def test_layer_set_opt_pen_depth_from_ref_index(layer):
 
 # AmorphousLayer & UnitCell (need atoms, mass, area to be set)
 
+
+@pytest.mark.parametrize("fixture_name",
+                         ["amorphous_layer", "unit_cell"])
+def test_layer_to_str(request, fixture_name):
+    layer = request.getfixturevalue(fixture_name)
+    layer.__str__()
 
 @pytest.mark.parametrize("fixture_name, expected",
                          [("amorphous_layer", 1.0*u.nm),
@@ -363,19 +365,18 @@ def test_unit_cell_number_atoms(unit_cell):
     assert unit_cell.num_atoms == 3
 
 
+def test_unit_cell_visualize(unit_cell):
+    unit_cell.visualize(block=False)
+
+
 def test_unit_cell_add_multiple_atoms(unit_cell, atom_oxygen):
-    unit_cell.add_multiple_atoms(atom_oxygen, 0.5, 2)
+    unit_cell.add_multiple_atoms(atom_oxygen, "0.5*s", 2)
+
+
+def test_unit_cell_get_atom_ids(unit_cell):
+    assert unit_cell.get_atom_ids() == ['Sr', 'O', 'Ti']
 
 
 def test_unit_cell_get_atom_positions(unit_cell):
-    print(unit_cell.atoms)
-    print("\n")
-    print(unit_cell.atoms[0][1](10))
-    print(unit_cell.atoms[1][1](10))
-    print(unit_cell.atoms[2][1](10))
-    print(unit_cell.atoms[3][1](10))
-    print(unit_cell.atoms[4][1](10))
-    print("\n")
-    # assert np.allclose(unit_cell.get_atom_positions(), [0, 0.5, 0.5, 0.5, 1])
-    # assert np.allclose(unit_cell.get_atom_positions(2.0), [0, 0.5, 0.5, 0.5, 1])
-
+    assert np.allclose(unit_cell.get_atom_positions(), [0, 0., 0., 0.5, 1])
+    assert np.allclose(unit_cell.get_atom_positions(2.0), [0, 1.0, 1.0, 0.5, 1])
