@@ -911,56 +911,53 @@ class UnitCell(Layer):
 
         Allows for 3D presentation of unit cell by allow for a & b
         coordinate of atoms.
-        Also add magnetization per atom.
 
         Todo:
             use the avogadro project as plugin
         Todo:
             create unit cell from CIF file e.g. by xrayutilities plugin.
+        Todo:
+            visualize magnetization per atom
 
         Args:
-            **kwargs (str): strain or magnetization for manipulating unit cell
-                visualization.
+            **kwargs (str): strain for manipulating unit cell visualization.
 
         """
         import matplotlib.pyplot as plt
         from matplotlib import cm
 
-        strains = kwargs.get('strains', 0)
-        if not isinstance(strains, np.ndarray):
-            strains = np.array([strains])
+        strain = kwargs.get('strain', 0)
 
-        colors = [cm.get_cmap('Dark2')(x) for x in np.linspace(0, 1, self.num_atoms)]
+        colors = [cm.get_cmap('Set1')(x) for x in np.linspace(0, 1, self.num_atoms)]
         atom_ids = self.get_atom_ids()
 
-        for strain in strains:
-            plt.figure()
-            atoms_plotted = np.zeros_like(atom_ids)
-            for j in range(self.num_atoms):
-                if not atoms_plotted[atom_ids.index(self.atoms[j][0].id)]:
-                    label = self.atoms[j][0].id
-                    atoms_plotted[atom_ids.index(self.atoms[j][0].id)] = True
-                    plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                             markersize=10,
-                             markeredgecolor=[0, 0, 0],
-                             markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
-                             label=label)
-                else:
-                    label = '_nolegend_'
-                    plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                             markersize=10,
-                             markeredgecolor=[0, 0, 0],
-                             markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
-                             label=label)
+        plt.figure()
+        atoms_plotted = np.zeros_like(atom_ids)
+        for j in range(self.num_atoms):
+            if not atoms_plotted[atom_ids.index(self.atoms[j][0].id)]:
+                label = self.atoms[j][0].id
+                atoms_plotted[atom_ids.index(self.atoms[j][0].id)] = True
+                plt.plot(1+j, self.atoms[j][1](strain), 'o',
+                         markersize=10,
+                         markeredgecolor=[0, 0, 0],
+                         markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
+                         label=label)
+            else:
+                label = '_nolegend_'
+                plt.plot(1+j, self.atoms[j][1](strain), 'o',
+                         markersize=10,
+                         markeredgecolor=[0, 0, 0],
+                         markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
+                         label=label)
 
-            plt.axis([0.1, self.num_atoms+0.9, -0.1, (1.1+np.max(strains))])
-            plt.grid(True)
+        plt.axis([0.1, self.num_atoms+0.9, -0.1, (1.1+strain)])
+        plt.grid(True)
 
-            plt.title('Strain: {:0.2f}%'.format(strain))
-            plt.ylabel('relative Position')
-            plt.xlabel('# Atoms')
-            plt.legend()
-            plt.show(block=block)
+        plt.title('Strain: {:0.2f}%'.format(strain))
+        plt.ylabel('relative Position')
+        plt.xlabel('# Atoms')
+        plt.legend()
+        plt.show()
 
     def add_atom(self, atom, position):
         r"""add_atom
@@ -997,8 +994,8 @@ class UnitCell(Layer):
                     cannot be converted to function handle!')
                 print(e)
         elif isinstance(position, (int, float)):
-            position_str = str(position)
-            position = lambdify(s, position, modules='numpy')
+            position_str = str(position) + '*(1+s)'
+            position = lambdify(s, position_str, modules='numpy')
         else:
             raise ValueError('Atom position input has to be a scalar, or string'
                              'which can be converted into a lambda function!')

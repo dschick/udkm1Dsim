@@ -20,3 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 ### Security
+
+## [2.0.5] 2026-03-04
+
+### Fixed
+
+- fix wrong strain dependence of `Atom`s in `UnitCell` when calling `add_atom` method (#172 and PR #173)
