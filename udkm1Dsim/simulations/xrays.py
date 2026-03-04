@@ -1302,9 +1302,9 @@ class XrayDyn(Xray):
             # function returns a relative postion dependent on the
             # applied strain.
             if i == (K-1):  # its the last atom
-                del_dist = (strain+1)-uc.atoms[i][1](strain)
+                rel_dist = (strain+1)-uc.atoms[i][1](strain)
             else:
-                del_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
+                rel_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
 
             # get the reflection-transmission matrix and phase matrix
             # from all atoms in the unit cell and multiply them
@@ -1314,7 +1314,7 @@ class XrayDyn(Xray):
                                                            uc._area,
                                                            uc._deb_wal_fac))
             RTM = m_times_n(RTM,
-                            self.get_atom_phase_matrix(del_dist*uc._c_axis))
+                            self.get_atom_phase_matrix(rel_dist*uc._c_axis))
         return RTM
 
     def get_atom_ref_trans_matrix(self, atom, area, deb_wal_fac):
@@ -2285,10 +2285,10 @@ class XrayDynMag(Xray):
         # force_recalc = True
         for j in range(K):
             if j == (K-1):  # its the last atom
-                del_dist = (strain+1)-uc.atoms[j][1](strain)
+                rel_dist = (strain+1)-uc.atoms[j][1](strain)
             else:
-                del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
-            distance = del_dist*uc._c_axis
+                rel_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
+            distance = rel_dist*uc._c_axis
 
             try:
                 # calculate density
