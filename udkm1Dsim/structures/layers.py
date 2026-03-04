@@ -987,8 +987,8 @@ class UnitCell(Layer):
                     cannot be converted to function handle!')
                 print(e)
         elif isinstance(position, (int, float)):
-            position_str = str(position)
-            position = lambdify(s, position, modules='numpy')
+            position_str = str(position) + '*(1+s)'
+            position = lambdify(s, position_str, modules='numpy')
         else:
             raise ValueError('Atom position input has to be a scalar, or string'
                              'which can be converted into a lambda function!')
