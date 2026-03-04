@@ -957,7 +957,7 @@ class UnitCell(Layer):
         plt.ylabel('relative Position')
         plt.xlabel('# Atoms')
         plt.legend()
-        plt.show()
+        plt.show(block=block)
 
     def add_atom(self, atom, position):
         r"""add_atom
