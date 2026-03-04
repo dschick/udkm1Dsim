@@ -367,7 +367,7 @@ def test_unit_cell_visualize(unit_cell):
 
 
 def test_unit_cell_add_multiple_atoms(unit_cell, atom_oxygen):
-    unit_cell.add_multiple_atoms(atom_oxygen, '0.5*s', 2)
+    unit_cell.add_multiple_atoms(atom_oxygen, 0.5, 2)
 
 
 def test_unit_cell_get_atom_ids(unit_cell):
@@ -375,5 +375,5 @@ def test_unit_cell_get_atom_ids(unit_cell):
 
 
 def test_unit_cell_get_atom_positions(unit_cell):
-    assert np.allclose(unit_cell.get_atom_positions(), [0, 0., 0., 0.5, 1])
-    assert np.allclose(unit_cell.get_atom_positions(2.0), [0, 1.0, 1.0, 0.5, 1])
+    assert np.allclose(unit_cell.get_atom_positions(), [0, 0.5, 0.5, 0.5, 1])
+    assert np.allclose(unit_cell.get_atom_positions(0.1), [0, 0.55, 0.55, 0.55, 1.1])
