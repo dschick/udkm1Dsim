@@ -79,7 +79,7 @@ class Simulation:
         class_str = 'This is the current structure for the simulations:\n\n'
         class_str += self.S.__str__()
         class_str += '\n\nDisplay properties:\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
+        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt='rst',
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
 
@@ -137,7 +137,7 @@ class Simulation:
         x0 = np.mean(x_lin)
         y_handle = handle(x_lin-x0)
 
-        temp = np.convolve(y_lin, y_handle/y_handle.sum(), mode="same")
+        temp = np.convolve(y_lin, y_handle/y_handle.sum(), mode='same')
 
         y_conv = np.interp(x, x_lin, temp)
         # finally remove NaN entries due to the interpolation

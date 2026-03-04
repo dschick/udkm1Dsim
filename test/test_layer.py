@@ -12,77 +12,73 @@ from pint.testing import assert_equal
 
 # fixtures
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def atom_iron():
-    atom_iron = Atom("Fe")
+    atom_iron = Atom('Fe')
     atom_iron.mag_amplitude = 0.5
     atom_iron.mag_phi = 0*u.deg
     atom_iron.mag_gamma = 180*u.deg
     return atom_iron
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def atom_oxygen():
-    atom_oxygen = Atom("O")
+    atom_oxygen = Atom('O')
     atom_oxygen.ionicity = 1
     return atom_oxygen
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def atom_strontium():
-    atom_strontium = Atom("Sr")
+    atom_strontium = Atom('Sr')
     return atom_strontium
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def atom_titanium():
-    atom_titanium = Atom("Ti")
+    atom_titanium = Atom('Ti')
     return atom_titanium
 
 
-# different fixtures for amorph_layer & unit_cell
-# as well as for pint, str, vector, lambda
-
-
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def properties():
-    props = {"roughness": 0.5*u.angstrom,
-             "deb_wal_fac": 1*u.angstrom**2,
-             "sound_vel": 6*u.nm/u.ps,
-             "phonon_damping": 1*u.kg/u.s,
-             "opt_pen_depth": 10.0*u.nm,
-             "opt_ref_index": 5-3j,
-             "opt_ref_index_per_strain": 1-1j,
-             "therm_cond": 1*u.W/(u.m*u.K),
-             "lin_therm_exp": 1e-5,
-             "heat_capacity": 10*(u.J/u.kg/u.K),
-             "sub_system_coupling": [0],
-             "eff_spin": 1,
-             "curie_temp": 100*u.K,
-             "lamda": 1,
-             "mag_moment": 1*u.bohr_magneton,
-             "aniso_exponent": 1,
-             "anisotropy": [1, 2, 3]*u.J/u.m**3,
-             "exch_stiffness": 1*u.J/u.m,
-             "mag_saturation": 1*u.J/u.T/u.m**3,
+    props = {'roughness': 0.5*u.angstrom,
+             'deb_wal_fac': 1*u.angstrom**2,
+             'sound_vel': 6*u.nm/u.ps,
+             'phonon_damping': 1*u.kg/u.s,
+             'opt_pen_depth': 10.0*u.nm,
+             'opt_ref_index': 5-3j,
+             'opt_ref_index_per_strain': 1-1j,
+             'therm_cond': 1*u.W/(u.m*u.K),
+             'lin_therm_exp': 1e-5,
+             'heat_capacity': 10*(u.J/u.kg/u.K),
+             'sub_system_coupling': [0],
+             'eff_spin': 1,
+             'curie_temp': 100*u.K,
+             'lamda': 1,
+             'mag_moment': 1*u.bohr_magneton,
+             'aniso_exponent': 1,
+             'anisotropy': [1, 2, 3]*u.J/u.m**3,
+             'exch_stiffness': 1*u.J/u.m,
+             'mag_saturation': 1*u.J/u.T/u.m**3,
              }
     return props
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def layer(properties):
-    return Layer(id="layer", name="base layer", **properties)
+    return Layer(id='layer', name='base layer', **properties)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def amorphous_layer(atom_iron, properties):
-    return AmorphousLayer(id="amorphous_layer", name="amorphous layer", thickness=1*u.nm,
+    return AmorphousLayer(id='amorphous_layer', name='amorphous layer', thickness=1*u.nm,
                           density=5000*u.kg/u.m**3, atom=atom_iron, **properties)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope='module')
 def unit_cell(atom_strontium, atom_oxygen, atom_titanium, properties):
-    uc = UnitCell(id="unit_cell", name="unit_cell", c_axis=5.0*u.angstrom, **properties)
+    uc = UnitCell(id='unit_cell', name='unit_cell', c_axis=5.0*u.angstrom, **properties)
     uc.add_atom(atom_strontium, 0.0)
     uc.add_atom(atom_oxygen, 0.5)
     uc.add_atom(atom_titanium, 1.0)
@@ -94,11 +90,11 @@ def unit_cell(atom_strontium, atom_oxygen, atom_titanium, properties):
 # Layer
 
 def test_layer_id(layer):
-    assert layer.id == "layer"
+    assert layer.id == 'layer'
 
 
 def test_layer_name(layer):
-    assert layer.name == "base layer"
+    assert layer.name == 'base layer'
 
 
 def test_layer_roughness(layer):
@@ -135,7 +131,7 @@ def test_layer_therm_cond(layer):
 
 
 def test_layer_therm_cond_str(layer):
-    assert layer.therm_cond_str[0] == "1.0"
+    assert layer.therm_cond_str[0] == '1.0'
 
 
 def test_layer_lin_therm_exp(layer):
@@ -143,7 +139,7 @@ def test_layer_lin_therm_exp(layer):
 
 
 def test_layer_lin_therm_exp_str(layer):
-    assert layer.lin_therm_exp_str[0] == "1e-05"
+    assert layer.lin_therm_exp_str[0] == '1e-05'
 
 
 def test_layer_int_lin_therm_exp(layer):
@@ -151,7 +147,7 @@ def test_layer_int_lin_therm_exp(layer):
 
 
 def test_layer_int_lin_therm_exp_str(layer):
-    assert layer.int_lin_therm_exp_str[0] == "1.0e-5*T"
+    assert layer.int_lin_therm_exp_str[0] == '1.0e-5*T'
 
 
 def test_layer_heat_capacity(layer):
@@ -159,7 +155,7 @@ def test_layer_heat_capacity(layer):
 
 
 def test_layer_heat_capacity_str(layer):
-    assert layer.heat_capacity_str[0] == "10.0"
+    assert layer.heat_capacity_str[0] == '10.0'
 
 
 def test_layer_int_heat_capacity(layer):
@@ -167,7 +163,7 @@ def test_layer_int_heat_capacity(layer):
 
 
 def test_layer_int_heat_capacity_str(layer):
-    assert layer.int_heat_capacity_str[0] == "10.0*T"
+    assert layer.int_heat_capacity_str[0] == '10.0*T'
 
 
 def test_layer_sub_system_coupling(layer):
@@ -215,16 +211,16 @@ def test_layer_mag_saturation(layer):
     assert_equal(layer.mag_saturation, 1*u.J/u.T/u.m**3)
 
 
-@pytest.mark.parametrize("input, expected, expected_str",
-                         [(1, 1.0, "1.0"),
-                          (1.0, 1.0, "1.0"),
-                          (1.0*u.m, 1.0, "1.0"),
-                          (1.0*u.nm, 1.0e-9, "1e-09"),
-                          ("1", 1.0, "1"),
-                          ("1.0", 1.0, "1.0"),
-                          ("1.0*T", 300.0, "1.0*T"),
-                          ("1.0*T_0", 300.0, "1.0*T_0"),
-                          ("lambda T: 1.0*T", 300.0, "1.0*T"),
+@pytest.mark.parametrize('input, expected, expected_str',
+                         [(1, 1.0, '1.0'),
+                          (1.0, 1.0, '1.0'),
+                          (1.0*u.m, 1.0, '1.0'),
+                          (1.0*u.nm, 1.0e-9, '1e-09'),
+                          ('1', 1.0, '1'),
+                          ('1.0', 1.0, '1.0'),
+                          ('1.0*T', 300.0, '1.0*T'),
+                          ('1.0*T_0', 300.0, '1.0*T_0'),
+                          ('lambda T: 1.0*T', 300.0, '1.0*T'),
                           ])
 def test_layer_check_input(layer, input, expected, expected_str):
     output, output_str = layer.check_input(input)
@@ -235,21 +231,21 @@ def test_layer_check_input(layer, input, expected, expected_str):
     assert output_str[0] == expected_str
 
 
-@pytest.mark.parametrize("input, expected, expected_str",
-                         [([1, 2, 3], [1, 2, 3], ["1.0", "2.0", "3.0"]),
-                          ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], ["1.0", "2.0", "3.0"]),
-                          ([1.0*u.m, 2.0*u.m, 3.0*u.m], [1.0, 2.0, 3.0], ["1.0", "2.0", "3.0"]),
+@pytest.mark.parametrize('input, expected, expected_str',
+                         [([1, 2, 3], [1, 2, 3], ['1.0', '2.0', '3.0']),
+                          ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], ['1.0', '2.0', '3.0']),
+                          ([1.0*u.m, 2.0*u.m, 3.0*u.m], [1.0, 2.0, 3.0], ['1.0', '2.0', '3.0']),
                           ([1.0*u.nm, 2.0*u.nm, 2.0*u.nm], [1.0e-9, 2.0e-9, 2.0e-9],
-                           ["1e-09", "2e-09", "2e-09"]),
-                          (["1", "2", "3"], [1.0, 2.0, 3.0], ["1", "2", "3"]),
-                          (["1.0", "2.0", "3.0"], [1.0, 2.0, 3.0],
-                           ["1.0", "2.0", "3.0"]),
-                          (["1.0*T", "2.0*T", "3.0*T"], [300.0, 600.0, 900.0],
-                           ["1.0*T", "2.0*T", "3.0*T"]),
-                          (["1.0*T_0", "2.0*T_1", "3.0*T_2"], [300.0, 600.0, 900.0],
-                           ["1.0*T_0", "2.0*T_1", "3.0*T_2"]),
-                          (["lambda T: 1.0*T", "lambda T: 2.0*T", "lambda T: 3.0*T"],
-                           [300.0, 600.0, 900.0], ["1.0*T", "2.0*T", "3.0*T"]),
+                           ['1e-09', '2e-09', '2e-09']),
+                          (['1', '2', '3'], [1.0, 2.0, 3.0], ['1', '2', '3']),
+                          (['1.0', '2.0', '3.0'], [1.0, 2.0, 3.0],
+                           ['1.0', '2.0', '3.0']),
+                          (['1.0*T', '2.0*T', '3.0*T'], [300.0, 600.0, 900.0],
+                           ['1.0*T', '2.0*T', '3.0*T']),
+                          (['1.0*T_0', '2.0*T_1', '3.0*T_2'], [300.0, 600.0, 900.0],
+                           ['1.0*T_0', '2.0*T_1', '3.0*T_2']),
+                          (['lambda T: 1.0*T', 'lambda T: 2.0*T', 'lambda T: 3.0*T'],
+                           [300.0, 600.0, 900.0], ['1.0*T', '2.0*T', '3.0*T']),
                           ])
 def test_layer_check_input_list(layer, input, expected, expected_str):
     output, output_str = layer.check_input(input)
@@ -284,56 +280,56 @@ def test_layer_set_opt_pen_depth_from_ref_index(layer):
 # AmorphousLayer & UnitCell (need atoms, mass, area to be set)
 
 
-@pytest.mark.parametrize("fixture_name",
-                         ["amorphous_layer", "unit_cell"])
+@pytest.mark.parametrize('fixture_name',
+                         ['amorphous_layer', 'unit_cell'])
 def test_layer_to_str(request, fixture_name):
     layer = request.getfixturevalue(fixture_name)
     layer.__str__()
 
 
-@pytest.mark.parametrize("fixture_name, expected",
-                         [("amorphous_layer", 1.0*u.nm),
-                          ("unit_cell", 5.0*u.angstrom),])
+@pytest.mark.parametrize('fixture_name, expected',
+                         [('amorphous_layer', 1.0*u.nm),
+                          ('unit_cell', 5.0*u.angstrom),])
 def test_layer_thickness(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)
     assert_approx(layer.thickness, expected, rtol=1e-2)
 
 
-@pytest.mark.parametrize("fixture_name, expected",
-                         [("amorphous_layer", 5e-26*u.kg),
-                          ("unit_cell", 2.51e-25*u.kg),])
+@pytest.mark.parametrize('fixture_name, expected',
+                         [('amorphous_layer', 5e-26*u.kg),
+                          ('unit_cell', 2.51e-25*u.kg),])
 def test_layer_mass(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)
     assert_approx(layer.mass, expected, rtol=1e-2)
 
 
-@pytest.mark.parametrize("fixture_name, expected",
-                         [("amorphous_layer", 1e-20*u.m**2),
-                          ("unit_cell", 2.5e-19*u.m**2),])
+@pytest.mark.parametrize('fixture_name, expected',
+                         [('amorphous_layer', 1e-20*u.m**2),
+                          ('unit_cell', 2.5e-19*u.m**2),])
 def test_layer_area(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)
     assert_approx(layer.area, expected, rtol=1e-2)
 
 
-@pytest.mark.parametrize("fixture_name, expected",
-                         [("amorphous_layer", 1e-29*u.m**3),
-                          ("unit_cell", 1.25e-28*u.m**3),])
+@pytest.mark.parametrize('fixture_name, expected',
+                         [('amorphous_layer', 1e-29*u.m**3),
+                          ('unit_cell', 1.25e-28*u.m**3),])
 def test_layer_volume(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)
     assert_approx(layer.volume, expected, rtol=1e-2)
 
 
-@pytest.mark.parametrize("fixture_name, expected",
-                         [("amorphous_layer", 30000000.0*u.kg**0.5/u.m**2),
-                          ("unit_cell", 2414871.22*u.kg**0.5/u.m**2),])
+@pytest.mark.parametrize('fixture_name, expected',
+                         [('amorphous_layer', 30000000.0*u.kg**0.5/u.m**2),
+                          ('unit_cell', 2414871.22*u.kg**0.5/u.m**2),])
 def test_layer_get_acoustic_impedance(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)
     assert_approx(layer.get_acoustic_impedance(), expected, rtol=1e-2)
 
 
-@pytest.mark.parametrize("fixture_name, expected",
-                         [("amorphous_layer", 1.8),
-                          ("unit_cell", 1.45),])
+@pytest.mark.parametrize('fixture_name, expected',
+                         [('amorphous_layer', 1.8),
+                          ('unit_cell', 1.45),])
 def test_layer_calc_spring_const(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)
     layer.calc_spring_const()
@@ -371,7 +367,7 @@ def test_unit_cell_visualize(unit_cell):
 
 
 def test_unit_cell_add_multiple_atoms(unit_cell, atom_oxygen):
-    unit_cell.add_multiple_atoms(atom_oxygen, "0.5*s", 2)
+    unit_cell.add_multiple_atoms(atom_oxygen, '0.5*s', 2)
 
 
 def test_unit_cell_get_atom_ids(unit_cell):

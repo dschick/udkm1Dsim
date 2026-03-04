@@ -138,7 +138,7 @@ class Atom:
                             '{:.4f}'.format(self.mag_gamma.to('deg'))]}
 
         return 'Atom with the following properties\n' + \
-               tabulate(output, colalign=('right',), tablefmt="rst", floatfmt=('.2f', '.2f'))
+               tabulate(output, colalign=('right',), tablefmt='rst', floatfmt=('.2f', '.2f'))
 
     def read_atomic_form_factor_coeff(self, source='chantler', filename=''):
         """read_atomic_form_factor_coeff
@@ -428,7 +428,7 @@ class AtomMixed(Atom):
             output_atom.append([self.atoms[i][0].name, '{:.1f} %'.format(self.atoms[i][1]*100)])
 
         return ('AtomMixed with the following properties\n'
-                + tabulate(output, colalign=('right',), tablefmt="rst", floatfmt=('.2f', '.2f'))
+                + tabulate(output, colalign=('right',), tablefmt='rst', floatfmt=('.2f', '.2f'))
                 + '\n{:d} Constituents:\n'.format(self.num_atoms)
                 + tabulate(output_atom, colalign=('right',), floatfmt=('.2f', '.2f')))
 
