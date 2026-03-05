@@ -163,6 +163,11 @@ class Structure:
         structure as well as the corresponding material properties which are
         given by the `kwargs`.
 
+        `types='all'` is problematic, as function handles will be include,
+        which will always change on recreation. Following errors from the
+        GitHub test-suite, hashes do not seem to match across different OS
+        and/or python versions.
+
         Args:
             **kwargs (list[str]): types of requested properties..
 
