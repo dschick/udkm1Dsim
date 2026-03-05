@@ -99,7 +99,8 @@ class Structure:
             class_str += tab_str + 'no substrate\n'
         return class_str
 
-    def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set1', linewidth=0.1, show=True):
+    def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set1', linewidth=0.1,
+                  show=True):
         """visualize
 
         Simple visualization of the structure.
