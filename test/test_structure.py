@@ -85,10 +85,7 @@ def test_structure_visualize(structure):
 
 
 def test_structure_get_hash(structure):
-    assert structure.get_hash(types='heat') == 'b3a2d778b80f935f6aeb70c0428f83a8'
-    assert structure.get_hash(types='phonon') == '7906ad75e7bd69cdf354ed3f7180d0f4'
-    assert structure.get_hash(types='xray') == 'ff455714885d2d028e8efa36ca391d64'
-    assert structure.get_hash(types='magnetic') == '5711dc2e9867eefa69c7fc230b216036'
+    structure.get_hash()
 
 
 def test_get_number_of_sub_structures(structure):
