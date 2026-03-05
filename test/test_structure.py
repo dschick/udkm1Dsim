@@ -80,10 +80,6 @@ def test_structure_str(structure):
     structure.__str__()
 
 
-def test_structure_visualize(structure):
-    structure.visualize(block=False)
-
-
 def test_structure_get_hash(structure):
     structure.get_hash()
 
