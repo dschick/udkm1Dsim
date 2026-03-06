@@ -362,6 +362,9 @@ def test_unit_cell_number_atoms(unit_cell):
     assert unit_cell.num_atoms == 3
 
 
+# test_visualize() fails on certain virtual machine due to TCL error
+
+
 def test_unit_cell_add_multiple_atoms(unit_cell, atom_oxygen):
     unit_cell.add_multiple_atoms(atom_oxygen, 0.5, 2)
 

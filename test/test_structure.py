@@ -79,6 +79,7 @@ def structure(amorphous_layer_iron, amorphous_layer_oxygen, unit_cell_iron, unit
 def test_structure_str(structure):
     structure.__str__()
 
+# test_visualize() fails on certain virtual machine due to TCL error
 
 def test_structure_get_hash(structure):
     structure.get_hash()
