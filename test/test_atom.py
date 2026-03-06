@@ -6,7 +6,7 @@ from udkm1Dsim import u
 import numpy as np
 from pathlib import Path
 import pytest
-from pint.testing import assert_allclose as assert_approx
+from pint.testing import assert_allclose
 from pint.testing import assert_equal
 
 
@@ -64,7 +64,7 @@ def test_atom_mass_number_a(request, fixture_name, expected):
                           ('atom_mixed', 1.636e-25*u.kg)])
 def test_atom_mass(request, fixture_name, expected):
     atom = request.getfixturevalue(fixture_name)
-    assert_approx(atom.mass, expected, rtol=1e-3)
+    assert_allclose(atom.mass, expected, rtol=1e-3)
 
 
 @pytest.mark.parametrize('fixture_name, expected',

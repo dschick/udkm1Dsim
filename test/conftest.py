@@ -104,27 +104,27 @@ def unit_cell(atom_strontium, atom_oxygen, atom_titanium, properties):
 
 
 @pytest.fixture(scope='module')
-def amorphous_layer_iron(atom_iron):
+def amorphous_layer_iron(atom_iron, properties):
     return AmorphousLayer(id='amorphous_layer_Fe', name='amorphous layer iron', thickness=1*u.nm,
-                          density=5000*u.kg/u.m**3, atom=atom_iron)
+                          density=5000*u.kg/u.m**3, atom=atom_iron, **properties)
 
 
 @pytest.fixture(scope='module')
-def amorphous_layer_oxygen(atom_oxygen):
+def amorphous_layer_oxygen(atom_oxygen, properties):
     return AmorphousLayer(id='amorphous_layer_O', name='amorphous layer oxygen', thickness=1*u.nm,
-                          density=5000*u.kg/u.m**3, atom=atom_oxygen)
+                          density=5000*u.kg/u.m**3, atom=atom_oxygen, **properties)
 
 
 @pytest.fixture(scope='module')
-def unit_cell_iron(atom_iron, atom_oxygen):
-    uc = UnitCell(id='unit_cell_Fe', name='unit cell iron', c_axis=5.0*u.angstrom)
+def unit_cell_iron(atom_iron, properties):
+    uc = UnitCell(id='unit_cell_Fe', name='unit cell iron', c_axis=5.0*u.angstrom, **properties)
     uc.add_atom(atom_iron, 0.0)
     return uc
 
 
 @pytest.fixture(scope='module')
-def unit_cell_oxygen(atom_oxygen):
-    uc = UnitCell(id='unit_cell_O', name='unit cell oxygen', c_axis=5.0*u.angstrom)
+def unit_cell_oxygen(atom_oxygen, properties):
+    uc = UnitCell(id='unit_cell_O', name='unit cell oxygen', c_axis=5.0*u.angstrom, **properties)
     uc.add_atom(atom_oxygen, 0.0)
     return uc
 
