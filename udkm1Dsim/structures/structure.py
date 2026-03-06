@@ -68,6 +68,11 @@ class Structure:
 
         class_str = tab_str + 'Structure properties:\n\n'
         class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
+
+        if len(self.sub_structures) == 0:
+            class_str += tab_str + 'Structure is empty\n----\n'
+            return class_str
+
         class_str += tab_str + 'Thickness : {:0.4f}\n'.format(self.get_thickness().to('nm'))
         class_str += tab_str + 'Roughness : {:0.4f}\n'.format(self.roughness.to('nm'))
         class_str += tab_str + '----\n'
