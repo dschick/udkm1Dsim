@@ -1,88 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from udkm1Dsim import Atom
-from udkm1Dsim import Layer, AmorphousLayer, UnitCell
 from udkm1Dsim import u
 import numpy as np
 import pytest
 from pint.testing import assert_allclose as assert_approx
 from pint.testing import assert_equal
-
-
-# fixtures
-
-@pytest.fixture(scope='module')
-def atom_iron():
-    atom_iron = Atom('Fe')
-    atom_iron.mag_amplitude = 0.5
-    atom_iron.mag_phi = 0*u.deg
-    atom_iron.mag_gamma = 180*u.deg
-    return atom_iron
-
-
-@pytest.fixture(scope='module')
-def atom_oxygen():
-    atom_oxygen = Atom('O')
-    atom_oxygen.ionicity = 1
-    return atom_oxygen
-
-
-@pytest.fixture(scope='module')
-def atom_strontium():
-    atom_strontium = Atom('Sr')
-    return atom_strontium
-
-
-@pytest.fixture(scope='module')
-def atom_titanium():
-    atom_titanium = Atom('Ti')
-    return atom_titanium
-
-
-@pytest.fixture(scope='module')
-def properties():
-    props = {'roughness': 0.5*u.angstrom,
-             'deb_wal_fac': 1*u.angstrom**2,
-             'sound_vel': 6*u.nm/u.ps,
-             'phonon_damping': 1*u.kg/u.s,
-             'opt_pen_depth': 10.0*u.nm,
-             'opt_ref_index': 5-3j,
-             'opt_ref_index_per_strain': 1-1j,
-             'therm_cond': 1*u.W/(u.m*u.K),
-             'lin_therm_exp': 1e-5,
-             'heat_capacity': 10*(u.J/u.kg/u.K),
-             'sub_system_coupling': [0],
-             'eff_spin': 1,
-             'curie_temp': 100*u.K,
-             'lamda': 1,
-             'mag_moment': 1*u.bohr_magneton,
-             'aniso_exponent': 1,
-             'anisotropy': [1, 2, 3]*u.J/u.m**3,
-             'exch_stiffness': 1*u.J/u.m,
-             'mag_saturation': 1*u.J/u.T/u.m**3,
-             }
-    return props
-
-
-@pytest.fixture(scope='module')
-def layer(properties):
-    return Layer(id='layer', name='base layer', **properties)
-
-
-@pytest.fixture(scope='module')
-def amorphous_layer(atom_iron, properties):
-    return AmorphousLayer(id='amorphous_layer', name='amorphous layer', thickness=1*u.nm,
-                          density=5000*u.kg/u.m**3, atom=atom_iron, **properties)
-
-
-@pytest.fixture(scope='module')
-def unit_cell(atom_strontium, atom_oxygen, atom_titanium, properties):
-    uc = UnitCell(id='unit_cell', name='unit_cell', c_axis=5.0*u.angstrom, **properties)
-    uc.add_atom(atom_strontium, 0.0)
-    uc.add_atom(atom_oxygen, 0.5)
-    uc.add_atom(atom_titanium, 1.0)
-    return uc
 
 
 # tests

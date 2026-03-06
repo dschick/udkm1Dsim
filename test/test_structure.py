@@ -1,76 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from udkm1Dsim import Atom
-from udkm1Dsim import UnitCell, AmorphousLayer
-from udkm1Dsim import Structure
+
 from udkm1Dsim import u
 u.default_format = '~P'
 import numpy as np
-import pytest
 from pint.testing import assert_allclose
-
-
-# fixtures
-
-
-@pytest.fixture(scope='module')
-def atom_iron():
-    atom_iron = Atom('Fe')
-    return atom_iron
-
-
-@pytest.fixture(scope='module')
-def atom_oxygen():
-    atom_oxygen = Atom('O')
-    atom_oxygen.ionicity = 1
-    return atom_oxygen
-
-
-@pytest.fixture(scope='module')
-def amorphous_layer_iron(atom_iron):
-    return AmorphousLayer(id='amorphous_layer_Fe', name='amorphous layer iron', thickness=1*u.nm,
-                          density=5000*u.kg/u.m**3, atom=atom_iron)
-
-
-@pytest.fixture(scope='module')
-def amorphous_layer_oxygen(atom_oxygen):
-    return AmorphousLayer(id='amorphous_layer_O', name='amorphous layer oxygen', thickness=1*u.nm,
-                          density=5000*u.kg/u.m**3, atom=atom_oxygen)
-
-
-@pytest.fixture(scope='module')
-def unit_cell_iron(atom_iron, atom_oxygen):
-    uc = UnitCell(id='unit_cell_Fe', name='unit cell iron', c_axis=5.0*u.angstrom)
-    uc.add_atom(atom_iron, 0.0)
-    return uc
-
-
-@pytest.fixture(scope='module')
-def unit_cell_oxygen(atom_oxygen):
-    uc = UnitCell(id='unit_cell_O', name='unit cell oxygen', c_axis=5.0*u.angstrom)
-    uc.add_atom(atom_oxygen, 0.0)
-    return uc
-
-
-@pytest.fixture(scope='module')
-def structure(amorphous_layer_iron, amorphous_layer_oxygen, unit_cell_iron, unit_cell_oxygen):
-    S = Structure('structure amorph')
-    S.add_sub_structure(amorphous_layer_iron, 10)
-    S.add_sub_structure(amorphous_layer_oxygen, 10)
-    S.add_sub_structure(unit_cell_iron, 20)
-
-    DL = Structure('double layer')
-    DL.add_sub_structure(unit_cell_iron, 5)
-    DL.add_sub_structure(unit_cell_oxygen, 7)
-
-    S.add_sub_structure(DL, 20)
-
-    substrate = Structure('substrate')
-    substrate.add_sub_structure(amorphous_layer_iron, 100)
-
-    S.add_substrate(substrate)
-
-    return S
 
 
 # tests

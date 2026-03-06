@@ -1,39 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from udkm1Dsim import Atom, AtomMixed
+
 from udkm1Dsim import u
 import numpy as np
 from pathlib import Path
 import pytest
 from pint.testing import assert_allclose as assert_approx
 from pint.testing import assert_equal
-
-
-# fixtures
-
-@pytest.fixture(scope='module')
-def atom_iron():
-    atom_iron = Atom('Fe')
-    atom_iron.mag_amplitude = 0.5
-    atom_iron.mag_phi = 0*u.deg
-    atom_iron.mag_gamma = 180*u.deg
-    return atom_iron
-
-
-@pytest.fixture(scope='module')
-def atom_dysprosium():
-    atom_dysprosium = Atom('Dy')
-    atom_dysprosium.ionicity = 1
-    return atom_dysprosium
-
-
-@pytest.fixture(scope='module')
-def atom_mixed(atom_dysprosium, atom_iron):
-    atom_mixed = AtomMixed('DyFe')
-    atom_mixed.add_atom(atom_dysprosium, 0.4)
-    atom_mixed.add_atom(atom_iron, 0.6)
-    return atom_mixed
 
 
 # tests

@@ -1,17 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from udkm1Dsim import Simulation
-from udkm1Dsim import Structure
 import numpy as np
 import pytest
 
 
 # fixtures
-
-
-@pytest.fixture(scope='module')
-def structure():
-    return Structure('structure')
 
 
 @pytest.fixture(scope='module')
