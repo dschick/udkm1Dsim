@@ -29,6 +29,7 @@ __docformat__ = 'restructuredtext'
 from tabulate import tabulate
 import numpy as np
 import os
+import warnings
 
 
 class Simulation:
@@ -154,4 +155,4 @@ class Simulation:
         if path.exists(cache_dir):
             self._cache_dir = cache_dir
         else:
-            print('Cache dir does not exist.\nPlease create the path first.')
+            warnings.warn('Cache dir does not exist. Please create the path first.')
