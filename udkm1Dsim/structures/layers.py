@@ -174,7 +174,7 @@ class Layer:
                    ['effective spin', self.eff_spin],
                    ['Curie temperature', '{:.4f}'.format(self.curie_temp.to('K'))],
                    ['mean-field exch. coupling', '{:.4f}'.format(
-                       self.mf_exch_coupling*u.m**2*u.kg/u.s**2)],
+                       self.mf_exch_coupling.to('m**2*kg/s**2')) + ' m² kg/s²'],
                    ['coupling to bath parameter', self.lamda],
                    ['atomic magnetic moment', '{:.4f}'.format(self.mag_moment.to(
                        'bohr_magneton'))],
@@ -363,11 +363,10 @@ class Layer:
 
         """
         try:
-            self.mf_exch_coupling = (3*self.eff_spin/(self.eff_spin+1)*constants.k*self._curie_temp
-                                     * u.m**2*u.kg/u.s**2)
+            self._mf_exch_coupling = 3*self.eff_spin/(self.eff_spin+1)*constants.k*self._curie_temp
         except AttributeError:
             # on initialization self._curie_temp
-            self.mf_exch_coupling = 0*u.m**2*u.kg/u.s**2
+            self._mf_exch_coupling = 0
 
     @property
     def thickness(self):
@@ -570,6 +569,10 @@ class Layer:
     @property
     def curie_temp(self):
         return Q_(self._curie_temp, u.K)
+
+    @property
+    def mf_exch_coupling(self):
+        return Q_(self._mf_exch_coupling, u.m**2*u.kg/(u.s**2))
 
     @curie_temp.setter
     def curie_temp(self, curie_temp):
