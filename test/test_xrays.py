@@ -36,7 +36,8 @@ def xray_dyn(structure_crystalline, tmp_path_factory):
 
 @pytest.fixture(scope='module')
 def xray_dyn_mag(structure, tmp_path_factory):
-    return XrayDynMag(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp('cache'),
+    return XrayDynMag(structure, force_recalc=True,
+                      cache_dir=tmp_path_factory.mktemp('cache'),
                       save_data=True, disp_messages=True, progress_bar=True,
                       )
 
@@ -53,13 +54,29 @@ def distances(structure_amorph):
 
 
 @pytest.fixture(scope='module')
+def distances_mixed(structure):
+    dists, _, _ = structure.get_distances_of_layers()
+    return dists
+
+
+@pytest.fixture(scope='module')
 def temp_map(delays, distances):
     return 50*np.ones([len(delays), len(distances), 1])
 
 
 @pytest.fixture(scope='module')
 def strain_map(delays, distances):
-    return 50*np.ones([len(delays), len(distances), 1])
+    return 0.01*np.ones([len(delays), len(distances), 1])
+
+
+@pytest.fixture(scope='module')
+def strain_map_mixed(delays, distances_mixed):
+    return 0.01*np.ones([len(delays), len(distances_mixed), 1])
+
+
+@pytest.fixture(scope='module')
+def magnetization_map(delays, distances_mixed):
+    return np.zeros([len(delays), len(distances_mixed), 3])
 
 
 # tests
@@ -124,3 +141,90 @@ def test_xray_kin_get_uc_structure_factor(xray_kin, unit_cell_iron):
 
 def test_xray_kin_homogeneous_reflectivity(xray_kin):
     xray_kin.homogeneous_reflectivity()
+
+
+# XrayDyn
+
+
+def text_xray_dyn_str(xray_dyn):
+    xray_kin.__str__()
+
+
+def text_xray_dyn_set_polarization(xray_dyn):
+    xray_dyn.set_polarization(0, 0)
+    xray_dyn.set_polarization(1, 1)
+    xray_dyn.set_polarization(2, 0)
+    xray_dyn.set_polarization(3, 0)
+    xray_dyn.set_polarization(4, 0)
+
+
+def test_xray_dyn_get_hash(xray_dyn, strain_map):
+    strain_vectors = {}
+    xray_dyn.get_hash(strain_vectors, strain_map=strain_map)
+
+
+def test_xray_dyn_homogeneous_reflectivity(xray_dyn):
+    xray_dyn.energy = 8000*u.eV
+    xray_dyn.theta = np.r_[1:10]*u.deg
+    xray_dyn.homogeneous_reflectivity()
+
+
+def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map):
+    xray_dyn.energy = 8000*u.eV
+    xray_dyn.theta = np.r_[1:10]*u.deg
+    strain_vectors = [np.r_[0:1], np.r_[0:1]]
+    xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors)
+    xray_dyn.force_recalc = False
+    xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors)
+    xray_dyn.force_recalc = True
+    with pytest.raises(ValueError):
+        xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors,
+                                            calc_type='parallel')
+    with pytest.raises(NotImplementedError):
+        xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors,
+                                            calc_type='distributed')
+
+
+# XrayDynMag
+
+
+def text_xray_dyn_mag_str(xray_dyn_mag):
+    xray_dyn_mag.__str__()
+
+
+def text_xray_dyn_mag_set_polarization(xray_dyn_mag):
+    xray_dyn_mag.set_polarization(0, 0)
+    xray_dyn_mag.set_polarization(1, 1)
+    xray_dyn_mag.set_polarization(2, 0)
+    xray_dyn_mag.set_polarization(3, 0)
+    xray_dyn_mag.set_polarization(4, 0)
+
+
+def test_xray_dyn_mag_get_hash(xray_dyn_mag, strain_map_mixed, magnetization_map):
+    xray_dyn_mag.get_hash(strain_map=strain_map_mixed, magnetization_map=magnetization_map)
+
+
+def test_xray_dyn_mag_homogeneous_reflectivity(xray_dyn_mag):
+    xray_dyn_mag.energy = 800*u.eV
+    xray_dyn_mag.theta = np.r_[1:10]*u.deg
+    xray_dyn_mag.homogeneous_reflectivity()
+
+
+def test_xray_dyn_mag_inhomogeneous_reflectivity(xray_dyn_mag, strain_map_mixed,
+                                                 magnetization_map):
+    xray_dyn_mag.energy = 800*u.eV
+    xray_dyn_mag.theta = np.r_[1:10]*u.deg
+    xray_dyn_mag.inhomogeneous_reflectivity(strain_map=strain_map_mixed,
+                                            magnetization_map=magnetization_map)
+    xray_dyn_mag.force_recalc = False
+    xray_dyn_mag.inhomogeneous_reflectivity(strain_map=strain_map_mixed,
+                                            magnetization_map=magnetization_map)
+    xray_dyn_mag.force_recalc = True
+    with pytest.raises(ValueError):
+        xray_dyn_mag.inhomogeneous_reflectivity(strain_map=strain_map_mixed,
+                                                magnetization_map=magnetization_map,
+                                                calc_type='parallel')
+    with pytest.raises(NotImplementedError):
+        xray_dyn_mag.inhomogeneous_reflectivity(strain_map=strain_map_mixed,
+                                                magnetization_map=magnetization_map,
+                                                calc_type='distributed')
