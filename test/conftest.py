@@ -25,18 +25,27 @@ def atom_iron():
 def atom_oxygen():
     atom_oxygen = Atom('O')
     atom_oxygen.ionicity = 1
+    atom_oxygen.mag_amplitude = 0.5
+    atom_oxygen.mag_phi = 0*u.deg
+    atom_oxygen.mag_gamma = 180*u.deg
     return atom_oxygen
 
 
 @pytest.fixture(scope='module')
 def atom_strontium():
     atom_strontium = Atom('Sr')
+    atom_strontium.mag_amplitude = 0.5
+    atom_strontium.mag_phi = 0*u.deg
+    atom_strontium.mag_gamma = 180*u.deg
     return atom_strontium
 
 
 @pytest.fixture(scope='module')
 def atom_titanium():
     atom_titanium = Atom('Ti')
+    atom_titanium.mag_amplitude = 0.5
+    atom_titanium.mag_phi = 0*u.deg
+    atom_titanium.mag_gamma = 180*u.deg
     return atom_titanium
 
 
@@ -44,6 +53,9 @@ def atom_titanium():
 def atom_dysprosium():
     atom_dysprosium = Atom('Dy')
     atom_dysprosium.ionicity = 1
+    atom_dysprosium.mag_amplitude = 0.
+    atom_dysprosium.mag_phi = 0.*u.deg
+    atom_dysprosium.mag_gamma = 0.*u.deg
     return atom_dysprosium
 
 
@@ -52,6 +64,9 @@ def atom_mixed(atom_dysprosium, atom_iron):
     atom_mixed = AtomMixed('DyFe')
     atom_mixed.add_atom(atom_dysprosium, 0.4)
     atom_mixed.add_atom(atom_iron, 0.6)
+    atom_mixed.mag_amplitude = 0.
+    atom_mixed.mag_phi = 0.*u.deg
+    atom_mixed.mag_gamma = 0.*u.deg
     return atom_mixed
 
 
@@ -144,6 +159,20 @@ def structure(amorphous_layer_iron, amorphous_layer_oxygen, unit_cell_iron, unit
     DL.add_sub_structure(unit_cell_oxygen, 7)
 
     S.add_sub_structure(DL, 20)
+
+    substrate = Structure('substrate')
+    substrate.add_sub_structure(amorphous_layer_iron, 100)
+
+    S.add_substrate(substrate)
+
+    return S
+
+
+@pytest.fixture(scope='module')
+def structure_amorph(amorphous_layer_iron, amorphous_layer_oxygen):
+    S = Structure('structure amorph')
+    S.add_sub_structure(amorphous_layer_iron, 10)
+    S.add_sub_structure(amorphous_layer_oxygen, 10)
 
     substrate = Structure('substrate')
     substrate.add_sub_structure(amorphous_layer_iron, 100)

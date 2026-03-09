@@ -12,21 +12,21 @@ import pytest
 
 @pytest.fixture(scope='module')
 def phonon(structure, tmp_path_factory):
-    return Phonon(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp("chache"),
+    return Phonon(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp("cache"),
                   save_data=True, disp_messages=True, progress_bar=True,
                   )
 
 
 @pytest.fixture(scope='module')
 def phonon_num(structure, tmp_path_factory):
-    return PhononNum(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp("chache"),
+    return PhononNum(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp("cache"),
                      save_data=True, disp_messages=True, progress_bar=True,
                      )
 
 
 @pytest.fixture(scope='module')
 def phonon_ana(structure, tmp_path_factory):
-    return PhononAna(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp("chache"),
+    return PhononAna(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp("cache"),
                      save_data=True, disp_messages=True, progress_bar=True,
                      )
 
