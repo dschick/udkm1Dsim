@@ -128,8 +128,6 @@ def test_get_temp_map(heat):
                        'backside': False}
     heat.get_temp_map(delays, init_temp)
 
-    # running simulations with heat diffusion in CI is way too CPU expensive
-
     # load data from cache
     heat.force_recalc = False
     heat.get_temp_map(delays, init_temp)
@@ -148,6 +146,23 @@ def test_get_temp_map(heat):
         heat.get_temp_map(delays, init_temp)
 
     heat.backend = 'scipy'
+
+
+@pytest.mark.skip(reason="takes too much time in CI")
+def test_get_diffusion_temp_map(heat):
+    print('\n test_get_temp_map\n')
+    delays = np.r_[-1:10:0.01]*u.ps
+    init_temp = 300*u.K
+    heat.backend = 'scipy'
+    heat.heat_diffusion = True
+    heat.excitation = {'fluence': [10]*u.mJ/u.cm**2,
+                       'delay_pump': [0]*u.ps,
+                       'pulse_width': [0]*u.ps,
+                       'wavelength': 800*u.nm,
+                       'theta': 45*u.deg,
+                       'multilayer_absorption': True,
+                       'backside': False}
+    heat.get_temp_map(delays, init_temp)
 
 
 def test_boundary_conditions(heat):
