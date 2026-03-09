@@ -146,7 +146,7 @@ class Structure:
 
         plt.xlim(0, thickness)
         plt.ylim(0, 1)
-        plt.xlabel('Distance [{:s}]'.format(unit))
+        plt.xlabel('Distance ({:s})'.format(unit))
         plt.yticks([], [])
 
         # add labels for legend
