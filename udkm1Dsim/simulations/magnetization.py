@@ -407,7 +407,11 @@ class LLB(Magnetization):
             delays = delays.to('s').magnitude
         except AttributeError:
             pass
-        M = len(delays)
+        M = len(delays)  # nb of delay steps
+        L = self.S.get_number_of_layers()
+        K = self.S.num_sub_systems
+
+        temp_map = np.reshape(temp_map, [M, L, K])
 
         distances, _, _ = self.S.get_distances_of_layers(False)
 
@@ -575,9 +579,14 @@ class LLB(Magnetization):
 
                 # for every temperature in temp_map search for best match in
                 # relevant_temps and assign according mf_mag into mf_mag_map
-                idx = finderb(np.round(temp_map[:, v].flatten(), decimals=1),
-                              relevant_temps[k][0, :])
-                mf_mag_map[:, v] = np.reshape(relevant_temps[k][1, idx], (M, len(v)))
+                try:
+                    idx = finderb(np.round(temp_map[:, v].flatten(), decimals=1),
+                                  relevant_temps[k][0, :])
+                    mf_mag_map[:, v] = np.reshape(relevant_temps[k][1, idx], (M, len(v)))
+                except Exception:
+                    raise IndexError('No temperature in _temp_map_ was found that is '
+                                     'below the curie temperature for layer {:s}!'.format(
+                                         unique_layers[0][i]))
             else:
                 # non-magnetic layers with Curie temperature = 0
                 mf_mag_map[:, v] = 0
@@ -918,7 +927,7 @@ class LLB(Magnetization):
 
         """
 
-        eta = mf_exch_coupling * mag / constants.k / temp / curie_temp
+        eta = mf_exch_coupling.to('m**2*kg/s**2').magnitude * mag / constants.k / temp / curie_temp
         c1 = (2 * eff_spin + 1) / (2 * eff_spin)
         c2 = 1 / (2 * eff_spin)
         brillouin = c1 / np.tanh(c1 * eta) - c2 / np.tanh(c2 * eta)
@@ -951,7 +960,7 @@ class LLB(Magnetization):
             dBdx (ndarray[float]): derivative of Brillouin function.
 
         """
-        x = np.divide(mf_exch_couplings*mf_magnetizations,
+        x = np.divide(mf_exch_couplings.to('m**2*kg/s**2').magnitude*mf_magnetizations,
                       constants.k*temp_map)
 
         two_eff_spins = 2*eff_spins
@@ -1127,11 +1136,13 @@ class LLB(Magnetization):
         chi_long = np.zeros_like(temp_map)
         chi_long[under_tc] = np.divide(
             mag_moments[under_tc]*dBdx,
-            temp_map[under_tc]*constants.k - mf_exch_couplings[under_tc]*dBdx
+            temp_map[under_tc]*constants.k
+            - (mf_exch_couplings.to('m**2*kg/s**2').magnitude)[under_tc]*dBdx
             )
         chi_long[over_tc] = np.divide(
             mag_moments[over_tc]*curie_temps[over_tc],
-            mf_exch_couplings[over_tc]*(temp_map[over_tc]-curie_temps[over_tc])
+            (mf_exch_couplings.to('m**2*kg/s**2').magnitude)[over_tc]
+            * (temp_map[over_tc]-curie_temps[over_tc])
             )
 
         return chi_long
