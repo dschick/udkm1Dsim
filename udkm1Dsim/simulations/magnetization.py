@@ -36,7 +36,7 @@ from scipy.optimize import fsolve
 import scipy.constants as constants
 from time import time
 from os import path
-from tqdm.notebook import tqdm
+from tqdm.auto import tqdm
 
 
 class Magnetization(Simulation):

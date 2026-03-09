@@ -34,7 +34,7 @@ import numpy as np
 import scipy.constants as constants
 from time import time
 from os import path
-from tqdm.notebook import trange
+from tqdm.auto import trange
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
