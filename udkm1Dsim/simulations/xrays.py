@@ -34,7 +34,7 @@ import numpy as np
 import scipy.constants as constants
 from time import time
 from os import path
-from tqdm.notebook import trange
+from tqdm.auto import trange
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -275,6 +275,8 @@ class Xray(Simulation):
     def theta(self, theta):
         self._theta = np.array(theta.to_base_units().magnitude, ndmin=1)
         if self._theta.ndim < 2:
+            if len(self._energy) == 0:
+                raise IndexError('Set energy, wl, or k first!')
             self._theta = np.tile(self._theta, (len(self._energy), 1))
         self.update_experiment('theta')
 
@@ -286,6 +288,8 @@ class Xray(Simulation):
     def qz(self, qz):
         self._qz = np.array(qz.to_base_units().magnitude, ndmin=1)
         if self._qz.ndim < 2:
+            if len(self._energy) == 0:
+                raise IndexError('Set energy, wl, or k first!')
             self._qz = np.tile(self._qz, (len(self._energy), 1))
         self.update_experiment('qz')
 

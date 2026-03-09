@@ -107,7 +107,7 @@ def m_times_n(m, n):
         res (ndarray[float, complex]): 4-dimensional multiplication result.
 
     """
-    return np.einsum("lmij,lmjk->lmik", m, n)
+    return np.einsum('lmij,lmjk->lmik', m, n)
 
 
 def finderb(key, array):
