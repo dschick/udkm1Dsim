@@ -149,7 +149,7 @@ def unit_cell_oxygen(atom_oxygen, properties):
 
 @pytest.fixture(scope='module')
 def structure(amorphous_layer_iron, amorphous_layer_oxygen, unit_cell_iron, unit_cell_oxygen):
-    S = Structure('structure amorph')
+    S = Structure('structure mixed')
     S.add_sub_structure(amorphous_layer_iron, 10)
     S.add_sub_structure(amorphous_layer_oxygen, 10)
     S.add_sub_structure(unit_cell_iron, 20)
@@ -176,6 +176,20 @@ def structure_amorph(amorphous_layer_iron, amorphous_layer_oxygen):
 
     substrate = Structure('substrate')
     substrate.add_sub_structure(amorphous_layer_iron, 100)
+
+    S.add_substrate(substrate)
+
+    return S
+
+
+@pytest.fixture(scope='module')
+def structure_crystalline(unit_cell_iron, unit_cell_oxygen):
+    S = Structure('structure crystalline')    
+    S.add_sub_structure(unit_cell_iron, 20)
+    S.add_sub_structure(unit_cell_oxygen, 20)
+
+    substrate = Structure('substrate')
+    substrate.add_sub_structure(unit_cell_iron, 100)
 
     S.add_substrate(substrate)
 
