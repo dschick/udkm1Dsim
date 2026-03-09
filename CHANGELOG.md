@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the udkm1Dsim project will be documented in this file.
+All notable changes to the **udkm1Dsim** project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [#171]: https://github.com/dschick/udkm1Dsim/pull/171
 [dd134ae]: https://github.com/dschick/udkm1Dsim/commit/dd134ae
-[#115]: ttps://github.com/dschick/udkm1Dsim/pull/115
+[#115]: https://github.com/dschick/udkm1Dsim/pull/115
 [f71eb1c]: https://github.com/dschick/udkm1Dsim/commit/f71eb1c
 [97b17d8]: https://github.com/dschick/udkm1Dsim/commit/97b17d8
 [0c8cecc]: https://github.com/dschick/udkm1Dsim/commit/0c8cecc
