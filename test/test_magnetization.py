@@ -12,14 +12,14 @@ import pytest
 
 @pytest.fixture(scope='module')
 def magnetization(structure, tmp_path_factory):
-    return Magnetization(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp("cache"),
+    return Magnetization(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp('cache'),
                          save_data=True, disp_messages=True, progress_bar=True,
                          )
 
 
 @pytest.fixture(scope='module')
 def llb(structure_amorph, tmp_path_factory):
-    return LLB(structure_amorph, force_recalc=True, cache_dir=tmp_path_factory.mktemp("cache"),
+    return LLB(structure_amorph, force_recalc=True, cache_dir=tmp_path_factory.mktemp('cache'),
                save_data=True, disp_messages=True, progress_bar=True,
                )
 

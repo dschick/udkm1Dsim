@@ -13,7 +13,7 @@ from pint.testing import assert_allclose
 
 @pytest.fixture(scope='module')
 def heat(structure, tmp_path_factory):
-    return Heat(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp("cache"),
+    return Heat(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp('cache'),
                 save_data=True, disp_messages=True, progress_bar=True,
                 )
 

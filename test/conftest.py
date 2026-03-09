@@ -184,7 +184,7 @@ def structure_amorph(amorphous_layer_iron, amorphous_layer_oxygen):
 
 @pytest.fixture(scope='module')
 def structure_crystalline(unit_cell_iron, unit_cell_oxygen):
-    S = Structure('structure crystalline')    
+    S = Structure('structure crystalline')
     S.add_sub_structure(unit_cell_iron, 20)
     S.add_sub_structure(unit_cell_oxygen, 20)
 
