@@ -9,14 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- introduce `nox` automatic testing tool for local testing of multiple python and/or package versions in virtual environments (PR #171)
-- add unit to mf_exch_coupling dd134ae4e7286ce792a8d53044768879c9d00a72
-
 ### Changed
-
-- `Layer.check_input()` always returns `float` f71eb1cea3a47665eb63aa6e9219e61758dc2e16
-- change GitHub CI Matrix to python 3.9--3.12 97b17d8ff5295c68119aa2da9b691db3dcfb6b18
-- change import of `tqdm` to `auto` module to work with scripts and notebooks 0c8cecc6b0b2a843334bc293a0e811640d6d8659
 
 ### Deprecated
 
@@ -24,9 +17,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- raise `TypeError` in `Magnetization` class for `UnitCell`s in sample 7e92efbb345ea6a84dc11cb33ba9f5132aeaf255
-
 ### Security
+
+## [2.1.0] 2026-03-09
+
+### Added
+
+- introduce `nox` automatic testing tool for local testing of multiple python and/or package versions in virtual environments (PR #171)
+- add unit to mf_exch_coupling ([dd134ae])
+- improve testing coverage to > 80% (#115)
+
+### Changed
+
+- `Layer.check_input()` always returns `float` ([f71eb1c])
+- change GitHub CI Matrix to python 3.9--3.12 ([97b17d8])
+- change import of `tqdm` to `auto` module to work with scripts and notebooks ([0c8cecc])
+
+### Fixed
+
+- raise `TypeError` in `Magnetization` class for `UnitCell`s in sample ([7e92efb])
+
+[dd134ae]: https://github.com/dschick/udkm1Dsim/commit/dd134ae
+[f71eb1c]: https://github.com/dschick/udkm1Dsim/commit/f71eb1c
+[97b17d8]: https://github.com/dschick/udkm1Dsim/commit/97b17d8
+[0c8cecc]: https://github.com/dschick/udkm1Dsim/commit/0c8cecc
+[7e92efb]: https://github.com/dschick/udkm1Dsim/commit/7e92efb
 
 ## [2.0.5] 2026-03-04
 
