@@ -27,6 +27,7 @@ __all__ = ['Magnetization', 'LLB']
 __docformat__ = 'restructuredtext'
 
 from .simulation import Simulation
+from ..structures.layers import UnitCell
 from .. import u, Q_
 from ..helpers import make_hash_md5, finderb
 from ..helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
@@ -144,6 +145,12 @@ class Magnetization(Simulation):
                 the according spatial grid.
 
         """
+        layers = self.S.get_unique_layers()
+        for layer in layers[1]:
+            if isinstance(layer, UnitCell):
+                raise TypeError('UnitCells are not yet supported in Magnetization '
+                                'simulations! See issue #129.')
+
         try:
             distances = distances.to('m').magnitude
         except AttributeError:
