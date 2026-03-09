@@ -34,7 +34,7 @@ import numpy as np
 import scipy.constants as constants
 from time import time
 from os import path
-from tqdm.notebook import trange
+from tqdm.auto import trange
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -275,6 +275,8 @@ class Xray(Simulation):
     def theta(self, theta):
         self._theta = np.array(theta.to_base_units().magnitude, ndmin=1)
         if self._theta.ndim < 2:
+            if len(self._energy) == 0:
+                raise IndexError('Set energy, wl, or k first!')
             self._theta = np.tile(self._theta, (len(self._energy), 1))
         self.update_experiment('theta')
 
@@ -286,6 +288,8 @@ class Xray(Simulation):
     def qz(self, qz):
         self._qz = np.array(qz.to_base_units().magnitude, ndmin=1)
         if self._qz.ndim < 2:
+            if len(self._energy) == 0:
+                raise IndexError('Set energy, wl, or k first!')
             self._qz = np.tile(self._qz, (len(self._energy), 1))
         self.update_experiment('qz')
 
@@ -1302,9 +1306,9 @@ class XrayDyn(Xray):
             # function returns a relative postion dependent on the
             # applied strain.
             if i == (K-1):  # its the last atom
-                del_dist = (strain+1)-uc.atoms[i][1](strain)
+                rel_dist = (strain+1)-uc.atoms[i][1](strain)
             else:
-                del_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
+                rel_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
 
             # get the reflection-transmission matrix and phase matrix
             # from all atoms in the unit cell and multiply them
@@ -1314,7 +1318,7 @@ class XrayDyn(Xray):
                                                            uc._area,
                                                            uc._deb_wal_fac))
             RTM = m_times_n(RTM,
-                            self.get_atom_phase_matrix(del_dist*uc._c_axis))
+                            self.get_atom_phase_matrix(rel_dist*uc._c_axis))
         return RTM
 
     def get_atom_ref_trans_matrix(self, atom, area, deb_wal_fac):
@@ -2285,10 +2289,10 @@ class XrayDynMag(Xray):
         # force_recalc = True
         for j in range(K):
             if j == (K-1):  # its the last atom
-                del_dist = (strain+1)-uc.atoms[j][1](strain)
+                rel_dist = (strain+1)-uc.atoms[j][1](strain)
             else:
-                del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
-            distance = del_dist*uc._c_axis
+                rel_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
+            distance = rel_dist*uc._c_axis
 
             try:
                 # calculate density

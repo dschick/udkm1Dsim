@@ -32,7 +32,7 @@ import numpy as np
 from os import path
 from time import time
 from scipy.integrate import solve_ivp
-from tqdm.notebook import tqdm, trange
+from tqdm.auto import tqdm, trange
 
 
 class Phonon(Simulation):

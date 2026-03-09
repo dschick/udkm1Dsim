@@ -36,7 +36,7 @@ from scipy.integrate import solve_ivp
 from time import time
 from os import path
 import warnings
-from tqdm.notebook import tqdm
+from tqdm.auto import tqdm
 
 
 class Heat(Simulation):

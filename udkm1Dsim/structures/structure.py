@@ -68,6 +68,11 @@ class Structure:
 
         class_str = tab_str + 'Structure properties:\n\n'
         class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
+
+        if len(self.sub_structures) == 0:
+            class_str += tab_str + 'Structure is empty\n----\n'
+            return class_str
+
         class_str += tab_str + 'Thickness : {:0.4f}\n'.format(self.get_thickness().to('nm'))
         class_str += tab_str + 'Roughness : {:0.4f}\n'.format(self.roughness.to('nm'))
         class_str += tab_str + '----\n'
@@ -99,7 +104,8 @@ class Structure:
             class_str += tab_str + 'no substrate\n'
         return class_str
 
-    def visualize(self, unit='nm', fig_size=[20, 1], cmap='Set1', linewidth=0.1, show=True):
+    def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set1', linewidth=0.1,
+                  show=True):
         """visualize
 
         Simple visualization of the structure.
@@ -140,7 +146,7 @@ class Structure:
 
         plt.xlim(0, thickness)
         plt.ylim(0, 1)
-        plt.xlabel('Distance [{:s}]'.format(unit))
+        plt.xlabel('Distance ({:s})'.format(unit))
         plt.yticks([], [])
 
         # add labels for legend
@@ -153,7 +159,7 @@ class Structure:
             line.set_linewidth(8.0)
 
         if show:
-            plt.show()
+            plt.show(block=block)
 
     def get_hash(self, **kwargs):
         """get_hash
@@ -161,6 +167,11 @@ class Structure:
         Create an unique hash from all layer IDs in the correct order in the
         structure as well as the corresponding material properties which are
         given by the `kwargs`.
+
+        `types='all'` is problematic, as function handles will be include,
+        which will always change on recreation. Following errors from the
+        GitHub test-suite, hashes do not seem to match across different OS
+        and/or python versions.
 
         Args:
             **kwargs (list[str]): types of requested properties..
