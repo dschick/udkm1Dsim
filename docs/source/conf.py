@@ -188,7 +188,7 @@ texinfo_documents = [
 
 todo_include_todos = True
 # -- Extension configuration --
-jupyter_execute_notebooks = "off"
+nb_execution_mode = "off"
 
 # Autodoc setting
 autodoc_default_options = {
