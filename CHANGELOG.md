@@ -17,7 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- errors in building the docs ([33d3a3c])
+
 ### Security
+
+[33d3a3c]: https://github.com/dschick/udkm1Dsim/commit/33d3a3c
 
 ## [2.2.0] 2026-03-10
 
