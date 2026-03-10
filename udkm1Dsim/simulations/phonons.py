@@ -1010,7 +1010,8 @@ class PhononAna(Phonon):
             # initialize
             L = self.S.get_number_of_layers()
             K = np.zeros([L, L])  # initializing three-diagonal springs-masses matrix.
-            omega = np.zeros([L, 1], dtype=np.complex128)  # initializing a vector for eigenfrequencies
+            # initializing a vector for eigenfrequencies
+            omega = np.zeros([L, 1], dtype=np.complex128)
 
             masses = self.S.get_layer_property_vector('_mass_unit_area')
             spring_consts = self.S.get_layer_property_vector('spring_const')

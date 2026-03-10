@@ -2645,9 +2645,9 @@ class XrayDynMag(Xray):
         """
 
         Ref = np.tile(np.eye(2, 2, dtype=np.complex128)[np.newaxis, np.newaxis, :, :],
-                  (np.size(RT, 0), np.size(RT, 1), 1, 1))
+                      (np.size(RT, 0), np.size(RT, 1), 1, 1))
         Trans = np.tile(np.eye(2, 2, dtype=np.complex128)[np.newaxis, np.newaxis, :, :],
-                (np.size(RT, 0), np.size(RT, 1), 1, 1))
+                        (np.size(RT, 0), np.size(RT, 1), 1, 1))
 
         d = np.divide(1, RT[:, :, 3, 3] * RT[:, :, 2, 2] - RT[:, :, 3, 2] * RT[:, :, 2, 3])
         Ref[:, :, 0, 0] = (-RT[:, :, 3, 3] * RT[:, :, 2, 0] + RT[:, :, 2, 3] * RT[:, :, 3, 0]) * d
