@@ -39,7 +39,7 @@ def tests(session, numpy):
     session.run('pytest', '--cov=udkm1Dsim', 'test/')
 
 
-@nox.session(python='3.13', reuse_venv=False)
+@nox.session(python='3.13', reuse_venv=True)
 def docs(session):
     session.install('.')
     session.install('-r', './docs/requirements.txt')
