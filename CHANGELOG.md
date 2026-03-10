@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- installation instruction of new conda package, see [udkm1dsim-feedstock](https://github.com/conda-forge/udkm1dsim-feedstock) for more details
+
 ### Changed
 
 ### Deprecated
@@ -18,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - errors in building the docs ([33d3a3c])
-- formatting of pint quantities in __str__() methods of structure and simulation objects ([#175] PR [#176])
+- formatting of pint quantities in __str__() methods of structure and simulation objects ([#175] and PR[#176])
 
 ### Security
 
@@ -30,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- compatibility for numpy>=2.0.0 and newer python version >= 3.10 and <= 3.14 ([#157] PR [#174])
+- compatibility for numpy>=2.0.0 and newer python version >= 3.10 and <= 3.14 ([#157] and PR[#174])
 
 [#157]: https://github.com/dschick/udkm1Dsim/issues/157
 [#174]: https://github.com/dschick/udkm1Dsim/pull/174
@@ -39,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- introduce `nox` automatic testing tool for local testing of multiple python and/or package versions in virtual environments (PR [#171])
+- introduce `nox` automatic testing tool for local testing of multiple python and/or package versions in virtual environments (PR[#171])
 - add unit to mf_exch_coupling ([dd134ae])
 - improve testing coverage to > 80% (PR [#115])
 
@@ -65,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- fix wrong strain dependence of `Atom`s in `UnitCell` when calling `add_atom` method ([#172] and PR [#173])
+- fix wrong strain dependence of `Atom`s in `UnitCell` when calling `add_atom` method ([#172] and PR[#173])
 
 [#172]: https://github.com/dschick/udkm1Dsim/issues/172
 [#173]: https://github.com/dschick/udkm1Dsim/pull/173
