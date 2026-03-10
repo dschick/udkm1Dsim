@@ -53,6 +53,8 @@ D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Barghee
 
 ## Installation
 
+### Installing with pip
+
 You can either install directly from pypi.org using the command
 
     pip install udkm1Dsim
@@ -81,6 +83,18 @@ computations, unit tests, as well as building the documentation:
     pip install udkm1Dsim[parallel]
     pip install udkm1Dsim[testing]
     pip install udkm1Dsim[documentation]
+
+### Installing with conda
+
+You can install directly from conda-forge using `conda`:
+
+    conda install -c conda-forge udkm1dsim
+
+or using `mamba`:
+
+    mamba install udkm1dsim
+
+See [udkm1dsim-feedstock](https://github.com/conda-forge/udkm1dsim-feedstock) for more details
 
 ## Contribute & Support
 
