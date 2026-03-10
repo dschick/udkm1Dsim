@@ -162,15 +162,15 @@ class Phonon(Simulation):
             N = np.asarray(N).ravel()
             if N.size != L:
                 raise ValueError('The dimension of N must be either 1 or the number '
-                                 'of unique layers the structure!')
+                                 'of unique layers ({:d}) the structure!'.format(L))
             N = N.astype(int)
 
         for i, value in enumerate(all_strains):
             min_strain = np.min(value)
             max_strain = np.max(value)
-            n_points = int(N[i]) if np.ndim(N) > 0 else int(N)
+
             strains.append(np.sort(np.unique(
-                np.r_[0, np.linspace(min_strain, max_strain, n_points)])))
+                np.r_[0, np.linspace(min_strain, max_strain, int(N[i]))])))
 
         return strains
 

@@ -606,35 +606,31 @@ class Structure:
         else:
             # its a number or array
             layers = self.get_unique_layers()
+            temp = np.zeros([len(layers[0]), 1])
             set_dtype = float
-            lengths = []
-            for layer in layers[1]:
+            for i, layer in enumerate(layers[1]):
                 value = getattr(layer, property_name)
-                value_arr = np.asarray(value)
-                if np.iscomplexobj(value_arr):
-                    set_dtype = complex
-                lengths.append(value_arr.size if value_arr.shape != () else 1)
-
-            max_dim = int(np.max(lengths))
+                if np.iscomplexobj(value):
+                    set_dtype = np.complex128
+                try:
+                    temp[i] = len(value)
+                except TypeError:
+                    temp[i] = 1
+            max_dim = int(np.max(temp))
             if max_dim > 1:
-                prop = np.zeros([self.get_number_of_layers(), max_dim], dtype=set_dtype)
+                prop = np.empty([self.get_number_of_layers(), max_dim], dtype=set_dtype)
             else:
-                prop = np.zeros([self.get_number_of_layers()], dtype=set_dtype)
-
-            # traverse all layers and fill values; shorter arrays are padded
-            for i, handle in enumerate(handles):
-                value_arr = np.asarray(getattr(handle, property_name))
-                if value_arr.shape == ():  # scalar-like
-                    if max_dim > 1:
-                        prop[i, 0] = value_arr.item()
-                    else:
-                        prop[i] = value_arr.item()
+                prop = np.empty([self.get_number_of_layers()], dtype=set_dtype)
+            del temp
+            # traverse all layers
+            for i in range(self.get_number_of_layers()):
+                temp = getattr(handles[i], property_name)
+                if np.iscomplexobj(temp):
+                    prop.dtype = np.complex128
+                if max_dim > 1:
+                    prop[i, :] = temp
                 else:
-                    flat_val = value_arr.ravel()
-                    if max_dim == 1:
-                        prop[i] = flat_val[0]
-                    else:
-                        prop[i, :flat_val.size] = flat_val
+                    prop[i] = np.asarray(temp).item()
 
         return prop
 

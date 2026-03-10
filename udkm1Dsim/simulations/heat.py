@@ -128,25 +128,14 @@ class Heat(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        def _fmt_quantity(value, empty_msg='[]'):
-            try:
-                mag = np.asarray(value.magnitude)
-                if mag.size == 0:
-                    return empty_msg
-            except Exception:
-                return str(value)
-
-            return str(value)
-
-        excitation = self.excitation
-        output = [['excitation fluence', _fmt_quantity(excitation['fluence'], 'not set')],
-                  ['excitation delay', _fmt_quantity(excitation['delay_pump'])],
-                  ['excitation pulse length', _fmt_quantity(excitation['pulse_width'])],
-                  ['excitation wavelength', _fmt_quantity(excitation['wavelength'])],
-                  ['excitation theta', _fmt_quantity(excitation['theta'])],
+        output = [['excitation fluence', self.excitation['fluence']],
+                  ['excitation delay', self.excitation['delay_pump']],
+                  ['excitation pulse length', self.excitation['pulse_width']],
+                  ['excitation wavelength', self.excitation['wavelength']],
+                  ['excitation theta', self.excitation['theta']],
                   # ['excitation polarization', self.excitation['polarization']],
-                  ['excitation multilayer absorption', excitation['multilayer_absorption']],
-                  ['excitation backside', excitation['backside']],
+                  ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
+                  ['excitation backside', self.excitation['backside']],
                   ['heat diffusion', self.heat_diffusion],
                   ['interpolate at interfaces', self.intp_at_interface],
                   ['backend', self.backend],
@@ -1151,7 +1140,7 @@ class Heat(Simulation):
         # calls throughout the ODE integration
         last_t, dt = state
         try:
-            n = int((t.item() - last_t)/dt)
+            n = int((float(np.asarray(t).item()) - last_t)/dt)
         except ValueError:
             n = 0
 
