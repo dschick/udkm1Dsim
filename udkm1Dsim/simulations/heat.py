@@ -1151,7 +1151,7 @@ class Heat(Simulation):
         # calls throughout the ODE integration
         last_t, dt = state
         try:
-            n = int((t - last_t)/dt)
+            n = int((t.item() - last_t)/dt)
         except ValueError:
             n = 0
 
