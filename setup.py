@@ -34,7 +34,7 @@ setup(
                 + 'in Condensed Matter',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    python_requires='>=3.9',
+    python_requires='>=3.10',
     keywords='ultrafast dynamics condensed matter 1D '
             + 'NTM 3TM 2TM TTM N-temperature model '
             + 'coherent acoustic phonons sound strain waves '
