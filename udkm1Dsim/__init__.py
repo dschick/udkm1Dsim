@@ -1,6 +1,6 @@
 from pint import UnitRegistry
 u = UnitRegistry()
-u.default_format = '~P'
+u.formatter.default_format = '.4g~P'
 Q_ = u.Quantity
 from .structures.atoms import Atom, AtomMixed
 from .structures.layers import Layer, AmorphousLayer, UnitCell
