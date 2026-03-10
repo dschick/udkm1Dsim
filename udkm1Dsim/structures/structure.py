@@ -73,14 +73,14 @@ class Structure:
             class_str += tab_str + 'Structure is empty\n----\n'
             return class_str
 
-        class_str += tab_str + 'Thickness : {:0.4f}\n'.format(self.get_thickness().to('nm'))
-        class_str += tab_str + 'Roughness : {:0.4f}\n'.format(self.roughness.to('nm'))
+        class_str += tab_str + 'Thickness : {:.4g~P}\n'.format(self.get_thickness().to('nm'))
+        class_str += tab_str + 'Roughness : {:.4g~P}\n'.format(self.roughness.to('nm'))
         class_str += tab_str + '----\n'
         # traverse all substructures
         for sub_structure in self.sub_structures:
             if isinstance(sub_structure[0], (AmorphousLayer, UnitCell)):
                 # the substructure is an unitCell
-                class_str += tab_str + '{:d} times {:s}: {:0.4f}\n'.format(
+                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
                         sub_structure[1],
                         sub_structure[0].name,
                         sub_structure[1]*sub_structure[0].thickness.to('nm'))
@@ -95,7 +95,7 @@ class Structure:
         if isinstance(self.substrate, Structure):
             class_str += tab_str + 'Substrate:\n'
             class_str += tab_str + '----\n'
-            class_str += tab_str + '{:d} times {:s}: {:0.4f}\n'.format(
+            class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
                     self.substrate.sub_structures[0][1],
                     self.substrate.sub_structures[0][0].name,
                     self.substrate.sub_structures[0][1]
