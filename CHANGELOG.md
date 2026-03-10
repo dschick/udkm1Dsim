@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [2.2.0] 2026-03-10
+
+### Added
+
+- compatibility for numpy>=2.0.0 and newer python version >= 3.10 and <= 3.14 ([#157] PR [#174])
+
+[#157]: https://github.com/dschick/udkm1Dsim/issues/157
+[#174]: https://github.com/dschick/udkm1Dsim/pull/174
+
 ## [2.1.0] 2026-03-09
 
 ### Added
