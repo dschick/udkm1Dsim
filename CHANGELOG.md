@@ -18,10 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - errors in building the docs ([33d3a3c])
+- formatting of pint quantities in __str__() methods of structure and simulation objects ([#175] PR [#176])
 
 ### Security
 
 [33d3a3c]: https://github.com/dschick/udkm1Dsim/commit/33d3a3c
+[#175]: https://github.com/dschick/udkm1Dsim/issues/175
+[#176]: https://github.com/dschick/udkm1Dsim/pull/176
 
 ## [2.2.0] 2026-03-10
 
