@@ -128,11 +128,16 @@ class Heat(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        output = [['excitation fluence', '{:.4g~P}'.format(self.excitation['fluence'].to('mJ/cm**2'))],
-                  ['excitation delay', '{:.4g~P}'.format(self.excitation['delay_pump'].to('ps'))],
-                  ['excitation pulse length', '{:.4g~P}'.format(self.excitation['pulse_width'].to('ps'))],
-                  ['excitation wavelength', '{:.4g~P}'.format(self.excitation['wavelength'].to('nm'))],
-                  ['excitation theta', '{:.4g~P}'.format(self.excitation['theta'].to('deg'))],
+        output = [['excitation fluence',
+                   '{:.4g~P}'.format(self.excitation['fluence'].to('mJ/cm**2'))],
+                  ['excitation delay',
+                   '{:.4g~P}'.format(self.excitation['delay_pump'].to('ps'))],
+                  ['excitation pulse length',
+                   '{:.4g~P}'.format(self.excitation['pulse_width'].to('ps'))],
+                  ['excitation wavelength',
+                   '{:.4g~P}'.format(self.excitation['wavelength'].to('nm'))],
+                  ['excitation theta',
+                   '{:.4g~P}'.format(self.excitation['theta'].to('deg'))],
                   # ['excitation polarization', self.excitation['polarization']],
                   ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
                   ['excitation backside', self.excitation['backside']],

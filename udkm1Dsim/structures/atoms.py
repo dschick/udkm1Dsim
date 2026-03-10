@@ -420,8 +420,9 @@ class AtomMixed(Atom):
         output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
                                 'ionicity', 'magn. amplitude', 'magn. phi', 'magn. gamma'],
                   'value': [self.id, self.symbol, self.name, self.atomic_number_z,
-                            self.mass_number_a, '{:.4g~P}'.format(self.mass.to('kg')), self.ionicity,
-                            self.mag_amplitude, '{:.4g~P}'.format(self.mag_phi.to('deg')),
+                            self.mass_number_a, '{:.4g~P}'.format(self.mass.to('kg')),
+                            self.ionicity, self.mag_amplitude,
+                            '{:.4g~P}'.format(self.mag_phi.to('deg')),
                             '{:.4g~P}'.format(self.mag_gamma.to('deg'))]}
 
         output_atom = []
