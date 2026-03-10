@@ -1063,9 +1063,9 @@ class UnitCell(Layer):
 
         """
         if args:
-            strain = args[0]
+            strain = float(np.asarray(args[0]).item())
         else:
-            strain = 0
+            strain = 0.
 
         res = np.zeros([self.num_atoms])
         for i, atom in enumerate(self.atoms):

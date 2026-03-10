@@ -704,10 +704,15 @@ class Heat(Simulation):
         # absorption profile from Lambert-Beer's law or multilayer absorption
         dAdz = self.get_absorption_profile(distances=distances, backside=backside)
 
+        # normalize fluence to a scalar (single delta excitation)
         try:
             fluence = fluence.to('J/m**2').magnitude
         except AttributeError:
-            pass
+            # fluence might be a list/array; squeeze to scalar if possible
+            fluence = np.asarray(fluence, dtype=float).squeeze()
+        if np.ndim(fluence) != 0:
+            raise ValueError('Delta excitation expects a single fluence value; '
+                             'got shape {}'.format(np.shape(fluence)))
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
@@ -1135,7 +1140,7 @@ class Heat(Simulation):
         # calls throughout the ODE integration
         last_t, dt = state
         try:
-            n = int((t - last_t)/dt)
+            n = int((float(np.asarray(t).item()) - last_t)/dt)
         except ValueError:
             n = 0
 

@@ -609,10 +609,11 @@ class Structure:
             temp = np.zeros([len(layers[0]), 1])
             set_dtype = float
             for i, layer in enumerate(layers[1]):
-                if isinstance(getattr(layer, property_name), complex):
-                    set_dtype = complex
+                value = getattr(layer, property_name)
+                if np.iscomplexobj(value):
+                    set_dtype = np.complex128
                 try:
-                    temp[i] = len(getattr(layer, property_name))
+                    temp[i] = len(value)
                 except TypeError:
                     temp[i] = 1
             max_dim = int(np.max(temp))
@@ -624,12 +625,12 @@ class Structure:
             # traverse all layers
             for i in range(self.get_number_of_layers()):
                 temp = getattr(handles[i], property_name)
-                if isinstance(temp, complex):
-                    prop.dtype = complex
+                if np.iscomplexobj(temp):
+                    prop.dtype = np.complex128
                 if max_dim > 1:
                     prop[i, :] = temp
                 else:
-                    prop[i] = temp
+                    prop[i] = np.asarray(temp).item()
 
         return prop
 
