@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - installation instruction of new conda package, see [udkm1dsim-feedstock](https://github.com/conda-forge/udkm1dsim-feedstock) for more details
+- temperature-dependence of Debye-Waller factor
 
 ### Changed
 
@@ -21,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - errors in building the docs ([33d3a3c])
 - formatting of pint quantities in __str__() methods of structure and simulation objects ([#175] and PR[#176])
+- math of Debye-Waller factor
 
 ### Security
 
