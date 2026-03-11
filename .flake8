@@ -14,4 +14,4 @@ ignore =
     W504,
     W505,
     W605
-exclude = docs,build,dist
+exclude = docs,build,dist,.nox

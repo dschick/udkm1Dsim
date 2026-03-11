@@ -60,7 +60,7 @@ class Structure:
         self.num_sub_systems = 1
         self.sub_structures = []
         self.substrate = []
-        self.roughness = 0*u.nm
+        self.roughness = 0.0*u.nm
 
     def __str__(self, tabs=0):
         """String representation of this class"""
@@ -68,14 +68,19 @@ class Structure:
 
         class_str = tab_str + 'Structure properties:\n\n'
         class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
-        class_str += tab_str + 'Thickness : {:0.2f}\n'.format(self.get_thickness().to('nm'))
-        class_str += tab_str + 'Roughness : {:0.2f}\n'.format(self.roughness)
+
+        if len(self.sub_structures) == 0:
+            class_str += tab_str + 'Structure is empty\n----\n'
+            return class_str
+
+        class_str += tab_str + 'Thickness : {:.4g~P}\n'.format(self.get_thickness().to('nm'))
+        class_str += tab_str + 'Roughness : {:.4g~P}\n'.format(self.roughness.to('nm'))
         class_str += tab_str + '----\n'
         # traverse all substructures
         for sub_structure in self.sub_structures:
             if isinstance(sub_structure[0], (AmorphousLayer, UnitCell)):
                 # the substructure is an unitCell
-                class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
+                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
                         sub_structure[1],
                         sub_structure[0].name,
                         sub_structure[1]*sub_structure[0].thickness.to('nm'))
@@ -90,7 +95,7 @@ class Structure:
         if isinstance(self.substrate, Structure):
             class_str += tab_str + 'Substrate:\n'
             class_str += tab_str + '----\n'
-            class_str += tab_str + '{:d} times {:s}: {:0.2f}\n'.format(
+            class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
                     self.substrate.sub_structures[0][1],
                     self.substrate.sub_structures[0][0].name,
                     self.substrate.sub_structures[0][1]
@@ -99,7 +104,8 @@ class Structure:
             class_str += tab_str + 'no substrate\n'
         return class_str
 
-    def visualize(self, unit='nm', fig_size=[20, 1], cmap='Set1', linewidth=0.1, show=True):
+    def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set1', linewidth=0.1,
+                  show=True):
         """visualize
 
         Simple visualization of the structure.
@@ -140,7 +146,7 @@ class Structure:
 
         plt.xlim(0, thickness)
         plt.ylim(0, 1)
-        plt.xlabel('Distance [{:s}]'.format(unit))
+        plt.xlabel('Distance ({:s})'.format(unit))
         plt.yticks([], [])
 
         # add labels for legend
@@ -153,7 +159,7 @@ class Structure:
             line.set_linewidth(8.0)
 
         if show:
-            plt.show()
+            plt.show(block=block)
 
     def get_hash(self, **kwargs):
         """get_hash
@@ -161,6 +167,11 @@ class Structure:
         Create an unique hash from all layer IDs in the correct order in the
         structure as well as the corresponding material properties which are
         given by the `kwargs`.
+
+        `types='all'` is problematic, as function handles will be include,
+        which will always change on recreation. Following errors from the
+        GitHub test-suite, hashes do not seem to match across different OS
+        and/or python versions.
 
         Args:
             **kwargs (list[str]): types of requested properties..
@@ -598,10 +609,11 @@ class Structure:
             temp = np.zeros([len(layers[0]), 1])
             set_dtype = float
             for i, layer in enumerate(layers[1]):
-                if isinstance(getattr(layer, property_name), complex):
-                    set_dtype = complex
+                value = getattr(layer, property_name)
+                if np.iscomplexobj(value):
+                    set_dtype = np.complex128
                 try:
-                    temp[i] = len(getattr(layer, property_name))
+                    temp[i] = len(value)
                 except TypeError:
                     temp[i] = 1
             max_dim = int(np.max(temp))
@@ -613,12 +625,12 @@ class Structure:
             # traverse all layers
             for i in range(self.get_number_of_layers()):
                 temp = getattr(handles[i], property_name)
-                if isinstance(temp, complex):
-                    prop.dtype = complex
+                if np.iscomplexobj(temp):
+                    prop.dtype = np.complex128
                 if max_dim > 1:
                     prop[i, :] = temp
                 else:
-                    prop[i] = temp
+                    prop[i] = np.asarray(temp).item()
 
         return prop
 

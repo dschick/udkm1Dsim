@@ -31,12 +31,12 @@ from .. import u, Q_
 from ..helpers import make_hash_md5, finderb, multi_gauss
 import numpy as np
 from scipy.optimize import brentq
-from scipy.interpolate import interp2d
+from scipy.interpolate import RectBivariateSpline
 from scipy.integrate import solve_ivp
 from time import time
 from os import path
 import warnings
-from tqdm.notebook import tqdm
+from tqdm.auto import tqdm
 
 
 class Heat(Simulation):
@@ -128,11 +128,16 @@ class Heat(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        output = [['excitation fluence', self.excitation['fluence']],
-                  ['excitation delay', self.excitation['delay_pump']],
-                  ['excitation pulse length', self.excitation['pulse_width']],
-                  ['excitation wavelength', self.excitation['wavelength']],
-                  ['excitation theta', self.excitation['theta']],
+        output = [['excitation fluence',
+                   '{:.4g~P}'.format(self.excitation['fluence'].to('mJ/cm**2'))],
+                  ['excitation delay',
+                   '{:.4g~P}'.format(self.excitation['delay_pump'].to('ps'))],
+                  ['excitation pulse length',
+                   '{:.4g~P}'.format(self.excitation['pulse_width'].to('ps'))],
+                  ['excitation wavelength',
+                   '{:.4g~P}'.format(self.excitation['wavelength'].to('nm'))],
+                  ['excitation theta',
+                   '{:.4g~P}'.format(self.excitation['theta'].to('deg'))],
                   # ['excitation polarization', self.excitation['polarization']],
                   ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
                   ['excitation backside', self.excitation['backside']],
@@ -147,19 +152,19 @@ class Heat(Simulation):
 
         if self._boundary_conditions['top_type'] == 1:
             output += [['top boundary temperature',
-                        str(self.boundary_conditions['top_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['top_value'].to('K'))]]
         elif self._boundary_conditions['top_type'] == 2:
             output += [['top boundary flux',
-                        str(self.boundary_conditions['top_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['top_value'].to('W/m**2'))]]
 
         output += [['bottom boundary type', self.boundary_conditions['bottom_type']]]
 
         if self._boundary_conditions['bottom_type'] == 1:
             output += [['bottom boundary temperature',
-                        str(self.boundary_conditions['bottom_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['bottom_value'].to('K'))]]
         elif self._boundary_conditions['bottom_type'] == 2:
             output += [['bottom boundary flux',
-                        str(self.boundary_conditions['bottom_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['bottom_value'].to('W/m**2'))]]
 
         class_str = 'Heat simulation properties:\n\n'
         class_str += super().__str__(output)
@@ -216,10 +221,9 @@ class Heat(Simulation):
         except AttributeError:
             pass
 
-        if distances == []:
+        N = len(distances)
+        if N == 0:
             N = self.S.get_number_of_layers()
-        else:
-            N = len(distances)
 
         K = self.S.num_sub_systems
         # check size of initTemp
@@ -417,7 +421,7 @@ class Heat(Simulation):
         else:
             structure = self.S
 
-        if distances == []:
+        if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
             d_start, _, distances = structure.get_distances_of_layers(False)
@@ -507,7 +511,7 @@ class Heat(Simulation):
         else:
             structure = self.S
 
-        if distances == []:
+        if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
             d_start, _, distances = structure.get_distances_of_layers(False)
@@ -695,7 +699,7 @@ class Heat(Simulation):
         # initialize
         t1 = time()
         backside = self._excitation['backside']
-        if distances == []:
+        if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
             d_start, _, distances = self.S.get_distances_of_layers(False)
@@ -705,10 +709,15 @@ class Heat(Simulation):
         # absorption profile from Lambert-Beer's law or multilayer absorption
         dAdz = self.get_absorption_profile(distances=distances, backside=backside)
 
+        # normalize fluence to a scalar (single delta excitation)
         try:
             fluence = fluence.to('J/m**2').magnitude
         except AttributeError:
-            pass
+            # fluence might be a list/array; squeeze to scalar if possible
+            fluence = np.asarray(fluence, dtype=float).squeeze()
+        if np.ndim(fluence) != 0:
+            raise ValueError('Delta excitation expects a single fluence value; '
+                             'got shape {}'.format(np.shape(fluence)))
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
@@ -868,16 +877,16 @@ class Heat(Simulation):
                 start = 0
                 stop = 0
                 if i > 0:
-                    # check if there was a intervall before and add
-                    # last time of this intervall to the current
+                    # check if there was a interval before and add
+                    # last time of this interval to the current
                     sub_delays = np.r_[checked_excitation[i-1][0][-1], sub_delays]
                     start = 1
                 if i < len(checked_excitation)-1 and \
                         np.sum(checked_excitation[i+1][3]) > 0 and \
                         np.sum(checked_excitation[i+1][2]) == 0:
-                    # there is a next intervall of delta excitation so
+                    # there is a next interval of delta excitation so
                     # we add this time at the end of the current
-                    # intervall
+                    # interval
                     sub_delays = np.r_[sub_delays, checked_excitation[i+1][0][0]]
                     stop = 1
 
@@ -886,9 +895,9 @@ class Heat(Simulation):
                                                 pulse_width, fluence)
 
                 if stop == 1:
-                    # there is an upcomming delta excitation so we have
+                    # there is an upcoming delta excitation so we have
                     # to set the initial temperature for this next
-                    # intervall seperately
+                    # interval separately
                     special_init_temp = temp[-1, :, :]
                     temp = temp[start:-1, :, :]
                 else:
@@ -921,7 +930,7 @@ class Heat(Simulation):
             if np.sum(fluence) > 0:
                 num_ex += len(fluence)
 
-        if not np.all(excitation_delays == delays.to('s').magnitude) or self.heat_diffusion:
+        if not np.array_equal(excitation_delays, delays.to('s').magnitude) or self.heat_diffusion:
             # if the time grid for the calculation is not the same as
             # the grid to return the results on. Then extrapolate the
             # results on the original delay array but keep the first
@@ -930,8 +939,9 @@ class Heat(Simulation):
             temp_map = np.zeros([len(delays)+1, L, K])
             for iii in range(K):
                 init = np.interp(d_mid, distances, temp[0, :, iii]).reshape([1, L])
-                f = interp2d(distances, excitation_delays, temp[1:, :, iii], kind='linear')
-                temp_map[:, :, iii] = np.append(init, f(d_mid, delays.to('s').magnitude), axis=0)
+                f = RectBivariateSpline(distances, excitation_delays, temp[1:, :, iii].T,
+                                        kx=1, ky=1)
+                temp_map[:, :, iii] = np.append(init, f(d_mid, delays.to('s').magnitude).T, axis=0)
 
         # calculate the difference temperature map
         delta_temp_map = np.diff(temp_map, axis=0)
@@ -991,7 +1001,7 @@ class Heat(Simulation):
 
         d_distances = np.diff(distances)
         N = len(distances)
-        if fluence != []:
+        if np.any(fluence):
             dAdz = self.get_absorption_profile(distances=distances,
                                                backside=backside)
         else:
@@ -1081,11 +1091,11 @@ class Heat(Simulation):
             temp_map = sol.y.T
 
         temp_map = np.array(temp_map).reshape([M, N, K], order='F')
-        if fluence == []:
-            self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
-        else:
+        if np.any(fluence):
             self.disp_message('Elapsed time for _heat_diffusion_ with {:d} '
                               'excitation(s): {:f} s'.format(len(fluence), time()-t1))
+        else:
+            self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
 
         return temp_map
 
@@ -1135,7 +1145,7 @@ class Heat(Simulation):
         # calls throughout the ODE integration
         last_t, dt = state
         try:
-            n = int((t - last_t)/dt)
+            n = int((float(np.asarray(t).item()) - last_t)/dt)
         except ValueError:
             n = 0
 
@@ -1156,7 +1166,7 @@ class Heat(Simulation):
 
         # calculate external source
         source = np.zeros([N, K])
-        if fluence != []:
+        if np.any(fluence):
             source[:, 0] = \
                 dAdz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
 
