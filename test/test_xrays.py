@@ -61,17 +61,17 @@ def distances_mixed(structure):
 
 @pytest.fixture(scope='module')
 def temp_map(delays, distances):
-    return 50*np.ones([len(delays), len(distances), 1])
+    return 50*np.ones([len(delays), len(distances)])
 
 
 @pytest.fixture(scope='module')
 def strain_map(delays, distances):
-    return 0.01*np.ones([len(delays), len(distances), 1])
+    return 0.01*np.ones([len(delays), len(distances)])
 
 
 @pytest.fixture(scope='module')
 def strain_map_mixed(delays, distances_mixed):
-    return 0.01*np.ones([len(delays), len(distances_mixed), 1])
+    return 0.01*np.ones([len(delays), len(distances_mixed)])
 
 
 @pytest.fixture(scope='module')

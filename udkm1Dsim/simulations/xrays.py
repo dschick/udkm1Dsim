@@ -963,22 +963,22 @@ class XrayDyn(Xray):
             if not isinstance(strain_map, np.ndarray):
                 raise TypeError('strain_map must be a numpy ndarray!')
             if not isinstance(strain_vectors, list):
-                raise TypeError('strain_vectors must be a list!')         
+                raise TypeError('strain_vectors must be a list!')
             if not isinstance(temp_map, np.ndarray):
                 raise TypeError('temp_map must be a numpy ndarray!')
-        
+
             (M, L) = strain_map.shape
             K = self.S.num_sub_systems
 
             if len(temp_map) == 0:
                 temp_map = np.zeros([M, L, K])
-            else: 
+            else:
                 temp_map = np.reshape(temp_map, [M, L, K])
 
                 if len(strain_vectors) > 0:
-                    warnings.warn('strain_vectors and temp_map are not compatible with each other!\n'
-                                  'strain_vectors takes over.')
-            
+                    warnings.warn('strain_vectors and temp_map are not compatible '
+                                  'with each other!\nstrain_vectors takes over.')
+
             dask_client = kwargs.get('dask_client', [])
             calc_type = kwargs.get('calc_type', 'sequential')
             if calc_type not in ['parallel', 'sequential', 'distributed']:
@@ -1101,13 +1101,11 @@ class XrayDyn(Xray):
 
         if len(strain_vectors) > 0:
             uc_indices, _, _ = self.S.get_layer_vectors()
-            
             # make RTM available for all works
             remote_RTM = dask_client.scatter(RTM)
             remote_RTU = dask_client.scatter(RTU)
             remote_uc_indices = dask_client.scatter(uc_indices)
             remote_strain_vectors = dask_client.scatter(strain_vectors)
-
             # create dask.delayed tasks for all delay steps
             for i in range(M):
                 RT = delayed(XrayDyn.lookup_inhomogeneous_ref_trans_matrix)(
