@@ -1090,14 +1090,8 @@ class XrayDyn(Xray):
         K = np.size(self._qz, 1)  # qz steps
 
         R = np.zeros([M, N, K])
-        uc_indices, _, _ = self.S.get_layer_vectors()
         # init unity matrix for matrix multiplication
         RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (N, K, 1, 1))
-        # make RTM available for all works
-        remote_RTM = dask_client.scatter(RTM)
-        remote_RTU = dask_client.scatter(RTU)
-        remote_uc_indices = dask_client.scatter(uc_indices)
-        remote_strain_vectors = dask_client.scatter(strain_vectors)
 
         # precalculate the substrate ref_trans_matrix if present
         if self.S.substrate != []:
@@ -1105,18 +1099,36 @@ class XrayDyn(Xray):
         else:
             RTS = RTU
 
-        # create dask.delayed tasks for all delay steps
-        for i in range(M):
-            RT = delayed(XrayDyn.calc_inhomogeneous_ref_trans_matrix)(
-                    remote_uc_indices,
-                    remote_RTU,
-                    strain_map[i, :],
-                    remote_strain_vectors,
-                    remote_RTM,
-                    temp_map[i, :, :],)
-            RT = delayed(m_times_n)(RT, RTS)
-            Ri = delayed(XrayDyn.calc_reflectivity_from_matrix)(RT)
-            res.append(Ri)
+        if len(strain_vectors) > 0:
+            uc_indices, _, _ = self.S.get_layer_vectors()
+            
+            # make RTM available for all works
+            remote_RTM = dask_client.scatter(RTM)
+            remote_RTU = dask_client.scatter(RTU)
+            remote_uc_indices = dask_client.scatter(uc_indices)
+            remote_strain_vectors = dask_client.scatter(strain_vectors)
+
+            # create dask.delayed tasks for all delay steps
+            for i in range(M):
+                RT = delayed(XrayDyn.lookup_inhomogeneous_ref_trans_matrix)(
+                        remote_uc_indices,
+                        remote_RTU,
+                        strain_map[i, :],
+                        remote_strain_vectors,
+                        remote_RTM
+                        )
+                RT = delayed(m_times_n)(RT, RTS)
+                Ri = delayed(XrayDyn.calc_reflectivity_from_matrix)(RT)
+                res.append(Ri)
+        else:
+            for i in range(M):
+                RT = delayed(self.calc_inhomogeneous_ref_trans_matrix)(
+                        strain_map[i, :],
+                        temp_map[i, :, :]
+                        )
+                RT = delayed(m_times_n)(RT, RTS)
+                Ri = delayed(XrayDyn.calc_reflectivity_from_matrix)(RT)
+                res.append(Ri)
 
         # compute results
         res = dask_client.compute(res, sync=True)
