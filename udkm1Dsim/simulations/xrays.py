@@ -163,7 +163,7 @@ class Xray(Simulation):
         Args:
             strain_vectors (dict{ndarray[float]}): reduced strains per unique
                 layer.
-            **kwargs (ndarray[float]): spatio-temporal strain profile.
+            **kwargs (ndarray[float]): spatio-temporal strain/temperature profile.
 
         Returns:
             hash (str): unique hash.
@@ -176,6 +176,12 @@ class Xray(Simulation):
             if np.size(strain_map) > 1e6:
                 strain_map = strain_map.flatten()[0:1000000]
             param.append(strain_map)
+
+        if 'temp_map' in kwargs:
+            temp_map = kwargs.get('temp_map')
+            if np.size(temp_map) > 1e6:
+                temp_map = temp_map.flatten()[0:1000000]
+            param.append(temp_map)
 
         return self.S.get_hash(types='xray') + '_' + make_hash_md5(param)
 
@@ -846,7 +852,7 @@ class XrayDyn(Xray):
             if temps.shape[0] != L:
                 raise IndexError('First dimension of temperatures must match the number of '
                                  'substructures {:d}.'.format(L))
-            
+
             # check length (number of sub-systems) of Debye-Waller factor, which is not checked
             # in setter method
             # make an average for
@@ -906,7 +912,8 @@ class XrayDyn(Xray):
 
         return RT, A
 
-    def inhomogeneous_reflectivity(self, strain_map, strain_vectors, **kwargs):
+    def inhomogeneous_reflectivity(self, strain_map, strain_vectors=[], temp_map=np.array([]),
+                                   **kwargs):
         """inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogeneously strained sample
@@ -925,8 +932,9 @@ class XrayDyn(Xray):
 
         Args:
             strain_map (ndarray[float]): spatio-temporal strain profile.
-            strain_vectors (list[ndarray[float]]): reduced strains per unique
+            strain_vectors (list[ndarray[float]], optional): reduced strains per unique
                 layer.
+            temp_map (ndarray[float], optional): spatio-temporal temperature profile.
             **kwargs:
                 - *calc_type (str)* - type of calculation.
                 - *dask_client (Dask.Client)* - Dask client.
@@ -939,7 +947,7 @@ class XrayDyn(Xray):
         """
         # create a hash of all simulation parameters
         filename = 'inhomogeneous_reflectivity_dyn_' \
-                   + self.get_hash(strain_vectors, strain_map=strain_map) \
+                   + self.get_hash(strain_vectors, strain_map=strain_map, temp_map=temp_map) \
                    + '.npz'
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
@@ -955,8 +963,22 @@ class XrayDyn(Xray):
             if not isinstance(strain_map, np.ndarray):
                 raise TypeError('strain_map must be a numpy ndarray!')
             if not isinstance(strain_vectors, list):
-                raise TypeError('strain_vectors must be a list!')
+                raise TypeError('strain_vectors must be a list!')         
+            if not isinstance(temp_map, np.ndarray):
+                raise TypeError('temp_map must be a numpy ndarray!')
+        
+            (M, L) = strain_map.shape
+            K = self.S.num_sub_systems
 
+            if len(temp_map) == 0:
+                temp_map = np.zeros([M, L, K])
+            else: 
+                temp_map = np.reshape(temp_map, [M, L, K])
+
+                if len(strain_vectors) > 0:
+                    warnings.warn('strain_vectors and temp_map are not compatible with each other!\n'
+                                  'strain_vectors takes over.')
+            
             dask_client = kwargs.get('dask_client', [])
             calc_type = kwargs.get('calc_type', 'sequential')
             if calc_type not in ['parallel', 'sequential', 'distributed']:
@@ -965,34 +987,39 @@ class XrayDyn(Xray):
             job = kwargs.get('job')
             num_workers = kwargs.get('num_workers', 1)
 
-            # All ref-trans matrices for all unique unitCells and for all
-            # possible strains, given by strainVectors, are calculated in
-            # advance.
-            RTM = self.get_all_ref_trans_matrices(strain_vectors)
+            # optinally calculate all ref-trans matrices for all unique unitCells
+            # and for all possible strains in advance, if strain_vectors are given
+            if len(strain_vectors) > 0:
+                RTM = self.get_all_ref_trans_matrices(strain_vectors)
+            else:
+                RTM = []
 
             # select the type of computation
             if calc_type == 'parallel':
                 R = self.parallel_inhomogeneous_reflectivity(strain_map,
                                                              strain_vectors,
                                                              RTM,
+                                                             temp_map,
                                                              dask_client)
             elif calc_type == 'distributed':
                 R = self.distributed_inhomogeneous_reflectivity(strain_map,
                                                                 strain_vectors,
                                                                 job,
                                                                 num_workers,
-                                                                RTM)
+                                                                RTM,
+                                                                temp_map)
             else:  # sequential
                 R = self.sequential_inhomogeneous_reflectivity(strain_map,
                                                                strain_vectors,
-                                                               RTM)
+                                                               RTM,
+                                                               temp_map)
 
             self.disp_message('Elapsed time for _inhomogeneous_reflectivity_:'
                               ' {:f} s'.format(time()-t1))
             self.save(full_filename, {'R': R}, '_inhomogeneous_reflectivity_')
         return R
 
-    def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM):
+    def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM, temp_map):
         """sequential_inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogeneously strained sample structure
@@ -1007,6 +1034,7 @@ class XrayDyn(Xray):
                 layer.
             RTM (list[ndarray[complex]]): reflection-transmission matrices for
                 all given strains per unique layer.
+            temp_map (ndarray[float], optional): spatio-temporal temperature profile.
 
         Returns:
             R (ndarray[float]): inhomogeneous reflectivity.
@@ -1020,15 +1048,16 @@ class XrayDyn(Xray):
         else:
             iterator = range(M)
         # get the inhomogeneous reflectivity of the sample
-        # structure for each time step of the strain map
+        # structure for each time step of the strain_map and temp_map
         for i in iterator:
             R[i, :, :] = self.calc_inhomogeneous_reflectivity(strain_map[i, :],
                                                               strain_vectors,
-                                                              RTM)
+                                                              RTM,
+                                                              temp_map[i, :, :],)
         return R
 
     def parallel_inhomogeneous_reflectivity(self, strain_map, strain_vectors,
-                                            RTM, dask_client):
+                                            RTM, temp_map, dask_client):
         """parallel_inhomogeneous_reflectivity
 
         Returns the reflectivity of an inhomogeneously strained sample structure
@@ -1043,6 +1072,7 @@ class XrayDyn(Xray):
                 layer.
             RTM (list[ndarray[complex]]): reflection-transmission matrices for
                 all given strains per unique layer.
+            temp_map (ndarray[float], optional): spatio-temporal temperature profile.
             dask_client (Dask.Client): Dask client.
 
         Returns:
@@ -1082,7 +1112,8 @@ class XrayDyn(Xray):
                     remote_RTU,
                     strain_map[i, :],
                     remote_strain_vectors,
-                    remote_RTM)
+                    remote_RTM,
+                    temp_map[i, :, :],)
             RT = delayed(m_times_n)(RT, RTS)
             Ri = delayed(XrayDyn.calc_reflectivity_from_matrix)(RT)
             res.append(Ri)
@@ -1097,7 +1128,7 @@ class XrayDyn(Xray):
         return R
 
     def distributed_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM,
-                                               job, num_worker):
+                                               temp_map, job, num_worker):
         """distributed_inhomogeneous_reflectivity
 
         This is a stub. Not yet implemented in python.
@@ -1108,6 +1139,7 @@ class XrayDyn(Xray):
                 layer.
             RTM (list[ndarray[complex]]): reflection-transmission matrices for
                 all given strains per unique layer.
+            temp_map (ndarray[float], optional): spatio-temporal temperature profile.
             job (Dask.job): Dask job.
             num_workers (int): Dask number of workers.
 
@@ -1117,7 +1149,7 @@ class XrayDyn(Xray):
         """
         raise NotImplementedError
 
-    def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM):
+    def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM, temps):
         r"""calc_inhomogeneous_reflectivity
 
         Calculates the reflectivity of a inhomogeneous sample structure for
@@ -1142,11 +1174,14 @@ class XrayDyn(Xray):
         .. math:: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\right|^2
 
         Args:
-            strain_map (ndarray[float]): spatio-temporal strain profile.
+            strains (ndarray[float]): spatial strain profile for single time
+                step.
             strain_vectors (list[ndarray[float]]): reduced strains per unique
                 layer.
             RTM (list[ndarray[complex]]): reflection-transmission matrices for
                 all given strains per unique layer.
+            temps (ndarray[float]): spatial temperature profile for single time
+                step.
 
         Returns:
             R (ndarray[float]): inhomogeneous reflectivity.
@@ -1160,11 +1195,14 @@ class XrayDyn(Xray):
         # initialize ref_trans_matrix
         RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
 
-        RT = XrayDyn.calc_inhomogeneous_ref_trans_matrix(uc_indices,
-                                                         RTU,
-                                                         strains,
-                                                         strain_vectors,
-                                                         RTM)
+        if len(strain_vectors) > 0:
+            RT = XrayDyn.lookup_inhomogeneous_ref_trans_matrix(uc_indices,
+                                                               RTU,
+                                                               strains,
+                                                               strain_vectors,
+                                                               RTM)
+        else:
+            RT = self.calc_inhomogeneous_ref_trans_matrix(strains, temps)
 
         # if a substrate is included add it at the end
         if self.S.substrate != []:
@@ -1174,13 +1212,46 @@ class XrayDyn(Xray):
         R = self.calc_reflectivity_from_matrix(RT)
         return R
 
-    @staticmethod
-    def calc_inhomogeneous_ref_trans_matrix(uc_indices, RT, strains,
-                                            strain_vectors, RTM):
+    def calc_inhomogeneous_ref_trans_matrix(self, strains, temps):
         r"""calc_inhomogeneous_ref_trans_matrix
 
         Sub-function of :meth:`calc_inhomogeneous_reflectivity` and for
         parallel computing (needs to be static) only for calculating the
+        total reflection-transmission matrix :math:`M_{RT}^t`:
+
+        .. math:: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
+
+        Args:
+            strains (ndarray[float]): spatial strain profile for single time
+                step.
+            temps (ndarray[float]): spatial temperature profile for single time
+                step.
+
+        Returns:
+            RT (ndarray[complex]): reflection-transmission matrix.
+
+        """
+        _, _, uc_handles = self.S.get_layer_vectors()
+
+        N = np.shape(self._qz)[1]  # number of q_z
+        M = np.shape(self._qz)[0]  # number of energies
+        RT = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
+        # traverse all unit cells in the sample structure
+        for i, uc in enumerate(uc_handles):
+
+            if not isinstance(uc, UnitCell):
+                raise ValueError('All layers  must be UnitCells!')
+            RT = m_times_n(RT, self.get_uc_ref_trans_matrix(uc, strains[i], temps[i, :]))
+
+        return RT
+
+    @staticmethod
+    def lookup_inhomogeneous_ref_trans_matrix(uc_indices, RT, strains,
+                                              strain_vectors, RTM):
+        r"""lookup_inhomogeneous_ref_trans_matrix
+
+        Sub-function of :meth:`calc_inhomogeneous_reflectivity` and for
+        parallel computing (needs to be static) only for looking up the
         total reflection-transmission matrix :math:`M_{RT}^t`:
 
         .. math:: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
@@ -1205,9 +1276,9 @@ class XrayDyn(Xray):
             # current unit_cell ID and applied strain. Use the
             # ``knnsearch`` function to find the nearest strain value.
             strain_index = finderb(strains[i], strain_vectors[int(uc_index)])[0]
-            temp = RTM[int(uc_index)][strain_index]
-            if temp is not []:
-                RT = m_times_n(RT, temp)
+            tmp = RTM[int(uc_index)][strain_index]
+            if tmp is not []:
+                RT = m_times_n(RT, tmp)
             else:
                 raise ValueError('RTM not found')
 
@@ -1529,365 +1600,6 @@ class XrayDyn(Xray):
 
         """
         return np.abs(M[:, :, 0, 1]/M[:, :, 1, 1])**2
-
-
-# class XrayDynDebyeWaller(XrayDyn):
-
-#     def __init__(self, S, force_recalc, **kwargs):
-#         super().__init__(S, force_recalc, **kwargs)
-
-#     def __str__(self):
-#         """String representation of this class"""
-#         class_str = 'Dynamical X-Ray Diffraction with dynamic ' \
-#             'Debye-Waller factor simulation properties:\n\n'
-#         class_str += super().__str__()
-#         return class_str
-
-#     def get_hash(self, **kwargs):
-#         """get_hash
-
-#         Calculates an unique hash given by the energy :math:`E`,
-#         :math:`q_z` range, polarization states and the ``strain_vectors`` as
-#         well as the sample structure hash for relevant x-ray parameters.
-#         Optionally, part of the strain_map is used.
-
-#         Args:
-#             **kwargs (ndarray[float]): spatio-temporal strain and temperature profile.
-
-#         Returns:
-#             hash (str): unique hash.
-
-#         """
-#         param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy]
-
-#         if 'strain_map' in kwargs:
-#             strain_map = kwargs.get('strain_map')
-#             if np.size(strain_map) > 1e6:
-#                 strain_map = strain_map.flatten()[0:1000000]
-#             param.append(strain_map)
-
-#         if 'temp_map' in kwargs:
-#             temp_map = kwargs.get('temp_map')
-#             if np.size(temp_map) > 1e6:
-#                 temp_map = temp_map.flatten()[0:1000000]
-#             param.append(temp_map)
-
-#         return self.S.get_hash(types='xray') + '_' + make_hash_md5(param)
-
-#     def inhomogeneous_reflectivity(self, strain_map, temp_map, **kwargs):
-#         """inhomogeneous_reflectivity
-
-#         Returns the reflectivity of an inhomogeneously strained sample
-#         structure for a given ``strain_map`` in position and time, as well
-#         as for a given set of possible strains for each unit cell in the
-#         sample structure (``strain_vectors``).
-#         If no reflectivity is saved in the cache it is caluclated.
-#         Providing the ``calc_type`` for the calculation the corresponding
-#         sub-routines for the reflectivity computation are called:
-
-#         * ``parallel`` parallelization over the time steps utilizing
-#           `Dask <https://dask.org/>`_
-#         * ``distributed`` not implemented in Python, but should be possible
-#           with `Dask <https://dask.org/>`_ as well
-#         * ``sequential`` no parallelization at all
-
-#         Args:
-#             strain_map (ndarray[float]): spatio-temporal strain profile.
-#             temp_map (ndarray[float]): spatio-temporal temperature profile.
-#             **kwargs:
-#                 - *calc_type (str)* - type of calculation.
-#                 - *dask_client (Dask.Client)* - Dask client.
-#                 - *job (Dask.job)* - Dask job.
-#                 - *num_workers (int)* - Dask number of workers.
-
-#         Returns:
-#             R (ndarray[float]): inhomogeneous reflectivity.
-
-#         """
-#         # create a hash of all simulation parameters
-#         filename = 'inhomogeneous_reflectivity_dyn_' \
-#                    + self.get_hash(temp_map=temp_map, strain_map=strain_map) \
-#                    + '.npz'
-#         full_filename = path.abspath(path.join(self.cache_dir, filename))
-#         # check if we find some corresponding data in the cache dir
-#         if path.exists(full_filename) and not self.force_recalc:
-#             # found something so load it
-#             tmp = np.load(full_filename)
-#             R = tmp['R']
-#             self.disp_message('_inhomogeneous_reflectivity_ loaded from file:\n\t' + filename)
-#         else:
-#             t1 = time()
-#             self.disp_message('Calculating _inhomogeneousReflectivity_ ...')
-#             # parse the input arguments
-#             if not isinstance(strain_map, np.ndarray):
-#                 raise TypeError('strain_map must be a numpy ndarray!')
-#             if not isinstance(temp_map, np.ndarray):
-#                 raise TypeError('temp_map must be a numpy ndarray!')
-
-#             (M, L) = strain_map.shape
-#             K = self.S.num_sub_systems
-
-#             temp_map = np.reshape(temp_map, [M, L, K])
-
-#             dask_client = kwargs.get('dask_client', [])
-#             calc_type = kwargs.get('calc_type', 'sequential')
-#             if calc_type not in ['parallel', 'sequential', 'distributed']:
-#                 raise TypeError('calc_type must be either _parallel_, '
-#                                 '_sequential_, or _distributed_!')
-#             job = kwargs.get('job')
-#             num_workers = kwargs.get('num_workers', 1)
-
-#             # select the type of computation
-#             if calc_type == 'parallel':
-#                 R = self.parallel_inhomogeneous_reflectivity(strain_map,
-#                                                              temp_map,
-#                                                              dask_client)
-#             elif calc_type == 'distributed':
-#                 R = self.distributed_inhomogeneous_reflectivity(strain_map,
-#                                                                 temp_map,
-#                                                                 job,
-#                                                                 num_workers
-#                                                                 )
-#             else:  # sequential
-#                 R = self.sequential_inhomogeneous_reflectivity(strain_map,
-#                                                                temp_map
-#                                                                )
-
-#             self.disp_message('Elapsed time for _inhomogeneous_reflectivity_:'
-#                               ' {:f} s'.format(time()-t1))
-#             self.save(full_filename, {'R': R}, '_inhomogeneous_reflectivity_')
-#         return R
-
-#     def sequential_inhomogeneous_reflectivity(self, strain_map, temp_map):
-#         """sequential_inhomogeneous_reflectivity
-
-#         Returns the reflectivity of an inhomogeneously strained sample structure
-#         for a given ``strain_map`` in position and time, as well as for a given
-#         set of possible strains for each unit cell in the sample structure
-#         (``strain_vectors``). The function calculates the results sequentially
-#         without parallelization.
-
-#         Args:
-#             strain_map (ndarray[float]): spatio-temporal strain profile.
-#             temp_map (ndarray[float]): spatio-temporal temperature profile.
-
-#         Returns:
-#             R (ndarray[float]): inhomogeneous reflectivity.
-
-#         """
-#         # initialize
-#         M = np.size(strain_map, 0)  # delay steps
-#         R = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
-#         if self.progress_bar:
-#             iterator = trange(M, desc='Progress', leave=True)
-#         else:
-#             iterator = range(M)
-#         # get the inhomogeneous reflectivity of the sample
-#         # structure for each time step of the strain map
-#         for i in iterator:
-#             R[i, :, :] = self.calc_inhomogeneous_reflectivity(strain_map[i, :],
-#                                                               temp_map[i, :, :])
-#         return R
-
-#     def parallel_inhomogeneous_reflectivity(self, strain_map, temp_map,
-#                                             dask_client):
-#         """parallel_inhomogeneous_reflectivity
-
-#         Returns the reflectivity of an inhomogeneously strained sample structure
-#         for a given ``strain_map`` in position and time, as well as for a given
-#         set of possible strains for each unit cell in the sample structure
-#         (``strain_vectors``). The function parallelizes the calculation over the
-#         time steps, since the results do not depend on each other.
-
-#         Args:
-#             strain_map (ndarray[float]): spatio-temporal strain profile.
-#             temp_map (ndarray[float]): spatio-temporal temperature profile.
-#             dask_client (Dask.Client): Dask client.
-
-#         Returns:
-#             R (ndarray[float]): inhomogeneous reflectivity.
-
-#         """
-#         if not dask_client:
-#             raise ValueError('no dask client set')
-#         from dask import delayed  # to allow parallel computation
-
-#         # initialize
-#         res = []
-#         M = np.size(strain_map, 0)  # delay steps
-#         N = np.size(self._qz, 0)  # energy steps
-#         K = np.size(self._qz, 1)  # qz steps
-
-#         R = np.zeros([M, N, K])
-#         uc_indices, _, _ = self.S.get_layer_vectors()
-#         # init unity matrix for matrix multiplication
-#         RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (N, K, 1, 1))
-
-#         # precalculate the substrate ref_trans_matrix if present
-#         if self.S.substrate != []:
-#             RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
-#         else:
-#             RTS = RTU
-
-#         # create dask.delayed tasks for all delay steps
-#         for i in range(M):
-#             RT = delayed(self.calc_inhomogeneous_ref_trans_matrix)(
-#                     strain_map[i, :],
-#                     temp_map[i, :, :]
-#                     )
-#             RT = delayed(m_times_n)(RT, RTS)
-#             Ri = delayed(XrayDyn.calc_reflectivity_from_matrix)(RT)
-#             res.append(Ri)
-
-#         # compute results
-#         res = dask_client.compute(res, sync=True)
-
-#         # reorder results to reflectivity matrix
-#         for i in range(M):
-#             R[i, :, :] = res[i]
-
-#         return R
-
-#     def calc_inhomogeneous_reflectivity(self, strains, temps):
-#         r"""calc_inhomogeneous_reflectivity
-
-#         Calculates the reflectivity of a inhomogeneous sample structure for
-#         given ``strain_vectors`` for a single time step. Similar to the
-#         homogeneous sample structure, the reflectivity of an unit cell is
-#         calculated from the reflection-transmission matrices :math:`H_i` of
-#         each atom and the phase matrices between the atoms :math:`L_i` in the
-#         unit cell:
-
-#         .. math:: M_{RT} = \prod_i H_i \ L_i
-
-#         Since all layers are generally inhomogeneously strained we have to
-#         traverse all individual unit cells (:math:`j = 1\ldots M`) in the
-#         sample to calculate the total reflection-transmission matrix
-#         :math:`M_{RT}^t`:
-
-#         .. math:: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
-
-#         The reflectivity of the :math:`2\times 2` matrices for each :math:`q_z`
-#         is calculates as follow:
-
-#         .. math:: R = \left|M_{RT}^t(1,2)/M_{RT}^t(2,2)\right|^2
-
-#         Args:
-#             strains (ndarray[float]): spatial strain profile.
-#             temps (ndarray[float]): spatial temperature profile.
-
-#         Returns:
-#             R (ndarray[float]): inhomogeneous reflectivity.
-
-#         """
-#         RT = self.calc_inhomogeneous_ref_trans_matrix(strains, temps)
-
-#         # if a substrate is included add it at the end
-#         if self.S.substrate != []:
-#             RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
-#             RT = m_times_n(RT, RTS)
-#         # calculate reflectivity from ref-trans matrix
-#         R = self.calc_reflectivity_from_matrix(RT)
-#         return R
-
-#     def calc_inhomogeneous_ref_trans_matrix(self, strains, temps):
-#         r"""calc_inhomogeneous_ref_trans_matrix
-
-#         Sub-function of :meth:`calc_inhomogeneous_reflectivity` and for
-#         parallel computing (needs to be static) only for calculating the
-#         total reflection-transmission matrix :math:`M_{RT}^t`:
-
-#         .. math:: M_{RT}^t = \prod_{j=1}^M M_{RT,j}
-
-#         Args:
-#             uc_indices (ndarray[float]): unit cell indices.
-#             RT (ndarray[complex]): reflection-transmission matrix.
-#             strains (ndarray[float]): spatial strain profile for single time
-#                 step.
-#             temps (ndarray[float]): spatial temperature profile for single time
-#                 step.
-
-#         Returns:
-#             RT (ndarray[complex]): reflection-transmission matrix.
-
-#         """
-#         _, _, uc_handles = self.S.get_layer_vectors()
-
-#         N = np.shape(self._qz)[1]  # number of q_z
-#         M = np.shape(self._qz)[0]  # number of energies
-#         RT = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
-#         # traverse all unit cells in the sample structure
-#         for i, uc in enumerate(uc_handles):
-
-#             if not isinstance(uc, UnitCell):
-#                 raise ValueError('All layers  must be UnitCells!')
-#             RT = m_times_n(RT, self.get_uc_ref_trans_matrix(uc, strains[i], temps[i, :]))
-
-#         return RT
-
-#     def get_uc_ref_trans_matrix(self, uc, *args):
-#         r"""get_uc_ref_trans_matrix
-
-#         Returns the reflection-transmission matrix of a unit cell:
-
-#         .. math:: M_{RT} = \prod_i H_i \  L_i
-
-#         where :math:`H_i` and :math:`L_i` are the atomic reflection-
-#         transmission matrix and the phase matrix for the atomic distances,
-#         respectively.
-
-#         Args:
-#             uc (UnitCell): unit cell object.
-#             args (float, optional): strain/temperature of unit cell.
-
-#         Returns:
-#             RTM (list[ndarray[complex]]): reflection-transmission matrices for
-#                 all given strains per unique layer.
-
-#         """
-#         M = len(self._energy)  # number of energies
-#         L = np.shape(self._qz)[1]  # number of q_z
-#         K = self.S.num_sub_systems
-#         N = uc.num_atoms  # number of atoms
-
-#         try:
-#             strain = args[0]
-#         except IndexError:
-#             strain = 0
-#         try:
-#             temp = args[1]
-#         except IndexError:
-#             temp = np.zeros([K])
-
-#         # initialize matrices
-#         RTM = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, L, 1, 1))
-#         # traverse all atoms of the unit cell
-#         for i in range(N):
-#             # Calculate the relative distance between the atoms.
-#             # The relative position is calculated by the function handle
-#             # stored in the atoms list as 3rd element. This
-#             # function returns a relative postion dependent on the
-#             # applied strain.
-#             if i == (N-1):  # its the last atom
-#                 del_dist = (strain+1)-uc.atoms[i][1](strain)
-#             else:
-#                 del_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
-
-#             # get the reflection-transmission matrix and phase matrix
-#             # from all atoms in the unit cell and multiply them
-#             # together
-
-#             deb_wal_fac = 0
-#             for j in range(K):
-#                 deb_wal_fac += uc._deb_wal_fac[j](temp[j])
-
-#             RTM = m_times_n(RTM,
-#                             self.get_atom_ref_trans_matrix(uc.atoms[i][0],
-#                                                            uc._area,
-#                                                            deb_wal_fac))
-#             RTM = m_times_n(RTM,
-#                             self.get_atom_phase_matrix(del_dist*uc._c_axis))
-#         return RTM
 
 
 class XrayDynMag(Xray):
