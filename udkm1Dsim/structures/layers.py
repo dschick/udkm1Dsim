@@ -127,13 +127,11 @@ class Layer:
         self.sub_system_coupling = kwargs.get('sub_system_coupling', 0.0)
 
         if len(self.heat_capacity) == len(self.therm_cond) \
-                == len(self.lin_therm_exp) == len(self.sub_system_coupling) \
-                == len(self.deb_wal_fac):
+                == len(self.lin_therm_exp) == len(self.sub_system_coupling):
             self.num_sub_systems = len(self.heat_capacity)
         else:
             raise ValueError('Heat capacity, thermal conductivity, linear '
-                             'thermal expansion, Debye-Waller factor and '
-                             'subsystem coupling have not '
+                             'thermal expansion, and subsystem coupling have not '
                              'the same number of elements!')
 
         self.eff_spin = kwargs.get('eff_spin', 0.0)
@@ -160,7 +158,7 @@ class Layer:
         except AttributeError:
             output += [['no mass set', '']]
         output += [['roughness', '{:.4g~P}'.format(self.roughness.to('nm'))],
-                   ['Debye Waller Factor', '{:.4g~P}'.format(self.deb_wal_fac.to('meter**2'))],
+                   ['Debye Waller factor', ' m²\n'.join(self.deb_wal_fac_str) + ' m²'],
                    ['sound velocity', '{:.4g~P}'.format(self.sound_vel.to('meter/s'))],
                    ['spring constant', '{:.4g~P}'.format(self.spring_const * u.kg/u.s**2)],
                    ['phonon damping', '{:.4g~P}'.format(self.phonon_damping.to('kg/s'))],
