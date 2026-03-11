@@ -1,6 +1,6 @@
 from pint import UnitRegistry
 u = UnitRegistry()
-u.default_format = '~P'
+u.formatter.default_format = '.4g~P'
 Q_ = u.Quantity
 from .structures.atoms import Atom, AtomMixed
 from .structures.layers import Layer, AmorphousLayer, UnitCell
@@ -15,4 +15,4 @@ __all__ = ['Atom', 'AtomMixed', 'Layer', 'AmorphousLayer', 'UnitCell', 'Structur
            'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization', 'LLB',
            'Xray', 'XrayKin', 'XrayDyn', 'XrayDynDebyeWaller', 'XrayDynMag', 'u', 'Q_']
 
-__version__ = '2.0.4'
+__version__ = '2.2.0'

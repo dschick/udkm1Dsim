@@ -34,7 +34,7 @@ import numpy as np
 import scipy.constants as constants
 from time import time
 from os import path
-from tqdm.notebook import trange
+from tqdm.auto import trange
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -102,15 +102,15 @@ class Xray(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
         output = [['energy', self.energy[0] if np.size(self.energy) == 1 else
-                   '{:.4f} .. {:.4f}'.format(np.min(self.energy), np.max(self.energy))],
+                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.energy), np.max(self.energy))],
                   ['wavelength', self.wl[0] if np.size(self.wl) == 1 else
-                   '{:.4f} .. {:.4f}'.format(np.min(self.wl), np.max(self.wl))],
+                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.wl), np.max(self.wl))],
                   ['wavenumber', self.k[0] if np.size(self.k) == 1 else
-                   '{:.4f} .. {:.4f}'.format(np.min(self.k), np.max(self.k))],
+                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.k), np.max(self.k))],
                   ['theta', self.theta[0] if np.size(self.theta) == 1 else
-                   '{:.4f} .. {:.4f}'.format(np.min(self.theta), np.max(self.theta))],
+                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.theta), np.max(self.theta))],
                   ['q_z', self.qz[0] if np.size(self.qz) == 1 else
-                   '{:.4f} .. {:.4f}'.format(np.min(self.qz), np.max(self.qz))],
+                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.qz), np.max(self.qz))],
                   ['incoming polarization', self.polarizations[self.pol_in_state]],
                   ['analyzer polarization', self.polarizations[self.pol_out_state]],
                   ] + output
@@ -275,6 +275,8 @@ class Xray(Simulation):
     def theta(self, theta):
         self._theta = np.array(theta.to_base_units().magnitude, ndmin=1)
         if self._theta.ndim < 2:
+            if len(self._energy) == 0:
+                raise IndexError('Set energy, wl, or k first!')
             self._theta = np.tile(self._theta, (len(self._energy), 1))
         self.update_experiment('theta')
 
@@ -286,6 +288,8 @@ class Xray(Simulation):
     def qz(self, qz):
         self._qz = np.array(qz.to_base_units().magnitude, ndmin=1)
         if self._qz.ndim < 2:
+            if len(self._energy) == 0:
+                raise IndexError('Set energy, wl, or k first!')
             self._qz = np.tile(self._qz, (len(self._energy), 1))
         self.update_experiment('qz')
 
@@ -1308,9 +1312,9 @@ class XrayDyn(Xray):
             # function returns a relative postion dependent on the
             # applied strain.
             if i == (K-1):  # its the last atom
-                del_dist = (strain+1)-uc.atoms[i][1](strain)
+                rel_dist = (strain+1)-uc.atoms[i][1](strain)
             else:
-                del_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
+                rel_dist = uc.atoms[i+1][1](strain)-uc.atoms[i][1](strain)
 
             # get the reflection-transmission matrix and phase matrix
             # from all atoms in the unit cell and multiply them
@@ -1320,7 +1324,7 @@ class XrayDyn(Xray):
                                                            uc._area,
                                                            uc._deb_wal_fac))
             RTM = m_times_n(RTM,
-                            self.get_atom_phase_matrix(del_dist*uc._c_axis))
+                            self.get_atom_phase_matrix(rel_dist*uc._c_axis))
         return RTM
 
     def get_atom_ref_trans_matrix(self, atom, area, deb_wal_fac):
@@ -1363,7 +1367,7 @@ class XrayDyn(Xray):
             rho = self.get_atom_reflection_factor(atom, area, deb_wal_fac)
             tau = self.get_atom_transmission_factor(atom, area, deb_wal_fac)
             # calculate the reflection-transmission matrix
-            H = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.cfloat)
+            H = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.complex128)
             H[:, :, 0, 0] = (1/tau)*(tau**2-rho**2)
             H[:, :, 0, 1] = (1/tau)*(rho)
             H[:, :, 1, 0] = (1/tau)*(-rho)
@@ -1463,7 +1467,7 @@ class XrayDyn(Xray):
 
         """
         phi = self.get_atom_phase_factor(distance)
-        L = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.cfloat)
+        L = np.zeros([np.shape(self._qz)[0], np.shape(self._qz)[1], 2, 2], dtype=np.complex128)
         L[:, :, 0, 0] = np.exp(1j*phi)
         L[:, :, 1, 1] = np.exp(-1j*phi)
         return L
@@ -1999,16 +2003,16 @@ class XrayDynMag(Xray):
 
         self.pol_in_state = pol_in_state
         if (self.pol_in_state == 1):  # circ +
-            self.pol_in = np.array([-np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_in = np.array([-np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.complex128)
         elif (self.pol_in_state == 2):  # circ -
-            self.pol_in = np.array([np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_in = np.array([np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.complex128)
         elif (self.pol_in_state == 3):  # sigma
-            self.pol_in = np.array([1, 0], dtype=np.cfloat)
+            self.pol_in = np.array([1, 0], dtype=np.complex128)
         elif (self.pol_in_state == 4):  # pi
-            self.pol_in = np.array([0, 1], dtype=np.cfloat)
+            self.pol_in = np.array([0, 1], dtype=np.complex128)
         else:  # unpolarized
             self.pol_in_state = 0  # catch any number and set state to 0
-            self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=np.complex128)
 
         self.disp_message('incoming polarizations set to: {:s}'.format(
             self.polarizations[self.pol_in_state]))
@@ -2026,16 +2030,16 @@ class XrayDynMag(Xray):
 
         self.pol_out_state = pol_out_state
         if (self.pol_out_state == 1):  # circ +
-            self.pol_out = np.array([-np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_out = np.array([-np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.complex128)
         elif (self.pol_out_state == 2):  # circ -
-            self.pol_out = np.array([np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.cfloat)
+            self.pol_out = np.array([np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.complex128)
         elif (self.pol_out_state == 3):  # sigma
-            self.pol_out = np.array([1, 0], dtype=np.cfloat)
+            self.pol_out = np.array([1, 0], dtype=np.complex128)
         elif (self.pol_out_state == 4):  # pi
-            self.pol_out = np.array([0, 1], dtype=np.cfloat)
+            self.pol_out = np.array([0, 1], dtype=np.complex128)
         else:  # no analyzer
             self.pol_out_state = 0  # catch any number and set state to 0
-            self.pol_out = np.array([], dtype=np.cfloat)
+            self.pol_out = np.array([], dtype=np.complex128)
 
         self.disp_message('analyzer polarizations set to: {:s}'.format(
             self.polarizations[self.pol_out_state]))
@@ -2650,10 +2654,10 @@ class XrayDynMag(Xray):
         # force_recalc = True
         for j in range(K):
             if j == (K-1):  # its the last atom
-                del_dist = (strain+1)-uc.atoms[j][1](strain)
+                rel_dist = (strain+1)-uc.atoms[j][1](strain)
             else:
-                del_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
-            distance = del_dist*uc._c_axis
+                rel_dist = uc.atoms[j+1][1](strain)-uc.atoms[j][1](strain)
+            distance = rel_dist*uc._c_axis
 
             try:
                 # calculate density
@@ -2840,11 +2844,11 @@ class XrayDynMag(Xray):
              np.sin(mag_gamma),
              np.cos(mag_phi)]
 
-        eps = np.zeros([M, N, 3, 3], dtype=np.cfloat)
-        A = np.zeros([M, N, 4, 4], dtype=np.cfloat)
-        A_phi = np.zeros_like(A, dtype=np.cfloat)
-        P = np.zeros_like(A, dtype=np.cfloat)
-        P_phi = np.zeros_like(A, dtype=np.cfloat)
+        eps = np.zeros([M, N, 3, 3], dtype=np.complex128)
+        A = np.zeros([M, N, 4, 4], dtype=np.complex128)
+        A_phi = np.zeros_like(A, dtype=np.complex128)
+        P = np.zeros_like(A, dtype=np.complex128)
+        P_phi = np.zeros_like(A, dtype=np.complex128)
 
         try:
             molar_density = density/1000/atom.mass_number_a
@@ -2858,11 +2862,11 @@ class XrayDynMag(Xray):
         try:
             cf = atom.get_atomic_form_factor(energy)
         except AttributeError:
-            cf = np.zeros_like(energy, dtype=np.cfloat)
+            cf = np.zeros_like(energy, dtype=np.complex128)
         try:
             mf = atom.get_magnetic_form_factor(energy)
         except AttributeError:
-            mf = np.zeros_like(energy, dtype=np.cfloat)
+            mf = np.zeros_like(energy, dtype=np.complex128)
 
         mag = factor * molar_density * mag_amplitude * mf
         mag = np.tile(mag[:, np.newaxis], [1, N])
@@ -3005,9 +3009,9 @@ class XrayDynMag(Xray):
 
         """
 
-        Ref = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :],
+        Ref = np.tile(np.eye(2, 2, dtype=np.complex128)[np.newaxis, np.newaxis, :, :],
                       (np.size(RT, 0), np.size(RT, 1), 1, 1))
-        Trans = np.tile(np.eye(2, 2, dtype=np.cfloat)[np.newaxis, np.newaxis, :, :],
+        Trans = np.tile(np.eye(2, 2, dtype=np.complex128)[np.newaxis, np.newaxis, :, :],
                         (np.size(RT, 0), np.size(RT, 1), 1, 1))
 
         d = np.divide(1, RT[:, :, 3, 3] * RT[:, :, 2, 2] - RT[:, :, 3, 2] * RT[:, :, 2, 3])
@@ -3033,9 +3037,9 @@ class XrayDynMag(Xray):
         if pol_out.size == 0:
             # no analyzer polarization
             R = np.real(np.matmul(np.square(np.absolute(np.matmul(Ref, pol_in))),
-                        np.array([1, 1], dtype=np.cfloat)))
+                        np.array([1, 1], dtype=np.complex128)))
             T = np.real(np.matmul(np.square(np.absolute(np.matmul(Trans, pol_in))),
-                        np.array([1, 1], dtype=np.cfloat)))
+                        np.array([1, 1], dtype=np.complex128)))
         else:
             R = np.real(np.square(np.absolute(np.matmul(np.matmul(Ref, pol_in), pol_out))))
             T = np.real(np.square(np.absolute(np.matmul(np.matmul(Trans, pol_in), pol_out))))
@@ -3077,7 +3081,7 @@ class XrayDynMag(Xray):
             W (ndarray[float]): roughness matrix.
 
         """
-        W = np.zeros([k_z.shape[0], k_z.shape[1], 4, 4], dtype=np.cfloat)
+        W = np.zeros([k_z.shape[0], k_z.shape[1], 4, 4], dtype=np.complex128)
         rugosp = np.exp(-((k_z + last_k_z)**2) * roughness**2 / 2)
         rugosn = np.exp(-((-k_z + last_k_z)**2) * roughness**2 / 2)
         W[:, :, 0, 0] = rugosn

@@ -36,7 +36,7 @@ from scipy.integrate import solve_ivp
 from time import time
 from os import path
 import warnings
-from tqdm.notebook import tqdm
+from tqdm.auto import tqdm
 
 
 class Heat(Simulation):
@@ -128,11 +128,16 @@ class Heat(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        output = [['excitation fluence', self.excitation['fluence']],
-                  ['excitation delay', self.excitation['delay_pump']],
-                  ['excitation pulse length', self.excitation['pulse_width']],
-                  ['excitation wavelength', self.excitation['wavelength']],
-                  ['excitation theta', self.excitation['theta']],
+        output = [['excitation fluence',
+                   '{:.4g~P}'.format(self.excitation['fluence'].to('mJ/cm**2'))],
+                  ['excitation delay',
+                   '{:.4g~P}'.format(self.excitation['delay_pump'].to('ps'))],
+                  ['excitation pulse length',
+                   '{:.4g~P}'.format(self.excitation['pulse_width'].to('ps'))],
+                  ['excitation wavelength',
+                   '{:.4g~P}'.format(self.excitation['wavelength'].to('nm'))],
+                  ['excitation theta',
+                   '{:.4g~P}'.format(self.excitation['theta'].to('deg'))],
                   # ['excitation polarization', self.excitation['polarization']],
                   ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
                   ['excitation backside', self.excitation['backside']],
@@ -147,19 +152,19 @@ class Heat(Simulation):
 
         if self._boundary_conditions['top_type'] == 1:
             output += [['top boundary temperature',
-                        str(self.boundary_conditions['top_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['top_value'].to('K'))]]
         elif self._boundary_conditions['top_type'] == 2:
             output += [['top boundary flux',
-                        str(self.boundary_conditions['top_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['top_value'].to('W/m**2'))]]
 
         output += [['bottom boundary type', self.boundary_conditions['bottom_type']]]
 
         if self._boundary_conditions['bottom_type'] == 1:
             output += [['bottom boundary temperature',
-                        str(self.boundary_conditions['bottom_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['bottom_value'].to('K'))]]
         elif self._boundary_conditions['bottom_type'] == 2:
             output += [['bottom boundary flux',
-                        str(self.boundary_conditions['bottom_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['bottom_value'].to('W/m**2'))]]
 
         class_str = 'Heat simulation properties:\n\n'
         class_str += super().__str__(output)
@@ -704,10 +709,15 @@ class Heat(Simulation):
         # absorption profile from Lambert-Beer's law or multilayer absorption
         dAdz = self.get_absorption_profile(distances=distances, backside=backside)
 
+        # normalize fluence to a scalar (single delta excitation)
         try:
             fluence = fluence.to('J/m**2').magnitude
         except AttributeError:
-            pass
+            # fluence might be a list/array; squeeze to scalar if possible
+            fluence = np.asarray(fluence, dtype=float).squeeze()
+        if np.ndim(fluence) != 0:
+            raise ValueError('Delta excitation expects a single fluence value; '
+                             'got shape {}'.format(np.shape(fluence)))
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
@@ -1135,7 +1145,7 @@ class Heat(Simulation):
         # calls throughout the ODE integration
         last_t, dt = state
         try:
-            n = int((t - last_t)/dt)
+            n = int((float(np.asarray(t).item()) - last_t)/dt)
         except ValueError:
             n = 0
 
