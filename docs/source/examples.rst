@@ -9,4 +9,5 @@ Examples
     Landau-Lifshitz-Bloch <examples/LLB.ipynb>
     Phonons <examples/phonons.ipynb>
     Dynamical Xray Scattering <examples/dynamical_xray.ipynb>
+    Dynamical Xray Scattering & Debye-Waller effect <examples/dynamical_xray_debye_waller.ipynb>
     Dynamical Magnetic Xray Scattering <examples/dynamical_magnetic_xray.ipynb>
