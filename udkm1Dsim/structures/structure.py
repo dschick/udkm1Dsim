@@ -634,6 +634,33 @@ class Structure:
 
         return prop
 
+    def get_numel_of_layer_property(self, property_name):
+        """get_numel_of_layer_property
+
+        Returns the number of elements (numel) of a property within
+        the structure.
+        For most properties this is 1, but for temperature-dependent
+        properties it should return the number of sub-systems.
+
+        The method raises an `IndexError` if the dimension of the property
+        is not equal for all layers.
+
+        Args:
+            property_name (str): name of property to be checked
+
+        Returns:
+            numel (float): number of elements of property.
+
+        """
+        numel = np.array([len(prop) for prop in self.get_layer_property_vector(property_name)])
+        if np.all(numel == numel[0]):
+            numel = numel[0]
+        else:
+            raise IndexError('Property {:s} has not the same number of elements '
+                             '(num_sub_systems) across the whole sample '
+                             'structure.'.format(property_name))
+        return numel
+
     def get_layer_handle(self, i):
         """get_layer_handle
 
