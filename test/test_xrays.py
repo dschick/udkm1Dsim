@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from udkm1Dsim import Xray, XrayKin, XrayDyn, XrayDynMag
+from udkm1Dsim import XrayKin, XrayDyn, XrayDynMag
 from udkm1Dsim import u
 import numpy as np
 import pytest
@@ -9,13 +9,6 @@ from pint.testing import assert_allclose
 
 
 # fixtures
-
-
-@pytest.fixture(scope='module')
-def xray(structure, tmp_path_factory):
-    return Xray(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp('cache'),
-                save_data=True, disp_messages=True, progress_bar=True,
-                )
 
 
 @pytest.fixture(scope='module')
@@ -82,19 +75,6 @@ def magnetization_map(delays, distances_mixed):
 # tests
 
 
-# Xray
-
-
-def text_xray_set_incoming_polarization(xray):
-    with pytest.raises(NotImplementedError):
-        xray.set_incoming_polarization(1)
-
-
-def text_xray_set_outgoing_polarization(xray):
-    with pytest.raises(NotImplementedError):
-        xray.set_outgoing_polarization(1)
-
-
 # XrayKin
 
 
@@ -158,21 +138,35 @@ def text_xray_dyn_set_polarization(xray_dyn):
     xray_dyn.set_polarization(4, 0)
 
 
-def test_xray_dyn_get_hash(xray_dyn, strain_map):
+def test_xray_dyn_get_hash(xray_dyn, strain_map, temp_map):
     strain_vectors = {}
-    xray_dyn.get_hash(strain_vectors, strain_map=strain_map)
+    xray_dyn.get_hash(strain_vectors, strain_map=strain_map, temp_map=temp_map)
 
 
 def test_xray_dyn_homogeneous_reflectivity(xray_dyn):
     xray_dyn.energy = 8000*u.eV
     xray_dyn.theta = np.r_[1:10]*u.deg
     xray_dyn.homogeneous_reflectivity()
+    xray_dyn.homogeneous_reflectivity(strains=np.zeros([2]))
+    xray_dyn.homogeneous_reflectivity(temps=300*np.ones([2]))
+    xray_dyn.homogeneous_reflectivity(strains=np.zeros([2]), temps=300*np.ones([2]))
+    with pytest.raises(IndexError):
+        xray_dyn.homogeneous_reflectivity(strains=np.zeros([3]))
+    with pytest.raises(IndexError):
+        xray_dyn.homogeneous_reflectivity(temps=300*np.ones([3]))
+    with pytest.raises(IndexError):
+        xray_dyn.homogeneous_reflectivity(temps=300*np.ones([2, 2]))
 
 
-def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map):
+def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map, temp_map):
     xray_dyn.energy = 8000*u.eV
     xray_dyn.theta = np.r_[1:10]*u.deg
+    xray_dyn.inhomogeneous_reflectivity(strain_map)
+    xray_dyn.inhomogeneous_reflectivity(strain_map, temp_map=temp_map)
     strain_vectors = [np.r_[0:1], np.r_[0:1]]
+    with pytest.warns(UserWarning):
+        xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors,
+                                            temp_map=temp_map)
     xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors)
     xray_dyn.force_recalc = False
     xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors)
@@ -183,6 +177,14 @@ def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map):
     with pytest.raises(NotImplementedError):
         xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors,
                                             calc_type='distributed')
+    with pytest.raises(TypeError):
+        xray_dyn.inhomogeneous_reflectivity([])
+    with pytest.raises(TypeError):
+        xray_dyn.inhomogeneous_reflectivity(strain_map, temp_map=[])
+    with pytest.raises(TypeError):
+        xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=np.array([]))
+    with pytest.raises(ValueError):
+        xray_dyn.inhomogeneous_reflectivity(strain_map, temp_map=np.ones([11, 20, 2]))
 
 
 # XrayDynMag
