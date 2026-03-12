@@ -10,3 +10,4 @@ Examples
     Phonons <examples/phonons.ipynb>
     Dynamical Xray Scattering <examples/dynamical_xray.ipynb>
     Dynamical Magnetic Xray Scattering <examples/dynamical_magnetic_xray.ipynb>
+    Data fitting <examples/data_fitting.ipynb>
