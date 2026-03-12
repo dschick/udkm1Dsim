@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - errors in building the docs ([33d3a3c])
 - formatting of pint quantities in __str__() methods of structure and simulation objects ([#175] and PR[#176])
+- heat diffusion calculation is broken when progressbar is disabled (#167 and 8a5e32d)
 
 ### Security
 
@@ -30,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#176]: https://github.com/dschick/udkm1Dsim/pull/176
 [#59]: https://github.com/dschick/udkm1Dsim/issues/59
 [#179]: https://github.com/dschick/udkm1Dsim/pull/179
+[#167]: https://github.com/dschick/udkm1Dsim/issues/167
+[8a5e32d]: https://github.com/dschick/udkm1Dsim/commit/8a5e32d
 
 ## [2.2.0] 2026-03-10
 
