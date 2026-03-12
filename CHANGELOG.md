@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - installation instruction of new conda package, see [udkm1dsim-feedstock](https://github.com/conda-forge/udkm1dsim-feedstock) for more details
-- temperature-dependence of Debye-Waller factor ([#61] and PR[#177])
+- temperature-dependence of Debye-Waller facto with example ([#61] and PR[#177])
 
 ### Changed
 
