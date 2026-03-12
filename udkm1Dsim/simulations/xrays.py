@@ -965,8 +965,6 @@ class XrayDyn(Xray):
             # in setter method
             numel_deb_wal_fac = self.S.get_numel_of_layer_property('deb_wal_fac')
 
-            K = self.S.num_sub_systems
-
             if len(temp_map) == 0:
                 temp_map = np.zeros([M, L, numel_deb_wal_fac])
             else:
