@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - installation instruction of new conda package, see [udkm1dsim-feedstock](https://github.com/conda-forge/udkm1dsim-feedstock) for more details
+- fitting example in the docs ([#59] and PR[#179])
 
 ### Changed
 
@@ -27,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [33d3a3c]: https://github.com/dschick/udkm1Dsim/commit/33d3a3c
 [#175]: https://github.com/dschick/udkm1Dsim/issues/175
 [#176]: https://github.com/dschick/udkm1Dsim/pull/176
+[#59]: https://github.com/dschick/udkm1Dsim/issues/59
+[#179]: https://github.com/dschick/udkm1Dsim/pull/179
 
 ## [2.2.0] 2026-03-10
 
