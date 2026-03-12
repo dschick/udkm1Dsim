@@ -1143,18 +1143,20 @@ class Heat(Simulation):
         # state = [last_t, dt]
         # I used a list because its values can be carried between function
         # calls throughout the ODE integration
-        last_t, dt = state
-        try:
-            n = int((float(np.asarray(t).item()) - last_t)/dt)
-        except ValueError:
-            n = 0
+        if pbar is not None:
+            # set everything for the tqdm progressbar
+            last_t, dt = state
+            try:
+                n = int((float(np.asarray(t).item()) - last_t)/dt)
+            except ValueError:
+                n = 0
 
-        if n >= 1:
-            pbar.update(n)
-            pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
-            state[0] = t
-        elif n < 0:
-            state[0] = t
+            if n >= 1:
+                pbar.update(n)
+                pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
+                state[0] = t
+            elif n < 0:
+                state[0] = t
 
         # reshape input temperature
         u = np.array(u).reshape([N, K], order='F')
