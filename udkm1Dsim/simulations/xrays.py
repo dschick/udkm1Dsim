@@ -855,18 +855,11 @@ class XrayDyn(Xray):
 
             # check length (number of sub-systems) of Debye-Waller factor, which is not checked
             # in setter method
-            # make an average for
-            lengths_deb_wal_fac = \
-                np.array([len(dbf) for dbf in S.get_layer_property_vector('deb_wal_fac')])
-            if np.all(lengths_deb_wal_fac == lengths_deb_wal_fac[0]):
-                len_deb_wal_fac = np.mean(lengths_deb_wal_fac)
-            else:
-                raise AttributeError('Debye-Waller factors in the sample do not all have the same '
-                                     'number of sub-systems.')
-            if temps.shape[1] != len_deb_wal_fac:
+            numel_deb_wal_fac = self.S.get_numel_of_layer_property('deb_wal_fac')
+            if temps.shape[1] != numel_deb_wal_fac:
                 raise IndexError('Second dimension of temperatures must match the number of '
                                  'subsystems for the Debye-Waller factor: {:d}'.format(
-                                     len_deb_wal_fac))
+                                     numel_deb_wal_fac))
         # initialize
         RT = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :],
                      (np.size(self._qz, 0), np.size(self._qz, 1), 1, 1))  # ref_trans_matrix
@@ -978,6 +971,14 @@ class XrayDyn(Xray):
                 if len(strain_vectors) > 0:
                     warnings.warn('strain_vectors and temp_map are not compatible '
                                   'with each other!\nstrain_vectors takes over.')
+
+            # check length (number of sub-systems) of Debye-Waller factor, which is not checked
+            # in setter method
+            numel_deb_wal_fac = self.S.get_numel_of_layer_property('deb_wal_fac')
+            if temp_map.shape[2] != numel_deb_wal_fac:
+                raise IndexError('Third dimension of temp_map must match the number of '
+                                 'sub-systems for the Debye-Waller factor: {:d}'.format(
+                                     numel_deb_wal_fac))
 
             dask_client = kwargs.get('dask_client', [])
             calc_type = kwargs.get('calc_type', 'sequential')
