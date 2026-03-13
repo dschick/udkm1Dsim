@@ -41,6 +41,7 @@ def test_check_excitation(heat):
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [0]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 'p',
                        'theta': 45*u.deg,
                        'multilayer_absorption': True,
                        'backside': False}
@@ -54,6 +55,7 @@ def test_check_excitation(heat):
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [1]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 's',
                        'theta': 45*u.deg,
                        'multilayer_absorption': True,
                        'backside': False}
@@ -62,12 +64,23 @@ def test_check_excitation(heat):
     assert np.allclose(delay_pump, [0.])
     assert np.allclose(pulse_width, [1.0e-12])
 
+    with pytest.raises(Warning):
+        heat.excitation = {'fluence': [10]*u.mJ/u.cm**2,
+                           'delay_pump': [0]*u.ps,
+                           'pulse_width': [1]*u.ps,
+                           'wavelength': 800*u.nm,
+                           'polarization': 'elliptical',
+                           'theta': 45*u.deg,
+                           'multilayer_absorption': True,
+                           'backside': False}
+
 
 def test_get_absorption_profile(heat):
     heat.excitation = {'fluence': [10]*u.mJ/u.cm**2,
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [0]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 'p',
                        'theta': 45*u.deg,
                        'multilayer_absorption': False,
                        'backside': False}
@@ -77,6 +90,7 @@ def test_get_absorption_profile(heat):
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [0]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 'p',
                        'theta': 45*u.deg,
                        'multilayer_absorption': False,
                        'backside': True}
@@ -86,6 +100,7 @@ def test_get_absorption_profile(heat):
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [0]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 'p',
                        'theta': 45*u.deg,
                        'multilayer_absorption': True,
                        'backside': False}
@@ -95,6 +110,27 @@ def test_get_absorption_profile(heat):
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [0]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 'p',
+                       'theta': 45*u.deg,
+                       'multilayer_absorption': True,
+                       'backside': True}
+    heat.get_absorption_profile()
+
+    heat.excitation = {'fluence': [10]*u.mJ/u.cm**2,
+                       'delay_pump': [0]*u.ps,
+                       'pulse_width': [0]*u.ps,
+                       'wavelength': 800*u.nm,
+                       'polarization': 's',
+                       'theta': 45*u.deg,
+                       'multilayer_absorption': True,
+                       'backside': False}
+    heat.get_absorption_profile()
+
+    heat.excitation = {'fluence': [10]*u.mJ/u.cm**2,
+                       'delay_pump': [0]*u.ps,
+                       'pulse_width': [0]*u.ps,
+                       'wavelength': 800*u.nm,
+                       'polarization': 'p',
                        'theta': 45*u.deg,
                        'multilayer_absorption': False,
                        'backside': False}
@@ -106,6 +142,7 @@ def test_get_temperature_after_delta_excitation(heat):
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [0]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 'p',
                        'theta': 45*u.deg,
                        'multilayer_absorption': True,
                        'backside': False}
@@ -123,6 +160,7 @@ def test_get_temp_map(heat):
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [0]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 'p',
                        'theta': 45*u.deg,
                        'multilayer_absorption': True,
                        'backside': False}
@@ -139,6 +177,7 @@ def test_get_temp_map(heat):
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [0.1]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 'p',
                        'theta': 45*u.deg,
                        'multilayer_absorption': True,
                        'backside': False}
@@ -159,6 +198,7 @@ def test_get_diffusion_temp_map(heat):
                        'delay_pump': [0]*u.ps,
                        'pulse_width': [0]*u.ps,
                        'wavelength': 800*u.nm,
+                       'polarization': 'p',
                        'theta': 45*u.deg,
                        'multilayer_absorption': True,
                        'backside': False}
