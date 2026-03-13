@@ -104,7 +104,7 @@ class Heat(Simulation):
         self.backend = kwargs.get('backend', 'scipy')
         self._excitation = {'fluence': [], 'delay_pump': [0], 'pulse_width': [0],
                             'wavelength': 800e-9, 'theta': np.pi/2,
-                            # 'polarization': 'p',
+                            'polarization': 'p',
                             'multilayer_absorption': True,
                             'backside': False}
         self._distances = np.array([])
@@ -138,7 +138,7 @@ class Heat(Simulation):
                    '{:.4g~P}'.format(self.excitation['wavelength'].to('nm'))],
                   ['excitation theta',
                    '{:.4g~P}'.format(self.excitation['theta'].to('deg'))],
-                  # ['excitation polarization', self.excitation['polarization']],
+                  ['excitation polarization', self.excitation['polarization']],
                   ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
                   ['excitation backside', self.excitation['backside']],
                   ['heat diffusion', self.heat_diffusion],
@@ -504,7 +504,8 @@ class Heat(Simulation):
            <https://doi.org/10.1103/PhysRevB.87.054437>`_
 
         """
-        self.disp_message('Absorption profile is calculated by multilayer formalism.')
+        self.disp_message('Absorption profile is calculated by multilayer formalism '
+                          'with {:s}-polarization.'.format(self._excitation['polarization']))
         if backside:
             self.disp_message('Backside excitation is enabled.')
             structure = self.S.reverse()
@@ -554,22 +555,22 @@ class Heat(Simulation):
         rfresnel = np.empty(M-1, dtype=complex)
         tfresnel = np.empty(M-1, dtype=complex)
 
-        # if self._excitation['polarization'] == 's':
-        #     rfresnel[:] = (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
-        #                    - opt_ref_indices[1:]*np.cos(alpha[1:])) \
-        #         / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
-        #            + opt_ref_indices[1:]*np.cos(alpha[1:]))
-        #     tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
-        #         / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
-        #            + opt_ref_indices[1:]*np.cos(alpha[1:]))
-        # else:  # p-polarization
-        rfresnel[:] = (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-                       - opt_ref_indices[0:-1]*np.cos(alpha[1:])) \
-            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
-        tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
-            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+        if self._excitation['polarization'] == 's':
+            rfresnel[:] = (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+                           - opt_ref_indices[1:]*np.cos(alpha[1:])) \
+                / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+                   + opt_ref_indices[1:]*np.cos(alpha[1:]))
+            tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
+                / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+                   + opt_ref_indices[1:]*np.cos(alpha[1:]))
+        else:  # p-polarization
+            rfresnel[:] = (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                           - opt_ref_indices[0:-1]*np.cos(alpha[1:])) \
+                / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                   + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+            tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
+                / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                   + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
 
         # interface change matrix
         Jnm = np.empty((2, 2, M-1), dtype=complex)
@@ -597,9 +598,14 @@ class Heat(Simulation):
 
         # Total transmission and reflection of the multilayer
         R_total = np.abs(S[1, 0]/S[0, 0])**2
-        T_total = (np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
-                           / (opt_ref_indices[0]*np.cos(alpha[0])))
-                   * np.abs(1/S[0, 0])**2)
+        if self._excitation['polarization'] == 's':
+            T_total = (np.real(opt_ref_indices[M-1]*np.cos(alpha[M-1])
+                               / (opt_ref_indices[0]*np.cos(alpha[0])))
+                       * np.abs(1/S[0, 0])**2)
+        else:
+            T_total = (np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
+                               / (opt_ref_indices[0]*np.cos(alpha[0])))
+                       * np.abs(1/S[0, 0])**2)
 
         # calculating D matrix for intermediate field
         Dn = np.empty((2, 2, M), dtype=complex)
@@ -1237,7 +1243,7 @@ class Heat(Simulation):
                       'pulse_width': Q_(self._excitation['pulse_width'], u.s).to('ps'),
                       'wavelength': Q_(self._excitation['wavelength'], u.m).to('nm'),
                       'theta': Q_(self._excitation['theta'], u.rad).to('deg'),
-                      # 'polarization': self._excitation['polarization'],
+                      'polarization': self._excitation['polarization'],
                       'multilayer_absorption': self._excitation['multilayer_absorption'],
                       'backside': self._excitation['backside']}
 
@@ -1260,12 +1266,12 @@ class Heat(Simulation):
                 self._excitation['wavelength'] = excitation['wavelength'].to('m').magnitude
             if 'theta' in excitation:
                 self._excitation['theta'] = excitation['theta'].to('rad').magnitude
-            # if 'polarization' in excitation:
-            #     if excitation['polarization'] in ['s', 'p']:
-            #         self._excitation['polarization'] = excitation['polarization']
-            #     else:
-            #         self._excitation['polarization'] = 'p'
-            #         raise Warning('Polarization musted be either _s_ or _p_!')
+            if 'polarization' in excitation:
+                if excitation['polarization'] in ['s', 'p']:
+                    self._excitation['polarization'] = excitation['polarization']
+                else:
+                    self._excitation['polarization'] = 'p'
+                    raise Warning('Polarization musted be either _s_ or _p_!')
             if 'multilayer_absorption' in excitation:
                 self._excitation['multilayer_absorption'] = \
                     bool(excitation['multilayer_absorption'])
