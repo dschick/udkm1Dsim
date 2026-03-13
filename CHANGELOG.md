@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - installation instruction of new conda package, see [udkm1dsim-feedstock](https://github.com/conda-forge/udkm1dsim-feedstock) for more details
 - fitting example in the docs ([#59] and PR[#179])
+- s-polarization in multilayer absorption formalism ([#28] and PR[#181])
 
 ### Changed
 
@@ -33,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#179]: https://github.com/dschick/udkm1Dsim/pull/179
 [#167]: https://github.com/dschick/udkm1Dsim/issues/167
 [8a5e32d]: https://github.com/dschick/udkm1Dsim/commit/8a5e32d
+[#181]: https://github.com/dschick/udkm1Dsim/pull/181
+[#28]: https://github.com/dschick/udkm1Dsim/issues/28
 
 ## [2.2.0] 2026-03-10
 
