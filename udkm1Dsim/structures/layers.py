@@ -71,7 +71,8 @@ class Layer:
         area (float): area of layer [m²].
         volume (float): volume of layer [m³].
         roughness (float): gaussian width of the top roughness of a layer [m].
-        deb_wal_fac (float): Debye-Waller factor `\langle u^2\rangle` [m²].
+        deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
+            `\langle u^2\rangle` [m²].
         sound_vel (float): longitudinal sound velocity in the layer [m/s].
         spring_const (ndarray[float]): spring constant of the layer [kg/s²]
             and higher orders.
@@ -115,7 +116,7 @@ class Layer:
         self.num_sub_systems = 1
         self.roughness = kwargs.get('roughness', 0.0*u.nm)
         self.spring_const = np.array([0.0])
-        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0.0*u.m**2)
+        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0.0)
         self.sound_vel = kwargs.get('sound_vel', 0.0*u.m/u.s)
         self.phonon_damping = kwargs.get('phonon_damping', 0.0*u.kg/u.s)
         self.opt_pen_depth = kwargs.get('opt_pen_depth', 0.0*u.nm)
@@ -131,7 +132,7 @@ class Layer:
             self.num_sub_systems = len(self.heat_capacity)
         else:
             raise ValueError('Heat capacity, thermal conductivity, linear '
-                             'thermal expansion and subsystem coupling have not '
+                             'thermal expansion, and subsystem coupling have not '
                              'the same number of elements!')
 
         self.eff_spin = kwargs.get('eff_spin', 0.0)
@@ -158,7 +159,7 @@ class Layer:
         except AttributeError:
             output += [['no mass set', '']]
         output += [['roughness', '{:.4g~P}'.format(self.roughness.to('nm'))],
-                   ['Debye Waller Factor', '{:.4g~P}'.format(self.deb_wal_fac.to('meter**2'))],
+                   ['Debye Waller factor', ' m²\n'.join(self.deb_wal_fac_str) + ' m²'],
                    ['sound velocity', '{:.4g~P}'.format(self.sound_vel.to('meter/s'))],
                    ['spring constant', '{:.4g~P}'.format(self.spring_const * u.kg/u.s**2)],
                    ['phonon damping', '{:.4g~P}'.format(self.phonon_damping.to('kg/s'))],
@@ -186,15 +187,17 @@ class Layer:
 
         return output
 
-    def check_input(self, inputs):
+    def check_input(self, inputs, change_num_sub_systems=True):
         """check_input
 
         Checks the input and create a list of function handle strings with T as
-        argument. Inputs can be strings, floats, ints, or pint quantaties.
+        argument. Inputs can be strings, floats, ints, or pint quantities.
 
         Args:
             inputs (list[str, int, float, Quantity]): list of strings, int, floats,
                 or Pint quantities.
+            change_num_sub_systems (boolean, optional): wheather the number of
+                sub-systems should be changed. Defaults to True.
 
         Returns:
             (tuple):
@@ -210,7 +213,7 @@ class Layer:
         # update number of subsystems
         K = self.num_sub_systems
         k = len(inputs)
-        if k != K:
+        if k != K and change_num_sub_systems:
             print('Number of subsystems changed from {:d} to {:d}.'.format(K, k))
             self.num_sub_systems = k
 
@@ -273,7 +276,7 @@ class Layer:
                                         'num_sub_systems'],
                                'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
                                           '_mass_unit_area', 'spring_const', '_phonon_damping'],
-                               'xray': ['num_atoms', '_area', '_mass', '_deb_wal_fac',
+                               'xray': ['num_atoms', '_area', '_mass', 'deb_wal_fac_str',
                                         '_thickness'],
                                'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
                                            'opt_ref_index_per_strain'],
@@ -418,11 +421,11 @@ class Layer:
 
     @property
     def deb_wal_fac(self):
-        return Q_(self._deb_wal_fac, u.m**2)
+        return self._deb_wal_fac
 
     @deb_wal_fac.setter
     def deb_wal_fac(self, deb_wal_fac):
-        self._deb_wal_fac = deb_wal_fac.to_base_units().magnitude
+        self._deb_wal_fac, self.deb_wal_fac_str = self.check_input(deb_wal_fac, False)
 
     @property
     def sound_vel(self):
@@ -663,7 +666,8 @@ class AmorphousLayer(Layer):
         area (float): area of layer [m²].
         volume (float): volume of layer [m³].
         roughness (float): gaussian width of the top roughness of a layer [m].
-        deb_wal_fac (float): Debye-Waller factor `\langle u^2\rangle` [m²].
+        deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
+            `\langle u^2\rangle` [m²].
         sound_vel (float): longitudinal sound velocity in the layer [m/s].
         spring_const (ndarray[float]): spring constant of the layer [kg/s²]
             and higher orders.
@@ -815,7 +819,8 @@ class UnitCell(Layer):
         area (float): area of layer [m²].
         volume (float): volume of layer [m³].
         roughness (float): gaussian width of the top roughness of a layer [m].
-        deb_wal_fac (float): Debye-Waller factor `\langle u^2\rangle` [m²].
+        deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
+            `\langle u^2\rangle` [m²].
         sound_vel (float): longitudinal sound velocity in the layer [m/s].
         spring_const (ndarray[float]): spring constant of the layer [kg/s²]
             and higher orders.

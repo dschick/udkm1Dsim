@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - installation instruction of new conda package, see [udkm1dsim-feedstock](https://github.com/conda-forge/udkm1dsim-feedstock) for more details
+- temperature-dependence of Debye-Waller factor with example ([#61] and PR[#177])
 - fitting example in the docs ([#59] and PR[#179])
 - s-polarization in multilayer absorption formalism ([#28] and PR[#181])
 
@@ -23,13 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - errors in building the docs ([33d3a3c])
 - formatting of pint quantities in __str__() methods of structure and simulation objects ([#175] and PR[#176])
-- heat diffusion calculation is broken when progressbar is disabled (#167 and 8a5e32d)
+- math of Debye-Waller factor (PR[#178])
+- heat diffusion calculation is broken when progressbar is disabled ([#167] and [8a5e32d])
 
 ### Security
 
 [33d3a3c]: https://github.com/dschick/udkm1Dsim/commit/33d3a3c
 [#175]: https://github.com/dschick/udkm1Dsim/issues/175
 [#176]: https://github.com/dschick/udkm1Dsim/pull/176
+[#178]: https://github.com/dschick/udkm1Dsim/pull/178
+[#61]: https://github.com/dschick/udkm1Dsim/issues/61
+[#177]: https://github.com/dschick/udkm1Dsim/pull/177
 [#59]: https://github.com/dschick/udkm1Dsim/issues/59
 [#179]: https://github.com/dschick/udkm1Dsim/pull/179
 [#167]: https://github.com/dschick/udkm1Dsim/issues/167

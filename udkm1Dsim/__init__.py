@@ -13,6 +13,6 @@ from .simulations.xrays import Xray, XrayKin, XrayDyn, XrayDynMag
 
 __all__ = ['Atom', 'AtomMixed', 'Layer', 'AmorphousLayer', 'UnitCell', 'Structure',
            'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization', 'LLB',
-           'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
+           'Xray', 'XrayKin', 'XrayDyn', 'XrayDynDebyeWaller', 'XrayDynMag', 'u', 'Q_']
 
 __version__ = '2.2.0'

@@ -25,7 +25,7 @@ def test_layer_roughness(layer):
 
 
 def test_layer_deb_wal_fac(layer):
-    assert_equal(layer.deb_wal_fac, 1*u.angstrom**2)
+    assert_equal(layer.deb_wal_fac[0](300), 1e-20)
 
 
 def test_layer_sound_vel(layer):
