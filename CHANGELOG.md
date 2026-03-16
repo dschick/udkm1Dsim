@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - errors in building the docs ([33d3a3c])
 - formatting of pint quantities in __str__() methods of structure and simulation objects ([#175] and PR[#176])
 - math of Debye-Waller factor (PR[#178])
-- heat diffusion calculation is broken when progressbar is disabled (#167 and 8a5e32d)
+- heat diffusion calculation is broken when progressbar is disabled ([#167] and [8a5e32d])
 
 ### Security
 
