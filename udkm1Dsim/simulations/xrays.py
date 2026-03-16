@@ -1392,8 +1392,8 @@ class XrayDyn(Xray):
         - :math:`P(q_z)` is the polarization factor
         - :math:`A` is the area in :math:`x-y` plane on which the atom
           is placed
-        - :math:`M = 0.5(\mbox{dbf} \ q_z)^2)` where
-          :math:`\mbox{dbf}^2 = \langle u^2\rangle` is the average
+        - :math:`M = 0.5 \mbox{dbf} q_z^2` where
+          :math:`\mbox{dbf} = \langle u^2\rangle` is the average
           thermal vibration of the atoms - Debye-Waller factor
 
         Args:
@@ -1408,7 +1408,7 @@ class XrayDyn(Xray):
         rho = (-4j*np.pi*r_0
                * atom.get_cm_atomic_form_factor(self._energy, self._qz)
                * self.get_polarization_factor(self._theta)
-               * np.exp(-0.5*(deb_wal_fac*self._qz)**2))/(self._qz*area)
+               * np.exp(-0.5*deb_wal_fac*self._qz**2))/(self._qz*area)
         return rho
 
     def get_atom_transmission_factor(self, atom, area, deb_wal_fac):
@@ -1423,8 +1423,8 @@ class XrayDyn(Xray):
           (no angle correction)
         - :math:`A` is the area in :math:`x-y` plane on which the atom
           is placed
-        - :math:`M = 0.5(\mbox{dbf} \ q_z)^2` where
-          :math:`\mbox{dbf}^2 = \langle u^2\rangle` is the average
+        - :math:`M = 0.5 \mbox{dbf} q_z^2` where
+          :math:`\mbox{dbf} = \langle u^2\rangle` is the average
           thermal vibration of the atoms - Debye-Waller factor
 
         Args:
@@ -1438,7 +1438,7 @@ class XrayDyn(Xray):
         """
         tau = 1 - (4j*np.pi*r_0
                    * atom.get_cm_atomic_form_factor(self._energy, np.zeros_like(self._qz))
-                   * np.exp(-0.5*(deb_wal_fac*self._qz)**2))/(self._qz*area)
+                   * np.exp(-0.5*deb_wal_fac*self._qz**2))/(self._qz*area)
         return tau
 
     def get_atom_phase_matrix(self, distance):

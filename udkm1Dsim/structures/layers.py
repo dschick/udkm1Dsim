@@ -71,7 +71,7 @@ class Layer:
         area (float): area of layer [m²].
         volume (float): volume of layer [m³].
         roughness (float): gaussian width of the top roughness of a layer [m].
-        deb_wal_fac (float): Debye-Waller factor [m²].
+        deb_wal_fac (float): Debye-Waller factor `\langle u^2\rangle` [m²].
         sound_vel (float): longitudinal sound velocity in the layer [m/s].
         spring_const (ndarray[float]): spring constant of the layer [kg/s²]
             and higher orders.
@@ -663,7 +663,7 @@ class AmorphousLayer(Layer):
         area (float): area of layer [m²].
         volume (float): volume of layer [m³].
         roughness (float): gaussian width of the top roughness of a layer [m].
-        deb_wal_fac (float): Debye-Waller factor [m²].
+        deb_wal_fac (float): Debye-Waller factor `\langle u^2\rangle` [m²].
         sound_vel (float): longitudinal sound velocity in the layer [m/s].
         spring_const (ndarray[float]): spring constant of the layer [kg/s²]
             and higher orders.
@@ -815,7 +815,7 @@ class UnitCell(Layer):
         area (float): area of layer [m²].
         volume (float): volume of layer [m³].
         roughness (float): gaussian width of the top roughness of a layer [m].
-        deb_wal_fac (float): Debye-Waller factor [m²].
+        deb_wal_fac (float): Debye-Waller factor `\langle u^2\rangle` [m²].
         sound_vel (float): longitudinal sound velocity in the layer [m/s].
         spring_const (ndarray[float]): spring constant of the layer [kg/s²]
             and higher orders.
