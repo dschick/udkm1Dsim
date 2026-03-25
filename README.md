@@ -114,7 +114,7 @@ You can contribute to the project via pull-requests following the
 Thanks to all who have contributed to the **udkm1Dsim** toolbox!
 
 <a href="https://github.com/dschick/udkm1Dsim/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=dschick/udkm1Dsim" />
+  <img src="https://contrib.rocks/image?repo=dschick/udkm1Dsim&max=40&columns=8" style="background-color: transparent" />
 </a>
 
 ## License
