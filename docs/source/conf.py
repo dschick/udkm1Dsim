@@ -19,8 +19,13 @@
 
 # -- Project information -----------------------------------------------------
 
+from datetime import datetime
+
+
+current_year = datetime.now().year
+
 project = 'udkm1Dsim'
-copyright = '2024, Daniel Schick'
+copyright = '2014-{:d}, Daniel Schick'.format(current_year)
 author = 'Daniel Schick'
 
 # The short X.Y version
