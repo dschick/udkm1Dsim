@@ -11,6 +11,7 @@
     Publications <publications>
     Examples <examples>
     API Documentation <api>
+    Changelog <changelog.md>
 ```
 
 # Indices and tables
