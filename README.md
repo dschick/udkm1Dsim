@@ -109,6 +109,14 @@ You can also ask questions, share ideas, or engage with community members via th
 You can contribute to the project via pull-requests following the
 [GitHub flow concept](https://docs.github.com/en/get-started/quickstart/github-flow).
 
+## Contributers
+
+Thanks to all who have contributed to the **udkm1Dsim** toolbox!
+
+<a href="https://github.com/dschick/udkm1Dsim/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=dschick/udkm1Dsim" />
+</a>
+
 ## License
 
 The project is licensed under the MIT license.
