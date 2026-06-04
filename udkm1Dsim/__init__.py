@@ -2,17 +2,17 @@ from pint import UnitRegistry
 u = UnitRegistry()
 u.formatter.default_format = '.4g~P'
 Q_ = u.Quantity
-from .structures.atoms import Atom, AtomMixed
-from .structures.layers import Layer, AmorphousLayer, UnitCell
-from .structures.structure import Structure
-from .simulations.simulation import Simulation
-from .simulations.heat import Heat
-from .simulations.phonons import Phonon, PhononNum, PhononAna
-from .simulations.magnetization import Magnetization, LLB
-from .simulations.scattering import Scattering, XrayKin, XrayDyn, XrayDynMag
+from .structures import Atom, AtomMixed
+from .structures import Layer, AmorphousLayer, UnitCell
+from .structures import Structure
+from .simulations import Simulation
+from .simulations import Heat
+from .simulations import Phonon, PhononNum, PhononAna
+from .simulations import Magnetization, LLB
+from .simulations import Scattering, Light, XrayKin, XrayDyn, XrayDynMag
 
 __all__ = ['Atom', 'AtomMixed', 'Layer', 'AmorphousLayer', 'UnitCell', 'Structure',
            'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization', 'LLB',
-           'Scattering', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
+           'Scattering', 'Light', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
 
 __version__ = '2.3.0'
