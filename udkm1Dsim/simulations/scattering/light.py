@@ -28,6 +28,7 @@ __docformat__ = 'restructuredtext'
 from . import Scattering
 import numpy as np
 from time import time
+from tqdm.auto import trange
 
 
 class Light(Scattering):
@@ -147,9 +148,12 @@ class Light(Scattering):
             self.disp_message('Light scattering does only allow for NO analyzer polarizations')
             self.set_outgoing_polarization(0)
 
-    def homogeneous_reflectivity(self):
+    def homogeneous_reflectivity(self, strains=[]):
+        """
+        this must be very much simplified to be "homogeneous" and by being vectorized
+        """
         t1 = time()
-        self.disp_message('Calculating _homogeneous_reflectivity_ ...')
+        # self.disp_message('Calculating _homogeneous_reflectivity_ ...')
 
         N = np.size(self._qz, 0)  # energy steps
         K = np.size(self._qz, 1)  # qz steps
@@ -176,85 +180,108 @@ class Light(Scattering):
         #     thicknesses[i+1] = interfaces[i+1]-interfaces[i]
 
         opt_ref_indices = self.S.get_layer_property_vector('opt_ref_index')
+        opt_ref_indices_per_strain = self.S.get_layer_property_vector('opt_ref_index_per_strain')
         thicknesses = self.S.get_layer_property_vector('_thickness')
 
-        opt_ref_indices = np.concatenate((np.array([1+0.0j]), opt_ref_indices))
-        thicknesses = np.concatenate((np.array([1]), thicknesses))
+        if len(strains) == 0:
+            strains = np.zeros_like(thicknesses)
 
+        opt_ref_indices = np.concatenate((np.array([1+0.0j]), opt_ref_indices))
+        opt_ref_indices_per_strain = np.concatenate((np.array([0+0.0j]), opt_ref_indices_per_strain))
+        thicknesses = np.concatenate((np.array([1]), thicknesses))
+        strains = np.concatenate((np.array([0]), strains))
         L = len(thicknesses)
 
         if self.S.substrate != []:
             opt_ref_indices = np.concatenate(
                 (opt_ref_indices, np.array([self.S.substrate.get_layer_handle(0).opt_ref_index])))
+            opt_ref_indices_per_strain = np.concatenate(
+                (opt_ref_indices_per_strain, np.array([self.S.substrate.get_layer_handle(0).opt_ref_indices_per_strain])))
             thicknesses = np.concatenate(
                 (thicknesses, np.array([self.S.substrate.get_thickness(False)])))
+            strains = np.concatenate((strains, np.array([0])))
             L += 1
-
+       
+        opt_ref_indices += opt_ref_indices_per_strain*strains
+        thicknesses *= (strains+1)
+        
         R_total = np.zeros((N, K))
         T_total = np.zeros((N, K))
+        
+        # Snell laws
+        alpha = np.empty((N, K, L), dtype=complex)
+        alpha[:, :, 0] = np.pi/2 - self._theta[:, :]
+        alpha[:, :, 1:] = np.arcsin(
+            np.einsum('nk,l->nkl', np.sin(alpha[:, :, 0]), opt_ref_indices[0]/opt_ref_indices[1:])
+            )
+        
+        # fresnel coefficient
+        rfresnel = np.empty((N, K, L-1), dtype=complex)
+        tfresnel = np.empty((N, K, L-1), dtype=complex)
 
-        for i in range(N):  # energies
-            for j in range(K):  # angles
-                # Snell laws
-                alpha = np.empty(L, dtype=complex)
-                alpha[0] = np.pi/2 - self._theta[i, j]
-                alpha[1:] = np.arcsin(opt_ref_indices[0]/opt_ref_indices[1:]*np.sin(alpha[0]))
+        if self.pol_in_state == 3:  # self._excitation['polarization'] == 's':
+            rfresnel[:, :, :] = \
+                (np.einsum('l,nkl->nkl', opt_ref_indices[0:-1], np.cos(alpha[:, :, 0:-1])) - np.einsum('l,nkl->nkl', opt_ref_indices[1:], np.cos(alpha[:, :, 1:]))) \
+                / (np.einsum('l,nkl->nkl', opt_ref_indices[0:-1], np.cos(alpha[:, :, 0:-1])) + np.einsum('l,nkl->nkl', opt_ref_indices[1:], np.cos(alpha[:, :, 1:])))
+            tfresnel[:, :, :] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[:, :, 0:-1]) \
+                / (opt_ref_indices[0:-1]*np.cos(alpha[:, :, 0:-1])
+                    + opt_ref_indices[1:]*np.cos(alpha[:, :, 1:]))
+        elif self.pol_in_state == 4:  # p-polarization
+            rfresnel[:, :, :] = (opt_ref_indices[1:]*np.cos(alpha[:, :, 0:-1])
+                            - opt_ref_indices[0:-1]*np.cos(alpha[:, :, 1:])) \
+                / (opt_ref_indices[1:]*np.cos(alpha[:, :, 0:-1])
+                    + opt_ref_indices[0:-1]*np.cos(alpha[:, :, 1:]))
+            tfresnel[:, :, :] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[:, :, 0:-1]) \
+                / (opt_ref_indices[1:]*np.cos(alpha[:, :, 0:-1])
+                    + opt_ref_indices[0:-1]*np.cos(alpha[:, :, 1:]))
 
-                # fresnel coefficient
-                rfresnel = np.empty(L-1, dtype=complex)
-                tfresnel = np.empty(L-1, dtype=complex)
+        # interface change matrix
+        Jnm = np.empty((N, K, 2, 2, L-1), dtype=complex)
+        Jnm[:, :, 0, 0, :] = 1.0/tfresnel
+        Jnm[:, :, 0, 1, :] = rfresnel/tfresnel
+        Jnm[:, :, 1, 0, :] = rfresnel/tfresnel
+        Jnm[:, :, 1, 1, :] = 1.0/tfresnel
 
-                if False:  # self._excitation['polarization'] == 's':
-                    rfresnel[:] = (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
-                                   - opt_ref_indices[1:]*np.cos(alpha[1:])) \
-                        / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
-                           + opt_ref_indices[1:]*np.cos(alpha[1:]))
-                    tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
-                        / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
-                           + opt_ref_indices[1:]*np.cos(alpha[1:]))
-                else:  # p-polarization
-                    rfresnel[:] = (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-                                   - opt_ref_indices[0:-1]*np.cos(alpha[1:])) \
-                        / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-                           + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
-                    tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
-                        / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-                           + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+        # calculating z-component of the wave vector
+        k_z = 2.0*np.einsum('nkl,n,l->nkl', np.cos(alpha), np.pi/self._wl, opt_ref_indices)
 
-                # interface change matrix
-                Jnm = np.empty((2, 2, L-1), dtype=complex)
-                Jnm[0, 0, :] = 1.0/tfresnel
-                Jnm[0, 1, :] = rfresnel/tfresnel
-                Jnm[1, 0, :] = rfresnel/tfresnel
-                Jnm[1, 1, :] = 1.0/tfresnel
+        # phase changes
+        beta = np.einsum('nkl,l->nkl', k_z, thicknesses)
+        Ln = np.empty((N, K, 2, 2, L-1), dtype=complex)
+        Ln[:, :, :, :, 0] = [[1, 0], [0, 1]]
+        Ln[:, :, 0, 0, 1:] = np.exp(-1.0j*beta[:, :, 1:-1])
+        Ln[:, :, 0, 1, 1:] = 0
+        Ln[:, :, 1, 0, 1:] = 0
+        Ln[:, :, 1, 1, 1:] = np.exp(1.0j*beta[:, :, 1:-1])
 
-                # calculating z-component of the wave vector
-                k_z = 2.0*np.pi/self._wl[i]*opt_ref_indices*np.cos(alpha)
+        # calculating propagation matrix
+        S = Jnm[:, :, :, :, L-2]
 
-                # phase changes
-                beta = k_z*thicknesses
-                Ln = np.empty((2, 2, L-1), dtype=complex)
-                Ln[:, :, 0] = [[1, 0], [0, 1]]
-                Ln[0, 0, 1:] = np.exp(-1.0j*beta[1:-1])
-                Ln[0, 1, 1:] = 0
-                Ln[1, 0, 1:] = 0
-                Ln[1, 1, 1:] = np.exp(1.0j*beta[1:-1])
+        for k in range(L-3, -1, -1):
+            # S = np.dot(Jnm[:, :, :, :, k], np.dot(Ln[:, :, :, :, k+1], S))
+            S = np.einsum('nkop, nkjp -> nkoj', Jnm[:, :, :, :, k],
+                          np.einsum('nkop, nkjp -> nkoj', Ln[:, :, :, :, k+1], S))
 
-                # calculating propagation matrix
-                S = Jnm[:, :, L-2]
-                for k in range(L-3, -1, -1):
-                    S = np.dot(Jnm[:, :, k], np.dot(Ln[:, :, k+1], S))
+        # Total transmission and reflection of the multilayer
+        R_total = np.abs(S[:, :, 1, 0]/S[:, :, 0, 0])**2
+        if self.pol_in_state == 3:  # self._excitation['polarization'] == 's':
+            T_total = (np.real(opt_ref_indices[L-1]*np.cos(alpha[:, :, L-1])
+                                        / (opt_ref_indices[0]*np.cos(alpha[:, :, 0])))
+                                * np.abs(1/S[:, :, 0, 0])**2)
+        elif self.pol_in_state == 4:
+            T_total = (np.real(np.conj(opt_ref_indices[L-1])*np.cos(alpha[:, :, L-1])
+                                        / (opt_ref_indices[0]*np.cos(alpha[:, :, 0])))
+                                * np.abs(1/S[:, :, 0, 0])**2)
 
-                # Total transmission and reflection of the multilayer
-                R_total[i, j] = np.abs(S[1, 0]/S[0, 0])**2
-                if False:  # self._excitation['polarization'] == 's':
-                    T_total[i, j] = (np.real(opt_ref_indices[L-1]*np.cos(alpha[L-1])
-                                             / (opt_ref_indices[0]*np.cos(alpha[0])))
-                                     * np.abs(1/S[0, 0])**2)
-                else:
-                    T_total[i, j] = (np.real(np.conj(opt_ref_indices[L-1])*np.cos(alpha[L-1])
-                                             / (opt_ref_indices[0]*np.cos(alpha[0])))
-                                     * np.abs(1/S[0, 0])**2)
-
-        self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(time()-t1))
+        # self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(time()-t1))
         return R_total, T_total
+
+    def inhomogeneous_reflectivity(self, strain_map):
+        M = np.size(strain_map, 0)  # delay steps
+        R = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
+        T = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
+
+        for i in trange(M):
+            R[i, :, :], T[i, :, :] = self.homogeneous_reflectivity(strain_map[i, :])
+
+        return R, T
