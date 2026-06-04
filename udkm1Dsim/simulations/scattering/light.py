@@ -202,9 +202,10 @@ class Light(Scattering):
             strains = np.concatenate((strains, np.array([0])))
             L += 1
        
+        
         opt_ref_indices += opt_ref_indices_per_strain*strains
         thicknesses *= (strains+1)
-        
+
         R_total = np.zeros((N, K))
         T_total = np.zeros((N, K))
         
@@ -259,8 +260,8 @@ class Light(Scattering):
 
         for k in range(L-3, -1, -1):
             # S = np.dot(Jnm[:, :, :, :, k], np.dot(Ln[:, :, :, :, k+1], S))
-            S = np.einsum('nkop, nkjp -> nkoj', Jnm[:, :, :, :, k],
-                          np.einsum('nkop, nkjp -> nkoj', Ln[:, :, :, :, k+1], S))
+            S = np.einsum('nkpo, nkpj -> nkoj', Jnm[:, :, :, :, k],
+                          np.einsum('nkpo, nkpj -> nkoj', Ln[:, :, :, :, k+1], S))
 
         # Total transmission and reflection of the multilayer
         R_total = np.abs(S[:, :, 1, 0]/S[:, :, 0, 0])**2
