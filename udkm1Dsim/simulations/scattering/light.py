@@ -152,7 +152,7 @@ class Light(Scattering):
         """
         this must be very much simplified to be "homogeneous" and by being vectorized
         """
-        t1 = time()
+        # t1 = time()
         # self.disp_message('Calculating _homogeneous_reflectivity_ ...')
 
         N = np.size(self._qz, 0)  # energy steps
@@ -173,9 +173,15 @@ class Light(Scattering):
             opt_ref_index_substrate = 1+0j
 
         # adding a superstrate and substrate
-        opt_ref_indices = np.concatenate((np.array([1+0.0j]), opt_ref_indices, np.array([opt_ref_index_substrate])))
-        opt_ref_indices_per_strain = np.concatenate((np.array([0+0.0j]), opt_ref_indices_per_strain, np.array([0+0.0j])))
-        thicknesses = np.concatenate((np.array([1]), thicknesses, np.array([1])))
+        opt_ref_indices = np.concatenate(
+            (np.array([1+0.0j]), opt_ref_indices, np.array([opt_ref_index_substrate]))
+            )
+        opt_ref_indices_per_strain = np.concatenate(
+            (np.array([0+0.0j]), opt_ref_indices_per_strain, np.array([0+0.0j]))
+            )
+        thicknesses = np.concatenate(
+            (np.array([1]), thicknesses, np.array([1]))
+            )
 
         strains = np.concatenate((np.array([0]), strains, np.array([0])))
         # number of layers + super- and substrate
@@ -187,38 +193,40 @@ class Light(Scattering):
         # account for energy dependence of the refractive index
         # dirty hack so far
 
-        for i, ref_index in enumerate(opt_ref_indices):
-            layer = self.S.get_layer_handle(i)
+        # for i, ref_index in enumerate(opt_ref_indices):
+        #     layer = self.S.get_layer_handle(i)
 
-            try:
-                layer.opt_ref_index_nk
-            except:
-                pass
+        #     try:
+        #         layer.opt_ref_index_nk
+        #     except:
+        #         pass
 
         R_total = np.zeros((N, K))
         T_total = np.zeros((N, K))
-        
+
         # Snell laws
         alpha = np.empty((N, K, L), dtype=complex)
         alpha[:, :, 0] = np.pi/2 - self._theta[:, :]
         alpha[:, :, 1:] = np.arcsin(
             np.einsum('nk,l->nkl', np.sin(alpha[:, :, 0]), opt_ref_indices[0]/opt_ref_indices[1:])
             )
-        
+
         # fresnel coefficient
         rfresnel = np.empty((N, K, L-1), dtype=complex)
         tfresnel = np.empty((N, K, L-1), dtype=complex)
 
         if self.pol_in_state == 3:  # self._excitation['polarization'] == 's':
             rfresnel[:, :, :] = \
-                (np.einsum('l,nkl->nkl', opt_ref_indices[0:-1], np.cos(alpha[:, :, 0:-1])) - np.einsum('l,nkl->nkl', opt_ref_indices[1:], np.cos(alpha[:, :, 1:]))) \
-                / (np.einsum('l,nkl->nkl', opt_ref_indices[0:-1], np.cos(alpha[:, :, 0:-1])) + np.einsum('l,nkl->nkl', opt_ref_indices[1:], np.cos(alpha[:, :, 1:])))
+                (np.einsum('l,nkl->nkl', opt_ref_indices[0:-1], np.cos(alpha[:, :, 0:-1]))
+                 - np.einsum('l,nkl->nkl', opt_ref_indices[1:], np.cos(alpha[:, :, 1:]))) \
+                / (np.einsum('l,nkl->nkl', opt_ref_indices[0:-1], np.cos(alpha[:, :, 0:-1]))
+                   + np.einsum('l,nkl->nkl', opt_ref_indices[1:], np.cos(alpha[:, :, 1:])))
             tfresnel[:, :, :] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[:, :, 0:-1]) \
                 / (opt_ref_indices[0:-1]*np.cos(alpha[:, :, 0:-1])
                     + opt_ref_indices[1:]*np.cos(alpha[:, :, 1:]))
         elif self.pol_in_state == 4:  # p-polarization
             rfresnel[:, :, :] = (opt_ref_indices[1:]*np.cos(alpha[:, :, 0:-1])
-                            - opt_ref_indices[0:-1]*np.cos(alpha[:, :, 1:])) \
+                                 - opt_ref_indices[0:-1]*np.cos(alpha[:, :, 1:])) \
                 / (opt_ref_indices[1:]*np.cos(alpha[:, :, 0:-1])
                     + opt_ref_indices[0:-1]*np.cos(alpha[:, :, 1:]))
             tfresnel[:, :, :] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[:, :, 0:-1]) \
@@ -254,17 +262,20 @@ class Light(Scattering):
         R_total = np.abs(S[:, :, 1, 0]/S[:, :, 0, 0])**2
         if self.pol_in_state == 3:  # self._excitation['polarization'] == 's':
             T_total = (np.real(opt_ref_indices[L-1]*np.cos(alpha[:, :, L-1])
-                                        / (opt_ref_indices[0]*np.cos(alpha[:, :, 0])))
-                                * np.abs(1/S[:, :, 0, 0])**2)
+                               / (opt_ref_indices[0]*np.cos(alpha[:, :, 0])))
+                       * np.abs(1/S[:, :, 0, 0])**2)
         elif self.pol_in_state == 4:
             T_total = (np.real(np.conj(opt_ref_indices[L-1])*np.cos(alpha[:, :, L-1])
-                                        / (opt_ref_indices[0]*np.cos(alpha[:, :, 0])))
-                                * np.abs(1/S[:, :, 0, 0])**2)
+                               / (opt_ref_indices[0]*np.cos(alpha[:, :, 0])))
+                       * np.abs(1/S[:, :, 0, 0])**2)
 
-        # self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(time()-t1))
+        # self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(
+        # time()-t1))
         return R_total, T_total
 
     def inhomogeneous_reflectivity(self, strain_map):
+        t1 = time()
+        self.disp_message('Calculating _inhomogeneous_reflectivity_ ...')
         M = np.size(strain_map, 0)  # delay steps
         R = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
         T = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
@@ -272,4 +283,6 @@ class Light(Scattering):
         for i in trange(M):
             R[i, :, :], T[i, :, :] = self.homogeneous_reflectivity(strain_map[i, :])
 
+        self.disp_message('Elapsed time for _inhomogeneous_reflectivity_: {:f} s'.format(
+            time()-t1))
         return R, T
