@@ -184,6 +184,17 @@ class Light(Scattering):
         opt_ref_indices += opt_ref_indices_per_strain*strains
         thicknesses *= (strains+1)
 
+        # account for energy dependence of the refractive index
+        # dirty hack so far
+
+        for i, ref_index in enumerate(opt_ref_indices):
+            layer = self.S.get_layer_handle(i)
+
+            try:
+                layer.opt_ref_index_nk
+            except:
+                pass
+
         R_total = np.zeros((N, K))
         T_total = np.zeros((N, K))
         
