@@ -158,27 +158,6 @@ class Light(Scattering):
         N = np.size(self._qz, 0)  # energy steps
         K = np.size(self._qz, 1)  # qz steps
 
-        # interfaces = self.S.get_distances_of_interfaces(False)
-        # N = len(interfaces)
-        # # if a substrate is included add it at the end
-        # if self.S.substrate != []:
-        #     M = N + 1
-        # else:
-        #     M = N
-
-        # opt_ref_indices = np.empty(M, dtype=complex)
-        # thicknesses = np.empty(M, dtype=float)
-
-        # # first layer is vacuum/air
-        # opt_ref_indices[0] = 1+0.0j
-        # thicknesses[0] = 1e-9
-
-        # for i in range(N-1):
-        #     index = finderb(interfaces[i], d_start)
-        #     layer = structure.get_layer_handle(index[0])
-        #     opt_ref_indices[i+1] = layer.opt_ref_index
-        #     thicknesses[i+1] = interfaces[i+1]-interfaces[i]
-
         opt_ref_indices = self.S.get_layer_property_vector('opt_ref_index')
         opt_ref_indices_per_strain = self.S.get_layer_property_vector('opt_ref_index_per_strain')
         thicknesses = self.S.get_layer_property_vector('_thickness')
@@ -186,23 +165,22 @@ class Light(Scattering):
         if len(strains) == 0:
             strains = np.zeros_like(thicknesses)
 
-        opt_ref_indices = np.concatenate((np.array([1+0.0j]), opt_ref_indices))
-        opt_ref_indices_per_strain = np.concatenate((np.array([0+0.0j]), opt_ref_indices_per_strain))
-        thicknesses = np.concatenate((np.array([1]), thicknesses))
-        strains = np.concatenate((np.array([0]), strains))
-        L = len(thicknesses)
+        # both the superstrate and the substrate should be semiinfinite and static
 
         if self.S.substrate != []:
-            opt_ref_indices = np.concatenate(
-                (opt_ref_indices, np.array([self.S.substrate.get_layer_handle(0).opt_ref_index])))
-            opt_ref_indices_per_strain = np.concatenate(
-                (opt_ref_indices_per_strain, np.array([self.S.substrate.get_layer_handle(0).opt_ref_indices_per_strain])))
-            thicknesses = np.concatenate(
-                (thicknesses, np.array([self.S.substrate.get_thickness(False)])))
-            strains = np.concatenate((strains, np.array([0])))
-            L += 1
-       
-        
+            opt_ref_index_substrate = self.S.substrate.get_layer_handle(0).opt_ref_index
+        else:  # its vacuum
+            opt_ref_index_substrate = 1+0j
+
+        # adding a superstrate and substrate
+        opt_ref_indices = np.concatenate((np.array([1+0.0j]), opt_ref_indices, np.array([opt_ref_index_substrate])))
+        opt_ref_indices_per_strain = np.concatenate((np.array([0+0.0j]), opt_ref_indices_per_strain, np.array([0+0.0j])))
+        thicknesses = np.concatenate((np.array([1]), thicknesses, np.array([1])))
+
+        strains = np.concatenate((np.array([0]), strains, np.array([0])))
+        # number of layers + super- and substrate
+        L = len(thicknesses)
+
         opt_ref_indices += opt_ref_indices_per_strain*strains
         thicknesses *= (strains+1)
 
@@ -257,9 +235,7 @@ class Light(Scattering):
 
         # calculating propagation matrix
         S = Jnm[:, :, :, :, L-2]
-
         for k in range(L-3, -1, -1):
-            # S = np.dot(Jnm[:, :, :, :, k], np.dot(Ln[:, :, :, :, k+1], S))
             S = np.einsum('nkpo, nkpj -> nkoj', Jnm[:, :, :, :, k],
                           np.einsum('nkpo, nkpj -> nkoj', Ln[:, :, :, :, k+1], S))
 
