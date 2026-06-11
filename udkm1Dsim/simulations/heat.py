@@ -1105,6 +1105,42 @@ class Heat(Simulation):
 
         return temp_map
 
+    def calc_energy_map(self, temp_map, init_temp):
+        r"""calc_energy_map
+
+        Calculates a energy profile for a given temperature map and inital temperature.
+
+        Args:
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+
+        Returns:
+            energy_map (ndarray[float]): spatio-temporal energy map.
+
+        """
+        t1 = time()
+
+        (M, N, K) = temp_map.shape
+        init_temp = self.check_initial_temperature(init_temp)
+
+        energy_map = np.zeros_like(temp_map)
+
+        int_heat_capacities = self.S.get_layer_property_vector('int_heat_capacity')
+        masses = self.S.get_layer_property_vector('_mass')
+
+        for k in range(K):
+            for i in range(M):
+                for j in range(N):
+                    energy_map[i, j, k] = masses[j] * (
+                        int_heat_capacities[j][k](temp_map[i, j, k])
+                        - int_heat_capacities[j][k](init_temp[j, k])
+                        )
+
+        self.disp_message('Elapsed time for _energy_map_: {:f} s'.format(time()-t1))
+
+        return energy_map
+
     @staticmethod
     def odefunc(t, u, N, K, d_x_grid, x, thermal_conds, heat_capacities,
                 sub_system_coupling, densities, indices, dAdz, fluence,
