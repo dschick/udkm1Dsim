@@ -186,29 +186,8 @@ def test_get_temp_map(heat):
     heat.backend = 'scipy'
 
 
-def test_calc_energy_map(heat):
-    temp_map = np.zeros((10, 10))
-    heat.calc_energy_map(temp_map, 0)
-
-    temp_map = np.zeros((10, 10, 3))
-    heat.calc_energy_map(temp_map, 0)
-
-
-def test_calc_energy_flux_map(heat):
-    delays = np.r_[-1:10:0.01]*u.ps
-
-    temp_map = np.zeros((10, 10))
-    delta_map = temp_map
-    heat.calc_energy_flux_map(temp_map, delta_map, delays)
-
-    temp_map = np.zeros((10, 10, 3))
-    delta_map = temp_map
-    heat.calc_energy_flux_map(temp_map, delta_map, delays)
-
-
 @pytest.mark.skip(reason="takes too much time in CI")
 def test_get_diffusion_temp_map(heat):
-    print('\n test_get_temp_map\n')
     delays = np.r_[-1:10:0.01]*u.ps
     init_temp = 300*u.K
     heat.backend = 'scipy'
@@ -222,6 +201,21 @@ def test_get_diffusion_temp_map(heat):
                        'multilayer_absorption': True,
                        'backside': False}
     heat.get_temp_map(delays, init_temp)
+
+
+def test_calc_energy_map(heat):
+    dists, _, _ = heat.S.get_distances_of_layers()
+    temp_map = np.zeros((10, len(dists)))
+    heat.calc_energy_map(temp_map, 0)
+
+
+def test_calc_energy_flux_map(heat):
+    delays = np.r_[-1:10:0.01]*u.ps
+    dists, _, _ = heat.S.get_distances_of_layers()
+
+    temp_map = np.zeros((len(delays), len(dists)))
+    delta_map = temp_map
+    heat.calc_energy_flux_map(temp_map, delta_map, delays)
 
 
 def test_ode_func(heat):
