@@ -1105,6 +1105,104 @@ class Heat(Simulation):
 
         return temp_map
 
+    def calc_energy_map(self, temp_map, init_temp):
+        r"""calc_energy_map
+
+        Calculates a energy profile for a given temperature map and inital temperature.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+
+        Returns:
+            energy_map (ndarray[float]): spatio-temporal energy map.
+
+        """
+        t1 = time()
+
+        temp_map = np.atleast_3d(temp_map)
+        (M, N, K) = temp_map.shape
+        init_temp = self.check_initial_temperature(init_temp)
+
+        energy_map = np.zeros_like(temp_map)
+
+        int_heat_capacities = self.S.get_layer_property_vector('int_heat_capacity')
+        masses = self.S.get_layer_property_vector('_mass')
+
+        for k in range(K):
+            for i in range(M):
+                for j in range(N):
+                    energy_map[i, j, k] = masses[j] * (
+                        int_heat_capacities[j][k](temp_map[i, j, k])
+                        - int_heat_capacities[j][k](init_temp[j, k])
+                        )
+
+        self.disp_message('Elapsed time for _energy_map_: {:f} s'.format(time()-t1))
+
+        return energy_map
+
+    def calc_energy_flux_map(self, temp_map, delta_temp_map, delays):
+        r"""calc_energy_flux_map
+
+        Calculates a energy flux profile for a given temperature map and inital
+        temperature. For the flux calculation also the time-intervalls are required
+        given by the according delays of the heat diffusion simulations.
+
+        The fourth dimension of the ``energy_flux_map`` contains
+
+        index 0 - total energy flux into the respective subsystems
+        index 1 - energy flux due to ``sub_system_coupling_str``
+        index 2 - energy flux due to diffusion into each subsystems
+
+        Args:
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            delta_temp_map (ndarray[float]): spatio-temporal differential
+              temperature map.
+            delays (ndarray[Quantity]): delays range of simulation [s].
+
+        Returns:
+            energy_flux_map (ndarray[float]): spatio-temporal energy flux map.
+
+        """
+        t1 = time()
+
+        try:
+            delays = delays.to('s').magnitude
+        except AttributeError:
+            pass
+
+        delay_intervals = np.diff(delays, prepend=2*delays[0]-delays[1])
+
+        temp_map = np.atleast_3d(temp_map)
+        delta_temp_map = np.atleast_3d(delta_temp_map)
+        (M, N, K) = temp_map.shape
+
+        energy_flux_map = np.zeros((M, N, K, 3))
+
+        heat_capacities = self.S.get_layer_property_vector('heat_capacity')
+        sub_system_couplings = self.S.get_layer_property_vector('sub_system_coupling')
+        masses = self.S.get_layer_property_vector('_mass')
+        volumes = self.S.get_layer_property_vector('_volume')
+
+        for k in range(K):
+            for i in range(M):
+                for j in range(N):
+                    energy_flux_map[i, j, k, 0] = masses[j] * \
+                        heat_capacities[j][k](temp_map[i, j, k]) * \
+                        delta_temp_map[i, j, k] / delay_intervals[i]
+                    if K > 1:
+                        energy_flux_map[i, j, k, 1] = volumes[j] * \
+                            sub_system_couplings[j][k](temp_map[i, j, :])
+                        energy_flux_map[i, j, k, 2] = energy_flux_map[i, j, k, 0] -\
+                            energy_flux_map[i, j, k, 1]
+
+        self.disp_message('Elapsed time for _energy_flux_map_: {:f} s'.format(time()-t1))
+
+        return energy_flux_map
+
     @staticmethod
     def odefunc(t, u, N, K, d_x_grid, x, thermal_conds, heat_capacities,
                 sub_system_coupling, densities, indices, dAdz, fluence,

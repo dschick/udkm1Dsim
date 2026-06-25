@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- calculation of energy maps and energy flux maps from heat diffusion ([#183])
+
+[#183]: https://github.com/dschick/udkm1Dsim/issues/183
+
 ### Changed
 
 ### Deprecated
