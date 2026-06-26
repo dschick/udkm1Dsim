@@ -1726,7 +1726,7 @@ class XrayDynMag(Xray):
         return self.S.get_hash(types=['xray', 'magnetic']) + '_' + make_hash_md5(param)
 
     def set_incoming_polarization(self, pol_in_state, polarization=None):
-        """set_incoming_polarization
+        r"""set_incoming_polarization
 
         Sets the incoming polarization factor for circular +, circular -, sigma,
         pi, unpolarized, and elliptical polarization.
@@ -1761,7 +1761,7 @@ class XrayDynMag(Xray):
                 polarization = [polarization]
 
             N = len(polarization)
-            self.pol_in = np.zeros((2, N), dtype=np.complex128)
+            self.pol_in = np.zeros((N, 2), dtype=np.complex128)
             for i, (alpha, ellipticity) in enumerate(polarization):
                 try:
                     alpha = alpha.to('rad').magnitude
@@ -1773,7 +1773,7 @@ class XrayDynMag(Xray):
                 else:
                     epsilon = np.arctan(ellipticity)
 
-                self.pol_in[:, i] = np.array([np.cos(alpha)*np.cos(epsilon)
+                self.pol_in[i, :] = np.array([np.cos(alpha)*np.cos(epsilon)
                                               - 1j*np.sin(alpha)*np.sin(epsilon),
                                               np.sin(alpha)*np.cos(epsilon)
                                               + 1j*np.cos(alpha)*np.sin(epsilon)],
@@ -1786,7 +1786,7 @@ class XrayDynMag(Xray):
             self.polarizations[self.pol_in_state]))
 
     def set_outgoing_polarization(self, pol_out_state, polarization=None):
-        """set_outgoing_polarization
+        r"""set_outgoing_polarization
 
         Sets the outgoing polarization factor for circular +, circular -, sigma,
         pi, unpolarized, and elliptical polarization.
@@ -1821,7 +1821,7 @@ class XrayDynMag(Xray):
                 polarization = [polarization]
 
             N = len(polarization)
-            self.pol_out = np.zeros((2, N), dtype=np.complex128)
+            self.pol_out = np.zeros((N, 2), dtype=np.complex128)
             for i, (alpha, ellipticity) in enumerate(polarization):
                 try:
                     alpha = alpha.to('rad').magnitude
@@ -1833,7 +1833,7 @@ class XrayDynMag(Xray):
                 else:
                     epsilon = np.arctan(ellipticity)
 
-                self.pol_out[:, i] = np.array([np.cos(alpha)*np.cos(epsilon)
+                self.pol_out[i, :] = np.array([np.cos(alpha)*np.cos(epsilon)
                                                - 1j*np.sin(alpha)*np.sin(epsilon),
                                                np.sin(alpha)*np.cos(epsilon)
                                                + 1j*np.cos(alpha)*np.sin(epsilon)],
@@ -2836,12 +2836,25 @@ class XrayDynMag(Xray):
                           np.array([[-1, 1j], [1, 1j]])*0.5)
 
         # enable multiple polarizations
-        try:
-            num_pol = pol_in.shape[1]
-        except IndexError:
-            num_pol = 1
-            # add second dimension to polarization vectors for iteration
-            pol_in = pol_in[:, np.newaxis]
+        # add second dimension to polarization vectors for iteration
+        pol_in = np.atleast_2d(pol_in)
+        pol_out = np.atleast_2d(pol_out)
+
+        num_pol_in = pol_in.shape[0]
+        num_pol_out = pol_out.shape[0]
+
+        # check length of polarizations lists and equalize if necessary
+        if (num_pol_in > 1) and (num_pol_out > 1) and (num_pol_in != num_pol_out):
+            raise ValueError(f'the number of multiple incoming (#{num_pol_in:d}) and outgoing '
+                             f'(#{num_pol_out:d}) elliptical polarizations must be the same.')
+        elif num_pol_in > num_pol_out:
+            pol_out = np.tile(pol_out, (num_pol_in, 1))
+            num_pol = num_pol_in
+        elif num_pol_out > num_pol_in:
+            pol_in = np.tile(pol_in, (num_pol_out, 1))
+            num_pol = num_pol_out
+        else:  # equal size
+            num_pol = num_pol_in
 
         R = np.empty((Ref.shape[0], Ref.shape[1], num_pol))
         T = np.empty((Ref.shape[0], Ref.shape[1], num_pol))
@@ -2849,13 +2862,17 @@ class XrayDynMag(Xray):
         for i in range(num_pol):
             if pol_out.size == 0:
                 # no analyzer polarization
-                R[:, :, i] = np.real(np.matmul(np.square(np.absolute(np.matmul(Ref, pol_in[:, i]))),
-                            np.array([1, 1], dtype=np.complex128)))
-                T[:, :, i] = np.real(np.matmul(np.square(np.absolute(np.matmul(Trans, pol_in[:, i]))),
-                            np.array([1, 1], dtype=np.complex128)))
+                R[:, :, i] = np.real(np.matmul(
+                    np.square(np.absolute(np.matmul(Ref, pol_in[i, :]))),
+                    np.array([1, 1], dtype=np.complex128)))
+                T[:, :, i] = np.real(np.matmul(
+                    np.square(np.absolute(np.matmul(Trans, pol_in[i, :]))),
+                    np.array([1, 1], dtype=np.complex128)))
             else:
-                R[:, :, i] = np.real(np.square(np.absolute(np.matmul(np.matmul(Ref, pol_in[:, i]), pol_out))))
-                T[:, :, i] = np.real(np.square(np.absolute(np.matmul(np.matmul(Trans, pol_in[:, i]), pol_out))))
+                R[:, :, i] = np.real(np.square(np.absolute(
+                    np.matmul(np.matmul(Ref, pol_in[i, :]), pol_out[i, :]))))
+                T[:, :, i] = np.real(np.square(np.absolute(
+                    np.matmul(np.matmul(Trans, pol_in[i, :]), pol_out[i, :]))))
 
         if num_pol == 1:
             return np.squeeze(R, axis=2), np.squeeze(T, axis=2)
