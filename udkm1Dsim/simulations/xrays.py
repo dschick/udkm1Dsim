@@ -1740,7 +1740,7 @@ class XrayDynMag(Xray):
             pol_in_state (int): incoming polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
                 azimuth angle alpha of polarization (0 -> s; 90 -> pi) [deg]
-                ellipticity (-+1 -> circular left/right; 0 -> linear) 
+                ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
 
@@ -1755,7 +1755,7 @@ class XrayDynMag(Xray):
             self.pol_in = np.array([0, 1], dtype=np.complex128)
         elif (self.pol_in_state == 5):  # elliptical
             if polarization is None:
-                raise ValueError('For elliptical polarization a list or single tuple of azimuth '
+                raise ValueError('For elliptical polarization a single or list tuple of azimuth '
                                  'angle alpha and ellipticity e must be provided.')
             if type(polarization) is tuple:
                 polarization = [polarization]
@@ -1763,22 +1763,25 @@ class XrayDynMag(Xray):
             N = len(polarization)
             self.pol_in = np.zeros((2, N), dtype=np.complex128)
             for i, (alpha, ellipticity) in enumerate(polarization):
-                alpha = alpha.to('rad').magnitude
+                try:
+                    alpha = alpha.to('rad').magnitude
+                except AttributeError:
+                    pass
+
                 if ellipticity > 1 or ellipticity < -1:
                     raise ValueError('ellipticity must be -1 <= e <= +1')
                 else:
                     epsilon = np.arctan(ellipticity)
+
                 self.pol_in[:, i] = np.array([np.cos(alpha)*np.cos(epsilon)
                                               - 1j*np.sin(alpha)*np.sin(epsilon),
                                               np.sin(alpha)*np.cos(epsilon)
                                               + 1j*np.cos(alpha)*np.sin(epsilon)],
                                              dtype=np.complex128)
-
         else:  # unpolarized
             self.pol_in_state = 0  # catch any number and set state to 0
             self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=np.complex128)
 
-            
         self.disp_message('incoming polarizations set to: {:s}'.format(
             self.polarizations[self.pol_in_state]))
 
@@ -1797,7 +1800,7 @@ class XrayDynMag(Xray):
             pol_out_state (int): outgoing polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
                 azimuth angle alpha of polarization (0 -> s; 90 -> pi) [deg]
-                ellipticity (-+1 -> circular left/right; 0 -> linear) 
+                ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
 
@@ -1811,7 +1814,30 @@ class XrayDynMag(Xray):
         elif (self.pol_out_state == 4):  # pi
             self.pol_out = np.array([0, 1], dtype=np.complex128)
         elif (self.pol_out_state == 5):  # elliptical
-            self.pol_out = np.array([0, 1], dtype=np.complex128)
+            if polarization is None:
+                raise ValueError('For elliptical polarization a single or list tuple of azimuth '
+                                 'angle alpha and ellipticity e must be provided.')
+            if type(polarization) is tuple:
+                polarization = [polarization]
+
+            N = len(polarization)
+            self.pol_out = np.zeros((2, N), dtype=np.complex128)
+            for i, (alpha, ellipticity) in enumerate(polarization):
+                try:
+                    alpha = alpha.to('rad').magnitude
+                except AttributeError:
+                    pass
+
+                if ellipticity > 1 or ellipticity < -1:
+                    raise ValueError('ellipticity must be -1 <= e <= +1')
+                else:
+                    epsilon = np.arctan(ellipticity)
+
+                self.pol_out[:, i] = np.array([np.cos(alpha)*np.cos(epsilon)
+                                               - 1j*np.sin(alpha)*np.sin(epsilon),
+                                               np.sin(alpha)*np.cos(epsilon)
+                                               + 1j*np.cos(alpha)*np.sin(epsilon)],
+                                              dtype=np.complex128)
         else:  # no analyzer
             self.pol_out_state = 0  # catch any number and set state to 0
             self.pol_out = np.array([], dtype=np.complex128)
