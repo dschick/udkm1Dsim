@@ -31,12 +31,12 @@ from .. import u, Q_
 from ..helpers import make_hash_md5, finderb, multi_gauss
 import numpy as np
 from scipy.optimize import brentq
-from scipy.interpolate import interp2d
+from scipy.interpolate import RectBivariateSpline
 from scipy.integrate import solve_ivp
 from time import time
 from os import path
 import warnings
-from tqdm.notebook import tqdm
+from tqdm.auto import tqdm
 
 
 class Heat(Simulation):
@@ -104,7 +104,7 @@ class Heat(Simulation):
         self.backend = kwargs.get('backend', 'scipy')
         self._excitation = {'fluence': [], 'delay_pump': [0], 'pulse_width': [0],
                             'wavelength': 800e-9, 'theta': np.pi/2,
-                            # 'polarization': 'p',
+                            'polarization': 'p',
                             'multilayer_absorption': True,
                             'backside': False}
         self._distances = np.array([])
@@ -128,12 +128,17 @@ class Heat(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        output = [['excitation fluence', self.excitation['fluence']],
-                  ['excitation delay', self.excitation['delay_pump']],
-                  ['excitation pulse length', self.excitation['pulse_width']],
-                  ['excitation wavelength', self.excitation['wavelength']],
-                  ['excitation theta', self.excitation['theta']],
-                  # ['excitation polarization', self.excitation['polarization']],
+        output = [['excitation fluence',
+                   '{:.4g~P}'.format(self.excitation['fluence'].to('mJ/cm**2'))],
+                  ['excitation delay',
+                   '{:.4g~P}'.format(self.excitation['delay_pump'].to('ps'))],
+                  ['excitation pulse length',
+                   '{:.4g~P}'.format(self.excitation['pulse_width'].to('ps'))],
+                  ['excitation wavelength',
+                   '{:.4g~P}'.format(self.excitation['wavelength'].to('nm'))],
+                  ['excitation theta',
+                   '{:.4g~P}'.format(self.excitation['theta'].to('deg'))],
+                  ['excitation polarization', self.excitation['polarization']],
                   ['excitation multilayer absorption', self.excitation['multilayer_absorption']],
                   ['excitation backside', self.excitation['backside']],
                   ['heat diffusion', self.heat_diffusion],
@@ -147,19 +152,19 @@ class Heat(Simulation):
 
         if self._boundary_conditions['top_type'] == 1:
             output += [['top boundary temperature',
-                        str(self.boundary_conditions['top_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['top_value'].to('K'))]]
         elif self._boundary_conditions['top_type'] == 2:
             output += [['top boundary flux',
-                        str(self.boundary_conditions['top_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['top_value'].to('W/m**2'))]]
 
         output += [['bottom boundary type', self.boundary_conditions['bottom_type']]]
 
         if self._boundary_conditions['bottom_type'] == 1:
             output += [['bottom boundary temperature',
-                        str(self.boundary_conditions['bottom_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['bottom_value'].to('K'))]]
         elif self._boundary_conditions['bottom_type'] == 2:
             output += [['bottom boundary flux',
-                        str(self.boundary_conditions['bottom_value'])]]
+                        '{:.4g~P}'.format(self.boundary_conditions['bottom_value'].to('W/m**2'))]]
 
         class_str = 'Heat simulation properties:\n\n'
         class_str += super().__str__(output)
@@ -499,7 +504,8 @@ class Heat(Simulation):
            <https://doi.org/10.1103/PhysRevB.87.054437>`_
 
         """
-        self.disp_message('Absorption profile is calculated by multilayer formalism.')
+        self.disp_message('Absorption profile is calculated by multilayer formalism '
+                          'with {:s}-polarization.'.format(self._excitation['polarization']))
         if backside:
             self.disp_message('Backside excitation is enabled.')
             structure = self.S.reverse()
@@ -549,22 +555,22 @@ class Heat(Simulation):
         rfresnel = np.empty(M-1, dtype=complex)
         tfresnel = np.empty(M-1, dtype=complex)
 
-        # if self._excitation['polarization'] == 's':
-        #     rfresnel[:] = (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
-        #                    - opt_ref_indices[1:]*np.cos(alpha[1:])) \
-        #         / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
-        #            + opt_ref_indices[1:]*np.cos(alpha[1:]))
-        #     tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
-        #         / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
-        #            + opt_ref_indices[1:]*np.cos(alpha[1:]))
-        # else:  # p-polarization
-        rfresnel[:] = (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-                       - opt_ref_indices[0:-1]*np.cos(alpha[1:])) \
-            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
-        tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
-            / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
-               + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+        if self._excitation['polarization'] == 's':
+            rfresnel[:] = (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+                           - opt_ref_indices[1:]*np.cos(alpha[1:])) \
+                / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+                   + opt_ref_indices[1:]*np.cos(alpha[1:]))
+            tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
+                / (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
+                   + opt_ref_indices[1:]*np.cos(alpha[1:]))
+        else:  # p-polarization
+            rfresnel[:] = (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                           - opt_ref_indices[0:-1]*np.cos(alpha[1:])) \
+                / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                   + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
+            tfresnel[:] = 2.0*opt_ref_indices[0:-1]*np.cos(alpha[0:-1]) \
+                / (opt_ref_indices[1:]*np.cos(alpha[0:-1])
+                   + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
 
         # interface change matrix
         Jnm = np.empty((2, 2, M-1), dtype=complex)
@@ -592,9 +598,14 @@ class Heat(Simulation):
 
         # Total transmission and reflection of the multilayer
         R_total = np.abs(S[1, 0]/S[0, 0])**2
-        T_total = (np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
-                           / (opt_ref_indices[0]*np.cos(alpha[0])))
-                   * np.abs(1/S[0, 0])**2)
+        if self._excitation['polarization'] == 's':
+            T_total = (np.real(opt_ref_indices[M-1]*np.cos(alpha[M-1])
+                               / (opt_ref_indices[0]*np.cos(alpha[0])))
+                       * np.abs(1/S[0, 0])**2)
+        else:
+            T_total = (np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
+                               / (opt_ref_indices[0]*np.cos(alpha[0])))
+                       * np.abs(1/S[0, 0])**2)
 
         # calculating D matrix for intermediate field
         Dn = np.empty((2, 2, M), dtype=complex)
@@ -704,10 +715,15 @@ class Heat(Simulation):
         # absorption profile from Lambert-Beer's law or multilayer absorption
         dAdz = self.get_absorption_profile(distances=distances, backside=backside)
 
+        # normalize fluence to a scalar (single delta excitation)
         try:
             fluence = fluence.to('J/m**2').magnitude
         except AttributeError:
-            pass
+            # fluence might be a list/array; squeeze to scalar if possible
+            fluence = np.asarray(fluence, dtype=float).squeeze()
+        if np.ndim(fluence) != 0:
+            raise ValueError('Delta excitation expects a single fluence value; '
+                             'got shape {}'.format(np.shape(fluence)))
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
@@ -929,8 +945,9 @@ class Heat(Simulation):
             temp_map = np.zeros([len(delays)+1, L, K])
             for iii in range(K):
                 init = np.interp(d_mid, distances, temp[0, :, iii]).reshape([1, L])
-                f = interp2d(distances, excitation_delays, temp[1:, :, iii], kind='linear')
-                temp_map[:, :, iii] = np.append(init, f(d_mid, delays.to('s').magnitude), axis=0)
+                f = RectBivariateSpline(distances, excitation_delays, temp[1:, :, iii].T,
+                                        kx=1, ky=1)
+                temp_map[:, :, iii] = np.append(init, f(d_mid, delays.to('s').magnitude).T, axis=0)
 
         # calculate the difference temperature map
         delta_temp_map = np.diff(temp_map, axis=0)
@@ -1088,6 +1105,104 @@ class Heat(Simulation):
 
         return temp_map
 
+    def calc_energy_map(self, temp_map, init_temp):
+        r"""calc_energy_map
+
+        Calculates a energy profile for a given temperature map and inital temperature.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+
+        Returns:
+            energy_map (ndarray[float]): spatio-temporal energy map.
+
+        """
+        t1 = time()
+
+        temp_map = np.atleast_3d(temp_map)
+        (M, N, K) = temp_map.shape
+        init_temp = self.check_initial_temperature(init_temp)
+
+        energy_map = np.zeros_like(temp_map)
+
+        int_heat_capacities = self.S.get_layer_property_vector('int_heat_capacity')
+        masses = self.S.get_layer_property_vector('_mass')
+
+        for k in range(K):
+            for i in range(M):
+                for j in range(N):
+                    energy_map[i, j, k] = masses[j] * (
+                        int_heat_capacities[j][k](temp_map[i, j, k])
+                        - int_heat_capacities[j][k](init_temp[j, k])
+                        )
+
+        self.disp_message('Elapsed time for _energy_map_: {:f} s'.format(time()-t1))
+
+        return energy_map
+
+    def calc_energy_flux_map(self, temp_map, delta_temp_map, delays):
+        r"""calc_energy_flux_map
+
+        Calculates a energy flux profile for a given temperature map and inital
+        temperature. For the flux calculation also the time-intervalls are required
+        given by the according delays of the heat diffusion simulations.
+
+        The fourth dimension of the ``energy_flux_map`` contains
+
+        index 0 - total energy flux into the respective subsystems
+        index 1 - energy flux due to ``sub_system_coupling_str``
+        index 2 - energy flux due to diffusion into each subsystems
+
+        Args:
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array [K].
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            delta_temp_map (ndarray[float]): spatio-temporal differential
+              temperature map.
+            delays (ndarray[Quantity]): delays range of simulation [s].
+
+        Returns:
+            energy_flux_map (ndarray[float]): spatio-temporal energy flux map.
+
+        """
+        t1 = time()
+
+        try:
+            delays = delays.to('s').magnitude
+        except AttributeError:
+            pass
+
+        delay_intervals = np.diff(delays, prepend=2*delays[0]-delays[1])
+
+        temp_map = np.atleast_3d(temp_map)
+        delta_temp_map = np.atleast_3d(delta_temp_map)
+        (M, N, K) = temp_map.shape
+
+        energy_flux_map = np.zeros((M, N, K, 3))
+
+        heat_capacities = self.S.get_layer_property_vector('heat_capacity')
+        sub_system_couplings = self.S.get_layer_property_vector('sub_system_coupling')
+        masses = self.S.get_layer_property_vector('_mass')
+        volumes = self.S.get_layer_property_vector('_volume')
+
+        for k in range(K):
+            for i in range(M):
+                for j in range(N):
+                    energy_flux_map[i, j, k, 0] = masses[j] * \
+                        heat_capacities[j][k](temp_map[i, j, k]) * \
+                        delta_temp_map[i, j, k] / delay_intervals[i]
+                    if K > 1:
+                        energy_flux_map[i, j, k, 1] = volumes[j] * \
+                            sub_system_couplings[j][k](temp_map[i, j, :])
+                        energy_flux_map[i, j, k, 2] = energy_flux_map[i, j, k, 0] -\
+                            energy_flux_map[i, j, k, 1]
+
+        self.disp_message('Elapsed time for _energy_flux_map_: {:f} s'.format(time()-t1))
+
+        return energy_flux_map
+
     @staticmethod
     def odefunc(t, u, N, K, d_x_grid, x, thermal_conds, heat_capacities,
                 sub_system_coupling, densities, indices, dAdz, fluence,
@@ -1132,18 +1247,20 @@ class Heat(Simulation):
         # state = [last_t, dt]
         # I used a list because its values can be carried between function
         # calls throughout the ODE integration
-        last_t, dt = state
-        try:
-            n = int((t - last_t)/dt)
-        except ValueError:
-            n = 0
+        if pbar is not None:
+            # set everything for the tqdm progressbar
+            last_t, dt = state
+            try:
+                n = int((float(np.asarray(t).item()) - last_t)/dt)
+            except ValueError:
+                n = 0
 
-        if n >= 1:
-            pbar.update(n)
-            pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
-            state[0] = t
-        elif n < 0:
-            state[0] = t
+            if n >= 1:
+                pbar.update(n)
+                pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
+                state[0] = t
+            elif n < 0:
+                state[0] = t
 
         # reshape input temperature
         u = np.array(u).reshape([N, K], order='F')
@@ -1224,7 +1341,7 @@ class Heat(Simulation):
                       'pulse_width': Q_(self._excitation['pulse_width'], u.s).to('ps'),
                       'wavelength': Q_(self._excitation['wavelength'], u.m).to('nm'),
                       'theta': Q_(self._excitation['theta'], u.rad).to('deg'),
-                      # 'polarization': self._excitation['polarization'],
+                      'polarization': self._excitation['polarization'],
                       'multilayer_absorption': self._excitation['multilayer_absorption'],
                       'backside': self._excitation['backside']}
 
@@ -1247,12 +1364,12 @@ class Heat(Simulation):
                 self._excitation['wavelength'] = excitation['wavelength'].to('m').magnitude
             if 'theta' in excitation:
                 self._excitation['theta'] = excitation['theta'].to('rad').magnitude
-            # if 'polarization' in excitation:
-            #     if excitation['polarization'] in ['s', 'p']:
-            #         self._excitation['polarization'] = excitation['polarization']
-            #     else:
-            #         self._excitation['polarization'] = 'p'
-            #         raise Warning('Polarization musted be either _s_ or _p_!')
+            if 'polarization' in excitation:
+                if excitation['polarization'] in ['s', 'p']:
+                    self._excitation['polarization'] = excitation['polarization']
+                else:
+                    self._excitation['polarization'] = 'p'
+                    raise Warning('Polarization musted be either _s_ or _p_!')
             if 'multilayer_absorption' in excitation:
                 self._excitation['multilayer_absorption'] = \
                     bool(excitation['multilayer_absorption'])

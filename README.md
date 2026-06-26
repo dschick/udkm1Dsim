@@ -2,8 +2,10 @@
 
 [![Documentation Status](https://readthedocs.org/projects/udkm1dsim/badge/?version=latest)](https://udkm1dsim.readthedocs.io/en/latest/?badge=latest)
 ![CI](https://github.com/dschick/udkm1Dsim/actions/workflows/main.yml/badge.svg)
-![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
 [![codecov](https://codecov.io/gh/dschick/udkm1Dsim/branch/develop/graph/badge.svg?token=9J3BQYE6CE)](https://codecov.io/gh/dschick/udkm1Dsim)
+[![Anaconda-Server Badge](https://anaconda.org/conda-forge/udkm1dsim/badges/version.svg)](https://anaconda.org/conda-forge/udkm1dsim)
+![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
+[![PyPI downloads](https://img.shields.io/pypi/dm/pypistats.svg)](https://pypistats.org/packages/udkm1Dsim)
 
 The *udkm1Dsim* toolbox is a collection of Python classes and routines to
 simulate the thermal, structural, and magnetic dynamics after laser excitation
@@ -53,6 +55,8 @@ D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Barghee
 
 ## Installation
 
+### Installing with pip
+
 You can either install directly from pypi.org using the command
 
     pip install udkm1Dsim
@@ -82,6 +86,18 @@ computations, unit tests, as well as building the documentation:
     pip install udkm1Dsim[testing]
     pip install udkm1Dsim[documentation]
 
+### Installing with conda
+
+You can install directly from conda-forge using `conda`:
+
+    conda install -c conda-forge udkm1dsim
+
+or using `mamba`:
+
+    mamba install udkm1dsim
+
+See [udkm1dsim-feedstock](https://github.com/conda-forge/udkm1dsim-feedstock) for more details
+
 ## Contribute & Support
 
 If you are having issues please let us know via the
@@ -92,6 +108,14 @@ You can also ask questions, share ideas, or engage with community members via th
 
 You can contribute to the project via pull-requests following the
 [GitHub flow concept](https://docs.github.com/en/get-started/quickstart/github-flow).
+
+## Contributers
+
+Thanks to all who have contributed to the **udkm1Dsim** toolbox!
+
+<a href="https://github.com/dschick/udkm1Dsim/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=dschick/udkm1Dsim&max=40&columns=8" style="background-color: transparent" />
+</a>
 
 ## License
 

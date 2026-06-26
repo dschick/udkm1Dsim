@@ -19,12 +19,17 @@
 
 # -- Project information -----------------------------------------------------
 
+from datetime import datetime
+
+
+current_year = datetime.now().year
+
 project = 'udkm1Dsim'
-copyright = '2024, Daniel Schick'
+copyright = '2014-{:d}, Daniel Schick'.format(current_year)
 author = 'Daniel Schick'
 
 # The short X.Y version
-version = '2.0.3'
+version = '2.3.0'
 # The full version, including alpha/beta/rc tags
 release = version
 
@@ -188,7 +193,7 @@ texinfo_documents = [
 
 todo_include_todos = True
 # -- Extension configuration --
-jupyter_execute_notebooks = "off"
+nb_execution_mode = "off"
 
 # Autodoc setting
 autodoc_default_options = {

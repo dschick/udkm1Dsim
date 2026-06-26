@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='udkm1Dsim',
-    version='2.0.3',
+    version='2.3.0',
     packages=find_packages(),
     package_data={
         'udkm1Dsim': ['parameters/atomic_form_factors/chantler/*.cf',
@@ -17,7 +17,7 @@ setup(
     },
     url='https://github.com/dschick/udkm1Dsim',
     install_requires=['tqdm>=4.43.0',
-                      'numpy>=1.18.2,<2.0.0',
+                      'numpy',
                       'pint>=0.23',
                       'scipy>=1.4.1',
                       'sympy>=1.5.1',
@@ -34,7 +34,7 @@ setup(
                 + 'in Condensed Matter',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    python_requires='>=3.9',
+    python_requires='>=3.10',
     keywords='ultrafast dynamics condensed matter 1D '
             + 'NTM 3TM 2TM TTM N-temperature model '
             + 'coherent acoustic phonons sound strain waves '

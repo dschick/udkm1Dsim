@@ -107,7 +107,7 @@ def m_times_n(m, n):
         res (ndarray[float, complex]): 4-dimensional multiplication result.
 
     """
-    return np.einsum("lmij,lmjk->lmik", m, n)
+    return np.einsum('lmij,lmjk->lmik', m, n)
 
 
 def finderb(key, array):
@@ -215,6 +215,9 @@ def convert_polar_to_cartesian(polar):
     (amplitude), azimuthal, and polar angles of vector field
     :math:`\mathbf{F}`, respectively.
 
+    In case of multidimensional array as input, the relevant vector or
+    field must be contained in its last dimension.
+
     Args:
         polar (ndarray[float]): vector of field to convert.
 
@@ -256,6 +259,9 @@ def convert_cartesian_to_polar(cartesian):
     where :math:`F_r`, :math:`F_{\phi}`, :math:`F_{\gamma}` are the radial
     (amplitude), azimuthal, and polar component of vector field
     :math:`\mathbf{F}`, respectively.
+
+    In case of multidimensional array as input, the relevant vector or
+    field must be contained in its last dimension.
 
     Args:
         cartesian (ndarray[float]): vector of field to convert.
