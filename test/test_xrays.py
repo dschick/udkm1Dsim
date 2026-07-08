@@ -202,6 +202,21 @@ def text_xray_dyn_mag_set_polarization(xray_dyn_mag):
     xray_dyn_mag.set_polarization(4, 0)
 
 
+def text_xray_dyn_mag_set_incoming_polarization(xray_dyn_mag):
+    with pytest.raises(ValueError):
+        xray_dyn_mag.set_incoming_polarization(5)
+    xray_dyn_mag.set_incoming_polarization(5, (0, 0))
+
+
+def text_xray_dyn_mag_set_outgoing_polarization(xray_dyn_mag):
+    with pytest.raises(ValueError):
+        xray_dyn_mag.set_outgoing_polarization(5)
+    xray_dyn_mag.set_outgoing_polarization(5, (0, 0))
+    with pytest.raises(ValueError):
+        xray_dyn_mag.set_incoming_polarization(5, (0, 0))
+        xray_dyn_mag.set_outgoing_polarization(5, [(0, 0), (1, 0)])
+
+
 def test_xray_dyn_mag_get_hash(xray_dyn_mag, strain_map_mixed, magnetization_map):
     xray_dyn_mag.get_hash(strain_map=strain_map_mixed, magnetization_map=magnetization_map)
 
