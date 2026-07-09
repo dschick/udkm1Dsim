@@ -9,10 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- calculation of energy maps and energy flux maps from heat diffusion ([#183])
-
-[#183]: https://github.com/dschick/udkm1Dsim/issues/183
-
 ### Changed
 
 ### Deprecated
@@ -23,7 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [2.4.0] 2026-07-09
+### Added
 
+- calculation of energy maps and energy flux maps from heat diffusion ([#183])
+- include variable/elliptical polarization in XrayDynMag ([#180])
+
+[#183]: https://github.com/dschick/udkm1Dsim/issues/183
+[#180]: https://github.com/dschick/udkm1Dsim/issues/180
 
 ## [2.3.0] 2026-03-16
 ### Added
