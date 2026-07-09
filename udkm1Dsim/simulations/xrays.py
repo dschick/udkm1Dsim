@@ -1733,13 +1733,13 @@ class XrayDynMag(Xray):
         In the case of elliptical polarization a single or list of tuple of the
         azimuth angle :math:`\alpha` and the ellipticity :math:`e` of the
         polarization can be input.
-        :math:`-180° \leq \alpha \leq +180°`
+        :math:`0° \leq \alpha \leq +180°`
         :math:`-1 \leq e \leq +1`
 
         Args:
             pol_in_state (int): incoming polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> pi) [deg]
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) [deg]
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
@@ -1793,13 +1793,13 @@ class XrayDynMag(Xray):
         In the case of elliptical polarization a single or list of tuple of the
         azimuth angle :math:`\alpha` and the ellipticity :math:`e` of the
         polarization can be input.
-        :math:`-180° \leq \alpha \leq +180°`
+        :math:`0° \leq \alpha \leq +180°`
         :math:`-1 \leq e \leq +1`
 
         Args:
             pol_out_state (int): outgoing polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> pi) [deg]
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) [deg]
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
