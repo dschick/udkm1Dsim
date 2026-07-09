@@ -2,6 +2,7 @@ Examples
 ========
 
 .. toctree::
+    :maxdepth: 1
    
     Structure <examples/structure.ipynb>
     Heat <examples/heat.ipynb>
