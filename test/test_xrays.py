@@ -78,10 +78,6 @@ def magnetization_map(delays, distances_mixed):
 # XrayKin
 
 
-def text_xray_kin_str(xray_kin):
-    xray_kin.__str__()
-
-
 def test_xray_kin_update_experiment(xray_kin):
     # energy, wl, or k must be set first
     with pytest.raises(IndexError):
@@ -97,7 +93,11 @@ def test_xray_kin_update_experiment(xray_kin):
     xray_kin.wl = 1*u.nm
 
 
-def text_xray_kin_set_polarization(xray_kin):
+def test_xray_kin_str(xray_kin):
+    xray_kin.__str__()
+
+
+def test_xray_kin_set_polarization(xray_kin):
     xray_kin.set_polarization(0, 0)
     xray_kin.set_polarization(1, 1)
     xray_kin.set_polarization(2, 0)
@@ -126,11 +126,13 @@ def test_xray_kin_homogeneous_reflectivity(xray_kin):
 # XrayDyn
 
 
-def text_xray_dyn_str(xray_dyn):
-    xray_kin.__str__()
+def test_xray_dyn_str(xray_dyn):
+    xray_dyn.energy = 8000*u.eV
+    xray_dyn.theta = np.r_[1:10]*u.deg
+    xray_dyn.__str__()
 
 
-def text_xray_dyn_set_polarization(xray_dyn):
+def test_xray_dyn_set_polarization(xray_dyn):
     xray_dyn.set_polarization(0, 0)
     xray_dyn.set_polarization(1, 1)
     xray_dyn.set_polarization(2, 0)
@@ -144,8 +146,6 @@ def test_xray_dyn_get_hash(xray_dyn, strain_map, temp_map):
 
 
 def test_xray_dyn_homogeneous_reflectivity(xray_dyn):
-    xray_dyn.energy = 8000*u.eV
-    xray_dyn.theta = np.r_[1:10]*u.deg
     xray_dyn.homogeneous_reflectivity()
     xray_dyn.homogeneous_reflectivity(strains=np.zeros([2]))
     xray_dyn.homogeneous_reflectivity(temps=300*np.ones([2]))
@@ -190,16 +190,34 @@ def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map, temp_map):
 # XrayDynMag
 
 
-def text_xray_dyn_mag_str(xray_dyn_mag):
+def test_xray_dyn_mag_str(xray_dyn_mag):
+    xray_dyn_mag.energy = 800*u.eV
+    xray_dyn_mag.theta = np.r_[1:10]*u.deg
     xray_dyn_mag.__str__()
 
 
-def text_xray_dyn_mag_set_polarization(xray_dyn_mag):
+def test_xray_dyn_mag_set_polarization(xray_dyn_mag):
     xray_dyn_mag.set_polarization(0, 0)
     xray_dyn_mag.set_polarization(1, 1)
     xray_dyn_mag.set_polarization(2, 0)
     xray_dyn_mag.set_polarization(3, 0)
     xray_dyn_mag.set_polarization(4, 0)
+
+
+def test_xray_dyn_mag_set_incoming_polarization(xray_dyn_mag):
+    with pytest.raises(ValueError):
+        xray_dyn_mag.set_incoming_polarization(5)
+    xray_dyn_mag.set_incoming_polarization(5, (0, 0))
+    with pytest.raises(ValueError):
+        xray_dyn_mag.set_incoming_polarization(5, (0, 2))
+
+
+def test_xray_dyn_mag_set_outgoing_polarization(xray_dyn_mag):
+    with pytest.raises(ValueError):
+        xray_dyn_mag.set_outgoing_polarization(5)
+    xray_dyn_mag.set_outgoing_polarization(5, (0, 0))
+    with pytest.raises(ValueError):
+        xray_dyn_mag.set_outgoing_polarization(5, (0, 2))
 
 
 def test_xray_dyn_mag_get_hash(xray_dyn_mag, strain_map_mixed, magnetization_map):
@@ -210,12 +228,18 @@ def test_xray_dyn_mag_homogeneous_reflectivity(xray_dyn_mag):
     xray_dyn_mag.energy = 800*u.eV
     xray_dyn_mag.theta = np.r_[1:10]*u.deg
     xray_dyn_mag.homogeneous_reflectivity()
+    with pytest.raises(ValueError):
+        xray_dyn_mag.set_incoming_polarization(5, [(0, 0), (1, 0), (2, 0)])
+        xray_dyn_mag.set_outgoing_polarization(5, [(0, 0), (1, 0)])
+        xray_dyn_mag.homogeneous_reflectivity()
 
 
 def test_xray_dyn_mag_inhomogeneous_reflectivity(xray_dyn_mag, strain_map_mixed,
                                                  magnetization_map):
     xray_dyn_mag.energy = 800*u.eV
     xray_dyn_mag.theta = np.r_[1:10]*u.deg
+    xray_dyn_mag.set_incoming_polarization(5, (0, 0))
+    xray_dyn_mag.set_outgoing_polarization(5, [(0, 0)])
     xray_dyn_mag.inhomogeneous_reflectivity(strain_map=strain_map_mixed,
                                             magnetization_map=magnetization_map)
     xray_dyn_mag.force_recalc = False

@@ -11,4 +11,5 @@ Examples
     Dynamical Xray Scattering <examples/dynamical_xray.ipynb>
     Dynamical Xray Scattering & Debye-Waller Effect <examples/dynamical_xray_debye_waller.ipynb>
     Dynamical Magnetic Xray Scattering <examples/dynamical_magnetic_xray.ipynb>
+    XUV Polarimetry <examples/XUV_polarimetry.ipynb>
     Data Fitting <examples/data_fitting.ipynb>
