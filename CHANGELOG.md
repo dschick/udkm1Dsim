@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- links to the API from the exmaples ([#185])
+
+[#185]: https://github.com/dschick/udkm1Dsim/pull/185
+
 ### Changed
 
 ### Deprecated
@@ -26,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - include variable/elliptical polarization in XrayDynMag ([#180])
 
 [#183]: https://github.com/dschick/udkm1Dsim/issues/183
-[#180]: https://github.com/dschick/udkm1Dsim/issues/180
+[#180]: https://github.com/dschick/udkm1Dsim/pull/180
 
 ## [2.3.0] 2026-03-16
 ### Added
