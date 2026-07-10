@@ -724,7 +724,7 @@ class PhononAna(Phonon):
            & M. Bargheer, *Analysis of ultrafast X-ray diffraction data in a
            linear-chain model of the lattice dynamics*, `Applied Physics A,
            106(3), 489-499 (2011).
-           <http://www.doi.org/doi:10.1007/s00339-011-6719-z>`_
+           <https://doi.org/10.1007/s00339-011-6719-z>`_
 
     """
 
