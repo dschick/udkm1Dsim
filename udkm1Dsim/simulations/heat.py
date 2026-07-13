@@ -725,7 +725,7 @@ class Heat(Simulation):
             raise ValueError('Delta excitation expects a single fluence value; '
                              'got shape {}'.format(np.shape(fluence)))
 
-        heat_capacities = self.S.get_layer_property_vector('_heat_capacity')
+        heat_capacities = self.S.get_layer_property_vector('heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
         masses = self.S.get_layer_property_vector('_mass_unit_area')
         # masses are normalized to 1Ang^2

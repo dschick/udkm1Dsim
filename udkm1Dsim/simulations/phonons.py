@@ -267,7 +267,7 @@ class Phonon(Simulation):
         delta_temp_map = np.reshape(delta_temp_map, [M, L, K])
 
         thicknesses = self.S.get_layer_property_vector('_thickness')
-        lin_therm_exps = self.S.get_layer_property_vector('_lin_therm_exp')
+        lin_therm_exps = self.S.get_layer_property_vector('lin_therm_exp')
 
         sticks = np.zeros([M, L])  # the sticks inserted in the unit cells
         sticks_sub_systems = np.zeros([M, L, K])  # the sticks for each thermodynamic subsystem

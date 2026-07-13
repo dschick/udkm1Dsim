@@ -463,7 +463,6 @@ class Layer:
 
     @heat_capacity.setter
     def heat_capacity(self, heat_capacity):
-        # (re)calculate the integrated heat capacity
         self._heat_capacity, self.heat_capacity_str = self.check_input(heat_capacity)
 
     @property
@@ -480,7 +479,6 @@ class Layer:
 
     @lin_therm_exp.setter
     def lin_therm_exp(self, lin_therm_exp):
-        # (re)calculate the integrated linear thermal expansion coefficient
         self._lin_therm_exp, self.lin_therm_exp_str = self.check_input(lin_therm_exp)
 
     @property
