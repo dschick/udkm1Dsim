@@ -216,7 +216,6 @@ class Layer:
         # traverse each list element and convert it to a function handle
         for input in inputs:
             T = symbols('T')
-            argument = T
             if isfunction(input):
                 raise ValueError('Please use string representation of function!')
             elif isinstance(input, str):
@@ -230,7 +229,10 @@ class Layer:
                     # check for presence of indexing and use symarray as argument
                     if '_' in input:
                         T = symarray('T', k)
-                        argument = [T]
+                        output.append(lambdify([T], input, modules='numpy'))
+                    else:
+                        output.append(lambdify(T, input, modules='numpy'))
+                    output_strs.append(input.strip())
                 except Exception as e:
                     print('String input for layer property ' + input + ' \
                         cannot be converted to function handle!')
@@ -246,8 +248,6 @@ class Layer:
                                  'list of numerics, Quantities, or function handle strings '
                                  'which can be converted into a lambda function!')
 
-            output.append(lambdify(argument, input, modules=['numpy', 'scipy']))
-            output_strs.append(str(input).strip())
         return output, output_strs
 
     def get_property_dict(self, **kwargs):
