@@ -3,7 +3,6 @@
 
 from udkm1Dsim import u
 import numpy as np
-import warnings
 import pytest
 from pint.testing import assert_allclose as assert_approx
 from pint.testing import assert_equal

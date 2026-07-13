@@ -543,8 +543,8 @@ class Layer:
                     self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
                     self.int_lin_therm_exp_str.append(str(integral))
             except Exception:
-                warnings.warn('\nThe sympy integration of the lin. thermal expansion did not work. '
-                              'You can set its analytical anti-derivative manually '
+                warnings.warn('\nThe sympy integration of the lin. thermal expansion did not '
+                              'work. You can set its analytical anti-derivative manually '
                               'as a str representing the correct function of temperature '
                               'T by typing\n'
                               '\n'
