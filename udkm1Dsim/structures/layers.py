@@ -496,11 +496,20 @@ class Layer:
                     self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
                     self.int_heat_capacity_str.append(str(integral))
             except Exception as e:
-                print('The sympy integration did not work. You can set the '
-                      'analytical anti-derivative of the heat capacity '
-                      'of your layer as function str of the temperature '
-                      'T by typing layer.int_heat_capacity = \'c(T)\' '
-                      'where layer is the name of the layer object.')
+                print('The sympy integration of the heat capacity did not work. '
+                      'It is only required for\n'
+                      '\n'
+                      '    Heat.get_temperature_after_delta_excitation()\n'
+                      '\n'
+                      'You can set its analytical anti-derivative manually '
+                      'as a str representing the correct function of temperature '
+                      'T by typing\n'
+                      '\n'
+                      '    layer.int_heat_capacity = \'c(T)\'\n'
+                      '\n'
+                      'where layer is the name of the layer object.\n'
+                      '\n'
+                      'Exception:')
                 print(e)
 
         return self._int_heat_capacity
