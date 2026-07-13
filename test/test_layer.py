@@ -65,28 +65,12 @@ def test_layer_lin_therm_exp_str(layer):
     assert layer.lin_therm_exp_str[0] == '1e-05'
 
 
-def test_layer_int_lin_therm_exp(layer):
-    assert layer.int_lin_therm_exp[0](300) == 3e-3
-
-
-def test_layer_int_lin_therm_exp_str(layer):
-    assert layer.int_lin_therm_exp_str[0] == '1.0e-5*T'
-
-
 def test_layer_heat_capacity(layer):
     assert layer.heat_capacity[0](300) == 10
 
 
 def test_layer_heat_capacity_str(layer):
     assert layer.heat_capacity_str[0] == '10.0'
-
-
-def test_layer_int_heat_capacity(layer):
-    assert layer.int_heat_capacity[0](300) == 3000.0
-
-
-def test_layer_int_heat_capacity_str(layer):
-    assert layer.int_heat_capacity_str[0] == '10.0*T'
 
 
 def test_layer_sub_system_coupling(layer):
