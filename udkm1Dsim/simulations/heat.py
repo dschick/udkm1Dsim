@@ -1128,15 +1128,14 @@ class Heat(Simulation):
 
         energy_map = np.zeros_like(temp_map)
 
-        int_heat_capacities = self.S.get_layer_property_vector('int_heat_capacity')
+        heat_capacities = self.S.get_layer_property_vector('heat_capacity')
         masses = self.S.get_layer_property_vector('_mass')
 
         for k in range(K):
             for i in range(M):
                 for j in range(N):
                     energy_map[i, j, k] = masses[j] * (
-                        int_heat_capacities[j][k](temp_map[i, j, k])
-                        - int_heat_capacities[j][k](init_temp[j, k])
+                        quad(heat_capacities[j][k], init_temp[j, k], temp_map[i, j, k])[0]
                         )
 
         self.disp_message('Elapsed time for _energy_map_: {:f} s'.format(time()-t1))
