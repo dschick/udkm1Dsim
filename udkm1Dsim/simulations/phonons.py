@@ -32,7 +32,7 @@ import numpy as np
 from os import path
 from time import time
 from scipy.integrate import solve_ivp, quad
-from tqdm.notebook import tqdm, trange
+from tqdm.auto import tqdm, trange
 
 
 class Phonon(Simulation):
@@ -155,15 +155,20 @@ class Phonon(Simulation):
         L = len(all_strains)  # Nb. of unique layers
         strains = []
 
+        # normalize N to a 1D integer array of length L
         if np.size(N) == 1:
-            N = N*np.ones([L, 1])
-        elif np.size(N) != L:
-            raise ValueError('The dimension of N must be either 1 or the number '
-                             'of unique layers the structure!')
+            N = np.full(L, int(N))
+        else:
+            N = np.asarray(N).ravel()
+            if N.size != L:
+                raise ValueError('The dimension of N must be either 1 or the number '
+                                 'of unique layers ({:d}) the structure!'.format(L))
+            N = N.astype(int)
 
         for i, value in enumerate(all_strains):
             min_strain = np.min(value)
             max_strain = np.max(value)
+
             strains.append(np.sort(np.unique(
                 np.r_[0, np.linspace(min_strain, max_strain, int(N[i]))])))
 
@@ -711,7 +716,7 @@ class PhononAna(Phonon):
            & M. Bargheer, *Analysis of ultrafast X-ray diffraction data in a
            linear-chain model of the lattice dynamics*, `Applied Physics A,
            106(3), 489-499 (2011).
-           <http://www.doi.org/doi:10.1007/s00339-011-6719-z>`_
+           <https://doi.org/10.1007/s00339-011-6719-z>`_
 
     """
 
@@ -997,7 +1002,8 @@ class PhononAna(Phonon):
             # initialize
             L = self.S.get_number_of_layers()
             K = np.zeros([L, L])  # initializing three-diagonal springs-masses matrix.
-            omega = np.zeros([L, 1], dtype=np.cfloat)  # initializing a vector for eigenfrequencies
+            # initializing a vector for eigenfrequencies
+            omega = np.zeros([L, 1], dtype=np.complex128)
 
             masses = self.S.get_layer_property_vector('_mass_unit_area')
             spring_consts = self.S.get_layer_property_vector('spring_const')

@@ -29,6 +29,7 @@ __docformat__ = 'restructuredtext'
 from tabulate import tabulate
 import numpy as np
 import os
+import warnings
 
 
 class Simulation:
@@ -79,7 +80,7 @@ class Simulation:
         class_str = 'This is the current structure for the simulations:\n\n'
         class_str += self.S.__str__()
         class_str += '\n\nDisplay properties:\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt="rst",
+        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt='rst',
                               colalign=('right',), floatfmt=('.2f', '.2f'))
         return class_str
 
@@ -115,7 +116,8 @@ class Simulation:
             filename = os.path.basename(full_filename)
             self.disp_message('{:s} saved to file:\n\t {:s}'.format(var_name, filename))
 
-    def conv_with_function(self, y, x, handle):
+    @staticmethod
+    def conv_with_function(y, x, handle):
         """conv_with_function
 
         Convolutes the array :math:`y(x)` with a function given by the handle
@@ -136,7 +138,7 @@ class Simulation:
         x0 = np.mean(x_lin)
         y_handle = handle(x_lin-x0)
 
-        temp = np.convolve(y_lin, y_handle/y_handle.sum(), mode="same")
+        temp = np.convolve(y_lin, y_handle/y_handle.sum(), mode='same')
 
         y_conv = np.interp(x, x_lin, temp)
         # finally remove NaN entries due to the interpolation
@@ -153,4 +155,4 @@ class Simulation:
         if path.exists(cache_dir):
             self._cache_dir = cache_dir
         else:
-            print('Cache dir does not exist.\nPlease create the path first.')
+            warnings.warn('Cache dir does not exist. Please create the path first.')
