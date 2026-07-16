@@ -73,6 +73,13 @@ def test_layer_int_lin_therm_exp_str(layer):
     assert layer.int_lin_therm_exp_str[0] == '1.0e-5*T'
 
 
+def test_layer_nonintegratable_lin_therm_exp(layer):
+    with pytest.warns(UserWarning):
+        layer.lin_therm_exp = '1/abs(T-300)'
+    # reset to original value
+    layer.lin_therm_exp = 1e-5
+
+
 def test_layer_heat_capacity(layer):
     assert layer.heat_capacity[0](300) == 10
 
@@ -87,6 +94,13 @@ def test_layer_int_heat_capacity(layer):
 
 def test_layer_int_heat_capacity_str(layer):
     assert layer.int_heat_capacity_str[0] == '10.0*T'
+
+
+def test_layer_nonintegratable_heat_capacity(layer):
+    with pytest.warns(UserWarning):
+        layer.heat_capacity = '1/abs(T-300)'
+    # reset to original value
+    layer.heat_capacity = 10*(u.J/u.kg/u.K)
 
 
 def test_layer_sub_system_coupling(layer):
