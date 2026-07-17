@@ -47,3 +47,10 @@ def docs(session):
     session.install('.')
     session.install('-r', './docs/requirements.txt')
     session.run('make', '--directory', './docs', 'html', external=True)
+
+
+@nox.session(venv_backend='mamba', python='3.13', reuse_venv=reuse_venv)
+def codspeed(session):
+    session.install('.')
+    session.install('pytest-codspeed')
+    session.run('pytest', '--codspeed', 'test/')
