@@ -28,4 +28,4 @@ jobs:
         uses: CodSpeedHQ/action@v4
         with:
           mode: simulation
-          run: pytest tests/ --codspeed
+          run: pytest test/ --codspeed
