@@ -6,6 +6,7 @@
 [![Anaconda-Server Badge](https://anaconda.org/conda-forge/udkm1dsim/badges/version.svg)](https://anaconda.org/conda-forge/udkm1dsim)
 ![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
 [![PyPI downloads](https://img.shields.io/pypi/dm/pypistats.svg)](https://pypistats.org/packages/udkm1Dsim)
+[![CodSpeed Badge](https://img.shields.io/endpoint?url=https://app.codspeed.io//badge.json)](https://app.codspeed.io//dschick/udkm1Dsim?utm_source=badge)
 
 The **udkm1Dsim** toolbox is a collection of Python classes and routines to
 simulate the thermal, structural, and magnetic dynamics after laser excitation
