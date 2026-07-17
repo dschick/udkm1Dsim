@@ -1,5 +1,6 @@
 import pytest
 
+
 # Define the function we want to benchmark
 def fibonacci(n: int) -> int:
     if n <= 1:
