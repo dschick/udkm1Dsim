@@ -32,7 +32,7 @@ jobs:
           # Upgrade pip
           python3 -m pip install --upgrade pip
           # Install build deps
-          pip install setuptools pytest pytest-cov flake8 ipython
+          pip install setuptools pytest pytest-cov pytest-codspeed flake8 ipython
           # Install the package from setup.py
           pip install .
       - name: linting flake8
