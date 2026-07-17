@@ -20,7 +20,10 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install dependencies
-        run: pip install pytest pytest-codspeed
+        run: |
+          pip install pytest pytest-codspeed
+          # Install the package from setup.py
+          pip install .
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
         with:
