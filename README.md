@@ -3,6 +3,7 @@
 [![Documentation Status](https://readthedocs.org/projects/udkm1dsim/badge/?version=latest)](https://udkm1dsim.readthedocs.io/en/latest/?badge=latest)
 ![CI](https://github.com/dschick/udkm1Dsim/actions/workflows/main.yml/badge.svg)
 [![codecov](https://codecov.io/gh/dschick/udkm1Dsim/branch/develop/graph/badge.svg?token=9J3BQYE6CE)](https://codecov.io/gh/dschick/udkm1Dsim)
+[![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/dschick/udkm1Dsim?utm_source=badge)
 [![Anaconda-Server Badge](https://anaconda.org/conda-forge/udkm1dsim/badges/version.svg)](https://anaconda.org/conda-forge/udkm1dsim)
 ![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
 [![PyPI downloads](https://img.shields.io/pypi/dm/pypistats.svg)](https://pypistats.org/packages/udkm1Dsim)
