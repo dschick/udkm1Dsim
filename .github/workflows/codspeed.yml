@@ -3,33 +3,42 @@ name: CodSpeed Benchmarks
 on:
   push:
     branches:
-      - 'develop'
+      - develop
   pull_request:
     branches:
-      - 'develop'
-      - 'master'
+      - develop
+      - master
+  # `workflow_dispatch` allows CodSpeed to trigger backtest
+  # performance analysis in order to generate initial data.
+  workflow_dispatch:
+
+permissions:
+    contents: read
+    id-token: write
 
 jobs:
   benchmarks:
     name: Run benchmarks
     runs-on: ubuntu-latest
-    permissions:
-        contents: read
-        id-token: write
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout source repo
+        uses: actions/checkout@v5
+      
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
+      
       - name: Install dependencies
         run: |
-          pip install pytest pytest-codspeed  pytest-benchmark
+          python3 -m pip install --upgrade pip
+          pip install pytest pytest-codspeed
           # Install the package from setup.py
           pip install .
+
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
         with:
           mode: simulation
           token: ${{ secrets.CODSPEED_TOKEN }}
-          run: pytest test/ --codspeed -v
+          run: pytest test/test_benchmarks.py --codspeed -v
