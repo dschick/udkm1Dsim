@@ -39,7 +39,7 @@ def tests(session, numpy):
     session.install(f'numpy=={numpy}')
     session.install('pytest-cov')
     session.install('.')
-    session.run('pytest', '--cov=udkm1Dsim', 'test/')
+    session.run('pytest', '--cov=udkm1Dsim', 'tests/')
 
 
 @nox.session(python='3.13', reuse_venv=reuse_venv)
@@ -47,3 +47,10 @@ def docs(session):
     session.install('.')
     session.install('-r', './docs/requirements.txt')
     session.run('make', '--directory', './docs', 'html', external=True)
+
+
+@nox.session(venv_backend='mamba', python='3.13', reuse_venv=reuse_venv)
+def benchmarks(session):
+    session.install('.')
+    session.install('pytest-codspeed')
+    session.run('pytest', '--codspeed', 'benchmarks/')
