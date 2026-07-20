@@ -12,14 +12,15 @@ on:
   # performance analysis in order to generate initial data.
   workflow_dispatch:
 
-permissions:
-    contents: read
-    id-token: write
-
 jobs:
   benchmarks:
     name: Run benchmarks
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Checkout source repo
         uses: actions/checkout@v5
