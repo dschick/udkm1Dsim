@@ -58,7 +58,6 @@ class Heat(Simulation):
             calculations.
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer.
-        backend (str): pde solver backend - either default scipy or matlab.
 
     Attributes:
         S (Structure): sample structure to calculate simulations on.
@@ -72,7 +71,6 @@ class Heat(Simulation):
             calculations.
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer.
-        backend (str): pde solver backend - either default scipy or matlab.
         excitation (dict{ndarray[float, Quantity]}): excitation parameters
             fluence, delay_pump, pulse_width, wavelength, theta, polarization,
             multilayer_absorption, backside
@@ -90,10 +88,6 @@ class Heat(Simulation):
 
         distances (ndarray[float, Quantity]): spatial grid for heat diffusion [m]
         ode_options (dict): options for scipy solve_ivp ode solver
-        ode_options_matlab (dict): dict with options for the MATLAB pdepe
-            solver.
-        matlab_engine (module): MATLAB to Python API engine required for
-            calculating heat diffusion.
 
     """
 
@@ -101,7 +95,6 @@ class Heat(Simulation):
         super().__init__(S, force_recalc, **kwargs)
         self.heat_diffusion = kwargs.get('heat_diffusion', False)
         self.intp_at_interface = kwargs.get('intp_at_interface', 11)
-        self.backend = kwargs.get('backend', 'scipy')
         self._excitation = {'fluence': [], 'delay_pump': [0], 'pulse_width': [0],
                             'wavelength': 800e-9, 'theta': np.pi/2,
                             'polarization': 'p',
@@ -122,8 +115,6 @@ class Heat(Simulation):
             'rtol': 1e-3,
             'atol': 1e-6,
             }
-        self.ode_options_matlab = {'RelTol': 1e-3}
-        self.matlab_engine = []
 
     def __str__(self, output=[]):
         """String representation of this class"""
@@ -143,7 +134,6 @@ class Heat(Simulation):
                   ['excitation backside', self.excitation['backside']],
                   ['heat diffusion', self.heat_diffusion],
                   ['interpolate at interfaces', self.intp_at_interface],
-                  ['backend', self.backend],
                   ['distances', 'no distance mesh is set for heat diffusion calculations'
                    if self.distances.size == 0 else
                    'a distance mesh is set for heat diffusion calculations.'],
@@ -982,9 +972,6 @@ class Heat(Simulation):
         parameter :math:`G_i(T_1,...,T_N)` of the individual layers.
         The index :math:`i` refers to the :math:`i`-th subsystem.
 
-        The 1D heat diffusion equation can be either solved with SciPy or
-        Matlab as backend.
-
         Args:
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
                 temperature scalar or array [K].
@@ -1013,88 +1000,45 @@ class Heat(Simulation):
         else:
             dAdz = np.zeros_like(distances)
 
-        if self.backend == 'matlab':
-            # use of matlab backend for heat diffusion calculation
-            # first try to import required python-matlab bridge
-            try:
-                import matlab.engine
-            except ImportError:
-                raise Warning('You need to have a working MATLAB installation '
-                              'on your machine with installed matlab.engine for '
-                              'Python.\n'
-                              'See '
-                              'https://de.mathworks.com/help/matlab/matlab-engine-for-python.html '
-                              'for details.')
+        if self.progress_bar:  # with tqdm progressbar
+            pbar = tqdm()
+            pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
+            state = [delays[0], abs(delays[-1]-delays[0])/100]
+        else:  # without progressbar
+            pbar = None
+            state = None
 
-            # start MATLAB engine if not already done
-            if self.matlab_engine == []:
-                self.matlab_engine = matlab.engine.start_matlab()
+        indices = finderb(distances, d_start)
+        densities = self.S.get_layer_property_vector('_density')
+        # solve pdepe with method-of-lines
+        sol = solve_ivp(
+            Heat.odefunc,
+            [delays[0], delays[-1]],
+            np.reshape(init_temp, K*N, order='F'),
+            args=(N,
+                  K,
+                  d_distances,
+                  d_start,
+                  self.S.get_layer_property_vector('therm_cond'),
+                  self.S.get_layer_property_vector('heat_capacity'),
+                  self.S.get_layer_property_vector('sub_system_coupling'),
+                  densities[indices],
+                  indices,
+                  dAdz,
+                  fluence,
+                  delay_pump,
+                  pulse_width,
+                  self._boundary_conditions['top_type'],
+                  self._boundary_conditions['top_value'],
+                  self._boundary_conditions['bottom_type'],
+                  self._boundary_conditions['bottom_value'],
+                  pbar, state),
+            t_eval=delays,
+            **self.ode_options)
 
-            # add path of matlab script to matlab's search path
-            matlab_path = path.join(path.dirname(path.abspath(__file__)), 'matlab')
-            self.matlab_engine.addpath(matlab_path)
-
-            temp_map = self.matlab_engine.calc_heat_diffusion(
-                K,
-                matlab.double(init_temp.tolist()),
-                matlab.double(d_start.tolist()),
-                matlab.double(distances.tolist()),
-                matlab.double(fluence),
-                matlab.double(pulse_width),
-                matlab.double(delay_pump),
-                matlab.double(dAdz.tolist()),
-                matlab.double(delays.tolist()),
-                self.S.get_layer_property_vector('therm_cond_str'),
-                self.S.get_layer_property_vector('heat_capacity_str'),
-                matlab.double(self.S.get_layer_property_vector('_density').tolist()),
-                self.S.get_layer_property_vector('sub_system_coupling_str'),
-                matlab.int32([self._boundary_conditions['top_type']+1]),
-                matlab.double([self._boundary_conditions['top_value'].tolist()]),
-                matlab.int32([self._boundary_conditions['bottom_type']+1]),
-                matlab.double([self._boundary_conditions['bottom_value'].tolist()]),
-                self.ode_options_matlab
-            )
-        else:
-            # use python scipy backend
-            if self.progress_bar:  # with tqdm progressbar
-                pbar = tqdm()
-                pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
-                state = [delays[0], abs(delays[-1]-delays[0])/100]
-            else:  # without progressbar
-                pbar = None
-                state = None
-
-            indices = finderb(distances, d_start)
-            densities = self.S.get_layer_property_vector('_density')
-            # solve pdepe with method-of-lines
-            sol = solve_ivp(
-                Heat.odefunc,
-                [delays[0], delays[-1]],
-                np.reshape(init_temp, K*N, order='F'),
-                args=(N,
-                      K,
-                      d_distances,
-                      d_start,
-                      self.S.get_layer_property_vector('therm_cond'),
-                      self.S.get_layer_property_vector('heat_capacity'),
-                      self.S.get_layer_property_vector('sub_system_coupling'),
-                      densities[indices],
-                      indices,
-                      dAdz,
-                      fluence,
-                      delay_pump,
-                      pulse_width,
-                      self._boundary_conditions['top_type'],
-                      self._boundary_conditions['top_value'],
-                      self._boundary_conditions['bottom_type'],
-                      self._boundary_conditions['bottom_value'],
-                      pbar, state),
-                t_eval=delays,
-                **self.ode_options)
-
-            if pbar is not None:  # close tqdm progressbar if used
-                pbar.close()
-            temp_map = sol.y.T
+        if pbar is not None:  # close tqdm progressbar if used
+            pbar.close()
+        temp_map = sol.y.T
 
         temp_map = np.array(temp_map).reshape([M, N, K], order='F')
         if np.any(fluence):
@@ -1321,19 +1265,6 @@ class Heat(Simulation):
         return np.reshape(dudt, K*N, order='F')
 
     @property
-    def backend(self):
-        return self._backend
-
-    @backend.setter
-    def backend(self, backend):
-        if backend in ['scipy', 'matlab']:
-            self._backend = backend
-        else:
-            warnings.warn('Backend must be either _scipy_ or _matlab_. '
-                          'Set to _scipy_ default!')
-            self._backend = 'scipy'
-
-    @property
     def excitation(self):
         # Convert to from default SI units to real quantities
         excitation = {'fluence': Q_(self._excitation['fluence'], u.J/u.m**2).to('mJ/cm**2'),
@@ -1470,10 +1401,3 @@ class Heat(Simulation):
     @distances.setter
     def distances(self, distances):
         self._distances = distances.to_base_units().magnitude
-
-    def __del__(self):
-        # stop matlab engine if exists
-        try:
-            self.matlab_engine.quit()
-        except AttributeError:
-            pass

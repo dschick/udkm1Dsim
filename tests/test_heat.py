@@ -153,7 +153,6 @@ def test_get_temperature_after_delta_excitation(heat):
 def test_get_temp_map(heat):
     delays = np.r_[-1:10:0.01]*u.ps
     init_temp = 300*u.K
-    heat.backend = 'scipy'
     heat.heat_diffusion = False
     heat.excitation = {'fluence': [10]*u.mJ/u.cm**2,
                        'delay_pump': [0]*u.ps,
@@ -169,28 +168,11 @@ def test_get_temp_map(heat):
     heat.force_recalc = False
     heat.get_temp_map(delays, init_temp)
 
-    heat.backend = 'matlab'
-    heat.force_recalc = True
-    heat.heat_diffusion = True
-    heat.excitation = {'fluence': [10]*u.mJ/u.cm**2,
-                       'delay_pump': [0]*u.ps,
-                       'pulse_width': [0.1]*u.ps,
-                       'wavelength': 800*u.nm,
-                       'polarization': 'p',
-                       'theta': 45*u.deg,
-                       'multilayer_absorption': True,
-                       'backside': False}
-    with pytest.raises(Warning):
-        heat.get_temp_map(delays, init_temp)
-
-    heat.backend = 'scipy'
-
 
 @pytest.mark.skip(reason="takes too much time in CI")
 def test_get_diffusion_temp_map(heat):
     delays = np.r_[-1:10:0.01]*u.ps
     init_temp = 300*u.K
-    heat.backend = 'scipy'
     heat.heat_diffusion = True
     heat.excitation = {'fluence': [10]*u.mJ/u.cm**2,
                        'delay_pump': [0]*u.ps,
