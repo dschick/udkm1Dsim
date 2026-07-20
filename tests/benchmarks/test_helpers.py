@@ -1,7 +1,10 @@
-import pytest
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 from udkm1Dsim.helpers import m_power_x, m_times_n
 from udkm1Dsim.helpers import finderb, make_hash_md5
 from udkm1Dsim.helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
+import pytest
 import numpy as np
 
 

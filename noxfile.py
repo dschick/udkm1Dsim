@@ -39,7 +39,7 @@ def tests(session, numpy):
     session.install(f'numpy=={numpy}')
     session.install('pytest-cov')
     session.install('.')
-    session.run('pytest', '--cov=udkm1Dsim', 'tests/')
+    session.run('pytest', '--cov=udkm1Dsim', '--ignore=tests/benchmarks', 'tests/')
 
 
 @nox.session(python='3.13', reuse_venv=reuse_venv)
@@ -53,4 +53,4 @@ def docs(session):
 def benchmarks(session):
     session.install('.')
     session.install('pytest-codspeed')
-    session.run('pytest', '--codspeed', 'benchmarks/')
+    session.run('pytest', '--codspeed', 'tests/benchmarks/')

@@ -41,7 +41,7 @@ jobs:
           flake8
       - name: Generate coverage report
         run: |
-          pytest --cov=./udkm1Dsim --cov-report=xml tests/
+          pytest --cov=./udkm1Dsim --cov-report=xml --ignore=tests/benchmarks tests/
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.13' && matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v3
