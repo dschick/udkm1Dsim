@@ -53,7 +53,7 @@ def sticks(phonon_num, temp_map, delta_temp_map):
 
 
 @pytest.mark.benchmark
-def test_calc_sticks_from_temp_map(benchmark, phonon_num, temp_map, delta_temp_map):
+def test_calc_sticks_from_temp_map(phonon_num, temp_map, delta_temp_map):
     phonon_num.calc_sticks_from_temp_map(temp_map, delta_temp_map)
 
 
