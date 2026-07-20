@@ -3,6 +3,7 @@
 
 from udkm1Dsim import Heat
 from udkm1Dsim.helpers import finderb
+from udkm1Dsim import u
 import pytest
 import numpy as np
 
@@ -33,6 +34,21 @@ def test_get_multilayers_absorption_profile(heat):
 @pytest.mark.benchmark
 def test_get_temperature_after_delta_excitation(heat):
     heat.get_temperature_after_delta_excitation(10, 300)
+
+
+def test_calc_energy_map(benchmark, heat):
+    dists, _, _ = heat.S.get_distances_of_layers()
+    temp_map = 1000*np.ones((100, len(dists)))
+    benchmark(heat.calc_energy_map, temp_map, 300)
+
+
+def test_calc_energy_flux_map(benchmark, heat):
+    delays = np.r_[-1:10:0.01]*u.ps
+    dists, _, _ = heat.S.get_distances_of_layers()
+
+    temp_map = 1000*np.ones((100, len(dists)))
+    delta_map = temp_map
+    benchmark(heat.calc_energy_flux_map, temp_map, delta_map, delays)
 
 
 def test_odefunc(benchmark, heat):
