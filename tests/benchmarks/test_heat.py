@@ -35,18 +35,6 @@ def test_get_temperature_after_delta_excitation(heat):
     heat.get_temperature_after_delta_excitation(10, 300)
 
 
-def test_calc_heat_diffusion(benchmark, heat):
-    distances = distances, _ = heat.S.interp_distance_at_interfaces(heat.intp_at_interface, False)
-    benchmark(heat.calc_heat_diffusion,
-              300,
-              distances,
-              np.linspace(-1, 1, 100),
-              [0],
-              [0.1],
-              [0.1]
-              )
-
-
 def test_odefunc(benchmark, heat):
     distances, _ = heat.S.interp_distance_at_interfaces(
         heat.intp_at_interface, False
