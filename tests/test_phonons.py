@@ -62,27 +62,22 @@ def test_phonon_str(phonon):
     phonon.__str__()
 
 
-@pytest.mark.benchmark
 def test_get_hash(phonon, delays, distances, temp_map):
     phonon.get_hash(delays, temp_map, temp_map)
 
 
-@pytest.mark.benchmark
 def test_get_all_strains_per_unique_layer(phonon, strain_map):
     assert np.allclose(phonon.get_all_strains_per_unique_layer(strain_map), [])
 
 
-@pytest.mark.benchmark
 def test_get_reduced_strains_per_unique_layer(phonon, strain_map):
     assert np.allclose(phonon.get_reduced_strains_per_unique_layer(strain_map), [])
 
 
-@pytest.mark.benchmark
 def test_check_temp_maps(phonon, temp_map, delays):
     phonon.check_temp_maps(temp_map, temp_map, delays)
 
 
-@pytest.mark.benchmark
 def test_calc_sticks_from_temp_map(phonon, temp_map):
     phonon.calc_sticks_from_temp_map(temp_map, temp_map)
 
@@ -94,8 +89,8 @@ def test_phonon_num_str(phonon_num):
     phonon_num.__str__()
 
 
-def test_phonon_num_get_strain_map(benchmark, phonon_num, delays, temp_map):
-    benchmark(phonon_num.get_strain_map, delays, temp_map, temp_map)
+def test_phonon_num_get_strain_map(phonon_num, delays, temp_map):
+    phonon_num.get_strain_map(delays, temp_map, temp_map)
     phonon_num.force_recalc = False
     phonon_num.get_strain_map(delays, temp_map, temp_map)
 
@@ -107,12 +102,12 @@ def test_phonon_ana_str(phonon_ana):
     phonon_ana.__str__()
 
 
-def test_phonon_ana_get_strain_map(benchmark, phonon_ana, delays, temp_map):
-    benchmark(phonon_ana.get_strain_map, delays, temp_map, temp_map)
+def test_phonon_ana_get_strain_map(phonon_ana, delays, temp_map):
+    phonon_ana.get_strain_map(delays, temp_map, temp_map)
     phonon_ana.force_recalc = False
     phonon_ana.get_strain_map(delays, temp_map, temp_map)
 
 
-def test_phonon_ana_get_energy_per_eigenmode(benchmark, phonon_ana, delays, temp_map):
+def test_phonon_ana_get_energy_per_eigenmode(phonon_ana, delays, temp_map):
     _, A, B = phonon_ana.get_strain_map(delays, temp_map, temp_map)
-    benchmark(phonon_ana.get_energy_per_eigenmode, A, B)
+    phonon_ana.get_energy_per_eigenmode(A, B)
