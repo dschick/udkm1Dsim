@@ -54,7 +54,26 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx_copybutton',
     'sphinx_design',
+    'myst_sphinx_gallery',
 ]
+
+from pathlib import Path
+
+from myst_sphinx_gallery import GalleryConfig, ThumbnailConfig
+
+myst_sphinx_gallery_config = GalleryConfig(
+    examples_dirs="../../examples",
+    gallery_dirs="auto_examples",
+    root_dir=Path(__file__).parent,
+    notebook_thumbnail_strategy="code",
+    thumbnail_strategy="last",
+    thumbnail_config=ThumbnailConfig(
+        ref_size=(320, 320),
+        operation="pad",
+        operation_kwargs={"color": "white"},
+        quality_static=90,
+    ),
+)
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -163,11 +182,11 @@ pygments_style = 'sphinx'
 suppress_warnings = ['myst.mathjax']
 
 myst_enable_extensions = [
-    "amsmath",
-    "colon_fence",
-    "deflist",
-    "dollarmath",
-    "html_image",
+    'amsmath',
+    'colon_fence',
+    'deflist',
+    'dollarmath',
+    'html_image',
 ]
 
 # -- Options for HTML output -------------------------------------------------

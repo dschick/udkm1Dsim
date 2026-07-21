@@ -14,6 +14,12 @@ project/
 # docs build
 docs/build
 
+# docs jupyter
+docs/jupyter_execute
+
+# docs myst-sphinx-gallery
+docs/source/auto_examples
+
 # ipython checkpoints
 docs/source/**/.ipynb_checkpoints
 

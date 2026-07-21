@@ -8,8 +8,8 @@
     Project Page <https://github.com/dschick/udkm1Dsim>
     Download from PyPI <http://pypi.python.org/pypi/udkm1Dsim>
     User Guide <user_guide>
+    Examples <auto_examples/index>
     Publications <publications>
-    Examples <examples>
     API Documentation <api>
     Changelog <changelog.md>
 ```
