@@ -1,4 +1,5 @@
 Examples
 ========
 
-Below you find examples showcasing the abilities of the **udkm1Dsim** mostly closely related to scientific publications.
+The following examples demonstrate the capabilities of the **udkm1Dsim**, 
+which are often closely aligned with findings in related scientific publications.
