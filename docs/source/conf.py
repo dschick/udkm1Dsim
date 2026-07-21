@@ -59,8 +59,83 @@ extensions = [
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
+# Bibliography styling
+
+from pybtex.plugin import register_plugin
+from pybtex.style.formatting.unsrt import Style as UnsrtStyle
+from pybtex.style.labels import BaseLabelStyle
+from pybtex.style.sorting import BaseSortingStyle
+from pybtex.style.names.plain import NameStyle as PlainNameStyle
+from pybtex.style.template import field, first_of, href, join, optional, sentence, tag
+
+
+class YearSortingStyle(BaseSortingStyle):
+    """Sort by year (newest first), then author, then title."""
+
+    def sorting_key(self, entry):
+        year = int(entry.fields.get('year', '0'))
+        author = ' '.join(
+            person.last_names[0] if person.last_names else ''
+            for person in entry.persons.get('author', [])
+        )
+        title = entry.fields.get('title', '')
+
+        # negative year -> descending
+        return (-year, author.lower(), title.lower())
+
+
+class InitialNameStyle(PlainNameStyle):
+    def format(self, person, abbr=True):
+        return super().format(person, abbr=True)
+
+
+class SortReverseLabelStyle(BaseLabelStyle):
+    def format_labels(self, sorted_entries):
+        for i, entry in enumerate(sorted_entries):
+            yield str(len(sorted_entries) - i)
+
+
+class DOIStyle(UnsrtStyle):
+    default_label_style = SortReverseLabelStyle
+    default_sorting_style = YearSortingStyle
+    default_name_style = InitialNameStyle
+
+    def get_article_template(self, e):
+        doi = first_of[
+            optional[
+                href[
+                    join['https://doi.org/', field('doi')],
+                    join[
+                        field('journal'),
+                        tag('b')[optional[' ', field('volume')]],
+                        optional[' ', field('number')],
+                        optional[' (', field('year'), ')'],
+                    ],
+                ]
+            ],
+            join[
+                field('journal'),
+                tag('b')[optional[' ', field('volume')]],
+                optional[' ', field('number')],
+                optional[' (', field('year'), ')'],
+            ],
+        ]
+
+        template = join[
+            sentence[self.format_names('author')],
+            ' ',
+            tag('em')[sentence[field('title')]],
+            ' ',
+            sentence[doi]
+        ]
+
+        return template
+
+
+register_plugin('pybtex.style.formatting', 'DOIstyle', DOIStyle)
+
 bibtex_bibfiles = ['publications.bib']
-bibtex_default_style = 'unsrt'
+bibtex_default_style = 'DOIstyle'
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
