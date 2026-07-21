@@ -531,7 +531,7 @@ class Layer:
             self._int_lin_therm_exp = []
             self.int_lin_therm_exp_str = []
             T = symbols('T')
-            for lte, ltes in zip(self.lin_therm_exp, self.lin_therm_exp_str):                
+            for lte, ltes in zip(self.lin_therm_exp, self.lin_therm_exp_str):
                 try:
                     integral = integrate(ltes, T)
                     self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
