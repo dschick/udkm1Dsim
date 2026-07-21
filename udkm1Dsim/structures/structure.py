@@ -133,7 +133,7 @@ class Structure:
 
         colortable = {}
         for i in range(N):
-            colortable[layer_ids[i]] = cm.get_cmap(cmap)(i)
+            colortable[layer_ids[i]] = cm.get_cmap(cmap, N)(i)
 
         plt.figure(figsize=fig_size)
         ax = plt.axes()
