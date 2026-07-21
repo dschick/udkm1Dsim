@@ -22,7 +22,7 @@ Heat
         :link: example_heat
         :link-type: ref
         :shadow: md
-        :class-card: msg-sd-card sd-border-0 sd-rounded-2
+        :class-card: sd-border-0 sd-rounded-2 msg-sd-card
         :class-item: msg-sd-card-hover
         :class-title: msg-sd-card-title
         :class-img-top: msg-sd-card-img-top
@@ -38,7 +38,7 @@ Heat
         :link: example_m3tm
         :link-type: ref
         :shadow: md
-        :class-card: msg-sd-card sd-border-0 sd-rounded-2
+        :class-card: sd-border-0 sd-rounded-2 msg-sd-card
         :class-item: msg-sd-card-hover
         :class-title: msg-sd-card-title
         :class-img-top: msg-sd-card-img-top
@@ -54,7 +54,7 @@ Heat
         :link: example_3tm
         :link-type: ref
         :shadow: md
-        :class-card: msg-sd-card sd-border-0 sd-rounded-2
+        :class-card: sd-border-0 sd-rounded-2 msg-sd-card
         :class-item: msg-sd-card-hover
         :class-title: msg-sd-card-title
         :class-img-top: msg-sd-card-img-top

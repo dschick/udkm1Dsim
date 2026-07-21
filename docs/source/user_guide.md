@@ -40,7 +40,7 @@ $-z$ direction.
 ```
 
 :::{hint}
-To get started, please work yourself through the [Examples](./examples.rst).  
+To get started, please work yourself through the [Examples](./auto_examples/index.rst).  
 For more detailed information, also regarding the physics, you might refer to
 the [API Documentation](./api.rst).
 :::

@@ -7,7 +7,7 @@ Structures
 .. toctree::
     :hidden:
 
-    01_structure
+    structure
 
 
 .. grid::
@@ -15,12 +15,12 @@ Structures
     :class-row: msg-sd-row
 
     
-    .. grid-item-card:: :ref:`example_01_structure`
-        :img-top: /auto_examples/myst_sphinx_gallery_thumbs/01_structure.webp
-        :link: example_01_structure
+    .. grid-item-card:: :ref:`example_structure`
+        :img-top: /auto_examples/myst_sphinx_gallery_thumbs/01-structure.webp
+        :link: example_structure
         :link-type: ref
         :shadow: md
-        :class-card: msg-sd-card sd-border-0 sd-rounded-2
+        :class-card: sd-border-0 sd-rounded-2 msg-sd-card
         :class-item: msg-sd-card-hover
         :class-title: msg-sd-card-title
         :class-img-top: msg-sd-card-img-top

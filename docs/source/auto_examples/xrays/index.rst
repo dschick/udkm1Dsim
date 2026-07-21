@@ -24,7 +24,7 @@ X-rays
         :link: example_dynamical_xray
         :link-type: ref
         :shadow: md
-        :class-card: msg-sd-card sd-border-0 sd-rounded-2
+        :class-card: sd-border-0 sd-rounded-2 msg-sd-card
         :class-item: msg-sd-card-hover
         :class-title: msg-sd-card-title
         :class-img-top: msg-sd-card-img-top
@@ -40,7 +40,7 @@ X-rays
         :link: example_dynamical_xray_debye_waller
         :link-type: ref
         :shadow: md
-        :class-card: msg-sd-card sd-border-0 sd-rounded-2
+        :class-card: sd-border-0 sd-rounded-2 msg-sd-card
         :class-item: msg-sd-card-hover
         :class-title: msg-sd-card-title
         :class-img-top: msg-sd-card-img-top
@@ -56,7 +56,7 @@ X-rays
         :link: example_dynamical_magnetic_xray
         :link-type: ref
         :shadow: md
-        :class-card: msg-sd-card sd-border-0 sd-rounded-2
+        :class-card: sd-border-0 sd-rounded-2 msg-sd-card
         :class-item: msg-sd-card-hover
         :class-title: msg-sd-card-title
         :class-img-top: msg-sd-card-img-top
@@ -72,7 +72,7 @@ X-rays
         :link: example_xuv_polarimetry
         :link-type: ref
         :shadow: md
-        :class-card: msg-sd-card sd-border-0 sd-rounded-2
+        :class-card: sd-border-0 sd-rounded-2 msg-sd-card
         :class-item: msg-sd-card-hover
         :class-title: msg-sd-card-title
         :class-img-top: msg-sd-card-img-top
@@ -88,7 +88,7 @@ X-rays
         :link: example_05_data_fitting
         :link-type: ref
         :shadow: md
-        :class-card: msg-sd-card sd-border-0 sd-rounded-2
+        :class-card: sd-border-0 sd-rounded-2 msg-sd-card
         :class-item: msg-sd-card-hover
         :class-title: msg-sd-card-title
         :class-img-top: msg-sd-card-img-top

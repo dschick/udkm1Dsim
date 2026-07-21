@@ -54,7 +54,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx_copybutton',
     'sphinx_design',
-    "myst_sphinx_gallery",
+    'myst_sphinx_gallery',
 ]
 
 from pathlib import Path
@@ -182,11 +182,11 @@ pygments_style = 'sphinx'
 suppress_warnings = ['myst.mathjax']
 
 myst_enable_extensions = [
-    "amsmath",
-    "colon_fence",
-    "deflist",
-    "dollarmath",
-    "html_image",
+    'amsmath',
+    'colon_fence',
+    'deflist',
+    'dollarmath',
+    'html_image',
 ]
 
 # -- Options for HTML output -------------------------------------------------
