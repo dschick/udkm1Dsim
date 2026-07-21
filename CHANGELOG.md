@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- drop MATLAB support for heat diffusion calculations ([#190] and PR[#191])
+
+[#190]: https://github.com/dschick/udkm1Dsim/issues/190
+[#191]: https://github.com/dschick/udkm1Dsim/pull/191
+
 ### Fixed
 
 ### Security
