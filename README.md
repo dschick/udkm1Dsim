@@ -2,10 +2,11 @@
 
 [![Documentation Status](https://readthedocs.org/projects/udkm1dsim/badge/?version=latest)](https://udkm1dsim.readthedocs.io/en/latest/?badge=latest)
 ![CI](https://github.com/dschick/udkm1Dsim/actions/workflows/main.yml/badge.svg)
+![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
 [![codecov](https://codecov.io/gh/dschick/udkm1Dsim/branch/develop/graph/badge.svg?token=9J3BQYE6CE)](https://codecov.io/gh/dschick/udkm1Dsim)
 [![CodSpeed Badge](https://img.shields.io/endpoint?url=https://app.codspeed.io//badge.json)](https://app.codspeed.io//dschick/udkm1Dsim?utm_source=badge)
-[![Anaconda-Server Badge](https://anaconda.org/conda-forge/udkm1dsim/badges/version.svg)](https://anaconda.org/conda-forge/udkm1dsim)
-![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/udkm1Dsim.svg)](https://anaconda.org/conda-forge/udkm1Dsim)
+[![PyPI](https://img.shields.io/pypi/v/udkm1Dsim)](https://pypi.org/project/udkm1Dsim/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/pypistats.svg)](https://pypistats.org/packages/udkm1Dsim)
 
 The **udkm1Dsim** toolbox is a collection of Python classes and routines to
