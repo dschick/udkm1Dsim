@@ -68,10 +68,12 @@ myst_sphinx_gallery_config = GalleryConfig(
     notebook_thumbnail_strategy="code",
     thumbnail_strategy="last",
     thumbnail_config=ThumbnailConfig(
-        ref_size=(200, 200),
-        operation="pad",
-        operation_kwargs={"color": "white"},
-        quality_static=90,
+        ref_size=(900, 900),
+        operation='pad',
+        operation_kwargs={'color': 'white'},
+        max_animation_frames=50,
+        quality_static=100,
+        quality_animated=15,
     ),
 )
 
