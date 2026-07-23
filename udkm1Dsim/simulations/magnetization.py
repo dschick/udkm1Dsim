@@ -296,7 +296,7 @@ class LLB(Magnetization):
     Mean-field quantum Landau-Lifshitz-Bloch simulations.
 
     Please find a detailed review on the Landau-Lifshitz-Bloch equation by
-    Unai Atxitia et al. [11]_.
+    :cite:t:`atxitia2017`.
 
     In collaboration with Theodor Griepe
     (`@Nilodirf <https://github.com/Nilodirf>`_) from the group of
@@ -321,13 +321,6 @@ class LLB(Magnetization):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-
-    References:
-
-        .. [11] U. Atxitia, D. Hinzke, and U. Nowak,
-           *Fundamentals and Applications of the Landau-Lifshitz-Bloch Equation*,
-           `J. Phys. D. Appl. Phys. 50, (2017).
-           <https://www.doi.org/10.1088/1361-6463/50/3/033003>`_
 
     """
 

@@ -1,5 +1,0 @@
-Publications
-============
-
-.. bibliography::
-   :all:

@@ -33,10 +33,9 @@ results at any step in the simulation procedure.
 The **udkm1Dsim** toolbox was initially developed for MATLAB® in the
 [Ultrafast Dynamics in Condensed Matter](https://www.uni-potsdam.de/en/udkm) group of Prof. Matias Bargheer at the
 *University of Potsdam*, Germany.
-:::{hint}
-The MATLAB® source code is still available at
-[github.com/dschick/udkm1DsimML](https://github.com/dschick/udkm1DsimML).
-:::
+
+> [!NOTE]
+> The MATLAB® source code is still available at [github.com/dschick/udkm1DsimML](https://github.com/dschick/udkm1DsimML).
 
 The current toolbox, written in Python, is maintained by [Daniel Schick](mailto:schick@mbi-berlin.de) at the
 [Max Born Institut](https://mbi-berlin.de), Berlin, Germany.
@@ -48,20 +47,15 @@ The documentation can be found at [udkm1Dsim.readthedocs.io](http://udkm1Dsim.re
 
 Please cite the latest publication if you use the toolbox in your own work:
 
-:::{admonition} Citation
-:class: seealso
-Schick, D., *udkm1Dsim - A Python toolbox for simulating 1D ultrafast dynamics in condensed matter*,
-[Comput. Phys. Commun. 266, 108031 (2021)](https://doi.org/10.1016/j.cpc.2021.108031) [(preprint)](https://arxiv.org/abs/2102.12144).
-:::
+> [!NOTE]
+> Schick, D., *udkm1Dsim - A Python toolbox for simulating 1D ultrafast dynamics in condensed matter*, [Comput. Phys. Commun. 266, 108031 (2021)](https://doi.org/10.1016/j.cpc.2021.108031) [(preprint)](https://arxiv.org/abs/2102.12144).
+
 
 You can also cite the original publication if appropriate:
 
-:::{admonition} Citation
-:class: seealso
-Schick, D., Bojahr, A., Herzog, M., Shayduk, R., von Korff Schmising, C. & Bargheer, M.,
-*udkm1Dsim - A Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter*,
+> [!NOTE]
+> Schick, D., Bojahr, A., Herzog, M., Shayduk, R., von Korff Schmising, C. & Bargheer, M., *udkm1Dsim - A Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter*,
 [Comput. Phys. Commun. 185, 651 (2014)](http://doi.org/10.1016/j.cpc.2013.10.009) [(preprint)](http://www.udkm.physik.uni-potsdam.de/medien/udkm1Dsim/udkm1DsimManuscriptPrePrint.pdf)
-:::
 
 ## Installation
 

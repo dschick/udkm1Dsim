@@ -69,28 +69,6 @@ class Atom:
         mag_phi (float): phi angle of magnetization [rad].
         mag_gamma (float): gamma angle of magnetization [rad].
 
-    References:
-
-        .. [1] B. L. Henke, E. M. Gullikson & J. C. Davis,
-           *X-Ray Interactions: Photoabsorption, Scattering,
-           Transmission, and Reflection at E = 50-30,000 eV, Z = 1-92*,
-           `Atomic Data and Nuclear Data Tables, 54(2), 181–342, (1993).
-           <http://www.doi.org/10.1006/adnd.1993.1013>`_
-        .. [2] C.T. Chantler, K. Olsen, R.A. Dragoset, J. Chang, A.R. Kishore,
-           S.A. Kotochigova, & D.S. Zucker,
-           *Detailed Tabulation of Atomic Form Factors, Photoelectric
-           Absorption and Scattering Cross Section, and Mass Attenuation
-           Coefficients for Z = 1-92 from E = 1-10 eV to E = 0.4-1.0 MeV*,
-           `NIST Standard Reference Database 66.
-           <https://dx.doi.org/10.18434/T4HS32>`_
-        .. [3] J. Als-Nielson, & D. McMorrow,
-           `Elements of Modern X-Ray Physics. New York: John Wiley &
-           Sons, Ltd. (2001) <http://www.doi.org/10.1002/9781119998365>`_
-        .. [4] D. T. Cromer & J. B. Mann, *X-ray scattering
-           factors computed from numerical Hartree–Fock wave functions*,
-           `Acta Crystallographica Section A, 24(2), 321–324 (1968).
-           <http://www.doi.org/10.1107/S0567739468000550>`_
-
     """
 
     def __init__(self, symbol, **kwargs):
@@ -145,8 +123,8 @@ class Atom:
         """read_atomic_form_factor_coeff
 
         The coefficients for the atomic form factor :math:`f` in dependence of
-        the photon energy :math:`E` is read from a parameter file given by [1]_
-        or by [2]_ as default.
+        the photon energy :math:`E` is read from a parameter file given by :cite:t:`henke1993`
+        or by :cite:t:`chantler2003` as default.
 
         Args:
             source (str, optional): source of atmoic form factors can be either
@@ -187,7 +165,7 @@ class Atom:
 
         .. math:: f(E)=f_1 - i f_2
 
-        Convention of Ref. [3]_ (p. 11, footnote) is a negative :math:`f_2`.
+        Convention of Ref. :cite:t:`alsnielsen2011` (p. 11, footnote) is a negative :math:`f_2`.
 
         Args:
             energy (ndarray[float]): photon energy [eV].
@@ -207,7 +185,7 @@ class Atom:
     def read_cromer_mann_coeff(self):
         r"""read_cromer_mann_coeff
 
-        The Cromer-Mann coefficients (Ref. [4]_) are read from a parameter file
+        The Cromer-Mann coefficients (see :cite:t:`cromermann1968`) are read from a parameter file
         and are returned in the following order:
 
         .. math:: a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c
@@ -233,15 +211,15 @@ class Atom:
 
         The atomic form factor :math:`f` is calculated in dependence of the
         photon energy :math:`E` [eV] and the :math:`z`-component of the
-        scattering vector :math:`q_z` [Å :math:`^{-1}`] (Ref. [4]_).
+        scattering vector :math:`q_z` [Å :math:`^{-1}`] (see :cite:t:`cromermann1968`).
         Note that the Cromer-Mann coefficients are fitted for :math:`q_z` in
         [Å :math:`^{-1}`]!
 
-        See Ref. [3]_ (p. 235).
+        See Ref. :cite:t:`alsnielsen2011` (p. 235).
 
         .. math:: f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -i f_2(E)
 
-        :math:`f_{CM}(q_z)` is given in Ref. [4]_:
+        :math:`f_{CM}(q_z)` is given in Ref. :cite:t:`cromermann1968`:
 
         .. math::
 
@@ -325,7 +303,7 @@ class Atom:
 
         for the photon energy :math:`E` [eV].
 
-        Convention of Ref. [3]_ (p. 11, footnote) is a negative :math:`m_2`
+        Convention of Ref. :cite:t:`alsnielsen2011` (p. 11, footnote) is a negative :math:`m_2`
 
         Args:
             energy (ndarray[float]): photon energy [eV].

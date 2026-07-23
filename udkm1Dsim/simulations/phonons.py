@@ -310,7 +310,8 @@ class Phonon(Simulation):
 class PhononNum(Phonon):
     """PhononNum
 
-    Numerical model to simulate coherent acoustic phonons.
+    Numerical model to simulate coherent acoustic phonons following
+    :cite:t:`bojahr2012`.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -336,13 +337,6 @@ class PhononNum(Phonon):
         only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
         ode_options (dict): options for scipy solve_ivp ode solver.
-
-    References:
-
-        .. [7] A. Bojahr, M. Herzog, D. Schick, I. Vrejoiu, & M. Bargheer,
-           *Calibrated real-time detection of nonlinearly propagating
-           strain waves*, `Phys. Rev. B, 86(14), 144306 (2012).
-           <http://www.doi.org/10.1103/PhysRevB.86.144306>`_
 
     """
 
@@ -402,8 +396,9 @@ class PhononNum(Phonon):
 
         Calculates the ``strain_map`` of the sample structure for a given
         ``temp_map`` and ``delta_temp_map`` and ``delay`` array. Further
-        details are given in Ref. [7]_. The coupled differential equations are
-        solved for each oscillator in a linear chain of masses and springs:
+        details are given in :cite:t:`bojahr2012`. The coupled differential
+        equations are solved for each oscillator in a linear chain of masses
+        and springs:
 
         .. math::
 
@@ -692,7 +687,8 @@ class PhononNum(Phonon):
 class PhononAna(Phonon):
     """PhononAna
 
-    Analytical model to simulate coherent acoustic phonons.
+    Analytical model to simulate coherent acoustic phonons following
+    :cite:t:`herzog2012`.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -717,14 +713,6 @@ class PhononAna(Phonon):
         progress_bar (boolean): enable tqdm progress bar.
         only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
-
-    References:
-
-        .. [8] M. Herzog, D. Schick, P. Gaal, R. Shayduk, C. von Korff Schmising
-           & M. Bargheer, *Analysis of ultrafast X-ray diffraction data in a
-           linear-chain model of the lattice dynamics*, `Applied Physics A,
-           106(3), 489-499 (2011).
-           <https://doi.org/10.1007/s00339-011-6719-z>`_
 
     """
 
@@ -785,10 +773,10 @@ class PhononAna(Phonon):
 
         Calculates the ``strain_map`` of the sample structure for a given
         ``temp_map`` and ``delta_temp_map`` and ``delay`` array. Further
-        details are given in Ref. [8]_. Within the linear chain of :math:`N`
-        masses (:math:`m_i`) at position :math:`z_i` coupled with spring
-        constants :math:`k_i` one can formulate the differential equation
-        of motion as follow:
+        details are given in :cite:t:`herzog2012`. Within the linear chain
+        of :math:`N` masses (:math:`m_i`) at position :math:`z_i` coupled
+        with spring constants :math:`k_i` one can formulate the differential
+        equation of motion as follow:
 
         .. math::
 
