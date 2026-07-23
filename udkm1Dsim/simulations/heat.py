@@ -461,8 +461,8 @@ class Heat(Simulation):
         increase profiles in each layer of a multilayers structure for :math:`p`
         -polarized light.
 
-        Calculation based on the method in Ref [5]_ and code developed Matlab
-        by L. Le Guyader, see Ref [6]_.
+        Calculation based on the method by :cite:t:`ohtaishida1990` and code
+        developed Matlab by :cite:t:`leguyader2013`.
 
         Copyright (2012-2014) Loïc Le Guyader
         <loic.le_guyader@helmholtz-berlin.de>
@@ -480,18 +480,6 @@ class Heat(Simulation):
               multilayer.
             - *T_total (float)* - total transmission in the last layer of the
               multilayer.
-
-        References:
-
-        .. [5] K. Ohta & H. Ishida, *Matrix formalism for calculation of the
-           light beam intensity in stratified multilayered films, and its use
-           in the analysis of emission spectra*, `Appl. Opt. 29, 2466 (1990).
-           <https://doi.org/10.1364/AO.29.002466>`_
-        .. [6] L. Le Guyader, A. Kleibert, F. Nolting, L. Joly, P.M. Derlet,
-           R.V. Pisarev, A. Kirilyuk, Th. Rasing & A.V. Kimel, *Dynamics of
-           laser-induced spin reorientation in Co/SmFeO_3 heterostructure*,
-           `Phys. Rev. B 87, 054437 (2013).
-           <https://doi.org/10.1103/PhysRevB.87.054437>`_
 
         """
         self.disp_message('Absorption profile is calculated by multilayer formalism '

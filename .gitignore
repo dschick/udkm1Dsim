@@ -22,6 +22,7 @@ docs/source/auto_examples
 
 # ipython checkpoints
 docs/source/**/.ipynb_checkpoints
+examples/.ipynb_checkpoints
 
 # dask worker space
 docs/source/**/dask-worker-space

@@ -305,7 +305,7 @@ class Xray(Simulation):
 class XrayKin(Xray):
     r"""XrayKin
 
-    Kinetic X-ray scattering simulations.
+    Kinetic X-ray scattering simulations following :cite:t:`warren1990`.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -339,10 +339,6 @@ class XrayKin(Xray):
             polarizations dict.
         pol_in (float): incoming polarization factor (can be a complex ndarray).
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
-
-    References:
-        .. [9] B. E. Warren (1990). *X-ray diffraction*.
-           New York: Dover Publications
 
     """
 
@@ -495,7 +491,7 @@ class XrayKin(Xray):
         Calculates the reflected field :math:`E_p^t` of the whole sample
         structure as well as for each sub-structure (:math:`E_p^N`). The
         reflected wave field :math:`E_p` from a single layer of unit cells at
-        the detector is calculated according to  Ref. [9]_:
+        the detector is calculated according to :cite:t:`warren1990`:
 
         .. math::
 
@@ -667,7 +663,7 @@ class XrayKin(Xray):
 class XrayDyn(Xray):
     r"""XrayDyn
 
-    Dynamical X-ray scattering simulations.
+    Dynamical X-ray scattering simulations following :cite:t:`alsnielsen2011`.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -1608,7 +1604,7 @@ class XrayDynMag(Xray):
 
     Dynamical magnetic X-ray scattering simulations.
 
-    Adapted from Elzo et.al. [10]_ and initially realized in `Project Dyna
+    Adapted from :cite:t:`elzo2012` and initially realized in `Project Dyna
     <http://dyna.neel.cnrs.fr>`_.
 
     Original copyright notice:
@@ -1664,15 +1660,6 @@ class XrayDynMag(Xray):
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
         last_atom_ref_trans_matrices (list): remember last result of
            atom ref_trans_matrices to speed up calculation.
-
-    References:
-
-        .. [10] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
-           Ramos, H. C. N. Tolentino, J. M. Tonnerre & N. Jaouen, *X-ray
-           resonant magnetic reflectivity of stratified magnetic structures:
-           Eigenwave formalism and application to a W/Fe/W trilayer*,
-           `J. Magn. Magn. Mater. 324, 105 (2012).
-           <http://www.doi.org/10.1016/j.jmmm.2011.07.019>`_
 
     """
 
@@ -2499,8 +2486,8 @@ class XrayDynMag(Xray):
                                        force_recalc=False, *args):
         """get_atom_boundary_phase_matrix
 
-        Returns the boundary and phase matrices of an atom from Elzo
-        formalism [10]_. The results for a given atom, energy, :math:`q_z`,
+        Returns the boundary and phase matrices of an atom from :cite:`elzo2012`.
+        The results for a given atom, energy, :math:`q_z`,
         polarization, and magnetization are stored to RAM to avoid recalculation.
 
         Args:
@@ -2592,8 +2579,8 @@ class XrayDynMag(Xray):
     def calc_atom_boundary_phase_matrix(self, atom, density, distance, *args):
         """calc_atom_boundary_phase_matrix
 
-        Calculates the boundary and phase matrices of an atom from Elzo
-        formalism [10]_.
+        Calculates the boundary and phase matrices of an atom from
+        :cite:t:`elzo2012`.
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
@@ -2796,7 +2783,7 @@ class XrayDynMag(Xray):
 
         Calculates the actual reflectivity and transmissivity from the
         reflectivity-transmission matrix for a given incoming and analyzer
-        polarization from Elzo formalism [10]_.
+        polarization from :cite:t:`elzo2012`.
 
         Args:
             RT (ndarray[complex]): reflection-transmission matrix.
@@ -2886,7 +2873,7 @@ class XrayDynMag(Xray):
         Calculates the Kerr rotation and ellipticity for sigma and pi
         incident polarization from the reflectivity-transmission
         matrix independent of the given incoming and analyzer polarization
-        from Elzo formalism [10]_.
+        from :cite:t:`elzo2012`.
 
         Args:
             RT (ndarray[complex]): reflection-transmission matrix.
@@ -2903,7 +2890,7 @@ class XrayDynMag(Xray):
         """calc_roughness_matrix
 
         Calculates the roughness matrix for an interface with a gaussian
-        roughness for the Elzo formalism [10]_.
+        roughness for the :cite:t:`elzo2012`.
 
         Args:
             roughness (float): gaussian roughness of the interface [m].

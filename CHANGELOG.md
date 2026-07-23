@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - links to the API from the exmaples ([#185])
 - benchmark test via codspeed.io ([#188])
 - add example gallery view to docs via myst-sphinx-gallery ([#197])
+- restructured documentation ([#199])
 
 [#185]: https://github.com/dschick/udkm1Dsim/pull/185
 [#188]: https://github.com/dschick/udkm1Dsim/pull/188
@@ -20,8 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - publication list with new bibliography style and reverse ordering ([#195])
+- restructured documentation ([#199])
 
 [#195]: https://github.com/dschick/udkm1Dsim/pull/195
+[#199]: https://github.com/dschick/udkm1Dsim/pull/199
 
 ### Deprecated
 
