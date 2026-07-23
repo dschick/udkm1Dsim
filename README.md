@@ -24,7 +24,7 @@ subsequent simulations, allowing users to build customized workflows with ease.
 >[Ultrafast Dynamics in Condensed Matter](https://www.uni-potsdam.de/en/udkm) group of Prof. Matias Bargheer at the
 >*University of Potsdam*, Germany.
 
-> [!HINT]
+> [!TIP]
 > The MATLAB® source code is still available at [github.com/dschick/udkm1DsimML](https://github.com/dschick/udkm1DsimML).
 
 The current toolbox, written in Python, is maintained by [Daniel Schick](mailto:schick@mbi-berlin.de) at the
