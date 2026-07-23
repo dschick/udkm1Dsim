@@ -88,7 +88,6 @@ computations, unit tests, as well as building the documentation:
 
     > pip install udkm1Dsim[parallel]
     > pip install udkm1Dsim[testing]
-    > pip install udkm1Dsim[documentation]
 
 ### Installing with conda
 

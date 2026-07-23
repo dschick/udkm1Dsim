@@ -2,7 +2,7 @@
 sd_hide_title: true
 ---
 
-# Overview
+# Welcome
 
 ::::::{div} landing-title
 :style: "padding: 0.1rem 0.5rem 0.6rem 0; background-image: linear-gradient(315deg, #222533 0%, #3C415A 89%); clip-path: polygon(0px 0px, 100% 0%, 100% 100%, 0% calc(100% - 1.5rem)); -webkit-clip-path: polygon(0px 0px, 100% 0%, 100% 100%, 0% calc(100% - 1.5rem));"
@@ -21,7 +21,6 @@ sd_hide_title: true
 ```
 :::
 
-
 :::{grid-item}
 :columns: 12 8 8 8
 :child-align: justify
@@ -29,16 +28,14 @@ sd_hide_title: true
 
 Welcome to the **udkm1Dsim** toolbox.
 
-
-
-:::{button-ref} getting_started
+```{button-ref} getting_started
 :ref-type: doc
 :outline:
 :color: white
 :class: sd-px-4 sd-fs-5
 
 Get Started
-:::
+```
 
 :::
 ::::
