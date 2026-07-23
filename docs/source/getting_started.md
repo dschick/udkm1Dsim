@@ -32,7 +32,8 @@ together with all required dependencies using your preferred package manager:
 
 ## Design Philosophy
 
-::::{grid}
+::::{grid} 1 1 2 2
+:gutter: 4
 :reverse:
 
 :::{grid-item}
@@ -65,7 +66,8 @@ subsequent simulations, allowing users to build customized workflows with ease.
 The experimental geometry shown below defines the coordinate system and angle conventions used consistently throughout **udkm1Dsim**.
 :::
 
-::::{grid}
+::::{grid} 1 1 2 2
+:gutter: 4
 :reverse:
 
 :::{grid-item}

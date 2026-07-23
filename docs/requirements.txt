@@ -3,10 +3,10 @@ ipykernel
 ipywidgets
 IProgress
 autodocsumm
-sphinxcontrib.bibtex
-pydata-sphinx-theme
 sphinx-book-theme
 sphinx_design
 sphinx_copybutton
+sphinxcontrib.bibtex
+pydata-sphinx-theme
 myst_nb
 myst-sphinx-gallery

@@ -227,13 +227,17 @@ html_static_path = ['_static']
 html_theme_options = {
     "home_page_in_toc": False,
     'show_navbar_depth': 1,
-    'max_navbar_depth': 2,
+    'max_navbar_depth': 3,
     'repository_url': 'https://github.com/dschick/udkm1Dsim',
-    "repository_branch": "develop",
+    'repository_branch': "develop",
     'use_repository_button': True,
-    "use_edit_page_button": True,
-    "use_issues_button": True,
-    "path_to_docs": "docs/source",
+    'use_edit_page_button': True,
+    'use_issues_button': True,
+    'path_to_docs': 'docs/source',
+}
+
+html_context = {
+   'default_mode': 'light',
 }
 
 html_logo = '_static/logo.png'
