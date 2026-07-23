@@ -9,32 +9,22 @@
 [![PyPI](https://img.shields.io/pypi/v/udkm1Dsim)](https://pypi.org/project/udkm1Dsim/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/pypistats.svg)](https://pypistats.org/packages/udkm1Dsim)
 
-The **udkm1Dsim** toolbox is a collection of Python classes and routines to
-simulate the thermal, structural, and magnetic dynamics after laser excitation
-as well as the according X-ray scattering response in one-dimensional sample
-structures after ultrafast excitation.
+The **udkm1Dsim** toolbox is a collection of Python classes and routines for simulating the thermal, structural, and magnetic dynamics of one-dimensional sample structures following ultrafast laser excitation. 
+It also enables the calculation of the corresponding light and X-ray scattering response, providing a unified framework for modeling coupled ultrafast dynamics and their experimental observables.
 
-The toolbox provides the capabilities to define arbitrary layered structures
-on the atomic level including a rich database of element-specific physical
-properties. 
-The excitation of ultrafast dynamics is represented by an *N*-temperature-model
-which is commonly applied for ultrafast optical excitations. 
-Structural dynamics due to thermal stresses are calculated by a linear-chain
-model of masses and springs.
-The implementation of magnetic dynamics can be easily accomplished by the user
-for the individual problem.
 
-The resulting X-ray diffraction response is computed by kinematical or
-dynamical X-ray theory which can also include magnetic scattering.
+The **udkm1Dsim** toolbox provides a comprehensive framework for defining arbitrary layered structures at the atomic level, supported by a rich database of element-specific physical properties. Ultrafast excitation is described using an *N*-temperature model, a widely used approach for simulating energy transfer following ultrafast optical excitation. Structural dynamics driven by thermally induced stresses are calculated using a linear-chain model of coupled masses and springs, while magnetization dynamics can be simulated with Landau–Lifshitz-type models. The resulting optical and X-ray scattering response is computed using kinematical or dynamical scattering theory, including resonant magnetic X-ray scattering, enabling direct comparison between time-resolved simulations and a wide range of ultrafast scattering experiments.
 
-The **udkm1Dsim** toolbox is highly modular and allows to introduce user-defined
-results at any step in the simulation procedure.
-
-The **udkm1Dsim** toolbox was initially developed for MATLAB® in the
-[Ultrafast Dynamics in Condensed Matter](https://www.uni-potsdam.de/en/udkm) group of Prof. Matias Bargheer at the
-*University of Potsdam*, Germany.
+The simulation framework is highly modular. Each module returns standard `numpy` 
+arrays that can be inspected, modified, or used directly as input for 
+subsequent simulations, allowing users to build customized workflows with ease.
 
 > [!NOTE]
+>The **udkm1Dsim** toolbox was initially developed for MATLAB® in the
+>[Ultrafast Dynamics in Condensed Matter](https://www.uni-potsdam.de/en/udkm) group of Prof. Matias Bargheer at the
+>*University of Potsdam*, Germany.
+
+> [!HINT]
 > The MATLAB® source code is still available at [github.com/dschick/udkm1DsimML](https://github.com/dschick/udkm1DsimML).
 
 The current toolbox, written in Python, is maintained by [Daniel Schick](mailto:schick@mbi-berlin.de) at the

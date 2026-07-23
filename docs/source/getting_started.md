@@ -1,12 +1,21 @@
 # Getting Started
 
-The **udkm1Dsim** toolbox provides the capabilities to define arbitrary layered structures on the atomic level including a rich database of element-specific physical properties. The excitation of ultrafast dynamics is represented by an *N*-temperature-model which is commonly applied for ultrafast optical excitations. Structural dynamics due to thermal stresses are calculated by a linear-chain model of masses and springs. The implementation of magnetic dynamics can be easily accomplished by the user for the individual problem.
-The resulting X-ray diffraction response is computed by kinematical or dynamical X-ray theory which can also include magnetic scattering.
+The **udkm1Dsim** toolbox provides a comprehensive framework for defining 
+arbitrary layered structures at the atomic level, supported by a rich database 
+of element-specific physical properties. Ultrafast excitation is described using 
+an *N*-temperature model, a widely used approach for simulating energy transfer 
+following ultrafast optical excitation. Structural dynamics driven by thermally 
+induced stresses are calculated using a linear-chain model of coupled masses and 
+springs, while magnetization dynamics can be simulated with Landau–Lifshitz-type 
+models. The resulting optical and X-ray scattering response is computed using 
+kinematical or dynamical scattering theory, including resonant magnetic X-ray 
+scattering, enabling direct comparison between time-resolved simulations and a 
+wide range of ultrafast scattering experiments.
 
 ## Installation
 
 The **udkm1Dsim** toolbox is distributed as a Python package and can be installed 
-together with all required dependencies using your preferred package manager:
+together with all required dependencies using your preferred package manager.
 
 ::::{tab-set}
 
@@ -45,16 +54,19 @@ together with all required dependencies using your preferred package manager:
 
 :::{grid-item}
 
-The internal architecture of **udkm1Dsim** is illustrated on the right.
-All physical material properties are stored in a {py:class}`Structure <udkm1Dsim.structures.structure.Structure>` 
-object composed of {py:class}`Layer <udkm1Dsim.structures.layers.Layer>` objects, , which in turn consist of 
-{py:class}`Atom <udkm1Dsim.structures.layers.Atom>` objetcs.
+The sketch illustrates the internal architecture of **udkm1Dsim** toolbox.
+All physical material properties are stored in a 
+{py:class}`Structure <udkm1Dsim.structures.structure.Structure>` 
+object composed of {py:class}`Layer <udkm1Dsim.structures.layers.Layer>` 
+objects, , which in turn consist of 
+{py:class}`Atom <udkm1Dsim.structures.atoms.Atom>` objetcs.
 
-All simulation modules operate on the same {py:class}`Structure <udkm1Dsim.structures.structure.Structure>` 
+All simulation modules operate on the same 
+{py:class}`Structure <udkm1Dsim.structures.structure.Structure>` 
 instance, ensuring consistency and reproducibility across different calculations.
 
-The simulation framework is highly modular. 
-Each module returns standard `numpy` arrays that can be inspected, modified, or used directly as input for 
+The simulation framework is highly modular. Each module returns standard `numpy` 
+arrays that can be inspected, modified, or used directly as input for 
 subsequent simulations, allowing users to build customized workflows with ease.
 
 :::
@@ -62,8 +74,9 @@ subsequent simulations, allowing users to build customized workflows with ease.
 
 ## Definitions
 
-:::{important}
-The experimental geometry shown below defines the coordinate system and angle conventions used consistently throughout **udkm1Dsim**.
+:::{attention}
+The sketched experimental geometry defines the coordinate system and angle 
+conventions, which are used consistently throughout **udkm1Dsim**.
 :::
 
 ::::{grid} 1 1 2 2

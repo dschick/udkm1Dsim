@@ -17,7 +17,7 @@ sd_hide_title: true
 
 ```{image} ./_static/logo.png
 :width: 200px
-:class: sd-m-auto sd-rounded-circle sd-shadow-sm
+:class: sd-m-auto sd-shadow-sm sd-avatar-xl
 ```
 :::
 
@@ -26,7 +26,8 @@ sd_hide_title: true
 :child-align: justify
 :class: sd-text-white sd-fs-3
 
-Welcome to the **udkm1Dsim** toolbox.
+Welcome to the\
+**udkm1Dsim** toolbox.
 
 ```{button-ref} getting_started
 :ref-type: doc
@@ -45,7 +46,8 @@ Get Started
 -----------
 
 :::{card}
-The **udkm1Dsim** toolbox is a collection of Python classes and routines to simulate the thermal, structural, and magnetic dynamics after laser excitation as well as the according X-ray scattering response in one-dimensional sample structures after ultrafast excitation.
+The **udkm1Dsim** toolbox is a collection of Python classes and routines for simulating the thermal, structural, and magnetic dynamics of one-dimensional sample structures following ultrafast laser excitation. 
+It also enables the calculation of the corresponding light and X-ray scattering response, providing a unified framework for modeling coupled ultrafast dynamics and their experimental observables.
 :::
 
 -----------
@@ -97,7 +99,7 @@ D. Schick, *udkm1Dsim - A Python toolbox for simulating 1D ultrafast dynamics in
 
 :::
 
-If your work is based on the original implementation of **udkm1Dsim** in MATLAB©, you may also cite the original publication:
+If your work is based on the original implementation of **udkm1Dsim** in MATLAB®, you may also cite the original publication:
 
 :::{admonition} Citation
 :class: seealso
