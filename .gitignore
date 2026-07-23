@@ -18,7 +18,8 @@ docs/build
 docs/jupyter_execute
 
 # docs myst-sphinx-gallery
-docs/source/examples
+docs/source/examples/**/*.ipynb
+docs/source/examples/**/*.rst
 
 # ipython checkpoints
 docs/source/**/.ipynb_checkpoints
