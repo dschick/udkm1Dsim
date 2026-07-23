@@ -63,7 +63,7 @@ from myst_sphinx_gallery import GalleryConfig, ThumbnailConfig
 
 myst_sphinx_gallery_config = GalleryConfig(
     examples_dirs="../../examples",
-    gallery_dirs="auto_examples",
+    gallery_dirs="examples",
     root_dir=Path(__file__).parent,
     notebook_thumbnail_strategy="code",
     thumbnail_strategy="last",

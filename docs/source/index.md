@@ -54,7 +54,7 @@ The **udkm1Dsim** toolbox is a collection of Python classes and routines to simu
 :gutter: 1 1 1 2
 
 :::{grid-item-card} {material-regular}`photo_library;2em` Examples
-:link: auto_examples/index
+:link: examples/index
 :link-type: doc
 
 Explore a growing collection of user-inspired Jupyter notebook examples.
@@ -114,7 +114,7 @@ D. Schick, A. Bojahr, M. Herzog, R. Shayduk, C. von Korff Schmising & M. Barghee
 :maxdepth: 1
 
 getting_started
-Examples <auto_examples/index>
+Examples <examples/index>
 publications
 ```
 

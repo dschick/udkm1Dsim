@@ -101,7 +101,7 @@ $-z$ direction.
 :gutter: 1 1 1 2
 
 :::{grid-item-card} {material-regular}`photo_library;2em` Examples
-:link: auto_examples/index
+:link: examples/index
 :link-type: doc
 
 Explore a growing collection of user-inspired Jupyter notebook examples.
