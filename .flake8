@@ -13,5 +13,6 @@ ignore =
     W503,
     W504,
     W505,
-    W605
+    W605,
+    E741,
 exclude = docs,build,dist,.nox
