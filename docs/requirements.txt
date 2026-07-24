@@ -3,7 +3,7 @@ ipykernel
 ipywidgets
 IProgress
 autodocsumm
-sphinx-book-theme
+sphinx-book-theme==1.2.0
 sphinx_design
 sphinx_copybutton
 sphinxcontrib.bibtex
