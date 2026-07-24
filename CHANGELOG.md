@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- matplotlib.cm deprecation in Matplotlib 3.11 ([#794da43])
+
+[794da43]: https://github.com/dschick/udkm1Dsim/commit/794da43
+
 ### Security
 
 ## [2.4.0] 2026-07-09
