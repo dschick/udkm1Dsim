@@ -49,6 +49,7 @@ class Structure:
         name (str): name of sample.
         sub_structures (list[AmorphousLayer, UnitCell, Structure]): list of
             structures in sample.
+        superstrate (Structure): structure of the superstrate.    
         substrate (Structure): structure of the substrate.
         num_sub_systems (int): number of subsystems for heat and phonons
            (electronic, lattice, spins, ...).
@@ -59,6 +60,7 @@ class Structure:
         self.name = name
         self.num_sub_systems = 1
         self.sub_structures = []
+        self.superstrate = []
         self.substrate = []
         self.roughness = 0.0*u.nm
 
@@ -91,6 +93,15 @@ class Structure:
                        sub_structure[1])
                 class_str += sub_structure[0].__str__(tabs+1)
         class_str += tab_str + '----\n'
+        # check for a superstrate
+        if isinstance(self.superstrate, Structure):
+            class_str += tab_str + 'Superstrate:\n'
+            class_str += tab_str + '----\n'
+            class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
+                    self.superstrate.sub_structures[0][1],
+                    self.substrate.sub_structures[0][0].name,
+                    self.superstrate.sub_structures[0][1]
+                    * self.superstrate.sub_structures[0][0].thickness.to('nm'))
         # check for a substrate
         if isinstance(self.substrate, Structure):
             class_str += tab_str + 'Substrate:\n'
@@ -229,22 +240,39 @@ class Structure:
         # add a sub_structure of N repetitions to the structure with
         self.sub_structures.append([sub_structure, N])
 
-    def add_substrate(self, sub_structure):
+    def add_superstrate(self, structure):
+        """add_superstrate
+
+        Add a structure as static superstrate to the structure.
+
+        Args:
+            structure (Structure): superstrate structure.
+
+        """
+        if not isinstance(structure, Structure):
+            raise ValueError('Class '
+                             + type(structure).__name__
+                             + ' is no possible superstrate. '
+                             + 'Only Structure class is allowed!')
+
+        self.superstrate = structure
+
+    def add_substrate(self, structure):
         """add_substrate
 
         Add a structure as static substrate to the structure.
 
         Args:
-            sub_structure (Structure): substrate structure.
+            structure (Structure): substrate structure.
 
         """
-        if not isinstance(sub_structure, Structure):
+        if not isinstance(structure, Structure):
             raise ValueError('Class '
-                             + type(sub_structure).__name__
+                             + type(structure).__name__
                              + ' is no possible substrate. '
-                             + 'Only structure class is allowed!')
+                             + 'Only Structure class is allowed!')
 
-        self.substrate = sub_structure
+        self.substrate = structure
 
     def get_number_of_sub_structures(self):
         """get_number_of_sub_structures
