@@ -1064,5 +1064,6 @@ class PhononAna(Phonon):
         for i in range(M):
             # calculate the energy for the jth mode
             E[i, :] = 0.5 * (A[i, :].T**2 + B[i, :].T**2) * omega**2 * masses * np.sum(Xi**2, 0).T
+            # E[i, :] = (A[i, :]**2 + B[i, :]**2) * omega**2 * np.matmul(Xi, np.matmul(masses, Xi))
 
         return omega[idx], E[:, idx]
