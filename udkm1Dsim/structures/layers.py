@@ -940,11 +940,11 @@ class UnitCell(Layer):
 
         """
         import matplotlib.pyplot as plt
-        from matplotlib import cm
+        from matplotlib import colormaps
 
         strain = kwargs.get('strain', 0)
 
-        colors = [cm.get_cmap('Set1')(x) for x in np.linspace(0, 1, self.num_atoms)]
+        colors = [colormaps['tab20'](x) for x in np.linspace(0, 1, self.num_atoms)]
         atom_ids = self.get_atom_ids()
 
         plt.figure()

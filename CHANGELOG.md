@@ -11,11 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - links to the API from the exmaples ([#185])
 - benchmark test via codspeed.io ([#188])
+- add example gallery view to docs via myst-sphinx-gallery ([#197])
 
 [#185]: https://github.com/dschick/udkm1Dsim/pull/185
 [#188]: https://github.com/dschick/udkm1Dsim/pull/188
+[#197]: https://github.com/dschick/udkm1Dsim/pull/197
 
 ### Changed
+
+- publication list with new bibliography style and reverse ordering ([#195])
+- restructured documentation ([#199])
+
+[#195]: https://github.com/dschick/udkm1Dsim/pull/195
+[#199]: https://github.com/dschick/udkm1Dsim/pull/199
 
 ### Deprecated
 
@@ -27,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#191]: https://github.com/dschick/udkm1Dsim/pull/191
 
 ### Fixed
+
+- matplotlib.cm deprecation in Matplotlib 3.11 ([#794da43])
+
+[794da43]: https://github.com/dschick/udkm1Dsim/commit/794da43
 
 ### Security
 

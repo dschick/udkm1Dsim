@@ -54,19 +54,119 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx_copybutton',
     'sphinx_design',
+    'myst_sphinx_gallery',
 ]
+
+from pathlib import Path
+
+from myst_sphinx_gallery import GalleryConfig, ThumbnailConfig
+
+myst_sphinx_gallery_config = GalleryConfig(
+    examples_dirs="../../examples",
+    gallery_dirs="examples",
+    root_dir=Path(__file__).parent,
+    notebook_thumbnail_strategy="code",
+    thumbnail_strategy="last",
+    thumbnail_config=ThumbnailConfig(
+        ref_size=(900, 900),
+        operation='pad',
+        operation_kwargs={'color': 'white'},
+        max_animation_frames=50,
+        quality_static=100,
+        quality_animated=15,
+    ),
+)
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
-bibtex_bibfiles = ['publications.bib']
-bibtex_default_style = 'unsrt'
+# Bibliography styling
+
+from pybtex.plugin import register_plugin
+from pybtex.style.formatting.unsrt import Style as UnsrtStyle
+from pybtex.style.labels import BaseLabelStyle
+from pybtex.style.sorting import BaseSortingStyle
+from pybtex.style.names.plain import NameStyle as PlainNameStyle
+from pybtex.style.template import field, first_of, href, join, optional, sentence, tag
+
+
+class YearSortingStyle(BaseSortingStyle):
+    """Sort by year (newest first), then author, then title."""
+
+    def sorting_key(self, entry):
+        year = int(entry.fields.get('year', '0'))
+        author = ' '.join(
+            person.last_names[0] if person.last_names else ''
+            for person in entry.persons.get('author', [])
+        )
+        title = entry.fields.get('title', '')
+
+        # negative year -> descending
+        return (-year, author.lower(), title.lower())
+
+
+class InitialNameStyle(PlainNameStyle):
+    def format(self, person, abbr=True):
+        return super().format(person, abbr=True)
+
+
+class SortReverseLabelStyle(BaseLabelStyle):
+    def format_labels(self, sorted_entries):
+        for i, entry in enumerate(sorted_entries):
+            yield str(len(sorted_entries) - i)
+
+
+class udkm1DsimStyle(UnsrtStyle):
+    default_name_style = InitialNameStyle
+
+    def get_article_template(self, e):
+        doi = first_of[
+            optional[
+                href[
+                    join['https://doi.org/', field('doi')],
+                    join[
+                        field('journal'),
+                        tag('b')[optional[' ', field('volume')]],
+                        optional[' ', field('number')],
+                        optional[' (', field('year'), ')'],
+                    ],
+                ]
+            ],
+            join[
+                field('journal'),
+                tag('b')[optional[' ', field('volume')]],
+                optional[' ', field('number')],
+                optional[' (', field('year'), ')'],
+            ],
+        ]
+
+        template = join[
+            sentence[self.format_names('author')],
+            ' ',
+            tag('em')[sentence[field('title')]],
+            ' ',
+            sentence[doi]
+        ]
+
+        return template
+
+
+class udkm1Dsim_reverseStyle(udkm1DsimStyle):
+    default_label_style = SortReverseLabelStyle
+    default_sorting_style = YearSortingStyle
+
+
+register_plugin('pybtex.style.formatting', 'udkm1DsimStyle', udkm1DsimStyle)
+register_plugin('pybtex.style.formatting', 'udkm1Dsim_reverseStyle', udkm1Dsim_reverseStyle)
+
+bibtex_bibfiles = ['publications.bib', 'references.bib']
+bibtex_default_style = 'udkm1DsimStyle'
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = ['.rst', '.md']
+source_suffix = ['.rst', '.md', '.ipynb']
 
 # The master toctree document.
 master_doc = 'index'
@@ -85,14 +185,15 @@ exclude_patterns = ['_build', '**.ipynb_checkpoints']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
-suppress_warnings = ['myst.mathjax']
+suppress_warnings = ['myst.mathjax',
+                     'bibtex.duplicate_label']
 
 myst_enable_extensions = [
-    "amsmath",
-    "colon_fence",
-    "deflist",
-    "dollarmath",
-    "html_image",
+    'amsmath',
+    'colon_fence',
+    'deflist',
+    'dollarmath',
+    'html_image',
 ]
 
 # -- Options for HTML output -------------------------------------------------
@@ -126,14 +227,22 @@ html_static_path = ['_static']
 # html_sidebars = {}
 
 html_theme_options = {
-    'navigation_depth': 5,
-    'collapse_navigation': False,
+    "home_page_in_toc": False,
+    'show_navbar_depth': 1,
+    'max_navbar_depth': 3,
     'repository_url': 'https://github.com/dschick/udkm1Dsim',
+    'repository_branch': "develop",
     'use_repository_button': True,
+    'use_edit_page_button': True,
+    'use_issues_button': True,
+    'path_to_docs': 'docs/source',
+}
+
+html_context = {
+   'default_mode': 'light',
 }
 
 html_logo = '_static/logo.png'
-
 
 # -- Options for HTMLHelp output ---------------------------------------------
 

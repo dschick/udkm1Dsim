@@ -104,7 +104,7 @@ class Structure:
             class_str += tab_str + 'no substrate\n'
         return class_str
 
-    def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set1', linewidth=0.1,
+    def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='tab20', linewidth=0.1,
                   show=True):
         """visualize
 
@@ -122,7 +122,7 @@ class Structure:
         """
         import matplotlib.pyplot as plt
         from matplotlib import patches
-        from matplotlib import cm
+        from matplotlib import colormaps
 
         _, d_end, _ = self.get_distances_of_layers(True)  # distance vector of all layers
         layer_interfaces = np.append(0, d_end.to(unit).magnitude)  # Append zero at the start
@@ -131,9 +131,10 @@ class Structure:
         layer_ids = self.get_unique_layers()[0]
         N = len(layer_ids)  # number of unique layers
 
+        cm = colormaps[cmap]
         colortable = {}
         for i in range(N):
-            colortable[layer_ids[i]] = cm.get_cmap(cmap, N)(i)
+            colortable[layer_ids[i]] = cm(i/(N-1))
 
         plt.figure(figsize=fig_size)
         ax = plt.axes()
