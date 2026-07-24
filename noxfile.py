@@ -8,7 +8,9 @@ reuse_venv = False
              venv_backend='mamba', reuse_venv=reuse_venv)
 def lint(session):
     session.install('flake8')
+    session.install('nbqa')
     session.run('flake8', '.')
+    session.run('nbqa', 'flake8', 'examples/')
 
 
 @nox.parametrize(
