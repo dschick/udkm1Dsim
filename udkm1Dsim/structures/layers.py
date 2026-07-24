@@ -944,7 +944,7 @@ class UnitCell(Layer):
 
         strain = kwargs.get('strain', 0)
 
-        colors = [colormaps['tab20'](x) for x in np.linspace(0, 1, self.num_atoms)]
+        colors = [colormaps['Set3'](x) for x in np.linspace(0, 1, self.num_atoms)]
         atom_ids = self.get_atom_ids()
 
         plt.figure()
