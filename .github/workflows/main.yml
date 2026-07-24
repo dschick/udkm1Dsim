@@ -32,13 +32,14 @@ jobs:
           # Upgrade pip
           python3 -m pip install --upgrade pip
           # Install build deps
-          pip install setuptools pytest pytest-cov pytest-codspeed flake8 ipython
+          pip install setuptools pytest pytest-cov pytest-codspeed flake8 ipython nbqa
           # Install the package from setup.py
           pip install .
       - name: linting flake8
         if: matrix.python-version == '3.13' && matrix.os == 'ubuntu-latest'
         run: |
           flake8
+          nbqa flake8 examples/
       - name: Generate coverage report
         run: |
           pytest --cov=./udkm1Dsim --cov-report=xml --ignore=tests/benchmarks tests/
