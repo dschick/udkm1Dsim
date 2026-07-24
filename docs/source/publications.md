@@ -1,7 +1,7 @@
 # Publications
 
 :::{note}
-Possibly an incomplete list of publications citing the **udkm1Dsim** toolbox.
+A non-exhaustive list of publications citing the **udkm1Dsim** toolbox.
 :::
 
 ---

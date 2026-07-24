@@ -17,7 +17,7 @@ sd_hide_title: true
 
 ```{image} ./_static/logo.png
 :width: 200px
-:class: sd-m-auto sd-shadow-sm sd-avatar-xl
+:class: sd-m-auto sd-shadow-sm sd-rounded-pill
 ```
 :::
 
