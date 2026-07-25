@@ -30,6 +30,7 @@ __docformat__ = 'restructuredtext'
 
 import hashlib
 import numpy as np
+import h5py as h5
 
 
 def make_hash_md5(obj):
@@ -281,3 +282,93 @@ def convert_cartesian_to_polar(cartesian):
     polar[..., 2] = np.arctan2(ys, xs)
 
     return polar
+
+
+def save_to_h5(filename, delays, distances, structure, abs_profile=None,
+               temp_map=None, strain_map=None, magnetization_map=None,
+               compression=9, cut=-1):
+    r"""Save simulation results to an HDF5 file.
+
+    Args:
+        filename (str): Name of the HDF5 file (without extension).
+        delays (ndarray[float]): 1D array of delay times in seconds.
+        distances (ndarray[float]): 1D array of spatial positions in meters.
+        structure (object): Structure object with method `get_all_positions_per_unique_layer()`.
+        abs_profile (ndarray[float], optional): 1D absorption profile aligned over `distances`.
+        temp_map (ndarray[float], optional): 3D temperature map (delay x distance x subsystem).
+        strain_map (ndarray[float], optional): 2D strain map (delay x distance).
+        magnetization_map (ndarray[float], optional): 2D magnetization map (delay x distance).
+        compression (int, optional): Gzip compression level (0-9). Defaults to 9.
+        cut (int, optional): Index to remove large substrates. Defaults to -1 (include all).
+
+    Returns:
+        None: Writes data and metadata into `<filename>`.
+
+    Notes:
+        - Dimension scales are attached to datasets (delays and distances).
+        - If any optional dataset is missing, a placeholder empty dataset is written.
+        - Layer names and thicknesses are stored as file attributes.
+    """
+    with h5.File(filename, "w") as h5file:
+        h5file.create_dataset('distances', data=distances[:cut],
+                             compression='gzip', compression_opts=compression)
+        h5file.create_dataset('delays', data=delays*1e-12, #save delay in seconds
+                             compression='gzip', compression_opts=compression)
+        h5file['distances'].make_scale('distances')
+        h5file['delays'].make_scale('delays')
+        
+        try:
+            h5file.create_dataset('abs_profile', data=abs_profile[:cut],
+                                compression='gzip', compression_opts=compression)
+            h5file['abs_profile'].dims[0].attach_scale(h5file['distances'])
+        except: h5file.create_dataset('abs_profile', data=h5.Empty("f"))
+        try:
+            h5file.create_dataset('temp_map', data=temp_map[:, :cut],
+                                compression='gzip', compression_opts=compression)
+            h5file['temp_map'].dims[0].attach_scale(h5file['delays'])
+            h5file['temp_map'].dims[1].attach_scale(h5file['distances'])
+        except: h5file.create_dataset('temp_map', data=h5.Empty("f"))
+        try:
+            h5file.create_dataset('strain_map', data=strain_map[:, :cut],
+                                compression='gzip', compression_opts=compression)
+            h5file['strain_map'].dims[0].attach_scale(h5file['delays'])
+            h5file['strain_map'].dims[1].attach_scale(h5file['distances'])
+        except: h5file.create_dataset('strain_map', data=h5.Empty("f"))
+        try:
+            h5file.create_dataset('magnetization_map', data=magnetization_map[:, :cut],
+                                compression='gzip', compression_opts=compression)
+            h5file['magnetization_map'].dims[0].attach_scale(h5file['delays'])
+            h5file['magnetization_map'].dims[1].attach_scale(h5file['distances'])
+        except: h5file.create_dataset('magnetization_map', data=h5.Empty("f"))
+
+        structure_info = structure.get_all_positions_per_unique_layer()
+        layers_list = list(structure_info.keys()) 
+        thickness_list = [len(value) for value in structure_info.values()]
+        h5file.attrs['layer_names'] = np.array(layers_list,dtype='S')
+        h5file.attrs['layer_thicknesses'] = np.array(thickness_list)
+
+
+
+def read_from_h5(filename):
+    r"""Read simulation data from an HDF5 file.
+
+    Args:
+        filename (str): Path to the HDF5 file.
+
+    Returns:
+        tuple:
+            delays (ndarray[float]): 1D array of delay times in seconds.
+            distances (ndarray[float]): 1D array of spatial positions in meters.
+            abs_profile (ndarray[float]): 1D absorption profile over distance.
+            temp_map (ndarray[float]): 3D temperature map (delay x distance x subsystem).
+            strain_map (ndarray[float]): 2D strain map (delay x distance).
+            magnetization_map (ndarray[float]): 2D magnetization map (delay x distance).
+    """
+    with h5.File(filename, "r") as h5file:
+        delays = h5file['delays'][()]
+        distances = h5file['distances'][()]
+        abs_profile = h5file['abs_profile'][()]
+        temp_map = h5file['temp_map'][()]
+        strain_map = h5file['strain_map'][()]
+        magnetization_map = h5file['magnetization_map'][()]
+    return delays, distances, abs_profile, temp_map, strain_map, magnetization_map
