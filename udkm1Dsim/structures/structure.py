@@ -102,6 +102,9 @@ class Structure:
                     self.substrate.sub_structures[0][0].name,
                     self.superstrate.sub_structures[0][1]
                     * self.superstrate.sub_structures[0][0].thickness.to('nm'))
+        else:
+            class_str += tab_str + 'Superstrate: vaccum\n'
+
         # check for a substrate
         if isinstance(self.substrate, Structure):
             class_str += tab_str + 'Substrate:\n'
@@ -112,7 +115,8 @@ class Structure:
                     self.substrate.sub_structures[0][1]
                     * self.substrate.sub_structures[0][0].thickness.to('nm'))
         else:
-            class_str += tab_str + 'no substrate\n'
+            class_str += tab_str + 'Substrate: vaccum\n'
+
         return class_str
 
     def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set3', linewidth=0.1,
