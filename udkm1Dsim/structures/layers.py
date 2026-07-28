@@ -647,6 +647,10 @@ class Vacuum(Layer):
         self.mass_unit_area = self.mass
         super().__init__('vacuum', 'vacuum')
 
+    def __str__(self):
+        """String representation of this class"""
+        return f'Vacuum layer of thickness: {self.thickness:.4g~P}'
+
 
 class AmorphousLayer(Layer):
     r"""AmorphousLayer
