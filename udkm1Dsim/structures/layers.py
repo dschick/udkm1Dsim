@@ -22,7 +22,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Layer', 'AmorphousLayer', 'UnitCell']
+__all__ = ['Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell']
 
 __docformat__ = 'restructuredtext'
 
@@ -635,6 +635,17 @@ class Layer:
     @mag_saturation.setter
     def mag_saturation(self, mag_saturation):
         self._mag_saturation = float(mag_saturation.to_base_units().magnitude)
+
+
+class Vacuum(Layer):
+    def __init__(self, thickness=1*u.nm, **kwargs):
+        self.thickness = thickness
+        self.density = 0.0*u.kg/u.m**3
+        self.area = 1.0*u.angstrom**2  # set as unit area
+        self.volume = self.area*self.thickness
+        self.mass = 0*u.kg
+        self.mass_unit_area = self.mass
+        super().__init__('vacuum', 'vacuum')
 
 
 class AmorphousLayer(Layer):
