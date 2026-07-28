@@ -27,7 +27,8 @@ __all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag']
 __docformat__ = 'restructuredtext'
 
 from .simulation import Simulation
-from ..structures.layers import AmorphousLayer, UnitCell
+from ..structures.layers import Vacuum, AmorphousLayer, UnitCell
+from ..structures.structure import Structure
 from .. import u, Q_
 from ..helpers import make_hash_md5, m_power_x, m_times_n, finderb
 import numpy as np
@@ -478,7 +479,16 @@ class XrayKin(Xray):
         for i, energy in enumerate(self._energy):
             qz = self._qz[i, :]
             theta = self._theta[i, :]
+            # a superstrate does not make too much sence here
+
             Ept, A = self.homogeneous_reflected_field(self.S, energy, qz, theta, strains)
+            # add static substrate to kinXRD
+            if isinstance(self.S.substrate, (UnitCell, Structure)):
+                temp,  temp2 = self.homogeneous_reflected_field(
+                    self.S.substrate, energy, qz, theta)
+                A.append([temp2, 'static substrate'])
+                Ept = Ept+(temp*np.exp(1j*qz*self.S.thickness.to_base_units().magnitude))
+    
             # calculate the real reflectivity from Ef
             R[i, :] = np.real(Ept*np.conj(Ept))
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
@@ -488,9 +498,9 @@ class XrayKin(Xray):
     def homogeneous_reflected_field(self, S, energy, qz, theta, strains=0):
         r"""homogeneous_reflected_field
 
-        Calculates the reflected field :math:`E_p^t` of the whole sample
-        structure as well as for each sub-structure (:math:`E_p^N`). The
-        reflected wave field :math:`E_p` from a single layer of unit cells at
+        Calculates the reflected field :math:`E_p^t` from a :class:`UnitCell` or
+        :class:Structure` as well as for each sub-structure (:math:`E_p^N`).
+        The reflected wave field :math:`E_p` from a single :class:`UnitCell` at
         the detector is calculated according to :cite:t:`warren1990`:
 
         .. math::
@@ -543,9 +553,21 @@ class XrayKin(Xray):
             - *A (ndarray[complex])* - reflected fields of substructures.
 
         """
+        if isinstance(S, Structure):
+            sub_structures = S.sub_structures
+        elif isinstance(S, (Vacuum, UnitCell)):
+            sub_structures = [[S, 1]]
+        else:
+            raise ValueError('XrayKin can only handle Layers of class '
+                             'UnitCell and Vacuum')
+
         # if no strains are given we assume no strain (1)
         if np.isscalar(strains) and strains == 0:
-            strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
+            try:
+                strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
+            except AttributeError:
+                # its a single Layer
+                strains = np.array([0])
 
         N = len(qz)  # nb of qz
         Ept = np.zeros([1, N])  # total reflected field
@@ -554,47 +576,42 @@ class XrayKin(Xray):
         strainCounter = 0  # the is the index of the strain vector if applied
 
         # traverse substructures
-        for sub_structures in S.sub_structures:
-            if isinstance(sub_structures[0], UnitCell):
+        for sub_structure in sub_structures:
+            if isinstance(sub_structure[0], UnitCell):
                 # the substructure is an unit cell and we can calculate
                 # Ep directly
-                Ep = self.get_Ep(energy, qz, theta, sub_structures[0], strains[strainCounter])
-                z = sub_structures[0]._c_axis
+                Ep = self.get_Ep(energy, qz, theta, sub_structure[0], strains[strainCounter])
+                z = sub_structure[0]._c_axis
                 strainCounter = strainCounter+1
-            elif isinstance(sub_structures[0], AmorphousLayer):
-                raise ValueError('The substructure cannot be an AmorphousLayer!')
-            else:
+            elif isinstance(sub_structure[0], Structure):
                 # the substructure is a structure, so we do a recursive
                 # call of this method
-                d = sub_structures[0].get_number_of_sub_structures()
+                d = sub_structure[0].get_number_of_sub_structures()
                 Ep, temp = self.homogeneous_reflected_field(
-                        sub_structures[0], energy, qz, theta,
+                        sub_structure[0], energy, qz, theta,
                         strains[strainCounter:(strainCounter + d)])
-                z = sub_structures[0].get_length().magnitude
+                z = sub_structure[0].get_length().magnitude
                 strainCounter = strainCounter + d
-                A.append([temp, [sub_structures[0].name + ' substructures']])
-                A.append([Ep, '{:d}x {:s}'.format(1, sub_structures[0].name)])
+                A.append([temp, [sub_structure[0].name + ' substructures']])
+                A.append([Ep, '{:d}x {:s}'.format(1, sub_structure[0].name)])            
+            else:
+                raise ValueError('The substructure must be Vacuum, UnitCell or Structure type!')
 
             # calculate the interference function for N repetitions of
             # the substructure with the length z
-            psi = self.get_interference_function(qz, z, sub_structures[1])
+            psi = self.get_interference_function(qz, z, sub_structure[1])
             # calculate the reflected field for N repetitions of
             # the substructure with the length z
             EpN = Ep * psi
             # remember the result
-            A.append([EpN, '{:d}x {:s}'.format(sub_structures[1], sub_structures[0].name)])
+            A.append([EpN, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
             # add the reflected field of the current substructure
             # phase-correct to the already calculated substructures
             Ept = Ept+(EpN*np.exp(1j*qz*Z))
             # update the total length $Z$ of the already calculated
             # substructures
-            Z = Z + z*sub_structures[1]
+            Z = Z + z*sub_structure[1]
 
-        # add static substrate to kinXRD
-        if S.substrate != []:
-            temp,  temp2 = self.homogeneous_reflected_field(S.substrate, energy, qz, theta)
-            A.append([temp2, 'static substrate'])
-            Ept = Ept+(temp*np.exp(1j*qz*Z))
         return Ept, A
 
     @u.wraps(None, (None, 'm**-1', 'm', None), strict=False)
