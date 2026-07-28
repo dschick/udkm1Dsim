@@ -522,7 +522,7 @@ class Heat(Simulation):
 
         if M != N:
             opt_ref_indices[N] = structure.substrate.get_layer_handle(0).opt_ref_index
-            thicknesses[N] = structure.substrate.get_thickness(False)
+            thicknesses[N] = structure.substrate.thickness.to_base_init().magnitude
 
         # Snell laws
         alpha = np.empty(M, dtype=complex)
