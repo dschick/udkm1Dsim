@@ -14,6 +14,10 @@ def test_structure_str(structure):
     structure.__str__()
 
 
+def test_thickness(structure):
+    assert_allclose(structure.thickness, 150*u.nm, rtol=1e-2)
+
+
 # test_visualize() fails on certain virtual machine due to TCL error
 
 
@@ -31,10 +35,6 @@ def test_get_number_of_layers(structure):
 
 def test_get_number_of_unique_layers(structure):
     assert structure.get_number_of_unique_layers() == 4
-
-
-def test_get_thickness(structure):
-    assert_allclose(structure.get_thickness(), 150*u.nm, rtol=1e-2)
 
 
 def test_get_unique_layers(structure):
