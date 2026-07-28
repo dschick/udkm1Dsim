@@ -214,18 +214,19 @@ def test_layer_set_opt_pen_depth_from_ref_index(layer):
     assert_approx(layer.opt_pen_depth, 21.22*u.nm, rtol=1e-2)
 
 
-# AmorphousLayer & UnitCell (need atoms, mass, area to be set)
+# Vacuum, AmorphousLayer & UnitCell (need atoms, mass, area to be set)
 
 
 @pytest.mark.parametrize('fixture_name',
-                         ['amorphous_layer', 'unit_cell'])
+                         ['vacuum', 'amorphous_layer', 'unit_cell'])
 def test_layer_to_str(request, fixture_name):
     layer = request.getfixturevalue(fixture_name)
     layer.__str__()
 
 
 @pytest.mark.parametrize('fixture_name, expected',
-                         [('amorphous_layer', 1.0*u.nm),
+                         [('vacuum', 1.0*u.nm),
+                          ('amorphous_layer', 1.0*u.nm),
                           ('unit_cell', 5.0*u.angstrom),])
 def test_layer_thickness(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)
@@ -233,7 +234,8 @@ def test_layer_thickness(request, fixture_name, expected):
 
 
 @pytest.mark.parametrize('fixture_name, expected',
-                         [('amorphous_layer', 5e-26*u.kg),
+                         [('vacuum', 0.0*u.kg),
+                          ('amorphous_layer', 5e-26*u.kg),
                           ('unit_cell', 2.51e-25*u.kg),])
 def test_layer_mass(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)
@@ -241,7 +243,8 @@ def test_layer_mass(request, fixture_name, expected):
 
 
 @pytest.mark.parametrize('fixture_name, expected',
-                         [('amorphous_layer', 1e-20*u.m**2),
+                         [('vacuum', 1e-20*u.m**2),
+                          ('amorphous_layer', 1e-20*u.m**2),
                           ('unit_cell', 2.5e-19*u.m**2),])
 def test_layer_area(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)
@@ -249,7 +252,8 @@ def test_layer_area(request, fixture_name, expected):
 
 
 @pytest.mark.parametrize('fixture_name, expected',
-                         [('amorphous_layer', 1e-29*u.m**3),
+                         [('vacuum', 1e-29*u.m**3),
+                          ('amorphous_layer', 1e-29*u.m**3),
                           ('unit_cell', 1.25e-28*u.m**3),])
 def test_layer_volume(request, fixture_name, expected):
     layer = request.getfixturevalue(fixture_name)

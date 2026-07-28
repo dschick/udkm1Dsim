@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from udkm1Dsim import Atom, AtomMixed
-from udkm1Dsim import Layer, AmorphousLayer, UnitCell
+from udkm1Dsim import Layer, Vacuum, AmorphousLayer, UnitCell
 from udkm1Dsim import Structure
 from udkm1Dsim import u
 import pytest
@@ -101,6 +101,11 @@ def properties():
 @pytest.fixture(scope='module')
 def layer(properties):
     return Layer(id='layer', name='base layer', **properties)
+
+
+@pytest.fixture(scope='module')
+def vacuum(properties):
+    return Vacuum()
 
 
 @pytest.fixture(scope='module')
