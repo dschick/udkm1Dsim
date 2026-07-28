@@ -62,7 +62,7 @@ class Structure:
         self.sub_structures = []
         self.substrate = Vacuum()
 
-    def __str__(self, tabs=0):
+    def __str__(self, tabs=0, recursive=False):
         """String representation of this class"""
         tab_str = tabs*'\t'
 
@@ -84,27 +84,28 @@ class Structure:
                         sub_structure[0].name,
                         sub_structure[1]*sub_structure[0].thickness.to('nm'))
             else:
-                # the substructure is a structure instance by itself
+                # the substructure is a Structure instance by itself
                 # call the display() method recursively
                 class_str += tab_str + 'sub-structure {:d} times:\n'.format(
                        sub_structure[1])
-                class_str += sub_structure[0].__str__(tabs+1)
+                class_str += sub_structure[0].__str__(tabs+1, recursive=True)
         class_str += tab_str + '----\n'
-        # check for a substrate
-        if isinstance(self.substrate, Structure):
-            class_str += tab_str + 'Substrate:\n'
+
+        # do not print substrate sub sub-structures
+        if not recursive:
+            class_str += tab_str + 'Substrate (semi-infinite):\n'
             class_str += tab_str + '----\n'
-            class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                    self.substrate.sub_structures[0][1],
-                    self.substrate.sub_structures[0][0].name,
-                    self.substrate.sub_structures[0][1]
-                    * self.substrate.sub_structures[0][0].thickness.to('nm'))
-        elif isinstance(self.substrate, (Layer)):
-            class_str += tab_str + 'Substrate:\n'
-            class_str += tab_str + '----\n'
-            class_str += tab_str + 'semi-infinite {:s} \n'.format(self.substrate.name)
-        else:
-            class_str += tab_str + 'no substrate\n'
+            # check for a substrate
+            if isinstance(self.substrate, Structure):
+                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
+                        self.substrate.sub_structures[0][1],
+                        self.substrate.sub_structures[0][0].name,
+                        self.substrate.sub_structures[0][1]
+                        * self.substrate.sub_structures[0][0].thickness.to('nm'))
+            elif isinstance(self.substrate, (Layer)):
+                class_str += tab_str + '{:s} \n'.format(self.substrate.name)
+            else:
+                warnings.warn('There should be substrate present!')
         return class_str
 
     def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set3', linewidth=0.1,
