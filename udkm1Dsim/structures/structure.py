@@ -50,10 +50,11 @@ class Structure:
         name (str): name of sample.
         thickness (float): thickness of the structure [m].
         sub_structures (list[Layer, Structure]): list of sub-structures in sample.
-        superstrate (Layer, Structure): Layer or its sub-classes, or Structure forming the superstrate.
+        superstrate (Layer, Structure): Layer or its sub-classes, or Structure forming
+            the superstrate.
         substrate (Layer, Structure): Layer or its sub-classes, or Structure forming the substrate.
         num_sub_systems (int): number of subsystems for heat and phonons
-           (electronic, lattice, spins, ...).
+            (electronic, lattice, spins, ...).
 
     """
 
@@ -107,7 +108,7 @@ class Structure:
                 class_str += tab_str + '{:s} \n'.format(self.superstrate.name)
             else:
                 warnings.warn('There should be a superstrate present!')
-
+            class_str += tab_str + '----\n'
             class_str += tab_str + 'Substrate (semi-infinite):\n'
             class_str += tab_str + '----\n'
             # check for a substrate
