@@ -487,7 +487,7 @@ class XrayKin(Xray):
                     self.S.substrate, energy, qz, theta)
                 A.append([temp2, 'static substrate'])
                 Ept = Ept+(temp*np.exp(1j*qz*self.S.thickness.to_base_units().magnitude))
-    
+
             # calculate the real reflectivity from Ef
             R[i, :] = np.real(Ept*np.conj(Ept))
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
@@ -558,7 +558,7 @@ class XrayKin(Xray):
             sub_structures = [[S, 1]]
         else:
             raise TypeError('XrayKin can only handle Layers of class '
-                             'UnitCell and Vacuum')
+                            'UnitCell and Vacuum')
 
         # if no strains are given we assume no strain (1)
         if np.isscalar(strains) and strains == 0:
@@ -592,7 +592,7 @@ class XrayKin(Xray):
                 z = sub_structure[0].get_length().magnitude
                 strainCounter = strainCounter + d
                 A.append([temp, [sub_structure[0].name + ' substructures']])
-                A.append([Ep, '{:d}x {:s}'.format(1, sub_structure[0].name)])            
+                A.append([Ep, '{:d}x {:s}'.format(1, sub_structure[0].name)])
             else:
                 raise TypeError('The substructure must be Vacuum, UnitCell or Structure type!')
 
@@ -851,7 +851,7 @@ class XrayDyn(Xray):
             L = 1
         else:
             raise TypeError('XrayDyn can only handle Layers of class '
-                             'UnitCell and Vacuum')
+                            'UnitCell and Vacuum')
 
         # if no strains are given we assume no strain (1)
         if len(strains) == 0:
@@ -1887,7 +1887,7 @@ class XrayDynMag(Xray):
         t1 = time()
         self.disp_message('Calculating _homogeneous_reflectivity_ ...')
 
-        # superstrate
+        # add superstrate
         if isinstance(self.S.superstrate, Vacuum):
             A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
         elif isinstance(self.S.superstrate, AmorphousLayer):
@@ -1897,22 +1897,26 @@ class XrayDynMag(Xray):
                 self.S.superstrate.atom._thickness
                 )
         else:
-            raise ValueError
-
+            raise TypeError('In XrayDynMag the superstrate must be of type Vacuum or '
+                            'AmorphousLayer!')
 
         # calc the reflectivity-transmission matrix of the structure
         # and the inverse of the last boundary matrix
         RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
             self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, *args)
-        # if a substrate is included add it at the end
-        if self.S.substrate != []:
+
+        # add substrate
+        if isinstance(self.S.substrate, (Vacuum, AmorphousLayer, UnitCell, Structure)):
             RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = \
                 self.calc_homogeneous_matrix(
                     self.S.substrate, last_A, last_A_phi, last_k_z)
             RT = m_times_n(RT_sub, RT)
             RT_phi = m_times_n(RT_sub_phi, RT_phi)
+        else:
+            raise ValueError('There should be a substrate present.')
+
         # multiply the result of the structure with the boundary matrix
-        # of vacuum (initial layer) and the final layer
+        # of superstrate and substrate
         RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
         RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
 
@@ -1963,26 +1967,35 @@ class XrayDynMag(Xray):
             - *k_z (ndarray[float])* - internal wave vector.
 
         """
+        if isinstance(S, Structure):
+            sub_structures = S.sub_structures
+            L = S.get_number_of_sub_structures()
+        elif isinstance(S, (Vacuum, AmorphousLayer, UnitCell)):
+            sub_structures = [[S, 1]]
+            L = 1
+        else:
+            raise TypeError('XrayDynMag can only handle Layers of class '
+                            'AmorphousLayer, UnitCell, and Vacuum')
+
         # if no strains are given we assume no strain (1)
         if len(args) == 0:
-            strains = np.zeros([S.get_number_of_sub_structures(), 1])
+            strains = np.zeros([L, 1])
         else:
             strains = args[0]
 
         if len(args) < 2:
             # create non-working magnetizations
-            magnetizations = np.zeros([S.get_number_of_sub_structures(), 1])
+            magnetizations = np.zeros([L, 1])
         else:
             magnetizations = args[1]
 
         layer_counter = 0
         # traverse substructures
-        for i, sub_structure in enumerate(S.sub_structures):
+        for i, sub_structure in enumerate(sub_structures):
             layer = sub_structure[0]
             repetitions = sub_structure[1]
             if isinstance(layer, UnitCell):
-                # the sub_structure is an unitCell
-                # calculate the ref-trans matrices for N unitCells
+                # calculate the ref-trans matrices for N UnitCells
                 RT_uc, RT_uc_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
                         layer, last_A, last_A_phi, last_k_z, strains[layer_counter],
@@ -2001,18 +2014,20 @@ class XrayDynMag(Xray):
                     temp_phi = m_times_n(temp2_phi, temp_phi)
 
                 layer_counter += 1
-            elif isinstance(layer, AmorphousLayer):
-                # the sub_structure is an amorphous layer
+            elif isinstance(layer, (Vacuum, AmorphousLayer)):
                 # calculate the ref-trans matrices for N layers
-
-                A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
-                    self.get_atom_boundary_phase_matrix(layer.atom,
-                                                        layer._density*(
-                                                            strains[layer_counter]+1),
-                                                        layer._thickness*(
-                                                            strains[layer_counter]+1),
-                                                        False,
-                                                        magnetizations[layer_counter])
+                if isinstance(layer, Vacuum):
+                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                        self.get_atom_boundary_phase_matrix([], 0, 0)
+                else:
+                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                        self.get_atom_boundary_phase_matrix(layer.atom,
+                                                            layer._density*(
+                                                                strains[layer_counter]+1),
+                                                            layer._thickness*(
+                                                                strains[layer_counter]+1),
+                                                            False,
+                                                            magnetizations[layer_counter])
 
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
@@ -2226,13 +2241,17 @@ class XrayDynMag(Xray):
             RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
                 self.calc_inhomogeneous_matrix(
                     A0, A0_phi, k_z_0, strain_map[i, :], magnetization_map[i, :])
-            # if a substrate is included add it at the end
-            if self.S.substrate != []:
+
+            # add substrate
+            if isinstance(self.S.substrate, (Vacuum, AmorphousLayer, UnitCell, Structure)):
                 RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = \
                     self.calc_homogeneous_matrix(
                         self.S.substrate, last_A, last_A_phi, last_k_z)
                 RT = m_times_n(RT_sub, RT)
                 RT_phi = m_times_n(RT_sub_phi, RT_phi)
+            else:
+                raise ValueError('There should be a substrate present.')
+
             # multiply vacuum and last layer
             RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
             RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
@@ -2283,8 +2302,20 @@ class XrayDynMag(Xray):
         R_phi = np.zeros_like(R)
         T = np.zeros_like(R)
         T_phi = np.zeros_like(R)
-        # vacuum boundary
-        A0, A0_phi, _, _,  _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+
+        # add superstrate
+        if isinstance(self.S.superstrate, Vacuum):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+        elif isinstance(self.S.superstrate, AmorphousLayer):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
+                self.S.superstrate.atom,
+                self.S.superstrate.atom._density,
+                self.S.superstrate.atom._thickness
+                )
+        else:
+            raise TypeError('In XrayDynMag the superstrate must be of type Vacuum or '
+                            'AmorphousLayer!')
+
         remote_A0 = dask_client.scatter(A0)
         remote_A0_phi = dask_client.scatter(A0_phi)
         remote_k_z_0 = dask_client.scatter(k_z_0)
@@ -2308,9 +2339,12 @@ class XrayDynMag(Xray):
             last_A_inv = t[4]
             last_A_inv_phi = t[5]
             last_k_z = t[6]
-            if self.S.substrate != []:
+
+            # add substrate
+            if isinstance(self.S.substrate, (Vacuum, AmorphousLayer, UnitCell, Structure)):
                 t2 = delayed(self.calc_homogeneous_matrix)(
-                    remote_substrate, last_A, last_A_phi, last_k_z)
+                    remote_substrate, last_A, last_A_phi, last_k_z
+                    )
                 RT_sub = t2[0]
                 RT_sub_phi = t2[1]
                 last_A = t2[2]
@@ -2319,7 +2353,11 @@ class XrayDynMag(Xray):
                 last_A_inv_phi = t2[5]
                 RT = delayed(m_times_n)(RT_sub, RT)
                 RT_phi = delayed(m_times_n)(RT_sub_phi, RT_phi)
-            # multiply vacuum and last layer
+            else:
+                raise ValueError('There should be a substrate present.')
+
+            # multiply the result of the structure with the boundary matrix
+            # of superstrate and substrate
             temp = delayed(m_times_n)(last_A, RT)
             temp_phi = delayed(m_times_n)(last_A_phi, RT_phi)
             RT = delayed(m_times_n)(last_A_inv, temp)
@@ -2409,12 +2447,19 @@ class XrayDynMag(Xray):
                 RT_layer, RT_layer_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
                         layer, last_A, last_A_phi, last_k_z, strains[i],
-                        magnetizations[i], force_recalc)
-            elif isinstance(layer, AmorphousLayer):
-                A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
-                    self.get_atom_boundary_phase_matrix(
-                        layer.atom, layer._density/(strains[i]+1), layer._thickness*(strains[i]+1),
-                        force_recalc, magnetizations[i])
+                        magnetizations[i], force_recalc
+                        )
+            elif isinstance(layer, (Vacuum, AmorphousLayer)):
+                if isinstance(layer, Vacuum):
+                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                        self.get_atom_boundary_phase_matrix([], 0, layer._thickness*(strains[i]+1))
+                else:
+                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                        self.get_atom_boundary_phase_matrix(
+                            layer.atom, layer._density/(strains[i]+1),
+                            layer._thickness*(strains[i]+1),
+                            force_recalc, magnetizations[i]
+                            )
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
                 F_phi = m_times_n(A_inv_phi, last_A_phi)

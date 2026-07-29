@@ -226,10 +226,10 @@ class Structure:
         # or its sub-classes, or Structure
         if not isinstance(sub_structure, (Layer, Structure)):
             raise TypeError('Class '
-                             + type(sub_structure).__name__
-                             + ' is no possible sub structure. '
-                             + 'Only Layer, its sub-classes, and '
-                             + 'Structure classes are allowed!')
+                            + type(sub_structure).__name__
+                            + ' is no possible sub structure. '
+                            + 'Only Layer, its sub-classes, and '
+                            + 'Structure classes are allowed!')
 
         # if a Structure is added as a sub_structure, the sub_structure's
         # substrate is ignored (Vacuum default is ignored)
@@ -261,10 +261,10 @@ class Structure:
         """
         if not isinstance(sub_structure, (Layer, Structure)):
             raise TypeError('Class '
-                             + type(sub_structure).__name__
-                             + ' is no possible superstrate. '
-                             + 'Only Layer or its sub-classes, or Structure '
-                             + 'class is allowed!')
+                            + type(sub_structure).__name__
+                            + ' is no possible superstrate. '
+                            + 'Only Layer or its sub-classes, or Structure '
+                            + 'class is allowed!')
 
         self.substrate = sub_structure
 
@@ -280,10 +280,10 @@ class Structure:
         """
         if not isinstance(sub_structure, (Layer, Structure)):
             raise TypeError('Class '
-                             + type(sub_structure).__name__
-                             + ' is no possible substrate. '
-                             + 'Only Layer or its sub-classes, or Structure '
-                             + 'class is allowed!')
+                            + type(sub_structure).__name__
+                            + ' is no possible substrate. '
+                            + 'Only Layer or its sub-classes, or Structure '
+                            + 'class is allowed!')
 
         self.substrate = sub_structure
 
@@ -711,7 +711,15 @@ class Structure:
         from copy import deepcopy
 
         reversed = deepcopy(self)
-        # need to handle superstrate and substrate
+
+        # handle superstrate and substrate
+        reversed.superstrate, reversed.substrate = reversed.substrate, reversed.superstrate
+
+        if isinstance(reversed.superstrate, Structure):
+            reversed.superstrate = self.reverse_sub_structures(reversed.superstrate)
+        if isinstance(reversed.substrate, Structure):
+            reversed.substrate = self.reverse_sub_structures(reversed.substrate)
+
         return self.reverse_sub_structures(reversed)
 
     def reverse_sub_structures(self, structure):

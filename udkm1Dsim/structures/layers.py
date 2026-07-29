@@ -645,7 +645,7 @@ class Vacuum(Layer):
         self.volume = self.area*self.thickness
         self.mass = 0*u.kg
         self.mass_unit_area = self.mass
-        super().__init__('vacuum', 'vacuum')
+        super().__init__('vacuum', 'vacuum', opt_ref_index=1+0.0j)
 
     def __str__(self):
         """String representation of this class"""
@@ -778,9 +778,9 @@ class AmorphousLayer(Layer):
 
         if not isinstance(atom, (Atom, AtomMixed)):
             raise TypeError('Class '
-                             + type(atom).__name__
-                             + ' is no possible atom of an amorphous layer. '
-                             + 'Only Atom and AtomMixed are allowed!')
+                            + type(atom).__name__
+                            + ' is no possible atom of an amorphous layer. '
+                            + 'Only Atom and AtomMixed are allowed!')
         self._atom = atom
         self.magnetization = {'amplitude': atom.mag_amplitude,
                               'phi': atom.mag_phi,
