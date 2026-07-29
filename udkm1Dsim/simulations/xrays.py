@@ -557,7 +557,7 @@ class XrayKin(Xray):
         elif isinstance(S, (Vacuum, UnitCell)):
             sub_structures = [[S, 1]]
         else:
-            raise ValueError('XrayKin can only handle Layers of class '
+            raise TypeError('XrayKin can only handle Layers of class '
                              'UnitCell and Vacuum')
 
         # if no strains are given we assume no strain (1)
@@ -594,7 +594,7 @@ class XrayKin(Xray):
                 A.append([temp, [sub_structure[0].name + ' substructures']])
                 A.append([Ep, '{:d}x {:s}'.format(1, sub_structure[0].name)])            
             else:
-                raise ValueError('The substructure must be Vacuum, UnitCell or Structure type!')
+                raise TypeError('The substructure must be Vacuum, UnitCell or Structure type!')
 
             # calculate the interference function for N repetitions of
             # the substructure with the length z
@@ -850,7 +850,7 @@ class XrayDyn(Xray):
             sub_structures = [[S, 1]]
             L = 1
         else:
-            raise ValueError('XrayDyn can only handle Layers of class '
+            raise TypeError('XrayDyn can only handle Layers of class '
                              'UnitCell and Vacuum')
 
         # if no strains are given we assume no strain (1)
@@ -912,7 +912,7 @@ class XrayDyn(Xray):
                 tmp = m_power_x(tmp, sub_structure[1])
                 A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
             else:
-                raise ValueError('The substructure must be Vacuum, UnitCell or Structure type!')
+                raise TypeError('The substructure must be Vacuum, UnitCell or Structure type!')
 
             # multiply it to the output
             RT = m_times_n(RT, tmp)
@@ -1264,7 +1264,7 @@ class XrayDyn(Xray):
         for i, uc in enumerate(uc_handles):
 
             if not isinstance(uc, UnitCell):
-                raise ValueError('All layers  must be of type UnitCell!')
+                raise TypeError('All layers  must be of type UnitCell!')
             RT = m_times_n(RT, self.get_uc_ref_trans_matrix(uc, strains[i], temps[i, :]))
 
         return RT
@@ -1384,7 +1384,7 @@ class XrayDyn(Xray):
             # traverse all strains in the strain_vector for this unique
             # unit_cell
             if not isinstance(uc, UnitCell):
-                raise ValueError('All layers  must be UnitCells!')
+                raise TypeError('All layers  must be UnitCells!')
             temp = []
             for strain in strain_vectors[i]:
                 temp.append(self.get_uc_ref_trans_matrix(uc, strain))
@@ -1886,8 +1886,20 @@ class XrayDynMag(Xray):
         """
         t1 = time()
         self.disp_message('Calculating _homogeneous_reflectivity_ ...')
-        # vacuum boundary
-        A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+
+        # superstrate
+        if isinstance(self.S.superstrate, Vacuum):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+        elif isinstance(self.S.superstrate, AmorphousLayer):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
+                self.S.superstrate.atom,
+                self.S.superstrate.atom._density,
+                self.S.superstrate.atom._thickness
+                )
+        else:
+            raise ValueError
+
+
         # calc the reflectivity-transmission matrix of the structure
         # and the inverse of the last boundary matrix
         RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
@@ -1903,6 +1915,7 @@ class XrayDynMag(Xray):
         # of vacuum (initial layer) and the final layer
         RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
         RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
+
         # calc the actual reflectivity and transmissivity from the matrix
         R, T = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
             RT, self.pol_in, self.pol_out)
@@ -2412,7 +2425,7 @@ class XrayDynMag(Xray):
                 RT_layer = m_times_n(P, F)
                 RT_layer_phi = m_times_n(P_phi, F_phi)
             else:
-                raise ValueError('All layers must be either AmorphousLayers or UnitCells!')
+                raise TypeError('All layers must be either AmorphousLayers or UnitCells!')
             if i == 0:
                 RT = RT_layer
                 RT_phi = RT_layer_phi

@@ -225,7 +225,7 @@ class Structure:
         # check of the sub_structure is of type Layer
         # or its sub-classes, or Structure
         if not isinstance(sub_structure, (Layer, Structure)):
-            raise ValueError('Class '
+            raise TypeError('Class '
                              + type(sub_structure).__name__
                              + ' is no possible sub structure. '
                              + 'Only Layer, its sub-classes, and '
@@ -260,7 +260,7 @@ class Structure:
 
         """
         if not isinstance(sub_structure, (Layer, Structure)):
-            raise ValueError('Class '
+            raise TypeError('Class '
                              + type(sub_structure).__name__
                              + ' is no possible superstrate. '
                              + 'Only Layer or its sub-classes, or Structure '
@@ -279,7 +279,7 @@ class Structure:
 
         """
         if not isinstance(sub_structure, (Layer, Structure)):
-            raise ValueError('Class '
+            raise TypeError('Class '
                              + type(sub_structure).__name__
                              + ' is no possible substrate. '
                              + 'Only Layer or its sub-classes, or Structure '

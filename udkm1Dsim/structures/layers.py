@@ -777,7 +777,7 @@ class AmorphousLayer(Layer):
             return
 
         if not isinstance(atom, (Atom, AtomMixed)):
-            raise ValueError('Class '
+            raise TypeError('Class '
                              + type(atom).__name__
                              + ' is no possible atom of an amorphous layer. '
                              + 'Only Atom and AtomMixed are allowed!')
