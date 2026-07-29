@@ -461,7 +461,6 @@ class XrayKin(Xray):
 
         Args:
             strains (ndarray[float], optional): strains of each sub-structure
-                0 .. 1. Defaults to 0.
 
         Returns:
             (tuple):
@@ -480,9 +479,9 @@ class XrayKin(Xray):
             qz = self._qz[i, :]
             theta = self._theta[i, :]
             # a superstrate does not make too much sence here
-
+            # calculate reflected field of the actual structure
             Ept, A = self.homogeneous_reflected_field(self.S, energy, qz, theta, strains)
-            # add static substrate to kinXRD
+            # add static substrate
             if isinstance(self.S.substrate, (UnitCell, Structure)):
                 temp,  temp2 = self.homogeneous_reflected_field(
                     self.S.substrate, energy, qz, theta)
@@ -798,8 +797,16 @@ class XrayDyn(Xray):
         """
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
-        # get the reflectivity-transmission matrix of the structure
+
+        # a superstrate does not make too much sense here
+        # get the reflectivity-transmission matrix of the actual structure
         RT, A = self.homogeneous_ref_trans_matrix(self.S, strains, temps)
+        # add static substrate
+        if isinstance(self.S.substrate, (UnitCell, Structure)):
+            tmp, tmp2 = self.homogeneous_ref_trans_matrix(self.S.substrate)
+            A.append([tmp2, 'static substrate'])
+            RT = m_times_n(RT, tmp)
+
         # calculate the real reflectivity from the RT matrix
         R = self.calc_reflectivity_from_matrix(RT)
         self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
@@ -836,7 +843,16 @@ class XrayDyn(Xray):
               sub-structures.
 
         """
-        L = S.get_number_of_sub_structures()
+        if isinstance(S, Structure):
+            sub_structures = S.sub_structures
+            L = S.get_number_of_sub_structures()
+        elif isinstance(S, (Vacuum, UnitCell)):
+            sub_structures = [[S, 1]]
+            L = 1
+        else:
+            raise ValueError('XrayDyn can only handle Layers of class '
+                             'UnitCell and Vacuum')
+
         # if no strains are given we assume no strain (1)
         if len(strains) == 0:
             strains = np.zeros([L])
@@ -871,7 +887,7 @@ class XrayDyn(Xray):
         counter = 0
 
         # traverse substructures
-        for sub_structure in S.sub_structures:
+        for sub_structure in sub_structures:
             if isinstance(sub_structure[0], UnitCell):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
@@ -881,9 +897,7 @@ class XrayDyn(Xray):
                 counter += 1
                 # remember the result
                 A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
-            elif isinstance(sub_structure[0], AmorphousLayer):
-                raise ValueError('The substructure cannot be an AmorphousLayer!')
-            else:
+            elif isinstance(sub_structure[0], Structure):
                 # its a structure
                 # make a recursive call
                 idx = np.r_[counter:(counter+sub_structure[0].get_number_of_sub_structures())]
@@ -897,14 +911,10 @@ class XrayDyn(Xray):
                 # calculate the ref-trans matrices for N sub structures
                 tmp = m_power_x(tmp, sub_structure[1])
                 A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+            else:
+                raise ValueError('The substructure must be Vacuum, UnitCell or Structure type!')
 
             # multiply it to the output
-            RT = m_times_n(RT, tmp)
-
-        # if a substrate is included add it at the end
-        if S.substrate != []:
-            tmp, tmp2 = self.homogeneous_ref_trans_matrix(S.substrate)
-            A.append([tmp2, 'static substrate'])
             RT = m_times_n(RT, tmp)
 
         return RT, A
