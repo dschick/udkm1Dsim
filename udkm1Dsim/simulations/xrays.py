@@ -1108,7 +1108,7 @@ class XrayDyn(Xray):
         RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (N, K, 1, 1))
 
         # precalculate the substrate ref_trans_matrix if present
-        if self.S.substrate != []:
+        if isinstance(self.S.substrate, (UnitCell, Structure)):
             RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
         else:
             RTS = RTU
@@ -1229,7 +1229,7 @@ class XrayDyn(Xray):
             RT = self.calc_inhomogeneous_ref_trans_matrix(strains, temps)
 
         # if a substrate is included add it at the end
-        if self.S.substrate != []:
+        if isinstance(self.S.substrate, (UnitCell, Structure)):
             RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
             RT = m_times_n(RT, RTS)
         # calculate reflectivity from ref-trans matrix
@@ -1264,7 +1264,7 @@ class XrayDyn(Xray):
         for i, uc in enumerate(uc_handles):
 
             if not isinstance(uc, UnitCell):
-                raise ValueError('All layers  must be UnitCells!')
+                raise ValueError('All layers  must be of type UnitCell!')
             RT = m_times_n(RT, self.get_uc_ref_trans_matrix(uc, strains[i], temps[i, :]))
 
         return RT
