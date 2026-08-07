@@ -28,7 +28,6 @@ __docformat__ = 'restructuredtext'
 
 from .simulation import Simulation
 from ..structures.layers import Layer
-from ..structures.structure import Structure
 from .. import u, Q_
 from ..helpers import make_hash_md5, finderb, multi_gauss
 import numpy as np
