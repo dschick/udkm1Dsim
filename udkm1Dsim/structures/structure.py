@@ -246,23 +246,23 @@ class Structure:
         # add a sub_structure of N repetitions to the structure with
         self.sub_structures.append([sub_structure, N])
 
-    def add_superstrate(self, layer, N=1):
+    def add_superstrate(self, layer):
         """add_superstrate
 
-        Add :math:`N` :class:`Layer` or its sub-classes as static superstrate to the sample.
+        Add :class:`Layer` or its sub-classes as static superstrate to the sample.
 
         Args:
             sub_structure (Layer): superstrate Layer or its sub-classes.
-            N (int): number or repetitions.
 
         """
-        if not isinstance(layer, (Layer)):
+        if not isinstance(layer, Layer):
             raise TypeError('Class '
                             + type(layer).__name__
                             + ' is no possible superstrate. '
                             + 'Only Layer or its sub-classes is allowed!')
 
-        self.substrate = [layer, N]
+        # there is only one repetition of the superstrate layer
+        self.superstrate = [layer, 1]
 
     def add_substrate(self, layer, N=1):
         """add_substrate
@@ -274,7 +274,7 @@ class Structure:
             N (int): number or repetitions.
 
         """
-        if not isinstance(layer, (Layer)):
+        if not isinstance(layer, Layer):
             raise TypeError('Class '
                             + type(layer).__name__
                             + ' is no possible substrate. '
