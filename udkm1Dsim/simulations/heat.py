@@ -508,15 +508,11 @@ class Heat(Simulation):
         thicknesses = np.empty(N+1, dtype=float)
 
         # add superstrate
-        if isinstance(structure.superstrate, Layer):
-            superstrate_layer = structure.superstrate
-        elif isinstance(structure.superstrate, Structure):
-            # get the opt_ref_index of the last layer
-            superstrate_layer = structure.superstrate.get_layer_handle(
-                structure.superstrate.get_number_of_layers())
+        if isinstance(structure.superstrate[0], Layer):
+            superstrate_layer = structure.superstrate[0]
         else:
             raise TypeError('Superstrate must be of type '
-                            'Layer or its sub-classes, or Structure')
+                            'Layer or its sub-classes!')
 
         opt_ref_indices[0] = superstrate_layer.opt_ref_index
         thicknesses[0] = superstrate_layer.thickness.to_base_units().magnitude
@@ -529,14 +525,11 @@ class Heat(Simulation):
             thicknesses[i+1] = interfaces[i+1]-interfaces[i]
 
         # add substrate
-        if isinstance(structure.substrate, Layer):
-            substrate_layer = structure.substrate
-        elif isinstance(structure.substrate, Structure):
-            # get the opt_ref_index of the first layer
-            substrate_layer = structure.substrate.get_layer_handle(0)
+        if isinstance(structure.substrate[0], Layer):
+            substrate_layer = structure.substrate[0]
         else:
             raise TypeError('Substrate must be of type '
-                            'Layer or its sub-classes, or Structure')
+                            'Layer or its sub-classes!')
 
         opt_ref_indices[N] = substrate_layer.opt_ref_index
         thicknesses[N] = substrate_layer.thickness.to_base_units().magnitude
