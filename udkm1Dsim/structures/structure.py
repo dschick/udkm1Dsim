@@ -92,12 +92,12 @@ class Structure:
                        sub_structure[1])
                 class_str += sub_structure[0].__str__(tabs+1, recursive=True)
         class_str += tab_str + '----\n'
-        # do not print substrate sub sub-structures
+        # do not print sub-structure superstrate or substrate
         if not recursive:
             class_str += tab_str + 'Superstrate (semi-infinite):\n'
             class_str += tab_str + '----\n'
             # check for a superstrate
-            if isinstance(self.superstrate, Layer):
+            if isinstance(self.superstrate[0], Layer):
                 class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
                         self.superstrate[1],
                         self.superstrate[0].name,
@@ -109,7 +109,7 @@ class Structure:
             class_str += tab_str + 'Substrate (semi-infinite):\n'
             class_str += tab_str + '----\n'
             # check for a substrate
-            if isinstance(self.substrate, Layer):
+            if isinstance(self.substrate[0], Layer):
                 class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
                         self.substrate[1],
                         self.substrate[0].name,
@@ -229,9 +229,9 @@ class Structure:
         # if a Structure is added as a sub_structure, the sub_structure's
         # superstrate and substrate are ignored (Vacuum default is ignored)
         if isinstance(sub_structure, Structure):
-            if not isinstance(sub_structure.superstrate, (Vacuum)):
+            if not isinstance(sub_structure.superstrate[0], Vacuum):
                 warnings.warn('The superstrate of the sub_structure is ignored.')
-            if not isinstance(sub_structure.substrate, (Vacuum)):
+            if not isinstance(sub_structure.substrate[0], Vacuum):
                 warnings.warn('The substrate of the sub_structure is ignored.')
 
         # check the number of subsystems of the sub_structure
@@ -280,7 +280,7 @@ class Structure:
                             + ' is no possible substrate. '
                             + 'Only Layer or its sub-classes is allowed!')
 
-        self.substrate = layer
+        self.substrate = [layer, N]
 
     def get_number_of_sub_structures(self):
         """get_number_of_sub_structures
