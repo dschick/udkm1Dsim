@@ -50,9 +50,8 @@ class Structure:
         name (str): name of sample.
         thickness (float): thickness of the structure [m].
         sub_structures (list[Layer, Structure]): list of sub-structures in sample.
-        superstrate (Layer, Structure): Layer or its sub-classes, or Structure forming
-            the superstrate.
-        substrate (Layer, Structure): Layer or its sub-classes, or Structure forming the substrate.
+        superstrate (Layer): Layer or its sub-classes forming the superstrate.
+        substrate (Layer): Layer or its sub-classes forming the substrate.
         num_sub_systems (int): number of subsystems for heat and phonons
             (electronic, lattice, spins, ...).
 
@@ -62,8 +61,8 @@ class Structure:
         self.name = name
         self.num_sub_systems = 1
         self.sub_structures = []
-        self.superstrate = Vacuum()
-        self.substrate = Vacuum()
+        self.superstrate = [Vacuum(), 1]
+        self.substrate = [Vacuum(), 1]
 
     def __str__(self, tabs=0, recursive=False):
         """String representation of this class"""
@@ -98,28 +97,24 @@ class Structure:
             class_str += tab_str + 'Superstrate (semi-infinite):\n'
             class_str += tab_str + '----\n'
             # check for a superstrate
-            if isinstance(self.superstrate, Structure):
+            if isinstance(self.superstrate, Layer):
                 class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                        self.superstrate.sub_structures[0][1],
-                        self.superstrate.sub_structures[0][0].name,
-                        self.superstrate.sub_structures[0][1]
-                        * self.superstrate.sub_structures[0][0].thickness.to('nm'))
-            elif isinstance(self.superstrate, Layer):
-                class_str += tab_str + '{:s} \n'.format(self.superstrate.name)
+                        self.superstrate[1],
+                        self.superstrate[0].name,
+                        self.superstrate[1]
+                        * self.superstrate[0].thickness.to('nm'))
             else:
                 warnings.warn('There should be a superstrate present!')
             class_str += tab_str + '----\n'
             class_str += tab_str + 'Substrate (semi-infinite):\n'
             class_str += tab_str + '----\n'
             # check for a substrate
-            if isinstance(self.substrate, Structure):
+            if isinstance(self.substrate, Layer):
                 class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                        self.substrate.sub_structures[0][1],
-                        self.substrate.sub_structures[0][0].name,
-                        self.substrate.sub_structures[0][1]
-                        * self.substrate.sub_structures[0][0].thickness.to('nm'))
-            elif isinstance(self.substrate, Layer):
-                class_str += tab_str + '{:s} \n'.format(self.substrate.name)
+                        self.substrate[1],
+                        self.substrate[0].name,
+                        self.substrate[1]
+                        * self.substrate[0].thickness.to('nm'))
             else:
                 warnings.warn('There should be a substrate present!')
         return class_str
@@ -232,8 +227,10 @@ class Structure:
                             + 'Structure classes are allowed!')
 
         # if a Structure is added as a sub_structure, the sub_structure's
-        # substrate is ignored (Vacuum default is ignored)
+        # superstrate and substrate are ignored (Vacuum default is ignored)
         if isinstance(sub_structure, Structure):
+            if not isinstance(sub_structure.superstrate, (Vacuum)):
+                warnings.warn('The superstrate of the sub_structure is ignored.')
             if not isinstance(sub_structure.substrate, (Vacuum)):
                 warnings.warn('The substrate of the sub_structure is ignored.')
 
@@ -249,43 +246,41 @@ class Structure:
         # add a sub_structure of N repetitions to the structure with
         self.sub_structures.append([sub_structure, N])
 
-    def add_superstrate(self, sub_structure):
+    def add_superstrate(self, layer, N=1):
         """add_superstrate
 
-        Add :class:`Layer` or its sub-classes, or :class:`Structure` as static superstrate
-        to the sample.
+        Add :math:`N` :class:`Layer` or its sub-classes as static superstrate to the sample.
 
         Args:
-            sub_structure (Layer, Structure): superstrate Layer or its sub-classes, or Structure.
+            sub_structure (Layer): superstrate Layer or its sub-classes.
+            N (int): number or repetitions.
 
         """
-        if not isinstance(sub_structure, (Layer, Structure)):
+        if not isinstance(layer, (Layer)):
             raise TypeError('Class '
-                            + type(sub_structure).__name__
+                            + type(layer).__name__
                             + ' is no possible superstrate. '
-                            + 'Only Layer or its sub-classes, or Structure '
-                            + 'class is allowed!')
+                            + 'Only Layer or its sub-classes is allowed!')
 
-        self.substrate = sub_structure
+        self.substrate = [layer, N]
 
-    def add_substrate(self, sub_structure):
+    def add_substrate(self, layer, N=1):
         """add_substrate
 
-        Add :class:`Layer` or its sub-classes, or :class:`Structure` as static substrate
-        to the sample.
+        Add :math:`N` :class:`Layer` or its sub-classes as static substrate to the sample.
 
         Args:
-            sub_structure (Layer, Structure): substrate Layer or its sub-classes, or Structure.
+            sub_structure (Layer): substrate Layer or its sub-classes.
+            N (int): number or repetitions.
 
         """
-        if not isinstance(sub_structure, (Layer, Structure)):
+        if not isinstance(layer, (Layer)):
             raise TypeError('Class '
-                            + type(sub_structure).__name__
+                            + type(layer).__name__
                             + ' is no possible substrate. '
-                            + 'Only Layer or its sub-classes, or Structure '
-                            + 'class is allowed!')
+                            + 'Only Layer or its sub-classes is allowed!')
 
-        self.substrate = sub_structure
+        self.substrate = layer
 
     def get_number_of_sub_structures(self):
         """get_number_of_sub_structures
@@ -714,11 +709,6 @@ class Structure:
 
         # handle superstrate and substrate
         reversed.superstrate, reversed.substrate = reversed.substrate, reversed.superstrate
-
-        if isinstance(reversed.superstrate, Structure):
-            reversed.superstrate = self.reverse_sub_structures(reversed.superstrate)
-        if isinstance(reversed.substrate, Structure):
-            reversed.substrate = self.reverse_sub_structures(reversed.substrate)
 
         return self.reverse_sub_structures(reversed)
 
