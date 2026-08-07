@@ -482,8 +482,8 @@ class XrayKin(Xray):
             # calculate reflected field of the actual structure
             Ept, A = self.homogeneous_reflected_field(self.S, energy, qz, theta, strains)
             # add static substrate
-            if isinstance(self.S.substrate, (UnitCell, Structure)):
-                temp,  temp2 = self.homogeneous_reflected_field(
+            if isinstance(self.S.substrate[0], UnitCell):
+                temp, temp2 = self.homogeneous_reflected_field(
                     self.S.substrate, energy, qz, theta)
                 A.append([temp2, 'static substrate'])
                 Ept = Ept+(temp*np.exp(1j*qz*self.S.thickness.to_base_units().magnitude))
@@ -554,8 +554,8 @@ class XrayKin(Xray):
         """
         if isinstance(S, Structure):
             sub_structures = S.sub_structures
-        elif isinstance(S, (Vacuum, UnitCell)):
-            sub_structures = [[S, 1]]
+        elif isinstance(S[0], (Vacuum, UnitCell)):
+            sub_structures = [S]
         else:
             raise TypeError('XrayKin can only handle Layers of class '
                             'UnitCell and Vacuum')
