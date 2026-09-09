@@ -9,7 +9,7 @@ reuse_venv = False
 def lint(session):
     session.install('flake8')
     session.install('nbqa')
-    session.run('flake8' '.')
+    session.run('flake8', '.')
     session.run('nbqa', 'flake8', 'examples/')
 
 

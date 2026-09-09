@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "udkm1Dsim"
 version = "2.4.0"
 description = "A Python Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter"
-readme = {file = "README.md", content-type = "text/markdown"}
+readme = "README.md"
 license = "MIT"
 authors = [
     {name = "Daniel Schick", email = "schick.daniel@gmail.com"}
@@ -38,7 +38,9 @@ parallel = ["dask[distributed]>=2.6.0"]
 testing = ["flake8", "pytest"]
 
 [project.urls]
-Homepage = "https://github.com/dschick/udkm1Dsim"
+homepage = "https://github.com/dschick/udkm1Dsim"
+repository = "https://github.com/dschick/udkm1Dsim.git"
+documentation = "https://https://udkm1dsim.readthedocs.io"
 
 [tool.setuptools.packages.find]
 where = ["."]
