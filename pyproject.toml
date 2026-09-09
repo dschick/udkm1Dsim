@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "udkm1Dsim"
+version = "2.4.0"
+description = "A Python Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = "MIT"
+authors = [
+    {name = "Daniel Schick", email = "schick.daniel@gmail.com"}
+]
+requires-python = ">=3.10"
+keywords = [
+    "ultrafast dynamics",
+    "condensed matter", "1D",
+    "NTM", "3TM", "2TM", "TTM", "N-temperature model", "M3TM",
+    "coherent acoustic phonons",
+    "sound", "strain waves",
+    "resonant magnetic scattering",
+    "diffraction", "spectroscopy",
+    "x-ray magnetic circular dichroism",
+    "Landau Lifschitz Bloch",
+]
+dependencies = [
+    "tqdm>=4.43.0",
+    "numpy",
+    "pint>=0.23",
+    "scipy>=1.4.1",
+    "sympy>=1.5.1",
+    "tabulate",
+    "matplotlib>=2.0.0",
+]
+
+[project.optional-dependencies]
+parallel = ["dask[distributed]>=2.6.0"]
+testing = ["flake8", "pytest"]
+
+[project.urls]
+Homepage = "https://github.com/dschick/udkm1Dsim"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+udkm1Dsim = [
+    "parameters/atomic_form_factors/chantler/*.cf",
+    "parameters/atomic_form_factors/chantler/*.md",
+    "parameters/atomic_form_factors/henke/*.nff",
+    "parameters/atomic_form_factors/henke/*.md",
+    "parameters/atomic_form_factors/cromermann.txt",
+    "parameters/magnetic_form_factors/*.mf",
+    "parameters/elements.dat",
+]
