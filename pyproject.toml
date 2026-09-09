@@ -35,7 +35,7 @@ dependencies = [
 
 [project.optional-dependencies]
 parallel = ["dask[distributed]>=2.6.0"]
-testing = ["flake8", "pytest"]
+testing = ["flake8", "pytest", "pytest-cov", "noqa"]
 
 [project.urls]
 homepage = "https://github.com/dschick/udkm1Dsim"
@@ -55,3 +55,6 @@ udkm1Dsim = [
     "parameters/magnetic_form_factors/*.mf",
     "parameters/elements.dat",
 ]
+
+[tool.pytest.ini_options]
+filterwarnings = "ignore::DeprecationWarning"
