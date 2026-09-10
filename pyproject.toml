@@ -32,6 +32,9 @@ dependencies = [
     "tabulate",
     "matplotlib>=2.0.0",
 ]
+[dependency-groups]
+test = ["pytest", "pytest-cov", "pytest-codspeed"]
+lint = ["flake8", "nbqa", "ipython"]
 
 [project.optional-dependencies]
 parallel = ["dask[distributed]>=2.6.0"]
