@@ -25,13 +25,15 @@ __all__ = ['Structure']
 
 __docformat__ = 'restructuredtext'
 
+
 import itertools
+import warnings
 
 import numpy as np
 import pint
 
 from ..helpers import finderb, make_hash_md5
-from .layers import AmorphousLayer, UnitCell
+from .layers import Layer, Vacuum
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -40,22 +42,23 @@ Q_ = u.Quantity
 class Structure:
     """Structure
 
-    Structure representation which holds various sub_structures.
+    Structure (sample) which holds various `sub_structures`.
 
-    Each sub_structure can be either a layer of :math:`N` UnitCell or
-    AmorphousLayer instances or a structure by itself.
-    It is possible to recursively build up 1D structures.
+    Each `sub_structure` can be either of type :class:`Layer` and its sub-classes,
+    such as :class:`UnitCell` or :class:`AmorphousLayer`, or a :class:`Structure`
+    by itself. It is possible to recursively build up samples.
 
     Args:
         name (str): name of the sample.
 
     Attributes:
         name (str): name of sample.
-        sub_structures (list[AmorphousLayer, UnitCell, Structure]): list of
-            structures in sample.
-        substrate (Structure): structure of the substrate.
+        thickness (float): thickness of the structure [m].
+        sub_structures (list[Layer, Structure]): list of sub-structures in sample.
+        superstrate (Layer): Layer or its sub-classes forming the superstrate.
+        substrate (Layer): Layer or its sub-classes forming the substrate.
         num_sub_systems (int): number of subsystems for heat and phonons
-           (electronic, lattice, spins, ...).
+            (electronic, lattice, spins, ...).
 
     """
 
@@ -63,10 +66,10 @@ class Structure:
         self.name = name
         self.num_sub_systems = 1
         self.sub_structures = []
-        self.substrate = []
-        self.roughness = 0.0*u.nm
+        self.superstrate = [Vacuum(), 1]
+        self.substrate = [Vacuum(), 1]
 
-    def __str__(self, tabs=0):
+    def __str__(self, tabs=0, recursive=False):
         """String representation of this class"""
         tab_str = tabs*'\t'
 
@@ -77,48 +80,61 @@ class Structure:
             class_str += tab_str + 'Structure is empty\n----\n'
             return class_str
 
-        class_str += tab_str + 'Thickness : {:.4g~P}\n'.format(self.get_thickness().to('nm'))
-        class_str += tab_str + 'Roughness : {:.4g~P}\n'.format(self.roughness.to('nm'))
+        class_str += tab_str + 'Thickness : {:.4g~P}\n'.format(self.thickness.to('nm'))
         class_str += tab_str + '----\n'
         # traverse all substructures
         for sub_structure in self.sub_structures:
-            if isinstance(sub_structure[0], (AmorphousLayer, UnitCell)):
-                # the substructure is an unitCell
+            if isinstance(sub_structure[0], Layer):
+                # the substructure is a Layer or sub-class
                 class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
                         sub_structure[1],
                         sub_structure[0].name,
                         sub_structure[1]*sub_structure[0].thickness.to('nm'))
             else:
-                # the substructure is a structure instance by itself
+                # the substructure is a Structure instance by itself
                 # call the display() method recursively
                 class_str += tab_str + f'sub-structure {sub_structure[1]:d} times:\n'
-                class_str += sub_structure[0].__str__(tabs+1)
+                class_str += sub_structure[0].__str__(tabs+1, recursive=True)
         class_str += tab_str + '----\n'
-        # check for a substrate
-        if isinstance(self.substrate, Structure):
-            class_str += tab_str + 'Substrate:\n'
+        # do not print sub-structure superstrate or substrate
+        if not recursive:
+            class_str += tab_str + 'Superstrate (semi-infinite):\n'
             class_str += tab_str + '----\n'
-            class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                    self.substrate.sub_structures[0][1],
-                    self.substrate.sub_structures[0][0].name,
-                    self.substrate.sub_structures[0][1]
-                    * self.substrate.sub_structures[0][0].thickness.to('nm'))
-        else:
-            class_str += tab_str + 'no substrate\n'
+            # check for a superstrate
+            if isinstance(self.superstrate[0], Layer):
+                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
+                        self.superstrate[1],
+                        self.superstrate[0].name,
+                        self.superstrate[1]
+                        * self.superstrate[0].thickness.to('nm'))
+            else:
+                warnings.warn('There should be a superstrate present!')
+            class_str += tab_str + '----\n'
+            class_str += tab_str + 'Substrate (semi-infinite):\n'
+            class_str += tab_str + '----\n'
+            # check for a substrate
+            if isinstance(self.substrate[0], Layer):
+                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
+                        self.substrate[1],
+                        self.substrate[0].name,
+                        self.substrate[1]
+                        * self.substrate[0].thickness.to('nm'))
+            else:
+                warnings.warn('There should be a substrate present!')
         return class_str
 
     def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set3', linewidth=0.1,
                   show=True):
         """visualize
 
-        Simple visualization of the structure.
+        Simple visualization of the :class:`Structure`.
 
         Args:
             unit (str): SI unit of the distance of the Structure. Defaults to
                 'nm'.
             fig_size (list[float]): figure size of the visualization plot.
                 Defaults to [20, 1].
-            cmap (str): Matplotlib colormap for colors of layers.
+            cmap (str): Matplotlib colormap for colors of Layer.
             linewidth (float): line width of the patches.
             show (boolean): show visualization plot at the end.
 
@@ -168,7 +184,7 @@ class Structure:
         """get_hash
 
         Create an unique hash from all layer IDs in the correct order in the
-        structure as well as the corresponding material properties which are
+        Structure as well as the corresponding material properties which are
         given by the `kwargs`.
 
         `types='all'` is problematic, as function handles will be include,
@@ -195,29 +211,31 @@ class Structure:
     def add_sub_structure(self, sub_structure, N=1):
         """add_sub_structure
 
-        Add a sub_structure of :math:`N` layers or sub-structures to the
-        structure.
+        Add :math:`N` sub_structures of type :class:`Layer` or its sub-classes,
+        or :class:`Structure`.
 
         Args:
-            sub_structure (AmorphousLayer, UnitCell, Structure):
-               amorphous layer, unit cell, or structure to add as sub-structure.
+            sub_structure (Layer, Structure):
+               Layer or its sub-classes, or Structure to add as sub-structure.
             N (int): number or repetitions.
 
         """
-        # check of the sub_structure is an instance of the unitCell or
-        # structure class
-        if not isinstance(sub_structure, (AmorphousLayer, UnitCell, Structure)):
-            raise ValueError('Class '
-                             + type(sub_structure).__name__
-                             + ' is no possible sub structure. '
-                             + 'Only AmorphousLayer, UnitCell, and '
-                             + 'Structure classes are allowed!')
+        # check of the sub_structure is of type Layer
+        # or its sub-classes, or Structure
+        if not isinstance(sub_structure, (Layer, Structure)):
+            raise TypeError('Class '
+                            + type(sub_structure).__name__
+                            + ' is no possible sub structure. '
+                            + 'Only Layer, its sub-classes, and '
+                            + 'Structure classes are allowed!')
 
-        # if a structure is added as a sub_structure, the sub_structure
-        # can not have a substrate
+        # if a Structure is added as a sub_structure, the sub_structure's
+        # superstrate and substrate are ignored (Vacuum default is ignored)
         if isinstance(sub_structure, Structure):
-            if sub_structure.substrate:
-                raise ValueError('No substrate in sub_structure allowed!')
+            if not isinstance(sub_structure.superstrate[0], Vacuum):
+                warnings.warn('The superstrate of the sub_structure is ignored.')
+            if not isinstance(sub_structure.substrate[0], Vacuum):
+                warnings.warn('The substrate of the sub_structure is ignored.')
 
         # check the number of subsystems of the sub_structure
         if ((self.num_sub_systems > 1)
@@ -231,28 +249,47 @@ class Structure:
         # add a sub_structure of N repetitions to the structure with
         self.sub_structures.append([sub_structure, N])
 
-    def add_substrate(self, sub_structure):
-        """add_substrate
+    def add_superstrate(self, layer):
+        """add_superstrate
 
-        Add a structure as static substrate to the structure.
+        Add :class:`Layer` or its sub-classes as static superstrate to the sample.
 
         Args:
-            sub_structure (Structure): substrate structure.
+            sub_structure (Layer): superstrate Layer or its sub-classes.
 
         """
-        if not isinstance(sub_structure, Structure):
-            raise ValueError('Class '
-                             + type(sub_structure).__name__
-                             + ' is no possible substrate. '
-                             + 'Only structure class is allowed!')
+        if not isinstance(layer, Layer):
+            raise TypeError('Class '
+                            + type(layer).__name__
+                            + ' is no possible superstrate. '
+                            + 'Only Layer or its sub-classes is allowed!')
 
-        self.substrate = sub_structure
+        # there is only one repetition of the superstrate layer
+        self.superstrate = [layer, 1]
+
+    def add_substrate(self, layer, N=1):
+        """add_substrate
+
+        Add :math:`N` :class:`Layer` or its sub-classes as static substrate to the sample.
+
+        Args:
+            sub_structure (Layer): substrate Layer or its sub-classes.
+            N (int): number or repetitions.
+
+        """
+        if not isinstance(layer, Layer):
+            raise TypeError('Class '
+                            + type(layer).__name__
+                            + ' is no possible substrate. '
+                            + 'Only Layer or its sub-classes is allowed!')
+
+        self.substrate = [layer, N]
 
     def get_number_of_sub_structures(self):
         """get_number_of_sub_structures
 
-        This methods does not return the number of all layers in the
-        structure, see :meth:`.get_number_of_layers`.
+        This methods does not return the number of all :class:`Layer` in the
+        :class:`Structure`, see :meth:`.get_number_of_layers`.
 
         Returns:
             N (int): number of all sub structures.
@@ -260,7 +297,7 @@ class Structure:
         """
         N = 0
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
+            if isinstance(self.sub_structures[i][0], Layer):
                 N = N + 1
             else:
                 N = N + self.sub_structures[i][0].get_number_of_sub_structures()
@@ -269,17 +306,16 @@ class Structure:
     def get_number_of_layers(self):
         """get_number_of_layers
 
-        Determines the number of all layers in the structure.
+        Determines the number of all :class:`Layer` in the :class:`Structure`.
 
         Returns:
-            L (int): number of all layers in the structure.
+            L (int): number of all Layer in the Structure.
 
         """
         L = 0
         # traverse the substructures
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], AmorphousLayer) or \
-                    isinstance(self.sub_structures[i][0], UnitCell):
+            if isinstance(self.sub_structures[i][0], Layer):
                 L = L + self.sub_structures[i][1]
             else:
                 # its a structure, so call the method recursively
@@ -291,51 +327,33 @@ class Structure:
     def get_number_of_unique_layers(self):
         """get_number_of_unique_layers
 
-        Determines the number of unique layers in the structure.
+        Determines the number of unique :class:`Layer` in the :class:`Structure`.
 
         Returns:
-            N (int): number of unique layers in the structure.
+            N (int): number of unique layers in the Structure.
 
         """
         N = len(self.get_unique_layers()[0])
         return N
 
-    def get_thickness(self, units=True):
-        """get_thickness
-
-        Determines the thickness of the structure.
-
-        Args:
-            units (boolean, optional): whether units should be returned or not.
-                Defaults to True.
-
-        Returns:
-            thickness (float, Quantity): the thickness from surface to bottom
-            of the structure.
-
-        """
-        _, d_end, _ = self.get_distances_of_layers(units)
-        return d_end[-1]
-
     def get_unique_layers(self):
         """get_unique_layers
 
-        The uniqueness is determined by the handle of each layer instance.
+        The uniqueness is determined by the handle of each :class:`Layer`.
 
         Returns:
             (tuple):
-            - *layer_ids (list[str])* - ids of all unique layers instances in
-              the structure.
-            - *layer_handles (list[AmorphousLayer, UnitCell, Structure])* -
-              handles of all unique layers instances in the structure.
+            - *layer_ids (list[str])* - ids of all unique Layer instances in
+              the Structure.
+            - *layer_handles (list[Layer, Structure])* -
+              handles of all unique Layer instances in the Structure.
 
         """
         layer_ids = []
         layer_handles = []
         # traverse the sub_structures
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], (AmorphousLayer)) or \
-                    isinstance(self.sub_structures[i][0], (UnitCell)):
+            if isinstance(self.sub_structures[i][0], Layer):
                 # its a AmorphousLayer or UnitCell
                 layer_id = self.sub_structures[i][0].id
                 if not layer_ids:
@@ -376,25 +394,25 @@ class Structure:
     def get_layer_vectors(self, *args):
         """get_layer_vectors
 
-        Returns three lists with the numeric index of all layers
-        in a structure given by the get_unique_layers() method and
-        additionally vectors with the ids and Handles of the
+        Returns three lists with the numeric index of all :class:`Layer`
+        in a :class:`Structure` given by the :meth:`get_unique_layers()`
+        method and additionally vectors with the ids and Handles of the
         corresponding layer instances.
-        The list and order of the unique layers can be either handed
+        The list and order of the unique :class:`Layer` can be either handed
         as an input parameter or is requested at the beginning.
 
         Args:
-            layers (Optional[list]): list of unique layers including
+            layers (Optional[list]): list of unique Layer including
                ids and handles
 
         Returns:
             (tuple):
-            - *indices (list[int])* - numeric index of all layers in a
-              structure.
-            - *layer_ids (list[str])* - ids of all unique layers instances in
-              the structure.
-            - *layer_handles (list[AmorphousLayer, UnitCell, Structure])* -
-              handles of all unique layers instances in the structure.
+            - *indices (list[int])* - numeric index of all Layer in a
+              Structure.
+            - *layer_ids (list[str])* - ids of all unique Layer instances in
+              the Structure.
+            - *layer_handles (list[Layer, Structure])* -
+              handles of all unique Layers instances in the Structure.
 
         """
         indices = []
@@ -407,8 +425,8 @@ class Structure:
             layers = args[0]
         # traverse the substructres
         for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], (AmorphousLayer, UnitCell)):
-                # its a AmorphousLayer or UnitCell
+            if isinstance(self.sub_structures[i][0], Layer):
+                # its a Layer or sub-class
                 # find the index of the current layer id in the unique
                 # layer list
                 Index = layers[0].index(self.sub_structures[i][0].id)
@@ -446,11 +464,11 @@ class Structure:
     def get_all_positions_per_unique_layer(self):
         """get_all_positions_per_unique_layer
 
-        Determines the position indices for each unique layer in the structure.
+        Determines the position indices for each unique :class:`Layer` in the :class:`Structure`.
 
         Returns:
-            pos (dict{ndarray[int]}): position indices for each unique layer in
-            the structure.
+            pos (dict{ndarray[int]}): position indices for each unique Layer in
+            the Structure.
 
         """
         layers = self.get_unique_layers()
@@ -464,9 +482,9 @@ class Structure:
     def get_distances_of_layers(self, units=True):
         """get_distances_of_layers
 
-        Returns a vector of the distance from the surface for each layer
-        starting at 0 (dStart) and starting at the end of the first
-        layer (dEnd) and from the center of each layer (dMid).
+        Returns a vector of the distance from the surface for each :class:`Layer`
+        starting at 0 (`d_start`) and starting at the end of the first
+        layer (`d_end`) and from the center of each layer (`d_mid`).
 
         Args:
             units (boolean, optional): whether units should be returned or not.
@@ -475,11 +493,11 @@ class Structure:
         Returns:
             (tuple):
             - *d_start (ndarray[float, Quantity])* - distances from the surface
-              of each layer starting at 0.
+              of each Layer starting at 0.
             - *d_end (ndarray[float, Quantity])* - distances from the bottom
-              of each layer.
+              of each Layer.
             - *d_mid (ndarray[float, Quantity])*: distance from the middle of
-              each layer.
+              each Layer.
 
         """
         thickness = self.get_layer_property_vector('_thickness')
@@ -494,7 +512,7 @@ class Structure:
     def get_distances_of_interfaces(self, units=True):
         """get_distances_of_interfaces
 
-        Calculates the distances of the interafaces of the structure.
+        Calculates the distances of the interafaces of the :class:`Structure`.
 
         Args:
             units (boolean, optional): whether units should be returned or not.
@@ -502,7 +520,7 @@ class Structure:
 
         Returns:
             res (ndarray[float, Quantity]): distances from the surface of each
-            interface of the structure.
+            interface of the Structure.
 
         """
 
@@ -517,7 +535,7 @@ class Structure:
     def interp_distance_at_interfaces(self, N, units=True):
         """ interp_distance_at_interfaces
 
-        Interpolates the distances at the layer interfaces by an odd number
+        Interpolates the distances at the :class:`Layer` interfaces by an odd number
         :math:`N`.
 
         Args:
@@ -528,7 +546,7 @@ class Structure:
         Returns:
             (tuple):
             - *dist_interp (ndarray[float, Quantity])* - distance array of the
-              middle of each layer interpolated by an odd number :math:`N` at
+              middle of each Layer interpolated by an odd number :math:`N` at
               the interfaces
             - *original_indicies (ndarray[int])* - indicies of the original
               distances in the interpolated array
@@ -571,19 +589,19 @@ class Structure:
     def get_layer_property_vector(self, property_name):
         """get_layer_property_vector
 
-        Returns a vector for a property of all layers in the
-        structure. The property is determined by the propertyName and
+        Returns a vector for a property of all :class:`Layer` in the
+        Structure. The property is determined by the `property_name` and
         returns a scalar value or a function handle.
 
         Args:
             property_name (str): name of property to return as array
 
         Returns:
-            prop (ndarray[float, @lambda]): array of a property for all layers
-            in the structure.
+            prop (ndarray[float, @lambda]): array of a property for all Layer
+            in the Structure.
 
         """
-        # get the Handle to all layers in the Structure
+        # get the Handle to all Layer in the Structure
         handles = self.get_layer_vectors()[2]
 
         if callable(getattr(handles[0], property_name)):
@@ -641,12 +659,12 @@ class Structure:
         """get_numel_of_layer_property
 
         Returns the number of elements (numel) of a property within
-        the structure.
+        the :class:`Structure`.
         For most properties this is 1, but for temperature-dependent
         properties it should return the number of sub-systems.
 
         The method raises an `IndexError` if the dimension of the property
-        is not equal for all layers.
+        is not equal for all :class:`Layer`.
 
         Args:
             property_name (str): name of property to be checked
@@ -661,20 +679,19 @@ class Structure:
         else:
             raise IndexError(f'Property {property_name:s} has not the same number of elements '
                              '(num_sub_systems) across the whole sample '
-                             'structure.')
+                             'Structure.')
         return numel
 
     def get_layer_handle(self, i):
         """get_layer_handle
 
-        Returns the handle to a layer at a given position index.
+        Returns the handle to a :class:`Layer` at a given position index.
 
         Args:
-            i (int): index of the layer to return.
+            i (int): index of the Layer to return.
 
         Returns:
-            handle (AmorphousLayer, UnitCell): handle to the layer at position
-            `i` in the structure.
+            handle (Layer): handle to the Layer at position `i` in the Structure.
 
         """
         handles = self.get_layer_vectors()[2]
@@ -683,29 +700,32 @@ class Structure:
     def reverse(self):
         """reverse
 
-        Returns a reversed structure also reversing all nested sub_structure.
+        Returns a reversed :class:`Structure` also reversing all nested `sub_structure`.
 
         Returns:
-            reversed (Structure): reversed structure.
+            reversed (Structure): reversed Structure.
 
         """
         from copy import deepcopy
 
         reversed = deepcopy(self)
-        # need to handle superstrate and substrate
+
+        # handle superstrate and substrate
+        reversed.superstrate, reversed.substrate = reversed.substrate, reversed.superstrate
+
         return self.reverse_sub_structures(reversed)
 
     def reverse_sub_structures(self, structure):
         """reverse_sub_structures
 
-        Reverse a `Structure` and recursively call itself if a
-        sub_structure is a `Structure` itself.
+        Reverse a :class:`Structure` and recursively call itself if a
+        `sub_structure` is a :class:`Structure` itself.
 
         Args:
-            structure (Structure): structure to be reversed.
+            structure (Structure): Structure to be reversed.
 
         Returns:
-            structure (Structure): reversed structure.
+            structure (Structure): reversed Structure.
 
         """
         # reverse the list of sub_structures
@@ -717,3 +737,8 @@ class Structure:
             else:
                 pass
         return structure
+
+    @property
+    def thickness(self):
+        _, d_end, _ = self.get_distances_of_layers(True)
+        return d_end[-1]

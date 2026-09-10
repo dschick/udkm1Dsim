@@ -9,7 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Vacuum added
+- example for XrayKin
+- superstrate
+
 ### Changed
+
+- substrates can be a single layer
+- Vacuum is default superstrate and substrate
 
 ### Deprecated
 

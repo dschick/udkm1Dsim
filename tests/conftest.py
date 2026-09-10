@@ -2,7 +2,7 @@
 
 import pytest
 
-from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Layer, Structure, UnitCell, u
+from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Layer, Structure, UnitCell, Vacuum, u
 
 # fixtures
 
@@ -100,6 +100,11 @@ def layer(properties):
 
 
 @pytest.fixture(scope='module')
+def vacuum(properties):
+    return Vacuum()
+
+
+@pytest.fixture(scope='module')
 def amorphous_layer(atom_iron, properties):
     return AmorphousLayer(id='amorphous_layer', name='amorphous layer', thickness=1*u.nm,
                           density=5000*u.kg/u.m**3, atom=atom_iron, **properties)
@@ -156,10 +161,7 @@ def structure(amorphous_layer_iron, amorphous_layer_oxygen, unit_cell_iron, unit
 
     S.add_sub_structure(DL, 20)
 
-    substrate = Structure('substrate')
-    substrate.add_sub_structure(amorphous_layer_iron, 100)
-
-    S.add_substrate(substrate)
+    S.add_substrate(amorphous_layer_iron, 100)
 
     return S
 
@@ -170,10 +172,7 @@ def structure_amorph(amorphous_layer_iron, amorphous_layer_oxygen):
     S.add_sub_structure(amorphous_layer_iron, 10)
     S.add_sub_structure(amorphous_layer_oxygen, 10)
 
-    substrate = Structure('substrate')
-    substrate.add_sub_structure(amorphous_layer_iron, 100)
-
-    S.add_substrate(substrate)
+    S.add_substrate(amorphous_layer_iron, 100)
 
     return S
 
@@ -184,9 +183,6 @@ def structure_crystalline(unit_cell_iron, unit_cell_oxygen):
     S.add_sub_structure(unit_cell_iron, 10)
     S.add_sub_structure(unit_cell_oxygen, 10)
 
-    substrate = Structure('substrate')
-    substrate.add_sub_structure(unit_cell_iron, 100)
-
-    S.add_substrate(substrate)
+    S.add_substrate(unit_cell_iron, 100)
 
     return S

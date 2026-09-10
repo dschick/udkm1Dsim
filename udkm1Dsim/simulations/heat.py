@@ -37,6 +37,7 @@ from scipy.optimize import brentq
 from tqdm.auto import tqdm
 
 from ..helpers import finderb, make_hash_md5, multi_gauss
+from ..structures.layers import Layer
 from .simulation import Simulation
 
 u = pint.get_application_registry()
@@ -503,37 +504,45 @@ class Heat(Simulation):
 
         interfaces = structure.get_distances_of_interfaces(False)
         N = len(interfaces)
-        # if a substrate is included add it at the end
-        if structure.substrate != []:
-            M = N + 1
+
+        opt_ref_indices = np.empty(N+1, dtype=np.complex128)
+        thicknesses = np.empty(N+1, dtype=float)
+
+        # add superstrate
+        if isinstance(structure.superstrate[0], Layer):
+            superstrate_layer = structure.superstrate[0]
         else:
-            M = N
+            raise TypeError('Superstrate must be of type '
+                            'Layer or its sub-classes!')
 
-        opt_ref_indices = np.empty(M, dtype=complex)
-        thicknesses = np.empty(M, dtype=float)
+        opt_ref_indices[0] = superstrate_layer.opt_ref_index
+        thicknesses[0] = superstrate_layer.thickness.to_base_units().magnitude
 
-        # first layer is vacuum/air
-        opt_ref_indices[0] = 1+0.0j
-        thicknesses[0] = 1e-9
-
+        # iterate actual sampel structure
         for i in range(N-1):
             index = finderb(interfaces[i], d_start)
             layer = structure.get_layer_handle(index[0])
             opt_ref_indices[i+1] = layer.opt_ref_index
             thicknesses[i+1] = interfaces[i+1]-interfaces[i]
 
-        if M != N:
-            opt_ref_indices[N] = structure.substrate.get_layer_handle(0).opt_ref_index
-            thicknesses[N] = structure.substrate.get_thickness(False)
+        # add substrate
+        if isinstance(structure.substrate[0], Layer):
+            substrate_layer = structure.substrate[0]
+        else:
+            raise TypeError('Substrate must be of type '
+                            'Layer or its sub-classes!')
+
+        opt_ref_indices[N] = substrate_layer.opt_ref_index
+        thicknesses[N] = substrate_layer.thickness.to_base_units().magnitude
 
         # Snell laws
-        alpha = np.empty(M, dtype=complex)
+        alpha = np.empty(N+1, dtype=complex)
         alpha[0] = np.pi/2 - self._excitation['theta']
         alpha[1:] = np.arcsin(opt_ref_indices[0]/opt_ref_indices[1:]*np.sin(alpha[0]))
 
         # fresnel coefficient
-        rfresnel = np.empty(M-1, dtype=complex)
-        tfresnel = np.empty(M-1, dtype=complex)
+        rfresnel = np.empty(N, dtype=complex)
+        tfresnel = np.empty(N, dtype=complex)
 
         if self._excitation['polarization'] == 's':
             rfresnel[:] = (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
@@ -553,7 +562,7 @@ class Heat(Simulation):
                    + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
 
         # interface change matrix
-        Jnm = np.empty((2, 2, M-1), dtype=complex)
+        Jnm = np.empty((2, 2, N), dtype=complex)
         Jnm[0, 0, :] = 1.0/tfresnel
         Jnm[0, 1, :] = rfresnel/tfresnel
         Jnm[1, 0, :] = rfresnel/tfresnel
@@ -564,7 +573,7 @@ class Heat(Simulation):
 
         # phase changes
         beta = k_z*thicknesses
-        Ln = np.empty((2, 2, M-1), dtype=complex)
+        Ln = np.empty((2, 2, N), dtype=complex)
         Ln[:, :, 0] = [[1, 0], [0, 1]]
         Ln[0, 0, 1:] = np.exp(-1.0j*beta[1:-1])
         Ln[0, 1, 1:] = 0
@@ -572,28 +581,28 @@ class Heat(Simulation):
         Ln[1, 1, 1:] = np.exp(1.0j*beta[1:-1])
 
         # calculating propagation matrix
-        S = Jnm[:, :, M-2]
-        for i in range(M-3, -1, -1):
+        S = Jnm[:, :, N-1]
+        for i in range(N-2, -1, -1):
             S = np.dot(Jnm[:, :, i], np.dot(Ln[:, :, i+1], S))
 
         # Total transmission and reflection of the multilayer
         R_total = np.abs(S[1, 0]/S[0, 0])**2
         if self._excitation['polarization'] == 's':
-            T_total = (np.real(opt_ref_indices[M-1]*np.cos(alpha[M-1])
+            T_total = (np.real(opt_ref_indices[N]*np.cos(alpha[N])
                                / (opt_ref_indices[0]*np.cos(alpha[0])))
                        * np.abs(1/S[0, 0])**2)
         else:
-            T_total = (np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
+            T_total = (np.real(np.conj(opt_ref_indices[N])*np.cos(alpha[N])
                                / (opt_ref_indices[0]*np.cos(alpha[0])))
                        * np.abs(1/S[0, 0])**2)
 
         # calculating D matrix for intermediate field
-        Dn = np.empty((2, 2, M), dtype=complex)
-        Dn[0, 0, M-1] = 1.0/S[0, 0]
-        Dn[0, 1, M-1] = 0.0
-        Dn[1, 0, M-1] = 0.0
-        Dn[1, 1, M-1] = 1.0/S[0, 0]
-        for i in range(M-2, -1, -1):
+        Dn = np.empty((2, 2, N+1), dtype=complex)
+        Dn[0, 0, N] = 1.0/S[0, 0]
+        Dn[0, 1, N] = 0.0
+        Dn[1, 0, N] = 0.0
+        Dn[1, 1, N] = 1.0/S[0, 0]
+        for i in range(N-1, -1, -1):
             Temp = np.dot(Ln[:, :, i], np.dot(Jnm[:, :, i], Dn[:, :, i+1]))
             Dn[0, 0, i] = Temp[0, 0]
             Dn[0, 1, i] = Temp[0, 1]
@@ -628,8 +637,8 @@ class Heat(Simulation):
 
             k = k+m  # set the counter
 
-        self.disp_message(f'Total reflectivity of {np.round(R_total*100, 1):0.1f} % and '
-                          f'transmission of {np.round(T_total*100, 1):0.1f} %.')
+        self.disp_message(f'Total reflectivity of {R_total*100:0.1f} % and transmission '
+                          f'of {T_total*100:0.1f} %.')
 
         if backside:
             # for backside excitation the results must be reversed

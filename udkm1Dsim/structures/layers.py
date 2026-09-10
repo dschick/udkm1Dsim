@@ -21,7 +21,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Layer', 'AmorphousLayer', 'UnitCell']
+__all__ = ['Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell']
 
 __docformat__ = 'restructuredtext'
 
@@ -641,6 +641,21 @@ class Layer:
         self._mag_saturation = float(mag_saturation.to_base_units().magnitude)
 
 
+class Vacuum(Layer):
+    def __init__(self, thickness=1*u.nm, **kwargs):
+        self.thickness = thickness
+        self.density = 0.0*u.kg/u.m**3
+        self.area = 1.0*u.angstrom**2  # set as unit area
+        self.volume = self.area*self.thickness
+        self.mass = 0*u.kg
+        self.mass_unit_area = self.mass
+        super().__init__('vacuum', 'vacuum', opt_ref_index=1+0.0j)
+
+    def __str__(self):
+        """String representation of this class"""
+        return f'Vacuum layer of thickness: {self.thickness:.4g~P}'
+
+
 class AmorphousLayer(Layer):
     r"""AmorphousLayer
 
@@ -766,10 +781,10 @@ class AmorphousLayer(Layer):
             return
 
         if not isinstance(atom, (Atom, AtomMixed)):
-            raise ValueError('Class '
-                             + type(atom).__name__
-                             + ' is no possible atom of an amorphous layer. '
-                             + 'Only Atom and AtomMixed are allowed!')
+            raise TypeError('Class '
+                            + type(atom).__name__
+                            + ' is no possible atom of an amorphous layer. '
+                            + 'Only Atom and AtomMixed are allowed!')
         self._atom = atom
         self.magnetization = {'amplitude': atom.mag_amplitude,
                               'phi': atom.mag_phi,
