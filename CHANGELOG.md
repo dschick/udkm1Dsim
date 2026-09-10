@@ -9,9 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Vacuum added
-- example for XrayKin
-- superstrate
+- Vacuum added by [#204] closing [#202]
+- example for XrayKin added by [#204]
+- superstrate introduced by [#204] closing [#134]
+- enable automatic numerical integration of layer properties if sympy fails ([#198]) replacing [#110] and closing issue [#109] and [#108]
+
+[#185]: https://github.com/dschick/udkm1Dsim/pull/185
+[#188]: https://github.com/dschick/udkm1Dsim/pull/188
+[#197]: https://github.com/dschick/udkm1Dsim/pull/197
+[#198]: https://github.com/dschick/udkm1Dsim/pull/198
+[#110]: https://github.com/dschick/udkm1Dsim/pull/110
+[#109]: https://github.com/dschick/udkm1Dsim/issue/109
+[#108]: https://github.com/dschick/udkm1Dsim/issue/108
+[#204]: https://github.com/dschick/udkm1Dsim/pull/204
+[#202]: https://github.com/dschick/udkm1Dsim/issue/202
+[#134]: https://github.com/dschick/udkm1Dsim/issue/134
 
 ### Changed
 
