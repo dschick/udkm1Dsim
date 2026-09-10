@@ -38,6 +38,20 @@ lint = ["flake8", "nbqa", "ipython"]
 
 [project.optional-dependencies]
 parallel = ["dask[distributed]>=2.6.0"]
+docs = [
+    "sphinx>=5.0",
+    "ipykernel",
+    "ipywidgets",
+    "IProgress",
+    "autodocsumm",
+    "sphinx-book-theme==1.2.0",
+    "sphinx_design",
+    "sphinx_copybutton",
+    "sphinxcontrib.bibtex",
+    "pydata-sphinx-theme",
+    "myst_nb",
+    "myst-sphinx-gallery",
+]
 
 [project.urls]
 homepage = "https://github.com/dschick/udkm1Dsim"
