@@ -25,17 +25,16 @@ jobs:
       - name: Checkout source repo
         uses: actions/checkout@v5
       
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - name: Install uv and set up Python
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.13'
-      
+          python-version: "3.13"
+
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          pip install pytest pytest-codspeed
-          # Install the package from setup.py
-          pip install .
+          uv pip install --system pytest pytest-codspeed
+          # Install the package (reads pyproject.toml / hatchling backend)
+          uv pip install --system .
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
