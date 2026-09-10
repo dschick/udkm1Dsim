@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
 name = "udkm1Dsim"
@@ -42,19 +42,8 @@ homepage = "https://github.com/dschick/udkm1Dsim"
 repository = "https://github.com/dschick/udkm1Dsim.git"
 documentation = "https://https://udkm1dsim.readthedocs.io"
 
-[tool.setuptools.packages.find]
-where = ["."]
-
-[tool.setuptools.package-data]
-udkm1Dsim = [
-    "parameters/atomic_form_factors/chantler/*.cf",
-    "parameters/atomic_form_factors/chantler/*.md",
-    "parameters/atomic_form_factors/henke/*.nff",
-    "parameters/atomic_form_factors/henke/*.md",
-    "parameters/atomic_form_factors/cromermann.txt",
-    "parameters/magnetic_form_factors/*.mf",
-    "parameters/elements.dat",
-]
+[tool.hatch.build.targets.wheel]
+packages = ["udkm1Dsim"]
 
 [tool.pytest.ini_options]
 filterwarnings = "ignore::DeprecationWarning"
