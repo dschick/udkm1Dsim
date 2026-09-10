@@ -1,4 +1,4 @@
-name: CI
+name: Main CI Workflow (linting & testing)
 
 on:
   push:
@@ -22,29 +22,29 @@ jobs:
     name: CI workflow
     steps:
       - name: checkout source repo
-        uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/checkout@v7
+      
+      - name: Install uv and set up Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - name: "Installs dependencies"
+      
+      - name: Install dependencies
         run: |
-          # Upgrade pip
-          python3 -m pip install --upgrade pip
-          # Install build deps
-          pip install setuptools pytest pytest-cov pytest-codspeed flake8 ipython
-          # Install the package from setup.py
-          pip install .
+          uv sync --group test --group lint --locked
+
       - name: linting flake8
         if: matrix.python-version == '3.13' && matrix.os == 'ubuntu-latest'
         run: |
-          flake8
+          uv run ruff check udkm1Dsim/ tests/ examples/
+  
       - name: Generate coverage report
         run: |
-          pytest --cov=./udkm1Dsim --cov-report=xml --ignore=tests/benchmarks tests/
+          uv run pytest --cov=./udkm1Dsim --cov-report=xml --ignore=tests/benchmarks tests/
+
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.13' && matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: OS, PYTHON

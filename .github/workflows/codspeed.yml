@@ -23,23 +23,20 @@ jobs:
 
     steps:
       - name: Checkout source repo
-        uses: actions/checkout@v5
-      
-      - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/checkout@v7
+
+      - name: Install uv and set up Python
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: '3.13'
-      
+          python-version: "3.13"
+
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          pip install pytest pytest-codspeed
-          # Install the package from setup.py
-          pip install .
+          uv sync --group test --locked
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
         with:
           mode: simulation
           token: ${{ secrets.CODSPEED_TOKEN }}
-          run: pytest --codspeed tests/benchmarks/
+          run: uv run pytest --codspeed tests/benchmarks/

@@ -2,40 +2,30 @@
 
 [![Documentation Status](https://readthedocs.org/projects/udkm1dsim/badge/?version=latest)](https://udkm1dsim.readthedocs.io/en/latest/?badge=latest)
 ![CI](https://github.com/dschick/udkm1Dsim/actions/workflows/main.yml/badge.svg)
+![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
 [![codecov](https://codecov.io/gh/dschick/udkm1Dsim/branch/develop/graph/badge.svg?token=9J3BQYE6CE)](https://codecov.io/gh/dschick/udkm1Dsim)
 [![CodSpeed Badge](https://img.shields.io/endpoint?url=https://app.codspeed.io//badge.json)](https://app.codspeed.io//dschick/udkm1Dsim?utm_source=badge)
-[![Anaconda-Server Badge](https://anaconda.org/conda-forge/udkm1dsim/badges/version.svg)](https://anaconda.org/conda-forge/udkm1dsim)
-![pypi](https://github.com/dschick/udkm1Dsim/actions/workflows/upload-to-pypi.yml/badge.svg)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/udkm1Dsim.svg)](https://anaconda.org/conda-forge/udkm1Dsim)
+[![PyPI](https://img.shields.io/pypi/v/udkm1Dsim)](https://pypi.org/project/udkm1Dsim/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/pypistats.svg)](https://pypistats.org/packages/udkm1Dsim)
 
-The **udkm1Dsim** toolbox is a collection of Python classes and routines to
-simulate the thermal, structural, and magnetic dynamics after laser excitation
-as well as the according X-ray scattering response in one-dimensional sample
-structures after ultrafast excitation.
+The **udkm1Dsim** toolbox is a collection of Python classes and routines for simulating the thermal, structural, and magnetic dynamics of one-dimensional sample structures following ultrafast laser excitation. 
+It also enables the calculation of the corresponding light and X-ray scattering response, providing a unified framework for modeling coupled ultrafast dynamics and their experimental observables.
 
-The toolbox provides the capabilities to define arbitrary layered structures
-on the atomic level including a rich database of element-specific physical
-properties. 
-The excitation of ultrafast dynamics is represented by an *N*-temperature-model
-which is commonly applied for ultrafast optical excitations. 
-Structural dynamics due to thermal stresses are calculated by a linear-chain
-model of masses and springs.
-The implementation of magnetic dynamics can be easily accomplished by the user
-for the individual problem.
 
-The resulting X-ray diffraction response is computed by kinematical or
-dynamical X-ray theory which can also include magnetic scattering.
+The **udkm1Dsim** toolbox provides a comprehensive framework for defining arbitrary layered structures at the atomic level, supported by a rich database of element-specific physical properties. Ultrafast excitation is described using an *N*-temperature model, a widely used approach for simulating energy transfer following ultrafast optical excitation. Structural dynamics driven by thermally induced stresses are calculated using a linear-chain model of coupled masses and springs, while magnetization dynamics can be simulated with Landau–Lifshitz-type models. The resulting optical and X-ray scattering response is computed using kinematical or dynamical scattering theory, including resonant magnetic X-ray scattering, enabling direct comparison between time-resolved simulations and a wide range of ultrafast scattering experiments.
 
-The **udkm1Dsim** toolbox is highly modular and allows to introduce user-defined
-results at any step in the simulation procedure.
+The simulation framework is highly modular. Each module returns standard `numpy` 
+arrays that can be inspected, modified, or used directly as input for 
+subsequent simulations, allowing users to build customized workflows with ease.
 
-The **udkm1Dsim** toolbox was initially developed for MATLAB® in the
-[Ultrafast Dynamics in Condensed Matter](https://www.uni-potsdam.de/en/udkm) group of Prof. Matias Bargheer at the
-*University of Potsdam*, Germany.
-:::{hint}
-The MATLAB® source code is still available at
-[github.com/dschick/udkm1DsimML](https://github.com/dschick/udkm1DsimML).
-:::
+> [!NOTE]
+>The **udkm1Dsim** toolbox was initially developed for MATLAB® in the
+>[Ultrafast Dynamics in Condensed Matter](https://www.uni-potsdam.de/en/udkm) group of Prof. Matias Bargheer at the
+>*University of Potsdam*, Germany.
+
+> [!TIP]
+> The MATLAB® source code is still available at [github.com/dschick/udkm1DsimML](https://github.com/dschick/udkm1DsimML).
 
 The current toolbox, written in Python, is maintained by [Daniel Schick](mailto:schick@mbi-berlin.de) at the
 [Max Born Institut](https://mbi-berlin.de), Berlin, Germany.
@@ -47,20 +37,15 @@ The documentation can be found at [udkm1Dsim.readthedocs.io](http://udkm1Dsim.re
 
 Please cite the latest publication if you use the toolbox in your own work:
 
-:::{admonition} Citation
-:class: seealso
-Schick, D., *udkm1Dsim - A Python toolbox for simulating 1D ultrafast dynamics in condensed matter*,
-[Comput. Phys. Commun. 266, 108031 (2021)](https://doi.org/10.1016/j.cpc.2021.108031) [(preprint)](https://arxiv.org/abs/2102.12144).
-:::
+> [!NOTE]
+> Schick, D., *udkm1Dsim - A Python toolbox for simulating 1D ultrafast dynamics in condensed matter*, [Comput. Phys. Commun. 266, 108031 (2021)](https://doi.org/10.1016/j.cpc.2021.108031) [(preprint)](https://arxiv.org/abs/2102.12144).
+
 
 You can also cite the original publication if appropriate:
 
-:::{admonition} Citation
-:class: seealso
-Schick, D., Bojahr, A., Herzog, M., Shayduk, R., von Korff Schmising, C. & Bargheer, M.,
-*udkm1Dsim - A Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter*,
+> [!NOTE]
+> Schick, D., Bojahr, A., Herzog, M., Shayduk, R., von Korff Schmising, C. & Bargheer, M., *udkm1Dsim - A Simulation Toolkit for 1D Ultrafast Dynamics in Condensed Matter*,
 [Comput. Phys. Commun. 185, 651 (2014)](http://doi.org/10.1016/j.cpc.2013.10.009) [(preprint)](http://www.udkm.physik.uni-potsdam.de/medien/udkm1Dsim/udkm1DsimManuscriptPrePrint.pdf)
-:::
 
 ## Installation
 
@@ -93,7 +78,6 @@ computations, unit tests, as well as building the documentation:
 
     > pip install udkm1Dsim[parallel]
     > pip install udkm1Dsim[testing]
-    > pip install udkm1Dsim[documentation]
 
 ### Installing with conda
 

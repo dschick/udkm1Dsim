@@ -29,7 +29,7 @@ copyright = '2014-{:d}, Daniel Schick'.format(current_year)
 author = 'Daniel Schick'
 
 # The short X.Y version
-version = '2.4.0'
+version = '2.4.1'
 # The full version, including alpha/beta/rc tags
 release = version
 
@@ -63,15 +63,17 @@ from myst_sphinx_gallery import GalleryConfig, ThumbnailConfig
 
 myst_sphinx_gallery_config = GalleryConfig(
     examples_dirs="../../examples",
-    gallery_dirs="auto_examples",
+    gallery_dirs="examples",
     root_dir=Path(__file__).parent,
     notebook_thumbnail_strategy="code",
     thumbnail_strategy="last",
     thumbnail_config=ThumbnailConfig(
-        ref_size=(320, 320),
-        operation="pad",
-        operation_kwargs={"color": "white"},
-        quality_static=90,
+        ref_size=(900, 900),
+        operation='pad',
+        operation_kwargs={'color': 'white'},
+        max_animation_frames=50,
+        quality_static=100,
+        quality_animated=15,
     ),
 )
 
@@ -114,9 +116,7 @@ class SortReverseLabelStyle(BaseLabelStyle):
             yield str(len(sorted_entries) - i)
 
 
-class DOIStyle(UnsrtStyle):
-    default_label_style = SortReverseLabelStyle
-    default_sorting_style = YearSortingStyle
+class udkm1DsimStyle(UnsrtStyle):
     default_name_style = InitialNameStyle
 
     def get_article_template(self, e):
@@ -151,16 +151,22 @@ class DOIStyle(UnsrtStyle):
         return template
 
 
-register_plugin('pybtex.style.formatting', 'DOIstyle', DOIStyle)
+class udkm1Dsim_reverseStyle(udkm1DsimStyle):
+    default_label_style = SortReverseLabelStyle
+    default_sorting_style = YearSortingStyle
 
-bibtex_bibfiles = ['publications.bib']
-bibtex_default_style = 'DOIstyle'
+
+register_plugin('pybtex.style.formatting', 'udkm1DsimStyle', udkm1DsimStyle)
+register_plugin('pybtex.style.formatting', 'udkm1Dsim_reverseStyle', udkm1Dsim_reverseStyle)
+
+bibtex_bibfiles = ['publications.bib', 'references.bib']
+bibtex_default_style = 'udkm1DsimStyle'
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
 # source_suffix = ['.rst', '.md']
-source_suffix = ['.rst', '.md']
+source_suffix = ['.rst', '.md', '.ipynb']
 
 # The master toctree document.
 master_doc = 'index'
@@ -179,7 +185,8 @@ exclude_patterns = ['_build', '**.ipynb_checkpoints']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
-suppress_warnings = ['myst.mathjax']
+suppress_warnings = ['myst.mathjax',
+                     'bibtex.duplicate_label']
 
 myst_enable_extensions = [
     'amsmath',
@@ -220,14 +227,22 @@ html_static_path = ['_static']
 # html_sidebars = {}
 
 html_theme_options = {
-    'navigation_depth': 5,
-    'collapse_navigation': False,
+    "home_page_in_toc": False,
+    'show_navbar_depth': 1,
+    'max_navbar_depth': 3,
     'repository_url': 'https://github.com/dschick/udkm1Dsim',
+    'repository_branch': "develop",
     'use_repository_button': True,
+    'use_edit_page_button': True,
+    'use_issues_button': True,
+    'path_to_docs': 'docs/source',
+}
+
+html_context = {
+   'default_mode': 'light',
 }
 
 html_logo = '_static/logo.png'
-
 
 # -- Options for HTMLHelp output ---------------------------------------------
 

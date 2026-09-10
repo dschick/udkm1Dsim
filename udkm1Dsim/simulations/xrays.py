@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -26,16 +25,23 @@ __all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag']
 
 __docformat__ = 'restructuredtext'
 
-from .simulation import Simulation
-from ..structures.layers import AmorphousLayer, UnitCell
-from .. import u, Q_
-from ..helpers import make_hash_md5, m_power_x, m_times_n, finderb
-import numpy as np
-import scipy.constants as constants
-from time import time
-from os import path
-from tqdm.auto import trange
+
 import warnings
+from os import path
+from time import time
+
+import numpy as np
+import pint
+import scipy.constants as constants
+from tqdm.auto import trange
+
+from ..helpers import finderb, m_power_x, m_times_n, make_hash_md5
+from ..structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
+from ..structures.structure import Structure
+from .simulation import Simulation
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -104,15 +110,15 @@ class Xray(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
         output = [['energy', self.energy[0] if np.size(self.energy) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.energy), np.max(self.energy))],
+                   f'{np.min(self.energy):.4g~P} .. {np.max(self.energy):.4g~P}'],
                   ['wavelength', self.wl[0] if np.size(self.wl) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.wl), np.max(self.wl))],
+                   f'{np.min(self.wl):.4g~P} .. {np.max(self.wl):.4g~P}'],
                   ['wavenumber', self.k[0] if np.size(self.k) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.k), np.max(self.k))],
+                   f'{np.min(self.k):.4g~P} .. {np.max(self.k):.4g~P}'],
                   ['theta', self.theta[0] if np.size(self.theta) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.theta), np.max(self.theta))],
+                   f'{np.min(self.theta):.4g~P} .. {np.max(self.theta):.4g~P}'],
                   ['q_z', self.qz[0] if np.size(self.qz) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.qz), np.max(self.qz))],
+                   f'{np.min(self.qz):.4g~P} .. {np.max(self.qz):.4g~P}'],
                   ['incoming polarization', self.polarizations[self.pol_in_state]],
                   ['analyzer polarization', self.polarizations[self.pol_out_state]],
                   ] + output
@@ -305,7 +311,7 @@ class Xray(Simulation):
 class XrayKin(Xray):
     r"""XrayKin
 
-    Kinetic X-ray scattering simulations.
+    Kinetic X-ray scattering simulations following :cite:t:`warren1990`.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -340,10 +346,6 @@ class XrayKin(Xray):
         pol_in (float): incoming polarization factor (can be a complex ndarray).
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
 
-    References:
-        .. [9] B. E. Warren (1990). *X-ray diffraction*.
-           New York: Dover Publications
-
     """
 
     def __init__(self, S, force_recalc, **kwargs):
@@ -367,8 +369,8 @@ class XrayKin(Xray):
         """
         self.pol_in_state = pol_in_state
         if self.pol_in_state in [1, 2, 5]:  # circ +,-, elliptical
-            self.disp_message('incoming polarizations {:s} not implemented'.format(
-                self.polarizations[self.pol_in_state]))
+            self.disp_message(f'incoming polarizations {self.polarizations[self.pol_in_state]:s} '
+                              'not implemented')
             self.set_incoming_polarization(3)
             return
         elif (self.pol_in_state == 3):  # sigma
@@ -379,8 +381,8 @@ class XrayKin(Xray):
             self.pol_in_state = 0
             self.pol_in = 0.5
 
-        self.disp_message('incoming polarizations set to: {:s}'.format(
-            self.polarizations[self.pol_in_state]))
+        self.disp_message('incoming polarizations set to: '
+                          f'{self.polarizations[self.pol_in_state]:s}')
 
     def set_outgoing_polarization(self, pol_out_state):
         """set_outgoing_polarization
@@ -393,8 +395,8 @@ class XrayKin(Xray):
         """
         self.pol_out_state = pol_out_state
         if self.pol_out_state == 0:
-            self.disp_message('analyzer polarizations set to: {:s}'.format(
-                self.polarizations[self.pol_out_state]))
+            self.disp_message('analyzer polarizations set to: '
+                              f'{self.polarizations[self.pol_out_state]:s}')
         else:
             self.disp_message('XrayDyn does only allow for NO analyzer polarizations')
             self.set_outgoing_polarization(0)
@@ -464,7 +466,6 @@ class XrayKin(Xray):
 
         Args:
             strains (ndarray[float], optional): strains of each sub-structure
-                0 .. 1. Defaults to 0.
 
         Returns:
             (tuple):
@@ -482,20 +483,29 @@ class XrayKin(Xray):
         for i, energy in enumerate(self._energy):
             qz = self._qz[i, :]
             theta = self._theta[i, :]
+            # a superstrate does not make too much sence here
+            # calculate reflected field of the actual structure
             Ept, A = self.homogeneous_reflected_field(self.S, energy, qz, theta, strains)
+            # add static substrate
+            if isinstance(self.S.substrate[0], UnitCell):
+                temp, temp2 = self.homogeneous_reflected_field(
+                    self.S.substrate, energy, qz, theta)
+                A.append([temp2, 'static substrate'])
+                Ept = Ept+(temp*np.exp(1j*qz*self.S.thickness.to_base_units().magnitude))
+
             # calculate the real reflectivity from Ef
             R[i, :] = np.real(Ept*np.conj(Ept))
-        self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _homogenous_reflectivity_: {time()-t1:f} s')
         return R, A
 
     @u.wraps((None, None), (None, None, 'eV', 'm**-1', 'rad', None), strict=False)
     def homogeneous_reflected_field(self, S, energy, qz, theta, strains=0):
         r"""homogeneous_reflected_field
 
-        Calculates the reflected field :math:`E_p^t` of the whole sample
-        structure as well as for each sub-structure (:math:`E_p^N`). The
-        reflected wave field :math:`E_p` from a single layer of unit cells at
-        the detector is calculated according to  Ref. [9]_:
+        Calculates the reflected field :math:`E_p^t` from a :class:`UnitCell` or
+        :class:Structure` as well as for each sub-structure (:math:`E_p^N`).
+        The reflected wave field :math:`E_p` from a single :class:`UnitCell` at
+        the detector is calculated according to :cite:t:`warren1990`:
 
         .. math::
 
@@ -547,9 +557,21 @@ class XrayKin(Xray):
             - *A (ndarray[complex])* - reflected fields of substructures.
 
         """
+        if isinstance(S, Structure):
+            sub_structures = S.sub_structures
+        elif isinstance(S[0], (Vacuum, UnitCell)):
+            sub_structures = [S]
+        else:
+            raise TypeError('XrayKin can only handle Layers of class '
+                            'UnitCell and Vacuum')
+
         # if no strains are given we assume no strain (1)
         if np.isscalar(strains) and strains == 0:
-            strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
+            try:
+                strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
+            except AttributeError:
+                # its a single Layer
+                strains = np.array([0])
 
         N = len(qz)  # nb of qz
         Ept = np.zeros([1, N])  # total reflected field
@@ -558,47 +580,42 @@ class XrayKin(Xray):
         strainCounter = 0  # the is the index of the strain vector if applied
 
         # traverse substructures
-        for sub_structures in S.sub_structures:
-            if isinstance(sub_structures[0], UnitCell):
+        for sub_structure in sub_structures:
+            if isinstance(sub_structure[0], UnitCell):
                 # the substructure is an unit cell and we can calculate
                 # Ep directly
-                Ep = self.get_Ep(energy, qz, theta, sub_structures[0], strains[strainCounter])
-                z = sub_structures[0]._c_axis
+                Ep = self.get_Ep(energy, qz, theta, sub_structure[0], strains[strainCounter])
+                z = sub_structure[0]._c_axis
                 strainCounter = strainCounter+1
-            elif isinstance(sub_structures[0], AmorphousLayer):
-                raise ValueError('The substructure cannot be an AmorphousLayer!')
-            else:
+            elif isinstance(sub_structure[0], Structure):
                 # the substructure is a structure, so we do a recursive
                 # call of this method
-                d = sub_structures[0].get_number_of_sub_structures()
+                d = sub_structure[0].get_number_of_sub_structures()
                 Ep, temp = self.homogeneous_reflected_field(
-                        sub_structures[0], energy, qz, theta,
+                        sub_structure[0], energy, qz, theta,
                         strains[strainCounter:(strainCounter + d)])
-                z = sub_structures[0].get_length().magnitude
+                z = sub_structure[0].get_length().magnitude
                 strainCounter = strainCounter + d
-                A.append([temp, [sub_structures[0].name + ' substructures']])
-                A.append([Ep, '{:d}x {:s}'.format(1, sub_structures[0].name)])
+                A.append([temp, [sub_structure[0].name + ' substructures']])
+                A.append([Ep, f'{1:d}x {sub_structure[0].name:s}'])
+            else:
+                raise TypeError('The substructure must be Vacuum, UnitCell or Structure type!')
 
             # calculate the interference function for N repetitions of
             # the substructure with the length z
-            psi = self.get_interference_function(qz, z, sub_structures[1])
+            psi = self.get_interference_function(qz, z, sub_structure[1])
             # calculate the reflected field for N repetitions of
             # the substructure with the length z
             EpN = Ep * psi
             # remember the result
-            A.append([EpN, '{:d}x {:s}'.format(sub_structures[1], sub_structures[0].name)])
+            A.append([EpN, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
             # add the reflected field of the current substructure
             # phase-correct to the already calculated substructures
             Ept = Ept+(EpN*np.exp(1j*qz*Z))
             # update the total length $Z$ of the already calculated
             # substructures
-            Z = Z + z*sub_structures[1]
+            Z = Z + z*sub_structure[1]
 
-        # add static substrate to kinXRD
-        if S.substrate != []:
-            temp,  temp2 = self.homogeneous_reflected_field(S.substrate, energy, qz, theta)
-            A.append([temp2, 'static substrate'])
-            Ept = Ept+(temp*np.exp(1j*qz*Z))
         return Ept, A
 
     @u.wraps(None, (None, 'm**-1', 'm', None), strict=False)
@@ -667,7 +684,7 @@ class XrayKin(Xray):
 class XrayDyn(Xray):
     r"""XrayDyn
 
-    Dynamical X-ray scattering simulations.
+    Dynamical X-ray scattering simulations following :cite:t:`alsnielsen2011`.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -730,8 +747,8 @@ class XrayDyn(Xray):
         """
         self.pol_in_state = pol_in_state
         if self.pol_in_state in [1, 2, 5]:  # circ +,-, elliptical
-            self.disp_message('incoming polarizations {:s} not implemented'.format(
-                self.polarizations[self.pol_in_state]))
+            self.disp_message(f'incoming polarizations {self.polarizations[self.pol_in_state]:s} '
+                              'not implemented')
             self.set_incoming_polarization(3)
             return
         elif (self.pol_in_state == 3):  # sigma
@@ -742,8 +759,8 @@ class XrayDyn(Xray):
             self.pol_in_state = 0
             self.pol_in = 0.5
 
-        self.disp_message('incoming polarizations set to: {:s}'.format(
-            self.polarizations[self.pol_in_state]))
+        self.disp_message('incoming polarizations set to: '
+                          f'{self.polarizations[self.pol_in_state]:s}')
 
     def set_outgoing_polarization(self, pol_out_state):
         """set_outgoing_polarization
@@ -756,8 +773,8 @@ class XrayDyn(Xray):
         """
         self.pol_out_state = pol_out_state
         if self.pol_out_state == 0:
-            self.disp_message('analyzer polarizations set to: {:s}'.format(
-                self.polarizations[self.pol_out_state]))
+            self.disp_message('analyzer polarizations set to: '
+                              f'{self.polarizations[self.pol_out_state]:s}')
         else:
             self.disp_message('XrayDyn does only allow for NO analyzer polarizations')
             self.set_outgoing_polarization(0)
@@ -785,11 +802,19 @@ class XrayDyn(Xray):
         """
         t1 = time()
         self.disp_message('Calculating _homogenous_reflectivity_ ...')
-        # get the reflectivity-transmission matrix of the structure
+
+        # a superstrate does not make too much sense here
+        # get the reflectivity-transmission matrix of the actual structure
         RT, A = self.homogeneous_ref_trans_matrix(self.S, strains, temps)
+        # add static substrate
+        if isinstance(self.S.substrate[0], UnitCell):
+            tmp, tmp2 = self.homogeneous_ref_trans_matrix(self.S.substrate)
+            A.append([tmp2, 'static substrate'])
+            RT = m_times_n(RT, tmp)
+
         # calculate the real reflectivity from the RT matrix
         R = self.calc_reflectivity_from_matrix(RT)
-        self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _homogenous_reflectivity_: {time()-t1:f} s')
         return R, A
 
     def homogeneous_ref_trans_matrix(self, S, strains=[], temps=[]):
@@ -823,7 +848,16 @@ class XrayDyn(Xray):
               sub-structures.
 
         """
-        L = S.get_number_of_sub_structures()
+        if isinstance(S, Structure):
+            sub_structures = S.sub_structures
+            L = S.get_number_of_sub_structures()
+        elif isinstance(S[0], (Vacuum, UnitCell)):
+            sub_structures = [S]
+            L = 1
+        else:
+            raise TypeError('XrayDyn can only handle Layers of class '
+                            'UnitCell and Vacuum')
+
         # if no strains are given we assume no strain (1)
         if len(strains) == 0:
             strains = np.zeros([L])
@@ -831,7 +865,7 @@ class XrayDyn(Xray):
             strains = np.array(strains)
         if len(strains) != L:
             raise IndexError('Number of strains must match the number of '
-                             'substructures: {:d}'.format(L))
+                             f'substructures: {L:d}')
 
         if len(temps) == 0:
             temps = np.zeros([L, 1])
@@ -842,15 +876,14 @@ class XrayDyn(Xray):
                 temps = temps[:, np.newaxis]
             if temps.shape[0] != L:
                 raise IndexError('First dimension of temperatures must match the number of '
-                                 'substructures {:d}.'.format(L))
+                                 f'substructures {L:d}.')
 
             # check length (number of sub-systems) of Debye-Waller factor, which is not checked
             # in setter method
             numel_deb_wal_fac = self.S.get_numel_of_layer_property('deb_wal_fac')
             if temps.shape[1] != numel_deb_wal_fac:
                 raise IndexError('Second dimension of temperatures must match the number of '
-                                 'subsystems for the Debye-Waller factor: {:d}'.format(
-                                     numel_deb_wal_fac))
+                                 f'subsystems for the Debye-Waller factor: {numel_deb_wal_fac:d}')
         # initialize
         RT = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :],
                      (np.size(self._qz, 0), np.size(self._qz, 1), 1, 1))  # ref_trans_matrix
@@ -858,7 +891,7 @@ class XrayDyn(Xray):
         counter = 0
 
         # traverse substructures
-        for sub_structure in S.sub_structures:
+        for sub_structure in sub_structures:
             if isinstance(sub_structure[0], UnitCell):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
@@ -867,10 +900,8 @@ class XrayDyn(Xray):
                         sub_structure[1])
                 counter += 1
                 # remember the result
-                A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
-            elif isinstance(sub_structure[0], AmorphousLayer):
-                raise ValueError('The substructure cannot be an AmorphousLayer!')
-            else:
+                A.append([tmp, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
+            elif isinstance(sub_structure[0], Structure):
                 # its a structure
                 # make a recursive call
                 idx = np.r_[counter:(counter+sub_structure[0].get_number_of_sub_structures())]
@@ -880,18 +911,14 @@ class XrayDyn(Xray):
                         temps[idx, :])
                 A.append([tmp2, sub_structure[0].name + ' substructures'])
                 counter = counter+sub_structure[0].get_number_of_sub_structures()
-                A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+                A.append([tmp, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
                 # calculate the ref-trans matrices for N sub structures
                 tmp = m_power_x(tmp, sub_structure[1])
-                A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+                A.append([tmp, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
+            else:
+                raise TypeError('The substructure must be Vacuum, UnitCell or Structure type!')
 
             # multiply it to the output
-            RT = m_times_n(RT, tmp)
-
-        # if a substrate is included add it at the end
-        if S.substrate != []:
-            tmp, tmp2 = self.homogeneous_ref_trans_matrix(S.substrate)
-            A.append([tmp2, 'static substrate'])
             RT = m_times_n(RT, tmp)
 
         return RT, A
@@ -962,9 +989,8 @@ class XrayDyn(Xray):
                 try:
                     temp_map = np.reshape(temp_map, [M, L, numel_deb_wal_fac])
                 except ValueError:
-                    raise ValueError('Third dimension of temp_map must match the number of '
-                                     'sub-systems for the Debye-Waller factor: {:d}'.format(
-                                      numel_deb_wal_fac))
+                    raise ValueError('Third dimension of temp_map must match the number of sub-'
+                                     f'systems for the Debye-Waller factor: {numel_deb_wal_fac:d}')
 
                 if len(strain_vectors) > 0:
                     warnings.warn('strain_vectors and temp_map are not compatible '
@@ -1006,7 +1032,7 @@ class XrayDyn(Xray):
                                                                temp_map)
 
             self.disp_message('Elapsed time for _inhomogeneous_reflectivity_:'
-                              ' {:f} s'.format(time()-t1))
+                              f' {time()-t1:f} s')
             self.save(full_filename, {'R': R}, '_inhomogeneous_reflectivity_')
         return R
 
@@ -1085,7 +1111,7 @@ class XrayDyn(Xray):
         RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (N, K, 1, 1))
 
         # precalculate the substrate ref_trans_matrix if present
-        if self.S.substrate != []:
+        if isinstance(self.S.substrate[0], UnitCell):
             RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
         else:
             RTS = RTU
@@ -1206,7 +1232,7 @@ class XrayDyn(Xray):
             RT = self.calc_inhomogeneous_ref_trans_matrix(strains, temps)
 
         # if a substrate is included add it at the end
-        if self.S.substrate != []:
+        if isinstance(self.S.substrate[0], UnitCell):
             RTS, _ = self.homogeneous_ref_trans_matrix(self.S.substrate)
             RT = m_times_n(RT, RTS)
         # calculate reflectivity from ref-trans matrix
@@ -1241,7 +1267,7 @@ class XrayDyn(Xray):
         for i, uc in enumerate(uc_handles):
 
             if not isinstance(uc, UnitCell):
-                raise ValueError('All layers  must be UnitCells!')
+                raise TypeError('All layers  must be of type UnitCell!')
             RT = m_times_n(RT, self.get_uc_ref_trans_matrix(uc, strains[i], temps[i, :]))
 
         return RT
@@ -1278,7 +1304,7 @@ class XrayDyn(Xray):
             # ``knnsearch`` function to find the nearest strain value.
             strain_index = finderb(strains[i], strain_vectors[int(uc_index)])[0]
             tmp = RTM[int(uc_index)][strain_index]
-            if tmp is not []:
+            if tmp.size:
                 RT = m_times_n(RT, tmp)
             else:
                 raise ValueError('RTM not found')
@@ -1361,12 +1387,12 @@ class XrayDyn(Xray):
             # traverse all strains in the strain_vector for this unique
             # unit_cell
             if not isinstance(uc, UnitCell):
-                raise ValueError('All layers  must be UnitCells!')
+                raise TypeError('All layers  must be UnitCells!')
             temp = []
             for strain in strain_vectors[i]:
                 temp.append(self.get_uc_ref_trans_matrix(uc, strain))
             RTM.append(temp)
-        self.disp_message('Elapsed time for _ref_trans_matrices_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _ref_trans_matrices_: {time()-t1:f} s')
         return RTM
 
     def get_uc_ref_trans_matrix(self, uc, strain=0, temp=np.array([0])):
@@ -1608,7 +1634,7 @@ class XrayDynMag(Xray):
 
     Dynamical magnetic X-ray scattering simulations.
 
-    Adapted from Elzo et.al. [10]_ and initially realized in `Project Dyna
+    Adapted from :cite:t:`elzo2012` and initially realized in `Project Dyna
     <http://dyna.neel.cnrs.fr>`_.
 
     Original copyright notice:
@@ -1664,15 +1690,6 @@ class XrayDynMag(Xray):
         pol_out (float): outgoing polarization factor (can be a complex ndarray).
         last_atom_ref_trans_matrices (list): remember last result of
            atom ref_trans_matrices to speed up calculation.
-
-    References:
-
-        .. [10] M. Elzo, E. Jal, O. Bunau, S. Grenier, Y. Joly, A. Y.
-           Ramos, H. C. N. Tolentino, J. M. Tonnerre & N. Jaouen, *X-ray
-           resonant magnetic reflectivity of stratified magnetic structures:
-           Eigenwave formalism and application to a W/Fe/W trilayer*,
-           `J. Magn. Magn. Mater. 324, 105 (2012).
-           <http://www.doi.org/10.1016/j.jmmm.2011.07.019>`_
 
     """
 
@@ -1782,8 +1799,8 @@ class XrayDynMag(Xray):
             self.pol_in_state = 0  # catch any number and set state to 0
             self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=np.complex128)
 
-        self.disp_message('incoming polarizations set to: {:s}'.format(
-            self.polarizations[self.pol_in_state]))
+        self.disp_message('incoming polarizations set to: '
+                          f'{self.polarizations[self.pol_in_state]:s}')
 
     def set_outgoing_polarization(self, pol_out_state, polarization=None):
         r"""set_outgoing_polarization
@@ -1842,8 +1859,8 @@ class XrayDynMag(Xray):
             self.pol_out_state = 0  # catch any number and set state to 0
             self.pol_out = np.array([], dtype=np.complex128)
 
-        self.disp_message('analyzer polarizations set to: {:s}'.format(
-            self.polarizations[self.pol_out_state]))
+        self.disp_message('analyzer polarizations set to: '
+                          f'{self.polarizations[self.pol_out_state]:s}')
 
     def homogeneous_reflectivity(self, *args):
         r"""homogeneous_reflectivity
@@ -1872,29 +1889,46 @@ class XrayDynMag(Xray):
         """
         t1 = time()
         self.disp_message('Calculating _homogeneous_reflectivity_ ...')
-        # vacuum boundary
-        A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+
+        # add superstrate
+        if isinstance(self.S.superstrate[0], Vacuum):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+        elif isinstance(self.S.superstrate[0], AmorphousLayer):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
+                self.S.superstrate[0].atom,
+                self.S.superstrate[0].atom._density,
+                self.S.superstrate[0].atom._thickness
+                )
+        else:
+            raise TypeError('In XrayDynMag the superstrate must be of type Vacuum or '
+                            'AmorphousLayer and should be present!')
+
         # calc the reflectivity-transmission matrix of the structure
         # and the inverse of the last boundary matrix
         RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
             self.calc_homogeneous_matrix(self.S, A0, A0_phi, k_z_0, *args)
-        # if a substrate is included add it at the end
-        if self.S.substrate != []:
+
+        # add substrate
+        if isinstance(self.S.substrate[0], Layer):
             RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = \
                 self.calc_homogeneous_matrix(
                     self.S.substrate, last_A, last_A_phi, last_k_z)
             RT = m_times_n(RT_sub, RT)
             RT_phi = m_times_n(RT_sub_phi, RT_phi)
+        else:
+            raise ValueError('There should be a substrate present.')
+
         # multiply the result of the structure with the boundary matrix
-        # of vacuum (initial layer) and the final layer
+        # of the substrate
         RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
         RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
+
         # calc the actual reflectivity and transmissivity from the matrix
         R, T = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
             RT, self.pol_in, self.pol_out)
         R_phi, T_phi = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
             RT_phi, self.pol_in, self.pol_out)
-        self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _homogeneous_reflectivity_: {time()-t1:f} s')
         return R, R_phi, T, T_phi
 
     def calc_homogeneous_matrix(self, S, last_A, last_A_phi, last_k_z, *args):
@@ -1936,26 +1970,35 @@ class XrayDynMag(Xray):
             - *k_z (ndarray[float])* - internal wave vector.
 
         """
+        if isinstance(S, Structure):
+            sub_structures = S.sub_structures
+            L = S.get_number_of_sub_structures()
+        elif isinstance(S[0], Layer):
+            sub_structures = [S]
+            L = 1
+        else:
+            raise TypeError('XrayDynMag can only handle Layers of class '
+                            'AmorphousLayer, UnitCell, and Vacuum')
+
         # if no strains are given we assume no strain (1)
         if len(args) == 0:
-            strains = np.zeros([S.get_number_of_sub_structures(), 1])
+            strains = np.zeros([L, 1])
         else:
             strains = args[0]
 
         if len(args) < 2:
             # create non-working magnetizations
-            magnetizations = np.zeros([S.get_number_of_sub_structures(), 1])
+            magnetizations = np.zeros([L, 1])
         else:
             magnetizations = args[1]
 
         layer_counter = 0
         # traverse substructures
-        for i, sub_structure in enumerate(S.sub_structures):
+        for i, sub_structure in enumerate(sub_structures):
             layer = sub_structure[0]
             repetitions = sub_structure[1]
             if isinstance(layer, UnitCell):
-                # the sub_structure is an unitCell
-                # calculate the ref-trans matrices for N unitCells
+                # calculate the ref-trans matrices for N UnitCells
                 RT_uc, RT_uc_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
                         layer, last_A, last_A_phi, last_k_z, strains[layer_counter],
@@ -1974,18 +2017,20 @@ class XrayDynMag(Xray):
                     temp_phi = m_times_n(temp2_phi, temp_phi)
 
                 layer_counter += 1
-            elif isinstance(layer, AmorphousLayer):
-                # the sub_structure is an amorphous layer
+            elif isinstance(layer, (Vacuum, AmorphousLayer)):
                 # calculate the ref-trans matrices for N layers
-
-                A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
-                    self.get_atom_boundary_phase_matrix(layer.atom,
-                                                        layer._density*(
-                                                            strains[layer_counter]+1),
-                                                        layer._thickness*(
-                                                            strains[layer_counter]+1),
-                                                        False,
-                                                        magnetizations[layer_counter])
+                if isinstance(layer, Vacuum):
+                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                        self.get_atom_boundary_phase_matrix([], 0, 0)
+                else:
+                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                        self.get_atom_boundary_phase_matrix(layer.atom,
+                                                            layer._density*(
+                                                                strains[layer_counter]+1),
+                                                            layer._thickness*(
+                                                                strains[layer_counter]+1),
+                                                            False,
+                                                            magnetizations[layer_counter])
 
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
@@ -2149,7 +2194,7 @@ class XrayDynMag(Xray):
                     strain_map, magnetization_map)
 
             self.disp_message('Elapsed time for _inhomogeneous_reflectivity_:'
-                              ' {:f} s'.format(time()-t1))
+                              f' {time()-t1:f} s')
             self.save(full_filename, {'R': R, 'R_phi': R_phi, 'T': T, 'T_phi': T_phi},
                       '_inhomogeneous_reflectivity_')
         return R, R_phi, T, T_phi
@@ -2193,19 +2238,33 @@ class XrayDynMag(Xray):
             # get the inhomogeneous reflectivity of the sample
             # structure for each time step of the strain map
 
-            # vacuum boundary
-            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+            # add superstrate
+            if isinstance(self.S.superstrate[0], Vacuum):
+                A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+            elif isinstance(self.S.superstrate[0], AmorphousLayer):
+                A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
+                    self.S.superstrate[0].atom,
+                    self.S.superstrate[0].atom._density,
+                    self.S.superstrate[0].atom._thickness
+                    )
+            else:
+                raise TypeError('In XrayDynMag the superstrate must be of type Vacuum or '
+                                'AmorphousLayer and should be present!')
 
             RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = \
                 self.calc_inhomogeneous_matrix(
                     A0, A0_phi, k_z_0, strain_map[i, :], magnetization_map[i, :])
-            # if a substrate is included add it at the end
-            if self.S.substrate != []:
+
+            # add substrate
+            if isinstance(self.S.substrate[0], Layer):
                 RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = \
                     self.calc_homogeneous_matrix(
                         self.S.substrate, last_A, last_A_phi, last_k_z)
                 RT = m_times_n(RT_sub, RT)
                 RT_phi = m_times_n(RT_sub_phi, RT_phi)
+            else:
+                raise ValueError('There should be a substrate present.')
+
             # multiply vacuum and last layer
             RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
             RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
@@ -2256,8 +2315,20 @@ class XrayDynMag(Xray):
         R_phi = np.zeros_like(R)
         T = np.zeros_like(R)
         T_phi = np.zeros_like(R)
-        # vacuum boundary
-        A0, A0_phi, _, _,  _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+
+        # add superstrate
+        if isinstance(self.S.superstrate[0], Vacuum):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
+        elif isinstance(self.S.superstrate[0], AmorphousLayer):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
+                self.S.superstrate[0].atom,
+                self.S.superstrate[0].atom._density,
+                self.S.superstrate[0].atom._thickness
+                )
+        else:
+            raise TypeError('In XrayDynMag the superstrate must be of type Vacuum or '
+                            'AmorphousLayer!')
+
         remote_A0 = dask_client.scatter(A0)
         remote_A0_phi = dask_client.scatter(A0_phi)
         remote_k_z_0 = dask_client.scatter(k_z_0)
@@ -2281,9 +2352,12 @@ class XrayDynMag(Xray):
             last_A_inv = t[4]
             last_A_inv_phi = t[5]
             last_k_z = t[6]
-            if self.S.substrate != []:
+
+            # add substrate
+            if isinstance(self.S.substrate[0], Layer):
                 t2 = delayed(self.calc_homogeneous_matrix)(
-                    remote_substrate, last_A, last_A_phi, last_k_z)
+                    remote_substrate, last_A, last_A_phi, last_k_z
+                    )
                 RT_sub = t2[0]
                 RT_sub_phi = t2[1]
                 last_A = t2[2]
@@ -2292,7 +2366,11 @@ class XrayDynMag(Xray):
                 last_A_inv_phi = t2[5]
                 RT = delayed(m_times_n)(RT_sub, RT)
                 RT_phi = delayed(m_times_n)(RT_sub_phi, RT_phi)
-            # multiply vacuum and last layer
+            else:
+                raise ValueError('There should be a substrate present.')
+
+            # multiply the result of the structure with the boundary matrix
+            # of superstrate and substrate
             temp = delayed(m_times_n)(last_A, RT)
             temp_phi = delayed(m_times_n)(last_A_phi, RT_phi)
             RT = delayed(m_times_n)(last_A_inv, temp)
@@ -2382,12 +2460,19 @@ class XrayDynMag(Xray):
                 RT_layer, RT_layer_phi, A, A_phi, A_inv, A_inv_phi, k_z = \
                     self.calc_uc_boundary_phase_matrix(
                         layer, last_A, last_A_phi, last_k_z, strains[i],
-                        magnetizations[i], force_recalc)
-            elif isinstance(layer, AmorphousLayer):
-                A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
-                    self.get_atom_boundary_phase_matrix(
-                        layer.atom, layer._density/(strains[i]+1), layer._thickness*(strains[i]+1),
-                        force_recalc, magnetizations[i])
+                        magnetizations[i], force_recalc
+                        )
+            elif isinstance(layer, (Vacuum, AmorphousLayer)):
+                if isinstance(layer, Vacuum):
+                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                        self.get_atom_boundary_phase_matrix([], 0, layer._thickness*(strains[i]+1))
+                else:
+                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = \
+                        self.get_atom_boundary_phase_matrix(
+                            layer.atom, layer._density/(strains[i]+1),
+                            layer._thickness*(strains[i]+1),
+                            force_recalc, magnetizations[i]
+                            )
                 roughness = layer._roughness
                 F = m_times_n(A_inv, last_A)
                 F_phi = m_times_n(A_inv_phi, last_A_phi)
@@ -2398,7 +2483,7 @@ class XrayDynMag(Xray):
                 RT_layer = m_times_n(P, F)
                 RT_layer_phi = m_times_n(P_phi, F_phi)
             else:
-                raise ValueError('All layers must be either AmorphousLayers or UnitCells!')
+                raise TypeError('All layers must be either Vacuum, AmorphousLayers, or UnitCells!')
             if i == 0:
                 RT = RT_layer
                 RT_phi = RT_layer_phi
@@ -2499,8 +2584,8 @@ class XrayDynMag(Xray):
                                        force_recalc=False, *args):
         """get_atom_boundary_phase_matrix
 
-        Returns the boundary and phase matrices of an atom from Elzo
-        formalism [10]_. The results for a given atom, energy, :math:`q_z`,
+        Returns the boundary and phase matrices of an atom from :cite:`elzo2012`.
+        The results for a given atom, energy, :math:`q_z`,
         polarization, and magnetization are stored to RAM to avoid recalculation.
 
         Args:
@@ -2592,8 +2677,8 @@ class XrayDynMag(Xray):
     def calc_atom_boundary_phase_matrix(self, atom, density, distance, *args):
         """calc_atom_boundary_phase_matrix
 
-        Calculates the boundary and phase matrices of an atom from Elzo
-        formalism [10]_.
+        Calculates the boundary and phase matrices of an atom from
+        :cite:t:`elzo2012`.
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
@@ -2796,7 +2881,7 @@ class XrayDynMag(Xray):
 
         Calculates the actual reflectivity and transmissivity from the
         reflectivity-transmission matrix for a given incoming and analyzer
-        polarization from Elzo formalism [10]_.
+        polarization from :cite:t:`elzo2012`.
 
         Args:
             RT (ndarray[complex]): reflection-transmission matrix.
@@ -2886,7 +2971,7 @@ class XrayDynMag(Xray):
         Calculates the Kerr rotation and ellipticity for sigma and pi
         incident polarization from the reflectivity-transmission
         matrix independent of the given incoming and analyzer polarization
-        from Elzo formalism [10]_.
+        from :cite:t:`elzo2012`.
 
         Args:
             RT (ndarray[complex]): reflection-transmission matrix.
@@ -2903,7 +2988,7 @@ class XrayDynMag(Xray):
         """calc_roughness_matrix
 
         Calculates the roughness matrix for an interface with a gaussian
-        roughness for the Elzo formalism [10]_.
+        roughness for the :cite:t:`elzo2012`.
 
         Args:
             roughness (float): gaussian roughness of the interface [m].

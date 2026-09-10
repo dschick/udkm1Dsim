@@ -18,10 +18,12 @@ docs/build
 docs/jupyter_execute
 
 # docs myst-sphinx-gallery
-docs/source/auto_examples
+docs/source/examples/**/*.ipynb
+docs/source/examples/**/*.rst
 
 # ipython checkpoints
 docs/source/**/.ipynb_checkpoints
+examples/.ipynb_checkpoints
 
 # dask worker space
 docs/source/**/dask-worker-space

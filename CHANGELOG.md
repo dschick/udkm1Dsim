@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Vacuum added
+- example for XrayKin
+- superstrate
+
+### Changed
+
+- substrates can be a single layer
+- Vacuum is default superstrate and substrate
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [2.4.1] 2026-09-10
+
+### Added
+
 - links to the API from the exmaples ([#185])
 - benchmark test via codspeed.io ([#188])
 - add example gallery view to docs via myst-sphinx-gallery ([#197])
@@ -20,10 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - publication list with new bibliography style and reverse ordering ([#195])
+- restructured documentation ([#199])
+- use pyproject.toml instead of setup.py and use hatchling as build backend ([#210])
+- replace flake8 with ruff for linting and formatting ([#211])
 
 [#195]: https://github.com/dschick/udkm1Dsim/pull/195
-
-### Deprecated
+[#199]: https://github.com/dschick/udkm1Dsim/pull/199
+[#210]: https://github.com/dschick/udkm1Dsim/pull/210
+[#211]: https://github.com/dschick/udkm1Dsim/pull/211
 
 ### Removed
 
@@ -34,7 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-### Security
+- matplotlib.cm deprecation in Matplotlib 3.11 ([#794da43])
+
+[794da43]: https://github.com/dschick/udkm1Dsim/commit/794da43
 
 ## [2.4.0] 2026-07-09
 ### Added

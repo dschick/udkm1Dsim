@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -26,12 +25,16 @@ __all__ = ['Atom', 'AtomMixed']
 
 __docformat__ = 'restructuredtext'
 
-from .. import u, Q_
 import os
-import numpy as np
-import scipy.constants as constants
 import warnings
+
+import numpy as np
+import pint
+import scipy.constants as constants
 from tabulate import tabulate
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 
 class Atom:
@@ -68,28 +71,6 @@ class Atom:
         mag_amplitude (float): magnetization amplitude -1 .. 1.
         mag_phi (float): phi angle of magnetization [rad].
         mag_gamma (float): gamma angle of magnetization [rad].
-
-    References:
-
-        .. [1] B. L. Henke, E. M. Gullikson & J. C. Davis,
-           *X-Ray Interactions: Photoabsorption, Scattering,
-           Transmission, and Reflection at E = 50-30,000 eV, Z = 1-92*,
-           `Atomic Data and Nuclear Data Tables, 54(2), 181–342, (1993).
-           <http://www.doi.org/10.1006/adnd.1993.1013>`_
-        .. [2] C.T. Chantler, K. Olsen, R.A. Dragoset, J. Chang, A.R. Kishore,
-           S.A. Kotochigova, & D.S. Zucker,
-           *Detailed Tabulation of Atomic Form Factors, Photoelectric
-           Absorption and Scattering Cross Section, and Mass Attenuation
-           Coefficients for Z = 1-92 from E = 1-10 eV to E = 0.4-1.0 MeV*,
-           `NIST Standard Reference Database 66.
-           <https://dx.doi.org/10.18434/T4HS32>`_
-        .. [3] J. Als-Nielson, & D. McMorrow,
-           `Elements of Modern X-Ray Physics. New York: John Wiley &
-           Sons, Ltd. (2001) <http://www.doi.org/10.1002/9781119998365>`_
-        .. [4] D. T. Cromer & J. B. Mann, *X-ray scattering
-           factors computed from numerical Hartree–Fock wave functions*,
-           `Acta Crystallographica Section A, 24(2), 321–324 (1968).
-           <http://www.doi.org/10.1107/S0567739468000550>`_
 
     """
 
@@ -145,8 +126,8 @@ class Atom:
         """read_atomic_form_factor_coeff
 
         The coefficients for the atomic form factor :math:`f` in dependence of
-        the photon energy :math:`E` is read from a parameter file given by [1]_
-        or by [2]_ as default.
+        the photon energy :math:`E` is read from a parameter file given by :cite:t:`henke1993`
+        or by :cite:t:`chantler2003` as default.
 
         Args:
             source (str, optional): source of atmoic form factors can be either
@@ -164,16 +145,16 @@ class Atom:
                                  'either chantler or henke!')
 
             if source == 'chantler':
-                sub_path = 'chantler/{:s}.cf'.format(self.symbol.lower())
+                sub_path = f'chantler/{self.symbol.lower():s}.cf'
             elif source == 'henke':
-                sub_path = 'henke/{:s}.nff'.format(self.symbol.lower())
+                sub_path = f'henke/{self.symbol.lower():s}.nff'
 
             filename = os.path.join(os.path.dirname(__file__),
-                                    '../parameters/atomic_form_factors/{:s}'.format(sub_path))
+                                    f'../parameters/atomic_form_factors/{sub_path:s}')
         try:
             f = np.genfromtxt(filename, skip_header=0)
         except FileNotFoundError:
-            print('Atomic form factor file {:s} not found!'.format(filename))
+            print(f'Atomic form factor file {filename:s} not found!')
             raise
 
         return f
@@ -187,7 +168,7 @@ class Atom:
 
         .. math:: f(E)=f_1 - i f_2
 
-        Convention of Ref. [3]_ (p. 11, footnote) is a negative :math:`f_2`.
+        Convention of Ref. :cite:t:`alsnielsen2011` (p. 11, footnote) is a negative :math:`f_2`.
 
         Args:
             energy (ndarray[float]): photon energy [eV].
@@ -207,7 +188,7 @@ class Atom:
     def read_cromer_mann_coeff(self):
         r"""read_cromer_mann_coeff
 
-        The Cromer-Mann coefficients (Ref. [4]_) are read from a parameter file
+        The Cromer-Mann coefficients (see :cite:t:`cromermann1968`) are read from a parameter file
         and are returned in the following order:
 
         .. math:: a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c
@@ -222,7 +203,7 @@ class Atom:
             cm = np.genfromtxt(filename, skip_header=1,
                                usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
         except FileNotFoundError:
-            print('Cromer Mann coefficient file {:s} not found!'.format(filename))
+            print(f'Cromer Mann coefficient file {filename:s} not found!')
             raise
 
         return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
@@ -233,15 +214,15 @@ class Atom:
 
         The atomic form factor :math:`f` is calculated in dependence of the
         photon energy :math:`E` [eV] and the :math:`z`-component of the
-        scattering vector :math:`q_z` [Å :math:`^{-1}`] (Ref. [4]_).
+        scattering vector :math:`q_z` [Å :math:`^{-1}`] (see :cite:t:`cromermann1968`).
         Note that the Cromer-Mann coefficients are fitted for :math:`q_z` in
         [Å :math:`^{-1}`]!
 
-        See Ref. [3]_ (p. 235).
+        See Ref. :cite:t:`alsnielsen2011` (p. 235).
 
         .. math:: f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -i f_2(E)
 
-        :math:`f_{CM}(q_z)` is given in Ref. [4]_:
+        :math:`f_{CM}(q_z)` is given in Ref. :cite:t:`cromermann1968`:
 
         .. math::
 
@@ -304,12 +285,11 @@ class Atom:
         """
         if not filename:
             filename = os.path.join(os.path.dirname(__file__),
-                                    '../parameters/magnetic_form_factors/{:s}.mf'.format(
-                                            self.symbol))
+                                    f'../parameters/magnetic_form_factors/{self.symbol:s}.mf')
         try:
             m = np.genfromtxt(filename)
         except FileNotFoundError:
-            print('Magnetic form factor file {:s} not found!'.format(filename))
+            print(f'Magnetic form factor file {filename:s} not found!')
             # return zero array
             m = np.zeros([1, 3])
 
@@ -325,7 +305,7 @@ class Atom:
 
         for the photon energy :math:`E` [eV].
 
-        Convention of Ref. [3]_ (p. 11, footnote) is a negative :math:`m_2`
+        Convention of Ref. :cite:t:`alsnielsen2011` (p. 11, footnote) is a negative :math:`m_2`
 
         Args:
             energy (ndarray[float]): photon energy [eV].
@@ -427,11 +407,11 @@ class AtomMixed(Atom):
 
         output_atom = []
         for i in range(self.num_atoms):
-            output_atom.append([self.atoms[i][0].name, '{:.1f} %'.format(self.atoms[i][1]*100)])
+            output_atom.append([self.atoms[i][0].name, f'{self.atoms[i][1]*100:.1f} %'])
 
         return ('AtomMixed with the following properties\n'
                 + tabulate(output, colalign=('right',), tablefmt='rst', floatfmt=('.2f', '.2f'))
-                + '\n{:d} Constituents:\n'.format(self.num_atoms)
+                + f'\n{self.num_atoms:d} Constituents:\n'
                 + tabulate(output_atom, colalign=('right',), floatfmt=('.2f', '.2f')))
 
     def add_atom(self, atom, fraction):
@@ -477,7 +457,7 @@ class AtomMixed(Atom):
         try:
             f = np.genfromtxt(filename, skip_header=0)
         except FileNotFoundError:
-            print('Atomic form factor file {:s} not found!'.format(filename))
+            print(f'Atomic form factor file {filename:s} not found!')
             raise
 
         return f
@@ -557,7 +537,7 @@ class AtomMixed(Atom):
         try:
             m = np.genfromtxt(filename)
         except FileNotFoundError:
-            print('Magnetic form factor file {:s} not found!'.format(filename))
+            print(f'Magnetic form factor file {filename:s} not found!')
             # return zero array
             m = np.zeros([1, 3])
 

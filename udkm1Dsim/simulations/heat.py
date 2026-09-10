@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -26,18 +25,23 @@ __all__ = ['Heat']
 
 __docformat__ = 'restructuredtext'
 
-from .simulation import Simulation
-from .. import u, Q_
-from ..helpers import make_hash_md5, finderb, multi_gauss
-import numpy as np
-from scipy.optimize import brentq
-from scipy.interpolate import RectBivariateSpline
-from scipy.integrate import solve_ivp
-from time import time
-from os import path
 import warnings
+from os import path
+from time import time
+
+import numpy as np
+import pint
+from scipy.integrate import solve_ivp
+from scipy.interpolate import RectBivariateSpline
+from scipy.optimize import brentq
 from tqdm.auto import tqdm
 
+from ..helpers import finderb, make_hash_md5, multi_gauss
+from ..structures.layers import Layer
+from .simulation import Simulation
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 class Heat(Simulation):
     """Heat
@@ -268,9 +272,8 @@ class Heat(Simulation):
         theta = self._excitation['theta']
 
         fluence = fluence*np.sin(theta)
-        self.disp_message('Surface incidence fluence scaled by factor {:5.4f}'
-                          ' due to incidence angle theta={:5.2f} deg'.format(
-                              np.sin(theta), np.rad2deg(theta)))
+        self.disp_message(f'Surface incidence fluence scaled by factor {np.sin(theta):5.4f}'
+                          f' due to incidence angle theta={np.rad2deg(theta):5.2f} deg')
 
         # throw warnings if heat diffusion should be enabled
         if (self.S.num_sub_systems > 1) and not self.heat_diffusion:
@@ -461,8 +464,8 @@ class Heat(Simulation):
         increase profiles in each layer of a multilayers structure for :math:`p`
         -polarized light.
 
-        Calculation based on the method in Ref [5]_ and code developed Matlab
-        by L. Le Guyader, see Ref [6]_.
+        Calculation based on the method by :cite:t:`ohtaishida1990` and code
+        developed Matlab by :cite:t:`leguyader2013`.
 
         Copyright (2012-2014) Loïc Le Guyader
         <loic.le_guyader@helmholtz-berlin.de>
@@ -480,18 +483,6 @@ class Heat(Simulation):
               multilayer.
             - *T_total (float)* - total transmission in the last layer of the
               multilayer.
-
-        References:
-
-        .. [5] K. Ohta & H. Ishida, *Matrix formalism for calculation of the
-           light beam intensity in stratified multilayered films, and its use
-           in the analysis of emission spectra*, `Appl. Opt. 29, 2466 (1990).
-           <https://doi.org/10.1364/AO.29.002466>`_
-        .. [6] L. Le Guyader, A. Kleibert, F. Nolting, L. Joly, P.M. Derlet,
-           R.V. Pisarev, A. Kirilyuk, Th. Rasing & A.V. Kimel, *Dynamics of
-           laser-induced spin reorientation in Co/SmFeO_3 heterostructure*,
-           `Phys. Rev. B 87, 054437 (2013).
-           <https://doi.org/10.1103/PhysRevB.87.054437>`_
 
         """
         self.disp_message('Absorption profile is calculated by multilayer formalism '
@@ -513,37 +504,45 @@ class Heat(Simulation):
 
         interfaces = structure.get_distances_of_interfaces(False)
         N = len(interfaces)
-        # if a substrate is included add it at the end
-        if structure.substrate != []:
-            M = N + 1
+
+        opt_ref_indices = np.empty(N+1, dtype=np.complex128)
+        thicknesses = np.empty(N+1, dtype=float)
+
+        # add superstrate
+        if isinstance(structure.superstrate[0], Layer):
+            superstrate_layer = structure.superstrate[0]
         else:
-            M = N
+            raise TypeError('Superstrate must be of type '
+                            'Layer or its sub-classes!')
 
-        opt_ref_indices = np.empty(M, dtype=complex)
-        thicknesses = np.empty(M, dtype=float)
+        opt_ref_indices[0] = superstrate_layer.opt_ref_index
+        thicknesses[0] = superstrate_layer.thickness.to_base_units().magnitude
 
-        # first layer is vacuum/air
-        opt_ref_indices[0] = 1+0.0j
-        thicknesses[0] = 1e-9
-
+        # iterate actual sampel structure
         for i in range(N-1):
             index = finderb(interfaces[i], d_start)
             layer = structure.get_layer_handle(index[0])
             opt_ref_indices[i+1] = layer.opt_ref_index
             thicknesses[i+1] = interfaces[i+1]-interfaces[i]
 
-        if M != N:
-            opt_ref_indices[N] = structure.substrate.get_layer_handle(0).opt_ref_index
-            thicknesses[N] = structure.substrate.get_thickness(False)
+        # add substrate
+        if isinstance(structure.substrate[0], Layer):
+            substrate_layer = structure.substrate[0]
+        else:
+            raise TypeError('Substrate must be of type '
+                            'Layer or its sub-classes!')
+
+        opt_ref_indices[N] = substrate_layer.opt_ref_index
+        thicknesses[N] = substrate_layer.thickness.to_base_units().magnitude
 
         # Snell laws
-        alpha = np.empty(M, dtype=complex)
+        alpha = np.empty(N+1, dtype=complex)
         alpha[0] = np.pi/2 - self._excitation['theta']
         alpha[1:] = np.arcsin(opt_ref_indices[0]/opt_ref_indices[1:]*np.sin(alpha[0]))
 
         # fresnel coefficient
-        rfresnel = np.empty(M-1, dtype=complex)
-        tfresnel = np.empty(M-1, dtype=complex)
+        rfresnel = np.empty(N, dtype=complex)
+        tfresnel = np.empty(N, dtype=complex)
 
         if self._excitation['polarization'] == 's':
             rfresnel[:] = (opt_ref_indices[0:-1]*np.cos(alpha[0:-1])
@@ -563,7 +562,7 @@ class Heat(Simulation):
                    + opt_ref_indices[0:-1]*np.cos(alpha[1:]))
 
         # interface change matrix
-        Jnm = np.empty((2, 2, M-1), dtype=complex)
+        Jnm = np.empty((2, 2, N), dtype=complex)
         Jnm[0, 0, :] = 1.0/tfresnel
         Jnm[0, 1, :] = rfresnel/tfresnel
         Jnm[1, 0, :] = rfresnel/tfresnel
@@ -574,7 +573,7 @@ class Heat(Simulation):
 
         # phase changes
         beta = k_z*thicknesses
-        Ln = np.empty((2, 2, M-1), dtype=complex)
+        Ln = np.empty((2, 2, N), dtype=complex)
         Ln[:, :, 0] = [[1, 0], [0, 1]]
         Ln[0, 0, 1:] = np.exp(-1.0j*beta[1:-1])
         Ln[0, 1, 1:] = 0
@@ -582,28 +581,28 @@ class Heat(Simulation):
         Ln[1, 1, 1:] = np.exp(1.0j*beta[1:-1])
 
         # calculating propagation matrix
-        S = Jnm[:, :, M-2]
-        for i in range(M-3, -1, -1):
+        S = Jnm[:, :, N-1]
+        for i in range(N-2, -1, -1):
             S = np.dot(Jnm[:, :, i], np.dot(Ln[:, :, i+1], S))
 
         # Total transmission and reflection of the multilayer
         R_total = np.abs(S[1, 0]/S[0, 0])**2
         if self._excitation['polarization'] == 's':
-            T_total = (np.real(opt_ref_indices[M-1]*np.cos(alpha[M-1])
+            T_total = (np.real(opt_ref_indices[N]*np.cos(alpha[N])
                                / (opt_ref_indices[0]*np.cos(alpha[0])))
                        * np.abs(1/S[0, 0])**2)
         else:
-            T_total = (np.real(np.conj(opt_ref_indices[M-1])*np.cos(alpha[M-1])
+            T_total = (np.real(np.conj(opt_ref_indices[N])*np.cos(alpha[N])
                                / (opt_ref_indices[0]*np.cos(alpha[0])))
                        * np.abs(1/S[0, 0])**2)
 
         # calculating D matrix for intermediate field
-        Dn = np.empty((2, 2, M), dtype=complex)
-        Dn[0, 0, M-1] = 1.0/S[0, 0]
-        Dn[0, 1, M-1] = 0.0
-        Dn[1, 0, M-1] = 0.0
-        Dn[1, 1, M-1] = 1.0/S[0, 0]
-        for i in range(M-2, -1, -1):
+        Dn = np.empty((2, 2, N+1), dtype=complex)
+        Dn[0, 0, N] = 1.0/S[0, 0]
+        Dn[0, 1, N] = 0.0
+        Dn[1, 0, N] = 0.0
+        Dn[1, 1, N] = 1.0/S[0, 0]
+        for i in range(N-1, -1, -1):
             Temp = np.dot(Ln[:, :, i], np.dot(Jnm[:, :, i], Dn[:, :, i+1]))
             Dn[0, 0, i] = Temp[0, 0]
             Dn[0, 1, i] = Temp[0, 1]
@@ -638,9 +637,8 @@ class Heat(Simulation):
 
             k = k+m  # set the counter
 
-        self.disp_message('Total reflectivity of {:0.1f} % and transmission '
-                          'of {:0.1f} %.'.format(np.round(R_total*100, 1),
-                                                 np.round(T_total*100, 1)))
+        self.disp_message(f'Total reflectivity of {R_total*100:0.1f} % and transmission '
+                          f'of {T_total*100:0.1f} %.')
 
         if backside:
             # for backside excitation the results must be reversed
@@ -713,7 +711,7 @@ class Heat(Simulation):
             fluence = np.asarray(fluence, dtype=float).squeeze()
         if np.ndim(fluence) != 0:
             raise ValueError('Delta excitation expects a single fluence value; '
-                             'got shape {}'.format(np.shape(fluence)))
+                             f'got shape {np.shape(fluence)}')
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
@@ -738,7 +736,7 @@ class Heat(Simulation):
                 final_temp[i, 0] = brentq(fun, init_temp[i, 0], 1e5)
         delta_T = final_temp - init_temp  # this is the temperature change
         self.disp_message('Elapsed time for _temperature_after_delta_excitation_:'
-                          ' {:f} s'.format(time()-t1))
+                          f' {time()-t1:f} s')
         return final_temp, delta_T
 
     def get_temp_map(self, delays, init_temp):
@@ -863,12 +861,10 @@ class Heat(Simulation):
                 else:
                     if len(fluence) == 1:
                         self.disp_message('Calculating _heat_diffusion_ for excitation ' +
-                                          '{:d}:{:d} ...'.format(num_ex, F))
+                                          f'{num_ex:d}:{F:d} ...')
                     elif len(fluence) > 1:
                         self.disp_message('Calculating _heat_diffusion_ for excitation ' +
-                                          '{:d}-{:d}:{:d}...'.format(num_ex,
-                                                                     num_ex+len(fluence)-1,
-                                                                     F))
+                                          f'{num_ex:d}-{num_ex+len(fluence)-1:d}:{F:d}...')
 
                 start = 0
                 stop = 0
@@ -944,7 +940,7 @@ class Heat(Simulation):
         # delete the initial temperature that was added at the beginning
         temp_map = temp_map[1:, :, :]
         self.disp_message('Elapsed time for _temp_map_:'
-                          ' {:f} s'.format(time()-t1))
+                          f' {time()-t1:f} s')
         return np.squeeze(temp_map), np.squeeze(delta_temp_map), checked_excitation
 
     def calc_heat_diffusion(self, init_temp, distances, delays, delay_pump, pulse_width, fluence):
@@ -1002,7 +998,7 @@ class Heat(Simulation):
 
         if self.progress_bar:  # with tqdm progressbar
             pbar = tqdm()
-            pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
+            pbar.set_description(f'Delay = {delays[0]*1e12:.3f} ps')
             state = [delays[0], abs(delays[-1]-delays[0])/100]
         else:  # without progressbar
             pbar = None
@@ -1042,10 +1038,10 @@ class Heat(Simulation):
 
         temp_map = np.array(temp_map).reshape([M, N, K], order='F')
         if np.any(fluence):
-            self.disp_message('Elapsed time for _heat_diffusion_ with {:d} '
-                              'excitation(s): {:f} s'.format(len(fluence), time()-t1))
+            self.disp_message(f'Elapsed time for _heat_diffusion_ with {len(fluence):d} '
+                              f'excitation(s): {time()-t1:f} s')
         else:
-            self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
+            self.disp_message(f'Elapsed time for _heat_diffusion_: {time()-t1:f} s')
 
         return temp_map
 
@@ -1082,7 +1078,7 @@ class Heat(Simulation):
                         - int_heat_capacities[j][k](init_temp[j, k])
                         )
 
-        self.disp_message('Elapsed time for _energy_map_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _energy_map_: {time()-t1:f} s')
 
         return energy_map
 
@@ -1143,7 +1139,7 @@ class Heat(Simulation):
                         energy_flux_map[i, j, k, 2] = energy_flux_map[i, j, k, 0] -\
                             energy_flux_map[i, j, k, 1]
 
-        self.disp_message('Elapsed time for _energy_flux_map_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _energy_flux_map_: {time()-t1:f} s')
 
         return energy_flux_map
 
@@ -1201,7 +1197,7 @@ class Heat(Simulation):
 
             if n >= 1:
                 pbar.update(n)
-                pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
+                pbar.set_description(f'Delay = {t*1e12:.3f} ps')
                 state[0] = t
             elif n < 0:
                 state[0] = t
