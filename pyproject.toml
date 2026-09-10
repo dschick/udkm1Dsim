@@ -38,7 +38,6 @@ lint = ["flake8", "nbqa", "ipython"]
 
 [project.optional-dependencies]
 parallel = ["dask[distributed]>=2.6.0"]
-testing = ["flake8", "pytest", "pytest-cov", "noqa"]
 
 [project.urls]
 homepage = "https://github.com/dschick/udkm1Dsim"
