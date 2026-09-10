@@ -90,3 +90,23 @@ filename = "udkm1Dsim/__init__.py"
 
 [[tool.bumpversion.files]]
 filename = "docs/source/conf.py"
+
+[tool.ruff]
+line-length = 99
+target-version = "py310"
+extend-exclude = ["examples","docs", "build", "dist", ".nox", ".venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports in __init__ files (re-exports)
+
+[tool.ruff.format]
+quote-style = "double"

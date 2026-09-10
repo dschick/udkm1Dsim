@@ -26,11 +26,13 @@ __all__ = ['Structure']
 
 __docformat__ = 'restructuredtext'
 
-from .layers import AmorphousLayer, UnitCell
-from .. import u, Q_
-from ..helpers import make_hash_md5, finderb
 import itertools
+
 import numpy as np
+
+from .. import Q_, u
+from ..helpers import finderb, make_hash_md5
+from .layers import AmorphousLayer, UnitCell
 
 
 class Structure:
@@ -121,8 +123,7 @@ class Structure:
 
         """
         import matplotlib.pyplot as plt
-        from matplotlib import patches
-        from matplotlib import colormaps
+        from matplotlib import colormaps, patches
 
         _, d_end, _ = self.get_distances_of_layers(True)  # distance vector of all layers
         layer_interfaces = np.append(0, d_end.to(unit).magnitude)  # Append zero at the start

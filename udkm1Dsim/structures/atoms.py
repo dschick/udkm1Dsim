@@ -26,12 +26,14 @@ __all__ = ['Atom', 'AtomMixed']
 
 __docformat__ = 'restructuredtext'
 
-from .. import u, Q_
 import os
+import warnings
+
 import numpy as np
 import scipy.constants as constants
-import warnings
 from tabulate import tabulate
+
+from .. import Q_, u
 
 
 class Atom:

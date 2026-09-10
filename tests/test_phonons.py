@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from udkm1Dsim import Phonon, PhononNum, PhononAna
-from udkm1Dsim import u
 import numpy as np
 import pytest
 
+from udkm1Dsim import Phonon, PhononAna, PhononNum, u
 
 # fixtures
 

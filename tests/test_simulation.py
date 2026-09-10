@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from udkm1Dsim import Simulation
 import numpy as np
 import pytest
 
+from udkm1Dsim import Simulation
 
 # fixtures
 

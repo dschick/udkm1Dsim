@@ -26,18 +26,24 @@ __all__ = ['Magnetization', 'LLB']
 
 __docformat__ = 'restructuredtext'
 
-from .simulation import Simulation
-from ..structures.layers import UnitCell
-from .. import u, Q_
-from ..helpers import make_hash_md5, finderb
-from ..helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
+from os import path
+from time import time
+
 import numpy as np
+import scipy.constants as constants
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve
-import scipy.constants as constants
-from time import time
-from os import path
 from tqdm.auto import tqdm
+
+from .. import Q_, u
+from ..helpers import (
+    convert_cartesian_to_polar,
+    convert_polar_to_cartesian,
+    finderb,
+    make_hash_md5,
+)
+from ..structures.layers import UnitCell
+from .simulation import Simulation
 
 
 class Magnetization(Simulation):

@@ -26,13 +26,15 @@ __all__ = ['Phonon', 'PhononNum', 'PhononAna']
 
 __docformat__ = 'restructuredtext'
 
-from .simulation import Simulation
-from ..helpers import make_hash_md5, finderb
-import numpy as np
 from os import path
 from time import time
+
+import numpy as np
 from scipy.integrate import solve_ivp
 from tqdm.auto import tqdm, trange
+
+from ..helpers import finderb, make_hash_md5
+from .simulation import Simulation
 
 
 class Phonon(Simulation):

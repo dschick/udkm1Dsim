@@ -26,17 +26,19 @@ __all__ = ['Heat']
 
 __docformat__ = 'restructuredtext'
 
-from .simulation import Simulation
-from .. import u, Q_
-from ..helpers import make_hash_md5, finderb, multi_gauss
-import numpy as np
-from scipy.optimize import brentq
-from scipy.interpolate import RectBivariateSpline
-from scipy.integrate import solve_ivp
-from time import time
-from os import path
 import warnings
+from os import path
+from time import time
+
+import numpy as np
+from scipy.integrate import solve_ivp
+from scipy.interpolate import RectBivariateSpline
+from scipy.optimize import brentq
 from tqdm.auto import tqdm
+
+from .. import Q_, u
+from ..helpers import finderb, make_hash_md5, multi_gauss
+from .simulation import Simulation
 
 
 class Heat(Simulation):

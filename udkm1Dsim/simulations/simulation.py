@@ -26,10 +26,11 @@ __all__ = ['Simulation']
 
 __docformat__ = 'restructuredtext'
 
-from tabulate import tabulate
-import numpy as np
 import os
 import warnings
+
+import numpy as np
+from tabulate import tabulate
 
 
 class Simulation:

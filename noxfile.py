@@ -1,6 +1,5 @@
 import nox
 
-
 reuse_venv = False
 
 

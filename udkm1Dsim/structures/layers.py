@@ -26,14 +26,16 @@ __all__ = ['Layer', 'AmorphousLayer', 'UnitCell']
 
 __docformat__ = 'restructuredtext'
 
-from .atoms import Atom, AtomMixed
-from .. import u, Q_
-import numpy as np
-from inspect import isfunction
-from sympy import integrate, lambdify, symbols, symarray
-from tabulate import tabulate
-import scipy.constants as constants
 import warnings
+from inspect import isfunction
+
+import numpy as np
+import scipy.constants as constants
+from sympy import integrate, lambdify, symarray, symbols
+from tabulate import tabulate
+
+from .. import Q_, u
+from .atoms import Atom, AtomMixed
 
 
 class Layer:
@@ -286,7 +288,7 @@ class Layer:
                                }
 
         types = (kwargs.get('types', 'all'))
-        if not type(types) is list:
+        if type(types) is not list:
             types = [types]
         attrs = vars(self)
         R = {}
@@ -1060,7 +1062,7 @@ class UnitCell(Layer):
         """
         ids = []
         for i in range(self.num_atoms):
-            if not self.atoms[i][0].id in ids:
+            if self.atoms[i][0].id not in ids:
                 ids.append(self.atoms[i][0].id)
 
         return ids

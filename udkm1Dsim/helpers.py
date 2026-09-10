@@ -29,6 +29,7 @@ __all__ = ['make_hash_md5', 'make_hashable', 'm_power_x',
 __docformat__ = 'restructuredtext'
 
 import hashlib
+
 import numpy as np
 
 

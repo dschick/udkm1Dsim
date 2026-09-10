@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 
-from udkm1Dsim import u
-import numpy as np
 from pathlib import Path
-import pytest
-from pint.testing import assert_allclose
-from pint.testing import assert_equal
 
+import numpy as np
+import pytest
+from pint.testing import assert_allclose, assert_equal
+
+from udkm1Dsim import u
 
 # tests
 

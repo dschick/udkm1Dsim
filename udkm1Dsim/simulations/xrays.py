@@ -26,16 +26,18 @@ __all__ = ['Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag']
 
 __docformat__ = 'restructuredtext'
 
-from .simulation import Simulation
-from ..structures.layers import AmorphousLayer, UnitCell
-from .. import u, Q_
-from ..helpers import make_hash_md5, m_power_x, m_times_n, finderb
+import warnings
+from os import path
+from time import time
+
 import numpy as np
 import scipy.constants as constants
-from time import time
-from os import path
 from tqdm.auto import trange
-import warnings
+
+from .. import Q_, u
+from ..helpers import finderb, m_power_x, m_times_n, make_hash_md5
+from ..structures.layers import AmorphousLayer, UnitCell
+from .simulation import Simulation
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -1274,7 +1276,7 @@ class XrayDyn(Xray):
             # ``knnsearch`` function to find the nearest strain value.
             strain_index = finderb(strains[i], strain_vectors[int(uc_index)])[0]
             tmp = RTM[int(uc_index)][strain_index]
-            if tmp is not []:
+            if tmp != []:
                 RT = m_times_n(RT, tmp)
             else:
                 raise ValueError('RTM not found')

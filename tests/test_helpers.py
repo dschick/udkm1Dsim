@@ -1,9 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from udkm1Dsim.helpers import make_hash_md5, m_power_x, m_times_n
-from udkm1Dsim.helpers import finderb, multi_gauss
-from udkm1Dsim.helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
 import numpy as np
+
+from udkm1Dsim.helpers import (
+    convert_cartesian_to_polar,
+    convert_polar_to_cartesian,
+    finderb,
+    m_power_x,
+    m_times_n,
+    make_hash_md5,
+    multi_gauss,
+)
 
 
 def test_make_hash_md5():
