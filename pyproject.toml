@@ -44,7 +44,7 @@ docs = [
     "ipywidgets",
     "IProgress",
     "autodocsumm",
-    "sphinx-book-theme==1.2.0",
+    "sphinx-book-theme==1.2.0; python_version >= '3.11'",
     "sphinx_design",
     "sphinx_copybutton",
     "sphinxcontrib.bibtex",
