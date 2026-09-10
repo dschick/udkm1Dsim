@@ -36,8 +36,7 @@ jobs:
       - name: linting flake8
         if: matrix.python-version == '3.13' && matrix.os == 'ubuntu-latest'
         run: |
-          uv run flake8 udkm1Dsim/ tests/
-          uv run nbqa flake8 examples/
+          uv run ruff check udkm1Dsim/ tests/ examples/
   
       - name: Generate coverage report
         run: |

@@ -34,7 +34,7 @@ dependencies = [
 ]
 [dependency-groups]
 test = ["pytest", "pytest-cov", "pytest-codspeed"]
-lint = ["flake8", "nbqa", "ipython"]
+lint = ["ruff"]
 
 [project.optional-dependencies]
 parallel = ["dask[distributed]>=2.6.0"]
@@ -94,7 +94,7 @@ filename = "docs/source/conf.py"
 [tool.ruff]
 line-length = 99
 target-version = "py310"
-extend-exclude = ["examples","docs", "build", "dist", ".nox", ".venv"]
+extend-exclude = ["docs", "build", "dist", ".nox", ".venv"]
 
 [tool.ruff.lint]
 select = [
@@ -104,10 +104,10 @@ select = [
     "UP",  # pyupgrade
     "I",   # isort (import sorting)
 ]
-ignore = []
+ignore = ["E741", "E731"]
 
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]  # unused imports in __init__ files (re-exports)
+[tool.ruff.lint.isort]
+known-first-party = ["udkm1Dsim"]
 
 [tool.ruff.format]
 quote-style = "double"
