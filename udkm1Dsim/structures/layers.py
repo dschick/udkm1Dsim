@@ -31,6 +31,7 @@ from inspect import isfunction
 import numpy as np
 import pint
 import scipy.constants as constants
+from scipy.integrate import quad
 from sympy import integrate, lambdify, symarray, symbols
 from tabulate import tabulate
 
@@ -494,24 +495,17 @@ class Layer:
             self._int_heat_capacity = []
             self.int_heat_capacity_str = []
             T = symbols('T')
-            try:
-                for hcs in self.heat_capacity_str:
+            for hc, hcs in zip(self.heat_capacity, self.heat_capacity_str):
+                try:
                     integral = integrate(hcs, T)
                     self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
                     self.int_heat_capacity_str.append(str(integral))
-            except Exception:
-                warnings.warn('\nThe sympy integration of the heat capacity did not work. '
-                              'It is only required for\n'
-                              '\n'
-                              '    Heat.get_temperature_after_delta_excitation()\n'
-                              '\n'
-                              'You can set its analytical anti-derivative manually '
-                              'as a str representing the correct function of temperature '
-                              'T by typing\n'
-                              '\n'
-                              '    layer.int_heat_capacity = \'c(T)\'\n'
-                              '\n'
-                              'where layer is the name of the layer object.\n')
+                except Exception:
+                    warnings.warn('\nSympy\'s analytical integration of the heat capacity '
+                                  'did not work.\n'
+                                  'Just do it numerically with scipy.integrate.quad')
+                    self._int_heat_capacity.append(lambda T: quad(hc, 0, T, limit=10000)[0])
+                    self.int_heat_capacity_str.append(f'scipy.integrate.quad({hcs:s}, 0, T)[0]')
 
         return self._int_heat_capacity
 
@@ -541,20 +535,17 @@ class Layer:
             self._int_lin_therm_exp = []
             self.int_lin_therm_exp_str = []
             T = symbols('T')
-            try:
-                for ltes in self.lin_therm_exp_str:
+            for lte, ltes in zip(self.lin_therm_exp, self.lin_therm_exp_str):
+                try:
                     integral = integrate(ltes, T)
                     self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
                     self.int_lin_therm_exp_str.append(str(integral))
-            except Exception:
-                warnings.warn('\nThe sympy integration of the lin. thermal expansion did not '
-                              'work. You can set its analytical anti-derivative manually '
-                              'as a str representing the correct function of temperature '
-                              'T by typing\n'
-                              '\n'
-                              '    layer.int_lin_therm_exp = \'c(T)\'\n'
-                              '\n'
-                              'where layer is the name of the layer object.')
+                except Exception:
+                    warnings.warn('\nSympy\'s analytical integration of the linear thermal '
+                                  'expansion did not work.\n'
+                                  'Just do it numerically with scipy.integrate.quad')
+                    self._int_lin_therm_exp.append(lambda T: quad(lte, 0, T, limit=10000)[0])
+                    self.int_lin_therm_exp_str.append(f'scipy.integrate.quad({ltes:s}, 0, T)[0]')
 
         return self._int_lin_therm_exp
 
