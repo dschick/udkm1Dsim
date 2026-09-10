@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -115,7 +114,7 @@ class Simulation:
         if self.save_data:
             np.savez(full_filename, **data)
             filename = os.path.basename(full_filename)
-            self.disp_message('{:s} saved to file:\n\t {:s}'.format(var_name, filename))
+            self.disp_message(f'{var_name:s} saved to file:\n\t {filename:s}')
 
     @staticmethod
     def conv_with_function(y, x, handle):

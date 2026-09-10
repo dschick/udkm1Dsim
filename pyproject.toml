@@ -101,6 +101,7 @@ select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
     "F",   # pyflakes
+    "UP",  # pyupgrade
     "I",   # isort (import sorting)
 ]
 ignore = []

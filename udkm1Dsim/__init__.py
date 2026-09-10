@@ -1,4 +1,4 @@
-from pint import UnitRegistry
+import pint
 
 from .simulations.heat import Heat
 from .simulations.magnetization import LLB, Magnetization
@@ -9,9 +9,10 @@ from .structures.atoms import Atom, AtomMixed
 from .structures.layers import AmorphousLayer, Layer, UnitCell
 from .structures.structure import Structure
 
-u = UnitRegistry()
+u = pint.get_application_registry()
 u.formatter.default_format = '.4g~P'
 Q_ = u.Quantity
+
 
 __all__ = ['Atom', 'AtomMixed', 'Layer', 'AmorphousLayer', 'UnitCell', 'Structure',
            'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization', 'LLB',

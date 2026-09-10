@@ -1,11 +1,10 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import numpy as np
-from pint import UnitRegistry
+import pint
 from pint.testing import assert_allclose
 
-u = UnitRegistry()
+u = pint.get_application_registry()
 u.formatter.default_format = '.4g~P'
 
 

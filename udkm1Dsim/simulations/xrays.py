@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -31,13 +30,16 @@ from os import path
 from time import time
 
 import numpy as np
+import pint
 import scipy.constants as constants
 from tqdm.auto import trange
 
-from .. import Q_, u
 from ..helpers import finderb, m_power_x, m_times_n, make_hash_md5
 from ..structures.layers import AmorphousLayer, UnitCell
 from .simulation import Simulation
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 r_0 = constants.physical_constants['classical electron radius'][0]
 
@@ -106,15 +108,15 @@ class Xray(Simulation):
     def __str__(self, output=[]):
         """String representation of this class"""
         output = [['energy', self.energy[0] if np.size(self.energy) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.energy), np.max(self.energy))],
+                   f'{np.min(self.energy):.4g~P} .. {np.max(self.energy):.4g~P}'],
                   ['wavelength', self.wl[0] if np.size(self.wl) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.wl), np.max(self.wl))],
+                   f'{np.min(self.wl):.4g~P} .. {np.max(self.wl):.4g~P}'],
                   ['wavenumber', self.k[0] if np.size(self.k) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.k), np.max(self.k))],
+                   f'{np.min(self.k):.4g~P} .. {np.max(self.k):.4g~P}'],
                   ['theta', self.theta[0] if np.size(self.theta) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.theta), np.max(self.theta))],
+                   f'{np.min(self.theta):.4g~P} .. {np.max(self.theta):.4g~P}'],
                   ['q_z', self.qz[0] if np.size(self.qz) == 1 else
-                   '{:.4g~P} .. {:.4g~P}'.format(np.min(self.qz), np.max(self.qz))],
+                   f'{np.min(self.qz):.4g~P} .. {np.max(self.qz):.4g~P}'],
                   ['incoming polarization', self.polarizations[self.pol_in_state]],
                   ['analyzer polarization', self.polarizations[self.pol_out_state]],
                   ] + output
@@ -365,8 +367,8 @@ class XrayKin(Xray):
         """
         self.pol_in_state = pol_in_state
         if self.pol_in_state in [1, 2, 5]:  # circ +,-, elliptical
-            self.disp_message('incoming polarizations {:s} not implemented'.format(
-                self.polarizations[self.pol_in_state]))
+            self.disp_message(f'incoming polarizations {self.polarizations[self.pol_in_state]:s} '
+                              'not implemented')
             self.set_incoming_polarization(3)
             return
         elif (self.pol_in_state == 3):  # sigma
@@ -377,8 +379,8 @@ class XrayKin(Xray):
             self.pol_in_state = 0
             self.pol_in = 0.5
 
-        self.disp_message('incoming polarizations set to: {:s}'.format(
-            self.polarizations[self.pol_in_state]))
+        self.disp_message('incoming polarizations set to: '
+                          f'{self.polarizations[self.pol_in_state]:s}')
 
     def set_outgoing_polarization(self, pol_out_state):
         """set_outgoing_polarization
@@ -391,8 +393,8 @@ class XrayKin(Xray):
         """
         self.pol_out_state = pol_out_state
         if self.pol_out_state == 0:
-            self.disp_message('analyzer polarizations set to: {:s}'.format(
-                self.polarizations[self.pol_out_state]))
+            self.disp_message('analyzer polarizations set to: '
+                              f'{self.polarizations[self.pol_out_state]:s}')
         else:
             self.disp_message('XrayDyn does only allow for NO analyzer polarizations')
             self.set_outgoing_polarization(0)
@@ -483,7 +485,7 @@ class XrayKin(Xray):
             Ept, A = self.homogeneous_reflected_field(self.S, energy, qz, theta, strains)
             # calculate the real reflectivity from Ef
             R[i, :] = np.real(Ept*np.conj(Ept))
-        self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _homogenous_reflectivity_: {time()-t1:f} s')
         return R, A
 
     @u.wraps((None, None), (None, None, 'eV', 'm**-1', 'rad', None), strict=False)
@@ -575,7 +577,7 @@ class XrayKin(Xray):
                 z = sub_structures[0].get_length().magnitude
                 strainCounter = strainCounter + d
                 A.append([temp, [sub_structures[0].name + ' substructures']])
-                A.append([Ep, '{:d}x {:s}'.format(1, sub_structures[0].name)])
+                A.append([Ep, f'{1:d}x {sub_structures[0].name:s}'])
 
             # calculate the interference function for N repetitions of
             # the substructure with the length z
@@ -584,7 +586,7 @@ class XrayKin(Xray):
             # the substructure with the length z
             EpN = Ep * psi
             # remember the result
-            A.append([EpN, '{:d}x {:s}'.format(sub_structures[1], sub_structures[0].name)])
+            A.append([EpN, f'{sub_structures[1]:d}x {sub_structures[0].name:s}'])
             # add the reflected field of the current substructure
             # phase-correct to the already calculated substructures
             Ept = Ept+(EpN*np.exp(1j*qz*Z))
@@ -728,8 +730,8 @@ class XrayDyn(Xray):
         """
         self.pol_in_state = pol_in_state
         if self.pol_in_state in [1, 2, 5]:  # circ +,-, elliptical
-            self.disp_message('incoming polarizations {:s} not implemented'.format(
-                self.polarizations[self.pol_in_state]))
+            self.disp_message(f'incoming polarizations {self.polarizations[self.pol_in_state]:s} '
+                              'not implemented')
             self.set_incoming_polarization(3)
             return
         elif (self.pol_in_state == 3):  # sigma
@@ -740,8 +742,8 @@ class XrayDyn(Xray):
             self.pol_in_state = 0
             self.pol_in = 0.5
 
-        self.disp_message('incoming polarizations set to: {:s}'.format(
-            self.polarizations[self.pol_in_state]))
+        self.disp_message('incoming polarizations set to: '
+                          f'{self.polarizations[self.pol_in_state]:s}')
 
     def set_outgoing_polarization(self, pol_out_state):
         """set_outgoing_polarization
@@ -754,8 +756,8 @@ class XrayDyn(Xray):
         """
         self.pol_out_state = pol_out_state
         if self.pol_out_state == 0:
-            self.disp_message('analyzer polarizations set to: {:s}'.format(
-                self.polarizations[self.pol_out_state]))
+            self.disp_message('analyzer polarizations set to: '
+                              f'{self.polarizations[self.pol_out_state]:s}')
         else:
             self.disp_message('XrayDyn does only allow for NO analyzer polarizations')
             self.set_outgoing_polarization(0)
@@ -787,7 +789,7 @@ class XrayDyn(Xray):
         RT, A = self.homogeneous_ref_trans_matrix(self.S, strains, temps)
         # calculate the real reflectivity from the RT matrix
         R = self.calc_reflectivity_from_matrix(RT)
-        self.disp_message('Elapsed time for _homogenous_reflectivity_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _homogenous_reflectivity_: {time()-t1:f} s')
         return R, A
 
     def homogeneous_ref_trans_matrix(self, S, strains=[], temps=[]):
@@ -829,7 +831,7 @@ class XrayDyn(Xray):
             strains = np.array(strains)
         if len(strains) != L:
             raise IndexError('Number of strains must match the number of '
-                             'substructures: {:d}'.format(L))
+                             f'substructures: {L:d}')
 
         if len(temps) == 0:
             temps = np.zeros([L, 1])
@@ -840,15 +842,14 @@ class XrayDyn(Xray):
                 temps = temps[:, np.newaxis]
             if temps.shape[0] != L:
                 raise IndexError('First dimension of temperatures must match the number of '
-                                 'substructures {:d}.'.format(L))
+                                 f'substructures {L:d}.')
 
             # check length (number of sub-systems) of Debye-Waller factor, which is not checked
             # in setter method
             numel_deb_wal_fac = self.S.get_numel_of_layer_property('deb_wal_fac')
             if temps.shape[1] != numel_deb_wal_fac:
                 raise IndexError('Second dimension of temperatures must match the number of '
-                                 'subsystems for the Debye-Waller factor: {:d}'.format(
-                                     numel_deb_wal_fac))
+                                 f'subsystems for the Debye-Waller factor: {numel_deb_wal_fac:d}')
         # initialize
         RT = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :],
                      (np.size(self._qz, 0), np.size(self._qz, 1), 1, 1))  # ref_trans_matrix
@@ -865,7 +866,7 @@ class XrayDyn(Xray):
                         sub_structure[1])
                 counter += 1
                 # remember the result
-                A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+                A.append([tmp, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
             elif isinstance(sub_structure[0], AmorphousLayer):
                 raise ValueError('The substructure cannot be an AmorphousLayer!')
             else:
@@ -878,10 +879,10 @@ class XrayDyn(Xray):
                         temps[idx, :])
                 A.append([tmp2, sub_structure[0].name + ' substructures'])
                 counter = counter+sub_structure[0].get_number_of_sub_structures()
-                A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+                A.append([tmp, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
                 # calculate the ref-trans matrices for N sub structures
                 tmp = m_power_x(tmp, sub_structure[1])
-                A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+                A.append([tmp, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
 
             # multiply it to the output
             RT = m_times_n(RT, tmp)
@@ -960,9 +961,8 @@ class XrayDyn(Xray):
                 try:
                     temp_map = np.reshape(temp_map, [M, L, numel_deb_wal_fac])
                 except ValueError:
-                    raise ValueError('Third dimension of temp_map must match the number of '
-                                     'sub-systems for the Debye-Waller factor: {:d}'.format(
-                                      numel_deb_wal_fac))
+                    raise ValueError('Third dimension of temp_map must match the number of sub-'
+                                     f'systems for the Debye-Waller factor: {numel_deb_wal_fac:d}')
 
                 if len(strain_vectors) > 0:
                     warnings.warn('strain_vectors and temp_map are not compatible '
@@ -1004,7 +1004,7 @@ class XrayDyn(Xray):
                                                                temp_map)
 
             self.disp_message('Elapsed time for _inhomogeneous_reflectivity_:'
-                              ' {:f} s'.format(time()-t1))
+                              f' {time()-t1:f} s')
             self.save(full_filename, {'R': R}, '_inhomogeneous_reflectivity_')
         return R
 
@@ -1276,7 +1276,7 @@ class XrayDyn(Xray):
             # ``knnsearch`` function to find the nearest strain value.
             strain_index = finderb(strains[i], strain_vectors[int(uc_index)])[0]
             tmp = RTM[int(uc_index)][strain_index]
-            if tmp != []:
+            if tmp.size:
                 RT = m_times_n(RT, tmp)
             else:
                 raise ValueError('RTM not found')
@@ -1364,7 +1364,7 @@ class XrayDyn(Xray):
             for strain in strain_vectors[i]:
                 temp.append(self.get_uc_ref_trans_matrix(uc, strain))
             RTM.append(temp)
-        self.disp_message('Elapsed time for _ref_trans_matrices_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _ref_trans_matrices_: {time()-t1:f} s')
         return RTM
 
     def get_uc_ref_trans_matrix(self, uc, strain=0, temp=np.array([0])):
@@ -1771,8 +1771,8 @@ class XrayDynMag(Xray):
             self.pol_in_state = 0  # catch any number and set state to 0
             self.pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=np.complex128)
 
-        self.disp_message('incoming polarizations set to: {:s}'.format(
-            self.polarizations[self.pol_in_state]))
+        self.disp_message('incoming polarizations set to: '
+                          f'{self.polarizations[self.pol_in_state]:s}')
 
     def set_outgoing_polarization(self, pol_out_state, polarization=None):
         r"""set_outgoing_polarization
@@ -1831,8 +1831,8 @@ class XrayDynMag(Xray):
             self.pol_out_state = 0  # catch any number and set state to 0
             self.pol_out = np.array([], dtype=np.complex128)
 
-        self.disp_message('analyzer polarizations set to: {:s}'.format(
-            self.polarizations[self.pol_out_state]))
+        self.disp_message('analyzer polarizations set to: '
+                          f'{self.polarizations[self.pol_out_state]:s}')
 
     def homogeneous_reflectivity(self, *args):
         r"""homogeneous_reflectivity
@@ -1883,7 +1883,7 @@ class XrayDynMag(Xray):
             RT, self.pol_in, self.pol_out)
         R_phi, T_phi = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
             RT_phi, self.pol_in, self.pol_out)
-        self.disp_message('Elapsed time for _homogeneous_reflectivity_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _homogeneous_reflectivity_: {time()-t1:f} s')
         return R, R_phi, T, T_phi
 
     def calc_homogeneous_matrix(self, S, last_A, last_A_phi, last_k_z, *args):
@@ -2138,7 +2138,7 @@ class XrayDynMag(Xray):
                     strain_map, magnetization_map)
 
             self.disp_message('Elapsed time for _inhomogeneous_reflectivity_:'
-                              ' {:f} s'.format(time()-t1))
+                              f' {time()-t1:f} s')
             self.save(full_filename, {'R': R, 'R_phi': R_phi, 'T': T, 'T_phi': T_phi},
                       '_inhomogeneous_reflectivity_')
         return R, R_phi, T, T_phi

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -62,7 +61,7 @@ def make_hashable(obj):
 
     """
     if isinstance(obj, (tuple, list)):
-        return tuple((make_hashable(e) for e in obj))
+        return tuple(make_hashable(e) for e in obj)
 
     if isinstance(obj, dict):
         return tuple(sorted((k, make_hashable(v)) for k, v in obj.items()))

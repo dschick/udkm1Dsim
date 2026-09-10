@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 import numpy as np
 
 from udkm1Dsim.helpers import (

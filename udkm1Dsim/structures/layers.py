@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -30,12 +29,15 @@ import warnings
 from inspect import isfunction
 
 import numpy as np
+import pint
 import scipy.constants as constants
 from sympy import integrate, lambdify, symarray, symbols
 from tabulate import tabulate
 
-from .. import Q_, u
 from .atoms import Atom, AtomMixed
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 
 class Layer:
@@ -156,20 +158,20 @@ class Layer:
             output += [['no area or volume set', '']]
         try:
             output += [['mass', '{:.4g~P}'.format(self.mass.to('kg'))],
-                       ['mass per unit area', '{:.4g~P}'.format(self.mass_unit_area)],
+                       ['mass per unit area', f'{self.mass_unit_area:.4g~P}'],
                        ['density', '{:.4g~P}'.format(self.density.to('kg/meter**3'))]]
         except AttributeError:
             output += [['no mass set', '']]
         output += [['roughness', '{:.4g~P}'.format(self.roughness.to('nm'))],
                    ['Debye Waller factor', ' m²\n'.join(self.deb_wal_fac_str) + ' m²'],
                    ['sound velocity', '{:.4g~P}'.format(self.sound_vel.to('meter/s'))],
-                   ['spring constant', '{:.4g~P}'.format(self.spring_const * u.kg/u.s**2)],
+                   ['spring constant', f'{self.spring_const * u.kg/u.s**2:.4g~P}'],
                    ['phonon damping', '{:.4g~P}'.format(self.phonon_damping.to('kg/s'))],
                    ['opt. pen. depth', '{:.4g~P}'.format(self.opt_pen_depth.to('nm'))],
-                   ['opt. refractive index', '{0.real:.4f} + {0.imag:.4f}i'.format(
-                       self.opt_ref_index)],
-                   ['opt. ref. index/strain', '{0.real:.4f} + {0.imag:.4f}i'.format(
-                       self.opt_ref_index_per_strain)],
+                   ['opt. refractive index', f'{self.opt_ref_index.real:.4f} \
+                    + {self.opt_ref_index.imag:.4f}i'],
+                   ['opt. ref. index/strain', f'{self.opt_ref_index_per_strain.real:.4f} \
+                    + {self.opt_ref_index_per_strain.imag:.4f}i'],
                    ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
                    ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
                    ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
@@ -216,7 +218,7 @@ class Layer:
         K = self.num_sub_systems
         k = len(inputs)
         if k != K and change_num_sub_systems:
-            print('Number of subsystems changed from {:d} to {:d}.'.format(K, k))
+            print(f'Number of subsystems changed from {K:d} to {k:d}.')
             self.num_sub_systems = k
 
         # traverse each list element and convert it to a function handle
@@ -732,7 +734,7 @@ class AmorphousLayer(Layer):
         """String representation of this class"""
         output = [['id', self.id],
                   ['name', self.name],
-                  ['thickness', '{:.4g~P}'.format(self.thickness)],
+                  ['thickness', f'{self.thickness:.4g~P}'],
                   ]
         output += super().__str__()
 
@@ -900,7 +902,7 @@ class UnitCell(Layer):
                   ['area', '{:.4g~P}'.format(self.area.to('nm**2'))],
                   ['volume', '{:.4g~P}'.format(self.volume.to('nm**3'))],
                   ['mass', '{:.4g~P}'.format(self.mass.to('kg'))],
-                  ['mass per unit area', '{:.4g~P}'.format(self.mass_unit_area)],
+                  ['mass per unit area', f'{self.mass_unit_area:.4g~P}'],
                   ]
         output += super().__str__()
 
@@ -912,7 +914,7 @@ class UnitCell(Layer):
         atoms_str = []
         for i in range(self.num_atoms):
             atoms_str.append([self.atoms[i][0].name,
-                              '{:0.2f}'.format(self.atoms[i][1](0)),
+                              f'{self.atoms[i][1](0):0.2f}',
                               self.atoms[i][2],
                               '',
                               self.atoms[i][0].mag_amplitude,
@@ -971,7 +973,7 @@ class UnitCell(Layer):
         plt.axis([0.1, self.num_atoms+0.9, -0.1, (1.1+strain)])
         plt.grid(True)
 
-        plt.title('Strain: {:0.2f}%'.format(strain))
+        plt.title(f'Strain: {strain:0.2f}%')
         plt.ylabel('relative Position')
         plt.xlabel('# Atoms')
         plt.legend()

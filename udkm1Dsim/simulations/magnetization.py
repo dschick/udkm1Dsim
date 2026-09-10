@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -30,12 +29,12 @@ from os import path
 from time import time
 
 import numpy as np
+import pint
 import scipy.constants as constants
 from scipy.integrate import solve_ivp
 from scipy.optimize import fsolve
 from tqdm.auto import tqdm
 
-from .. import Q_, u
 from ..helpers import (
     convert_cartesian_to_polar,
     convert_polar_to_cartesian,
@@ -45,6 +44,8 @@ from ..helpers import (
 from ..structures.layers import UnitCell
 from .simulation import Simulation
 
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 class Magnetization(Simulation):
     """Magnetization
@@ -268,7 +269,7 @@ class Magnetization(Simulation):
             magnetization_map = self.calc_magnetization_map(delays, **kwargs)
 
             self.disp_message('Elapsed time for _magnetization_map_:'
-                              ' {:f} s'.format(time()-t1))
+                              f' {time()-t1:f} s')
             self.save(full_filename, {'magnetization_map': magnetization_map},
                       '_magnetization_map_')
         return magnetization_map
@@ -437,7 +438,7 @@ class LLB(Magnetization):
 
         if self.progress_bar:  # with tqdm progressbar
             pbar = tqdm()
-            pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
+            pbar.set_description(f'Delay = {delays[0]*1e12:.3f} ps')
             state = [delays[0], abs(delays[-1]-delays[0])/100]
         else:  # without progressbar
             pbar = None
@@ -475,7 +476,7 @@ class LLB(Magnetization):
         magnetization_map[:, is_magnetic, :] = np.array(temp).reshape([M, N, 3], order='F')
         # convert to polar coordinates
         magnetization_map = convert_cartesian_to_polar(magnetization_map)
-        self.disp_message('Elapsed time for _LLB_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _LLB_: {time()-t1:f} s')
 
         return magnetization_map
 
@@ -516,7 +517,7 @@ class LLB(Magnetization):
             mf_mag_map = self.calc_mean_field_mag_map(temp_map)
 
             self.disp_message('Elapsed time for _mean_field_magnetization_map_:'
-                              ' {:f} s'.format(time()-t1))
+                              f' {time()-t1:f} s')
             self.save(full_filename, {'mf_mag_map': mf_mag_map},
                       '_mean_field_magnetization_map_')
         return mf_mag_map
@@ -584,9 +585,8 @@ class LLB(Magnetization):
                                   relevant_temps[k][0, :])
                     mf_mag_map[:, v] = np.reshape(relevant_temps[k][1, idx], (M, len(v)))
                 except Exception:
-                    raise IndexError('No temperature in _temp_map_ was found that is '
-                                     'below the curie temperature for layer {:s}!'.format(
-                                         unique_layers[0][i]))
+                    raise IndexError('No temperature in _temp_map_ was found that is below'
+                                     f'the curie temperature for layer {unique_layers[0][i]:s}!')
             else:
                 # non-magnetic layers with Curie temperature = 0
                 mf_mag_map[:, v] = 0
@@ -680,7 +680,7 @@ class LLB(Magnetization):
 
         if n >= 1:
             pbar.update(n)
-            pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
+            pbar.set_description(f'Delay = {t*1e12:.3f} ps')
             state[0] = t
         elif n < 0:
             state[0] = t
