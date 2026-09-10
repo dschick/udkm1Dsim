@@ -23,22 +23,25 @@ jobs:
 
     steps:
       - name: Checkout source repo
-        uses: actions/checkout@v5
-      
+        uses: actions/checkout@v7
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
       - name: Install uv and set up Python
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
 
       - name: Install dependencies
         run: |
-          uv pip install --system pytest pytest-codspeed
-          # Install the package (reads pyproject.toml / hatchling backend)
-          uv pip install --system .
+          uv sync --locked --all-extras --dev
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
         with:
           mode: simulation
           token: ${{ secrets.CODSPEED_TOKEN }}
-          run: pytest --codspeed tests/benchmarks/
+          run: uv run pytest --codspeed tests/benchmarks/
