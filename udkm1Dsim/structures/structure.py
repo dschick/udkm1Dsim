@@ -33,7 +33,7 @@ import numpy as np
 import pint
 
 from ..helpers import finderb, make_hash_md5
-from .layers import Vacuum, Layer
+from .layers import Layer, Vacuum
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -93,8 +93,7 @@ class Structure:
             else:
                 # the substructure is a Structure instance by itself
                 # call the display() method recursively
-                class_str += tab_str + 'sub-structure {:d} times:\n'.format(
-                       sub_structure[1])
+                class_str += tab_str + f'sub-structure {sub_structure[1]:d} times:\n'
                 class_str += sub_structure[0].__str__(tabs+1, recursive=True)
         class_str += tab_str + '----\n'
         # do not print sub-structure superstrate or substrate

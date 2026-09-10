@@ -37,6 +37,7 @@ from scipy.optimize import brentq
 from tqdm.auto import tqdm
 
 from ..helpers import finderb, make_hash_md5, multi_gauss
+from ..structures.layers import Layer
 from .simulation import Simulation
 
 u = pint.get_application_registry()
@@ -636,8 +637,8 @@ class Heat(Simulation):
 
             k = k+m  # set the counter
 
-        self.disp_message('Total reflectivity of {:0.1f} % and transmission '
-                          'of {:0.1f} %.'.format(R_total*100, T_total*100))
+        self.disp_message(f'Total reflectivity of {R_total*100:0.1f} % and transmission '
+                          f'of {T_total*100:0.1f} %.')
 
         if backside:
             # for backside excitation the results must be reversed

@@ -36,7 +36,7 @@ import scipy.constants as constants
 from tqdm.auto import trange
 
 from ..helpers import finderb, m_power_x, m_times_n, make_hash_md5
-from ..structures.layers import Layer, Vacuum, AmorphousLayer, UnitCell
+from ..structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
 from ..structures.structure import Structure
 from .simulation import Simulation
 
@@ -597,7 +597,7 @@ class XrayKin(Xray):
                 z = sub_structure[0].get_length().magnitude
                 strainCounter = strainCounter + d
                 A.append([temp, [sub_structure[0].name + ' substructures']])
-                A.append([Ep, '{:d}x {:s}'.format(1, sub_structure[0].name)])
+                A.append([Ep, f'{1:d}x {sub_structure[0].name:s}'])
             else:
                 raise TypeError('The substructure must be Vacuum, UnitCell or Structure type!')
 
@@ -608,7 +608,7 @@ class XrayKin(Xray):
             # the substructure with the length z
             EpN = Ep * psi
             # remember the result
-            A.append([EpN, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+            A.append([EpN, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
             # add the reflected field of the current substructure
             # phase-correct to the already calculated substructures
             Ept = Ept+(EpN*np.exp(1j*qz*Z))
@@ -900,7 +900,7 @@ class XrayDyn(Xray):
                         sub_structure[1])
                 counter += 1
                 # remember the result
-                A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+                A.append([tmp, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
             elif isinstance(sub_structure[0], Structure):
                 # its a structure
                 # make a recursive call
@@ -914,7 +914,7 @@ class XrayDyn(Xray):
                 A.append([tmp, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
                 # calculate the ref-trans matrices for N sub structures
                 tmp = m_power_x(tmp, sub_structure[1])
-                A.append([tmp, '{:d}x {:s}'.format(sub_structure[1], sub_structure[0].name)])
+                A.append([tmp, f'{sub_structure[1]:d}x {sub_structure[0].name:s}'])
             else:
                 raise TypeError('The substructure must be Vacuum, UnitCell or Structure type!')
 

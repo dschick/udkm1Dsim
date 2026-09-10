@@ -6,7 +6,7 @@ from .simulations.phonons import Phonon, PhononAna, PhononNum
 from .simulations.simulation import Simulation
 from .simulations.xrays import Xray, XrayDyn, XrayDynMag, XrayKin
 from .structures.atoms import Atom, AtomMixed
-from .structures.layers import Layer, Vacuum, AmorphousLayer, UnitCell
+from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
 from .structures.structure import Structure
 
 u = pint.get_application_registry()
