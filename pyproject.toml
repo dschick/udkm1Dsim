@@ -47,6 +47,9 @@ documentation = "https://https://udkm1dsim.readthedocs.io"
 [tool.hatch.build.targets.wheel]
 packages = ["udkm1Dsim"]
 
+[tool.uv]
+required-version = ">=0.12.12"
+
 [tool.pytest.ini_options]
 filterwarnings = "ignore::DeprecationWarning"
 
