@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -26,12 +25,16 @@ __all__ = ['Atom', 'AtomMixed']
 
 __docformat__ = 'restructuredtext'
 
-from .. import u, Q_
 import os
-import numpy as np
-import scipy.constants as constants
 import warnings
+
+import numpy as np
+import pint
+import scipy.constants as constants
 from tabulate import tabulate
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 
 class Atom:
@@ -142,16 +145,16 @@ class Atom:
                                  'either chantler or henke!')
 
             if source == 'chantler':
-                sub_path = 'chantler/{:s}.cf'.format(self.symbol.lower())
+                sub_path = f'chantler/{self.symbol.lower():s}.cf'
             elif source == 'henke':
-                sub_path = 'henke/{:s}.nff'.format(self.symbol.lower())
+                sub_path = f'henke/{self.symbol.lower():s}.nff'
 
             filename = os.path.join(os.path.dirname(__file__),
-                                    '../parameters/atomic_form_factors/{:s}'.format(sub_path))
+                                    f'../parameters/atomic_form_factors/{sub_path:s}')
         try:
             f = np.genfromtxt(filename, skip_header=0)
         except FileNotFoundError:
-            print('Atomic form factor file {:s} not found!'.format(filename))
+            print(f'Atomic form factor file {filename:s} not found!')
             raise
 
         return f
@@ -200,7 +203,7 @@ class Atom:
             cm = np.genfromtxt(filename, skip_header=1,
                                usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
         except FileNotFoundError:
-            print('Cromer Mann coefficient file {:s} not found!'.format(filename))
+            print(f'Cromer Mann coefficient file {filename:s} not found!')
             raise
 
         return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
@@ -282,12 +285,11 @@ class Atom:
         """
         if not filename:
             filename = os.path.join(os.path.dirname(__file__),
-                                    '../parameters/magnetic_form_factors/{:s}.mf'.format(
-                                            self.symbol))
+                                    f'../parameters/magnetic_form_factors/{self.symbol:s}.mf')
         try:
             m = np.genfromtxt(filename)
         except FileNotFoundError:
-            print('Magnetic form factor file {:s} not found!'.format(filename))
+            print(f'Magnetic form factor file {filename:s} not found!')
             # return zero array
             m = np.zeros([1, 3])
 
@@ -405,11 +407,11 @@ class AtomMixed(Atom):
 
         output_atom = []
         for i in range(self.num_atoms):
-            output_atom.append([self.atoms[i][0].name, '{:.1f} %'.format(self.atoms[i][1]*100)])
+            output_atom.append([self.atoms[i][0].name, f'{self.atoms[i][1]*100:.1f} %'])
 
         return ('AtomMixed with the following properties\n'
                 + tabulate(output, colalign=('right',), tablefmt='rst', floatfmt=('.2f', '.2f'))
-                + '\n{:d} Constituents:\n'.format(self.num_atoms)
+                + f'\n{self.num_atoms:d} Constituents:\n'
                 + tabulate(output_atom, colalign=('right',), floatfmt=('.2f', '.2f')))
 
     def add_atom(self, atom, fraction):
@@ -455,7 +457,7 @@ class AtomMixed(Atom):
         try:
             f = np.genfromtxt(filename, skip_header=0)
         except FileNotFoundError:
-            print('Atomic form factor file {:s} not found!'.format(filename))
+            print(f'Atomic form factor file {filename:s} not found!')
             raise
 
         return f
@@ -535,7 +537,7 @@ class AtomMixed(Atom):
         try:
             m = np.genfromtxt(filename)
         except FileNotFoundError:
-            print('Magnetic form factor file {:s} not found!'.format(filename))
+            print(f'Magnetic form factor file {filename:s} not found!')
             # return zero array
             m = np.zeros([1, 3])
 

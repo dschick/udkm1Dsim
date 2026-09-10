@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Vacuum added by [#204] closing [#202]
+- example for XrayKin added by [#204]
+- superstrate introduced by [#204] closing [#134]
+- enable automatic numerical integration of layer properties if sympy fails ([#198]) replacing [#110] and closing issue [#109] and [#108]
+
+[#185]: https://github.com/dschick/udkm1Dsim/pull/185
+[#188]: https://github.com/dschick/udkm1Dsim/pull/188
+[#197]: https://github.com/dschick/udkm1Dsim/pull/197
+[#198]: https://github.com/dschick/udkm1Dsim/pull/198
+[#110]: https://github.com/dschick/udkm1Dsim/pull/110
+[#109]: https://github.com/dschick/udkm1Dsim/issue/109
+[#108]: https://github.com/dschick/udkm1Dsim/issue/108
+[#204]: https://github.com/dschick/udkm1Dsim/pull/204
+[#202]: https://github.com/dschick/udkm1Dsim/issue/202
+[#134]: https://github.com/dschick/udkm1Dsim/issue/134
+
+### Changed
+
+- substrates can be a single layer
+- Vacuum is default superstrate and substrate
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [2.4.1] 2026-09-10
+
+### Added
+
 - links to the API from the exmaples ([#185])
 - benchmark test via codspeed.io ([#188])
 - add example gallery view to docs via myst-sphinx-gallery ([#197])
@@ -21,11 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - publication list with new bibliography style and reverse ordering ([#195])
 - restructured documentation ([#199])
+- use pyproject.toml instead of setup.py and use hatchling as build backend ([#210])
+- replace flake8 with ruff for linting and formatting ([#211])
 
 [#195]: https://github.com/dschick/udkm1Dsim/pull/195
 [#199]: https://github.com/dschick/udkm1Dsim/pull/199
-
-### Deprecated
+[#210]: https://github.com/dschick/udkm1Dsim/pull/210
+[#211]: https://github.com/dschick/udkm1Dsim/pull/211
 
 ### Removed
 
@@ -39,8 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - matplotlib.cm deprecation in Matplotlib 3.11 ([#794da43])
 
 [794da43]: https://github.com/dschick/udkm1Dsim/commit/794da43
-
-### Security
 
 ## [2.4.0] 2026-07-09
 ### Added

@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
-from udkm1Dsim import XrayKin, XrayDyn, XrayDynMag
-from udkm1Dsim import u
 import numpy as np
 import pytest
 from pint.testing import assert_allclose
 
+from udkm1Dsim import XrayDyn, XrayDynMag, XrayKin, u
 
 # fixtures
 

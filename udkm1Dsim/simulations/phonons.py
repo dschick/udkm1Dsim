@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -26,13 +25,15 @@ __all__ = ['Phonon', 'PhononNum', 'PhononAna']
 
 __docformat__ = 'restructuredtext'
 
-from .simulation import Simulation
-from ..helpers import make_hash_md5, finderb
-import numpy as np
 from os import path
 from time import time
+
+import numpy as np
 from scipy.integrate import solve_ivp
 from tqdm.auto import tqdm, trange
+
+from ..helpers import finderb, make_hash_md5
+from .simulation import Simulation
 
 
 class Phonon(Simulation):
@@ -162,7 +163,7 @@ class Phonon(Simulation):
             N = np.asarray(N).ravel()
             if N.size != L:
                 raise ValueError('The dimension of N must be either 1 or the number '
-                                 'of unique layers ({:d}) the structure!'.format(L))
+                                 f'of unique layers ({L:d}) the structure!')
             N = N.astype(int)
 
         for i, value in enumerate(all_strains):
@@ -486,7 +487,7 @@ class PhononNum(Phonon):
             # apply scipy's ode-solver together
             if self.progress_bar:  # with tqdm progressbar
                 pbar = tqdm()
-                pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
+                pbar.set_description(f'Delay = {delays[0]*1e12:.3f} ps')
                 state = [delays[0], abs(delays[-1]-delays[0])/100]
             else:  # without progressbar
                 pbar = None
@@ -514,7 +515,7 @@ class PhononNum(Phonon):
             strain_map = strain_map/np.tile(thicknesses[:], [np.size(temp, 0), 1])
             velocities = sol.y[L:, :].T
         self.disp_message('Elapsed time for _strain_map_:'
-                          ' {:f} s'.format(time()-t1))
+                          f' {time()-t1:f} s')
         return strain_map, sticks_sub_systems, velocities
 
     @staticmethod
@@ -555,7 +556,7 @@ class PhononNum(Phonon):
             n = (t - last_t)/dt
             if n >= 1:
                 pbar.update(1)
-                pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
+                pbar.set_description(f'Delay = {t*1e12:.3f} ps')
                 state[0] = t
             elif n < 0:
                 state[0] = t
@@ -922,9 +923,10 @@ class PhononAna(Phonon):
                 dt = delays[i]-delay0  # this is the time step
                 # calculate the current shift X and velocity V of all
                 # layers using the ansatz
-                X[i, :] = np.dot(Xi, (A[i, :].T*np.cos(omega*dt) + B[i, :].T*np.sin(omega*dt)))
-                V[i, :] = np.dot(Xi, (omega*(-A[i, :].T*np.sin(omega*dt)
-                                             + B[i, :].T*np.cos(omega*dt))))
+                X[i, :] = np.real(np.dot(Xi, (A[i, :].T*np.cos(omega*dt)
+                                              + B[i, :].T*np.sin(omega*dt))))
+                V[i, :] = np.real(np.dot(Xi, (omega*(-A[i, :].T*np.sin(omega*dt)
+                                              + B[i, :].T*np.cos(omega*dt)))))
                 # remember the velocities and shifts as ic for the next
                 # time step
                 X0 = X[i, :].T
@@ -961,7 +963,7 @@ class PhononAna(Phonon):
                         B[i+1, :] = B[i, :]
 
         self.disp_message('Elapsed time for _strain_map_:'
-                          ' {:f} s'.format(time()-t1))
+                          f' {time()-t1:f} s')
 
         return strain_map, A, B
 
@@ -1020,7 +1022,7 @@ class PhononAna(Phonon):
             omega = np.sqrt(-lambd)
 
             self.disp_message('Elapsed time for _eigen_values_:'
-                              ' {:f} s'.format(time()-t1))
+                              f' {time()-t1:f} s')
             # save the result to file
             self.save(full_filename, {'Xi': Xi, 'omega': omega}, '_eigen_values_')
 
@@ -1063,7 +1065,7 @@ class PhononAna(Phonon):
         # traverse time
         for i in range(M):
             # calculate the energy for the jth mode
-            E[i, :] = 0.5 * (A[i, :].T**2 + B[i, :].T**2) * omega**2 * masses * np.sum(Xi**2, 0).T
+            E[i, :] = np.real(0.5 * (A[i, :].T**2 + B[i, :].T**2) * omega**2 * masses * np.sum(Xi**2, 0).T)
             # E[i, :] = (A[i, :]**2 + B[i, :]**2) * omega**2 * np.matmul(Xi, np.matmul(masses, Xi))
 
         return omega[idx], E[:, idx]

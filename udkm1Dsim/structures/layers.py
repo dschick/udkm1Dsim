@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -22,18 +21,24 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Layer', 'AmorphousLayer', 'UnitCell']
+__all__ = ['Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell']
 
 __docformat__ = 'restructuredtext'
 
-from .atoms import Atom, AtomMixed
-from .. import u, Q_
-import numpy as np
-from inspect import isfunction
-from sympy import integrate, lambdify, symbols, symarray
-from tabulate import tabulate
-import scipy.constants as constants
 import warnings
+from inspect import isfunction
+
+import numpy as np
+import pint
+import scipy.constants as constants
+from scipy.integrate import quad
+from sympy import integrate, lambdify, symarray, symbols
+from tabulate import tabulate
+
+from .atoms import Atom, AtomMixed
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 
 class Layer:
@@ -154,20 +159,20 @@ class Layer:
             output += [['no area or volume set', '']]
         try:
             output += [['mass', '{:.4g~P}'.format(self.mass.to('kg'))],
-                       ['mass per unit area', '{:.4g~P}'.format(self.mass_unit_area)],
+                       ['mass per unit area', f'{self.mass_unit_area:.4g~P}'],
                        ['density', '{:.4g~P}'.format(self.density.to('kg/meter**3'))]]
         except AttributeError:
             output += [['no mass set', '']]
         output += [['roughness', '{:.4g~P}'.format(self.roughness.to('nm'))],
                    ['Debye Waller factor', ' m²\n'.join(self.deb_wal_fac_str) + ' m²'],
                    ['sound velocity', '{:.4g~P}'.format(self.sound_vel.to('meter/s'))],
-                   ['spring constant', '{:.4g~P}'.format(self.spring_const * u.kg/u.s**2)],
+                   ['spring constant', f'{self.spring_const * u.kg/u.s**2:.4g~P}'],
                    ['phonon damping', '{:.4g~P}'.format(self.phonon_damping.to('kg/s'))],
                    ['opt. pen. depth', '{:.4g~P}'.format(self.opt_pen_depth.to('nm'))],
-                   ['opt. refractive index', '{0.real:.4f} + {0.imag:.4f}i'.format(
-                       self.opt_ref_index)],
-                   ['opt. ref. index/strain', '{0.real:.4f} + {0.imag:.4f}i'.format(
-                       self.opt_ref_index_per_strain)],
+                   ['opt. refractive index', f'{self.opt_ref_index.real:.4f} \
+                    + {self.opt_ref_index.imag:.4f}i'],
+                   ['opt. ref. index/strain', f'{self.opt_ref_index_per_strain.real:.4f} \
+                    + {self.opt_ref_index_per_strain.imag:.4f}i'],
                    ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
                    ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
                    ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
@@ -214,7 +219,7 @@ class Layer:
         K = self.num_sub_systems
         k = len(inputs)
         if k != K and change_num_sub_systems:
-            print('Number of subsystems changed from {:d} to {:d}.'.format(K, k))
+            print(f'Number of subsystems changed from {K:d} to {k:d}.')
             self.num_sub_systems = k
 
         # traverse each list element and convert it to a function handle
@@ -286,7 +291,7 @@ class Layer:
                                }
 
         types = (kwargs.get('types', 'all'))
-        if not type(types) is list:
+        if type(types) is not list:
             types = [types]
         attrs = vars(self)
         R = {}
@@ -490,24 +495,17 @@ class Layer:
             self._int_heat_capacity = []
             self.int_heat_capacity_str = []
             T = symbols('T')
-            try:
-                for hcs in self.heat_capacity_str:
+            for hc, hcs in zip(self.heat_capacity, self.heat_capacity_str):
+                try:
                     integral = integrate(hcs, T)
                     self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
                     self.int_heat_capacity_str.append(str(integral))
-            except Exception:
-                warnings.warn('\nThe sympy integration of the heat capacity did not work. '
-                              'It is only required for\n'
-                              '\n'
-                              '    Heat.get_temperature_after_delta_excitation()\n'
-                              '\n'
-                              'You can set its analytical anti-derivative manually '
-                              'as a str representing the correct function of temperature '
-                              'T by typing\n'
-                              '\n'
-                              '    layer.int_heat_capacity = \'c(T)\'\n'
-                              '\n'
-                              'where layer is the name of the layer object.\n')
+                except Exception:
+                    warnings.warn('\nSympy\'s analytical integration of the heat capacity '
+                                  'did not work.\n'
+                                  'Just do it numerically with scipy.integrate.quad')
+                    self._int_heat_capacity.append(lambda T: quad(hc, 0, T, limit=10000)[0])
+                    self.int_heat_capacity_str.append(f'scipy.integrate.quad({hcs:s}, 0, T)[0]')
 
         return self._int_heat_capacity
 
@@ -537,20 +535,17 @@ class Layer:
             self._int_lin_therm_exp = []
             self.int_lin_therm_exp_str = []
             T = symbols('T')
-            try:
-                for ltes in self.lin_therm_exp_str:
+            for lte, ltes in zip(self.lin_therm_exp, self.lin_therm_exp_str):
+                try:
                     integral = integrate(ltes, T)
                     self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
                     self.int_lin_therm_exp_str.append(str(integral))
-            except Exception:
-                warnings.warn('\nThe sympy integration of the lin. thermal expansion did not '
-                              'work. You can set its analytical anti-derivative manually '
-                              'as a str representing the correct function of temperature '
-                              'T by typing\n'
-                              '\n'
-                              '    layer.int_lin_therm_exp = \'c(T)\'\n'
-                              '\n'
-                              'where layer is the name of the layer object.')
+                except Exception:
+                    warnings.warn('\nSympy\'s analytical integration of the linear thermal '
+                                  'expansion did not work.\n'
+                                  'Just do it numerically with scipy.integrate.quad')
+                    self._int_lin_therm_exp.append(lambda T: quad(lte, 0, T, limit=10000)[0])
+                    self.int_lin_therm_exp_str.append(f'scipy.integrate.quad({ltes:s}, 0, T)[0]')
 
         return self._int_lin_therm_exp
 
@@ -635,6 +630,21 @@ class Layer:
     @mag_saturation.setter
     def mag_saturation(self, mag_saturation):
         self._mag_saturation = float(mag_saturation.to_base_units().magnitude)
+
+
+class Vacuum(Layer):
+    def __init__(self, thickness=1*u.nm, **kwargs):
+        self.thickness = thickness
+        self.density = 0.0*u.kg/u.m**3
+        self.area = 1.0*u.angstrom**2  # set as unit area
+        self.volume = self.area*self.thickness
+        self.mass = 0*u.kg
+        self.mass_unit_area = self.mass
+        super().__init__('vacuum', 'vacuum', opt_ref_index=1+0.0j)
+
+    def __str__(self):
+        """String representation of this class"""
+        return f'Vacuum layer of thickness: {self.thickness:.4g~P}'
 
 
 class AmorphousLayer(Layer):
@@ -730,7 +740,7 @@ class AmorphousLayer(Layer):
         """String representation of this class"""
         output = [['id', self.id],
                   ['name', self.name],
-                  ['thickness', '{:.4g~P}'.format(self.thickness)],
+                  ['thickness', f'{self.thickness:.4g~P}'],
                   ]
         output += super().__str__()
 
@@ -762,10 +772,10 @@ class AmorphousLayer(Layer):
             return
 
         if not isinstance(atom, (Atom, AtomMixed)):
-            raise ValueError('Class '
-                             + type(atom).__name__
-                             + ' is no possible atom of an amorphous layer. '
-                             + 'Only Atom and AtomMixed are allowed!')
+            raise TypeError('Class '
+                            + type(atom).__name__
+                            + ' is no possible atom of an amorphous layer. '
+                            + 'Only Atom and AtomMixed are allowed!')
         self._atom = atom
         self.magnetization = {'amplitude': atom.mag_amplitude,
                               'phi': atom.mag_phi,
@@ -898,7 +908,7 @@ class UnitCell(Layer):
                   ['area', '{:.4g~P}'.format(self.area.to('nm**2'))],
                   ['volume', '{:.4g~P}'.format(self.volume.to('nm**3'))],
                   ['mass', '{:.4g~P}'.format(self.mass.to('kg'))],
-                  ['mass per unit area', '{:.4g~P}'.format(self.mass_unit_area)],
+                  ['mass per unit area', f'{self.mass_unit_area:.4g~P}'],
                   ]
         output += super().__str__()
 
@@ -910,7 +920,7 @@ class UnitCell(Layer):
         atoms_str = []
         for i in range(self.num_atoms):
             atoms_str.append([self.atoms[i][0].name,
-                              '{:0.2f}'.format(self.atoms[i][1](0)),
+                              f'{self.atoms[i][1](0):0.2f}',
                               self.atoms[i][2],
                               '',
                               self.atoms[i][0].mag_amplitude,
@@ -969,7 +979,7 @@ class UnitCell(Layer):
         plt.axis([0.1, self.num_atoms+0.9, -0.1, (1.1+strain)])
         plt.grid(True)
 
-        plt.title('Strain: {:0.2f}%'.format(strain))
+        plt.title(f'Strain: {strain:0.2f}%')
         plt.ylabel('relative Position')
         plt.xlabel('# Atoms')
         plt.legend()
@@ -1060,7 +1070,7 @@ class UnitCell(Layer):
         """
         ids = []
         for i in range(self.num_atoms):
-            if not self.atoms[i][0].id in ids:
+            if self.atoms[i][0].id not in ids:
                 ids.append(self.atoms[i][0].id)
 
         return ids
