@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 
+import copy
+
 import numpy as np
 import pint
+import pytest
 from pint.testing import assert_allclose
+
+from udkm1Dsim import Structure
 
 u = pint.get_application_registry()
 u.formatter.default_format = '.4g~P'
@@ -24,6 +29,54 @@ def test_thickness(structure):
 
 def test_structure_get_hash(structure):
     structure.get_hash()
+
+
+@pytest.mark.parametrize('fixture_name', ['layer',
+                                          'vacuum',
+                                          'amorphous_layer',
+                                          'unit_cell',
+                                          'structure'
+                                          ])
+def test_structure_add_sub_structure(request, fixture_name, structure):
+    substructure = request.getfixturevalue(fixture_name)
+    struc_copy = copy.deepcopy(structure)
+    if isinstance(substructure, Structure):
+        with pytest.warns(UserWarning):
+            struc_copy.add_sub_structure(substructure, 10)
+    else:
+        struc_copy.add_sub_structure(substructure, 10)
+
+
+@pytest.mark.parametrize('fixture_name', ['layer',
+                                          'vacuum',
+                                          'amorphous_layer',
+                                          'unit_cell',
+                                          'structure'
+                                          ])
+def test_structure_add_superstrate(request, fixture_name, structure):
+    substructure = request.getfixturevalue(fixture_name)
+    struc_copy = copy.deepcopy(structure)
+    if isinstance(substructure, Structure):
+        with pytest.raises(TypeError):
+            struc_copy.add_superstrate(substructure)
+    else:
+        struc_copy.add_superstrate(substructure)
+
+
+@pytest.mark.parametrize('fixture_name', ['layer',
+                                          'vacuum',
+                                          'amorphous_layer',
+                                          'unit_cell',
+                                          'structure'
+                                          ])
+def test_structure_add_substrate(request, fixture_name, structure):
+    substructure = request.getfixturevalue(fixture_name)
+    struc_copy = copy.deepcopy(structure)
+    if isinstance(substructure, Structure):
+        with pytest.raises(TypeError):
+            struc_copy.add_substrate(substructure)
+    else:
+        struc_copy.add_substrate(substructure)
 
 
 def test_get_number_of_sub_structures(structure):
