@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -26,18 +25,22 @@ __all__ = ['Heat']
 
 __docformat__ = 'restructuredtext'
 
-from .simulation import Simulation
-from .. import u, Q_
-from ..helpers import make_hash_md5, finderb, multi_gauss
-import numpy as np
-from scipy.optimize import brentq
-from scipy.interpolate import RectBivariateSpline
-from scipy.integrate import solve_ivp
-from time import time
-from os import path
 import warnings
+from os import path
+from time import time
+
+import numpy as np
+import pint
+from scipy.integrate import solve_ivp
+from scipy.interpolate import RectBivariateSpline
+from scipy.optimize import brentq
 from tqdm.auto import tqdm
 
+from ..helpers import finderb, make_hash_md5, multi_gauss
+from .simulation import Simulation
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 class Heat(Simulation):
     """Heat
@@ -268,9 +271,8 @@ class Heat(Simulation):
         theta = self._excitation['theta']
 
         fluence = fluence*np.sin(theta)
-        self.disp_message('Surface incidence fluence scaled by factor {:5.4f}'
-                          ' due to incidence angle theta={:5.2f} deg'.format(
-                              np.sin(theta), np.rad2deg(theta)))
+        self.disp_message(f'Surface incidence fluence scaled by factor {np.sin(theta):5.4f}'
+                          f' due to incidence angle theta={np.rad2deg(theta):5.2f} deg')
 
         # throw warnings if heat diffusion should be enabled
         if (self.S.num_sub_systems > 1) and not self.heat_diffusion:
@@ -626,9 +628,8 @@ class Heat(Simulation):
 
             k = k+m  # set the counter
 
-        self.disp_message('Total reflectivity of {:0.1f} % and transmission '
-                          'of {:0.1f} %.'.format(np.round(R_total*100, 1),
-                                                 np.round(T_total*100, 1)))
+        self.disp_message(f'Total reflectivity of {np.round(R_total*100, 1):0.1f} % and '
+                          f'transmission of {np.round(T_total*100, 1):0.1f} %.')
 
         if backside:
             # for backside excitation the results must be reversed
@@ -701,7 +702,7 @@ class Heat(Simulation):
             fluence = np.asarray(fluence, dtype=float).squeeze()
         if np.ndim(fluence) != 0:
             raise ValueError('Delta excitation expects a single fluence value; '
-                             'got shape {}'.format(np.shape(fluence)))
+                             f'got shape {np.shape(fluence)}')
 
         int_heat_capacities = self.S.get_layer_property_vector('_int_heat_capacity')
         thicknesses = self.S.get_layer_property_vector('_thickness')
@@ -726,7 +727,7 @@ class Heat(Simulation):
                 final_temp[i, 0] = brentq(fun, init_temp[i, 0], 1e5)
         delta_T = final_temp - init_temp  # this is the temperature change
         self.disp_message('Elapsed time for _temperature_after_delta_excitation_:'
-                          ' {:f} s'.format(time()-t1))
+                          f' {time()-t1:f} s')
         return final_temp, delta_T
 
     def get_temp_map(self, delays, init_temp):
@@ -851,12 +852,10 @@ class Heat(Simulation):
                 else:
                     if len(fluence) == 1:
                         self.disp_message('Calculating _heat_diffusion_ for excitation ' +
-                                          '{:d}:{:d} ...'.format(num_ex, F))
+                                          f'{num_ex:d}:{F:d} ...')
                     elif len(fluence) > 1:
                         self.disp_message('Calculating _heat_diffusion_ for excitation ' +
-                                          '{:d}-{:d}:{:d}...'.format(num_ex,
-                                                                     num_ex+len(fluence)-1,
-                                                                     F))
+                                          f'{num_ex:d}-{num_ex+len(fluence)-1:d}:{F:d}...')
 
                 start = 0
                 stop = 0
@@ -932,7 +931,7 @@ class Heat(Simulation):
         # delete the initial temperature that was added at the beginning
         temp_map = temp_map[1:, :, :]
         self.disp_message('Elapsed time for _temp_map_:'
-                          ' {:f} s'.format(time()-t1))
+                          f' {time()-t1:f} s')
         return np.squeeze(temp_map), np.squeeze(delta_temp_map), checked_excitation
 
     def calc_heat_diffusion(self, init_temp, distances, delays, delay_pump, pulse_width, fluence):
@@ -990,7 +989,7 @@ class Heat(Simulation):
 
         if self.progress_bar:  # with tqdm progressbar
             pbar = tqdm()
-            pbar.set_description('Delay = {:.3f} ps'.format(delays[0]*1e12))
+            pbar.set_description(f'Delay = {delays[0]*1e12:.3f} ps')
             state = [delays[0], abs(delays[-1]-delays[0])/100]
         else:  # without progressbar
             pbar = None
@@ -1030,10 +1029,10 @@ class Heat(Simulation):
 
         temp_map = np.array(temp_map).reshape([M, N, K], order='F')
         if np.any(fluence):
-            self.disp_message('Elapsed time for _heat_diffusion_ with {:d} '
-                              'excitation(s): {:f} s'.format(len(fluence), time()-t1))
+            self.disp_message(f'Elapsed time for _heat_diffusion_ with {len(fluence):d} '
+                              f'excitation(s): {time()-t1:f} s')
         else:
-            self.disp_message('Elapsed time for _heat_diffusion_: {:f} s'.format(time()-t1))
+            self.disp_message(f'Elapsed time for _heat_diffusion_: {time()-t1:f} s')
 
         return temp_map
 
@@ -1070,7 +1069,7 @@ class Heat(Simulation):
                         - int_heat_capacities[j][k](init_temp[j, k])
                         )
 
-        self.disp_message('Elapsed time for _energy_map_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _energy_map_: {time()-t1:f} s')
 
         return energy_map
 
@@ -1131,7 +1130,7 @@ class Heat(Simulation):
                         energy_flux_map[i, j, k, 2] = energy_flux_map[i, j, k, 0] -\
                             energy_flux_map[i, j, k, 1]
 
-        self.disp_message('Elapsed time for _energy_flux_map_: {:f} s'.format(time()-t1))
+        self.disp_message(f'Elapsed time for _energy_flux_map_: {time()-t1:f} s')
 
         return energy_flux_map
 
@@ -1189,7 +1188,7 @@ class Heat(Simulation):
 
             if n >= 1:
                 pbar.update(n)
-                pbar.set_description('Delay = {:.3f} ps'.format(t*1e12))
+                pbar.set_description(f'Delay = {t*1e12:.3f} ps')
                 state[0] = t
             elif n < 0:
                 state[0] = t

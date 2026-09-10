@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 # The MIT License (MIT)
 # Copyright (c) 2020 Daniel Schick
@@ -26,11 +25,16 @@ __all__ = ['Structure']
 
 __docformat__ = 'restructuredtext'
 
-from .layers import AmorphousLayer, UnitCell
-from .. import u, Q_
-from ..helpers import make_hash_md5, finderb
 import itertools
+
 import numpy as np
+import pint
+
+from ..helpers import finderb, make_hash_md5
+from .layers import AmorphousLayer, UnitCell
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
 
 
 class Structure:
@@ -67,7 +71,7 @@ class Structure:
         tab_str = tabs*'\t'
 
         class_str = tab_str + 'Structure properties:\n\n'
-        class_str += tab_str + 'Name   : {:s}\n'.format(self.name)
+        class_str += tab_str + f'Name   : {self.name:s}\n'
 
         if len(self.sub_structures) == 0:
             class_str += tab_str + 'Structure is empty\n----\n'
@@ -87,8 +91,7 @@ class Structure:
             else:
                 # the substructure is a structure instance by itself
                 # call the display() method recursively
-                class_str += tab_str + 'sub-structure {:d} times:\n'.format(
-                       sub_structure[1])
+                class_str += tab_str + f'sub-structure {sub_structure[1]:d} times:\n'
                 class_str += sub_structure[0].__str__(tabs+1)
         class_str += tab_str + '----\n'
         # check for a substrate
@@ -121,8 +124,7 @@ class Structure:
 
         """
         import matplotlib.pyplot as plt
-        from matplotlib import patches
-        from matplotlib import colormaps
+        from matplotlib import colormaps, patches
 
         _, d_end, _ = self.get_distances_of_layers(True)  # distance vector of all layers
         layer_interfaces = np.append(0, d_end.to(unit).magnitude)  # Append zero at the start
@@ -147,7 +149,7 @@ class Structure:
 
         plt.xlim(0, thickness)
         plt.ylim(0, 1)
-        plt.xlabel('Distance ({:s})'.format(unit))
+        plt.xlabel(f'Distance ({unit:s})')
         plt.yticks([], [])
 
         # add labels for legend
@@ -657,9 +659,9 @@ class Structure:
         if np.all(numel == numel[0]):
             numel = numel[0]
         else:
-            raise IndexError('Property {:s} has not the same number of elements '
+            raise IndexError(f'Property {property_name:s} has not the same number of elements '
                              '(num_sub_systems) across the whole sample '
-                             'structure.'.format(property_name))
+                             'structure.')
         return numel
 
     def get_layer_handle(self, i):

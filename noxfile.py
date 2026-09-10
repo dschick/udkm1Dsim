@@ -1,6 +1,5 @@
 import nox
 
-
 reuse_venv = False
 
 
@@ -8,8 +7,7 @@ reuse_venv = False
              venv_backend='uv', reuse_venv=reuse_venv)
 def lint(session):
     session.install('.', '--group', 'lint')
-    session.run('flake8', 'udkm1Dsim/', 'tests/')
-    session.run('nbqa', 'flake8', 'examples/')
+    session.run('ruff', 'check', 'udkm1Dsim/', 'tests/', 'examples/')
 
 
 @nox.parametrize(

@@ -1,10 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
-from udkm1Dsim import u
-u.default_format = '~P'
 import numpy as np
+import pint
 from pint.testing import assert_allclose
+
+u = pint.get_application_registry()
+u.formatter.default_format = '.4g~P'
 
 
 # tests

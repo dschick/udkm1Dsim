@@ -1,12 +1,8 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
-from udkm1Dsim import Atom, AtomMixed
-from udkm1Dsim import Layer, AmorphousLayer, UnitCell
-from udkm1Dsim import Structure
-from udkm1Dsim import u
 import pytest
 
+from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Layer, Structure, UnitCell, u
 
 # fixtures
 

@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
-from udkm1Dsim import Heat
-from udkm1Dsim.helpers import finderb
-from udkm1Dsim import u
-import pytest
 import numpy as np
+import pytest
 
+from udkm1Dsim import Heat, u
+from udkm1Dsim.helpers import finderb
 
 # fixtures
 
