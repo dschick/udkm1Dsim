@@ -954,8 +954,8 @@ class PhononAna(Phonon):
                         # determining the coefficient vectors A and B of
                         # the general solution of X(t) using the initial
                         # conditions X0 and V0
-                        A[i+1, :] = np.linalg.solve(Xi, X0)
-                        B[i+1, :] = (np.linalg.solve(Xi, V0)/omega).T
+                        A[i+1, :] = np.real(np.linalg.solve(Xi, X0))
+                        B[i+1, :] = np.real((np.linalg.solve(Xi, V0)/omega).T)
                     else:
                         # no temperature change, so keep the current As,
                         # Bs, and sticks
@@ -1034,11 +1034,27 @@ class PhononAna(Phonon):
         Returns the sorted energy per Eigenmode of the coherent phonons of
         the 1D sample.
 
+        The total energy of the linear chain is
+
         .. math::
 
-            E_j = \frac{1}{2} (A^2_j + B^2_j)\, \omega_j^2\, m_j \, \| \Xi_j\|^2
+            E = \frac{1}{2}\left(\dot{X}^T M \dot{X} + X^T K X\right)
 
-        Frequencies are in [Hz] and energy per mode in [J].
+        which, expanded in the eigenbasis :math:`X(t) = \sum_j \Xi_j\,
+        (A_j\cos(\omega_j t) + B_j\sin(\omega_j t))`, decomposes exactly
+        into a sum of independent per-mode energies (see :cite:t:`herzog2012`):
+
+        .. math::
+
+            E_j & = \frac{1}{2} (A^2_j + B^2_j)\, \omega_j^2\,
+                  \left(\Xi_j^T M \Xi_j\right) \\
+                & = \frac{1}{2} (A^2_j + B^2_j)\, \omega_j^2\,
+                  \sum_{i=1}^N m_i\,(\xi_i^j)^2
+
+        Here :math:`M = \mathrm{diag}(m_1, \ldots, m_N)` is the diagonal
+        matrix of the (mass-per-unit-area) layer masses :math:`m_i`, and
+        :math:`\Xi_j = (\xi_1^j \ldots \xi_N^j)` is the :math:`j`-th
+        eigenvector.
 
         Args:
             A (ndarray[float]): coefficient vector A of general solution.
@@ -1046,8 +1062,8 @@ class PhononAna(Phonon):
 
         Returns:
             (tuple):
-            - *omega (ndarray[float])* - eigenfrequencies.
-            - *E (ndarray[float])* - energy per eigenmode.
+            - *omega (ndarray[float])* - eigenfrequencies in Hz.
+            - *E (ndarray[float])* - energy per eigenmode in J.
 
         """
         # initialize
@@ -1059,13 +1075,16 @@ class PhononAna(Phonon):
         # get the eigenVectors and eigenFrequencies
         Xi, omega = self.solve_eigenproblem()
 
-        # sort the frequencies and remember the permutation of indices
+        # sort the frequencies
         idx = np.argsort(omega)
+
+        # generalized mass per mode: diag(Xi.T @ M @ Xi)
+        M_tilde = np.sum(masses[:, None] * Xi**2, axis=0)
 
         # traverse time
         for i in range(M):
             # calculate the energy for the jth mode
-            E[i, :] = np.real(0.5 * (A[i, :].T**2 + B[i, :].T**2)
-                              * omega**2 * masses * np.sum(Xi**2, 0).T)
+            E[i, :] = np.real(0.5 * (A[i, :].T**2 + B[i, :].T**2) * omega**2
+                              * M_tilde)
 
-        return omega[idx], E[:, idx]
+        return np.real(omega[idx]), E[:, idx]

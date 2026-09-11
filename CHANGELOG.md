@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- bug in energy spectrum calculation of analytical phonons ([#212]) closing issue [#84]
+
+[#212]: https://github.com/dschick/udkm1Dsim/pull/212
+[#84]: https://github.com/dschick/udkm1Dsim/issue/84
+
 ### Security
 
 ## [2.4.1] 2026-09-10
