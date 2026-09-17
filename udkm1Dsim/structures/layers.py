@@ -26,6 +26,7 @@ __all__ = ['Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell']
 __docformat__ = 'restructuredtext'
 
 from inspect import isfunction
+from dataclasses import dataclass, fields
 
 import numpy as np
 import pint
@@ -75,105 +76,70 @@ class Layer:
         self.id = id
         self.name = name
 
-        self.structural = StructuralParameters(
-            thickness=kwargs.get('thickness', 0.0*u.nm),
-            mass=kwargs.get('mass', 0.0*u.kg),
-            mass_unit_area=kwargs.get('mass_unit_area', 0.0*u.kg),
-            density=kwargs.get('density', 0.0*u.kg/u.m**3),
-            area=kwargs.get('area', 0.0*u.m**2),
-            volume=kwargs.get('volume', 0.0*u.m**3),
-            roughness=kwargs.get('roughness', 0.0*u.nm),
-        )
+        self.structural = StructuralParameters()
+        self.thickness = kwargs.get("thickness", 0.0*u.nm)
+        self.roughness = kwargs.get('roughness', 0.0*u.nm)
+        self.density = kwargs.get('density', 0.0*u.kg/u.m**3)
 
-        self.thermal = ThermalParameters(
-            therm_cond=kwargs.get('therm_cond', 0.0),
-            heat_capacity=kwargs.get('heat_capacity', 0.0),
-            lin_therm_exp=kwargs.get('lin_therm_exp', 0.0),
-            int_lin_therm_exp=kwargs.get('int_lin_therm_exp', 0.0),
-            int_heat_capacity=kwargs.get('int_heat_capacity', 0.0),
-            sub_system_coupling=kwargs.get('sub_system_coupling', 0.0),
-            num_sub_systems=kwargs.get('num_sub_systems', 1)
-        )
-
-        self.elastic = ElasticParameters(
-            sound_vel=kwargs.get('sound_vel', 0.0*u.m/u.s),
-            spring_const=kwargs.get('spring_const', np.array([0.0])),
-            phonon_damping=kwargs.get('phonon_damping', 0.0*u.kg/u.s),
-        )
-
-        self.optical = OpticalParameters(
-            opt_pen_depth=kwargs.get('opt_pen_depth', 0.0*u.nm),
-            opt_ref_index=kwargs.get('opt_ref_index', 0.0+0.0j),
-            opt_ref_index_per_strain=kwargs.get('opt_ref_index_per_strain', 0.0+0.0j),
-            deb_wal_fac=kwargs.get('deb_wal_fac', 0.0)
-        )
-
-        self.magnetic = MagneticParameters(
-            eff_spin=kwargs.get('eff_spin', 0.0),
-            curie_temp=kwargs.get('curie_temp', 0.0*u.K),
-            mf_exch_coupling=kwargs.get('mf_exch_coupling', 0.0*u.m**2*u.kg/u.s**2),
-            lamda=kwargs.get('lamda', 0.0),
-            mag_moment=kwargs.get('mag_moment', 0.0*u.bohr_magneton),
-            aniso_exponent=kwargs.get('aniso_exponent', 0.0),
-            anisotropy=kwargs.get('anisotropy', [0.0, 0.0, 0.0]*u.J/u.m**3),
-            exch_stiffness=kwargs.get('exch_stiffness', 0.0*u.J/u.m),
-            mag_saturation=kwargs.get('mag_saturation', 0.0*u.J/u.T/u.m**3),
-            magnetization=kwargs.get('magnetization', {'amplitude': 0.0,
-                                                       'phi': 0.0*u.deg,
-                                                       'gamma': 0.0*u.deg})
-        )
+        self.thermal = ThermalParameters()
+        self.heat_capacity = kwargs.get('heat_capacity', 0.0*u.J/u.kg/u.K)
+        self.therm_cond = kwargs.get('therm_cond', 0.0*u.W/u.m/u.K)
+        self.lin_therm_exp = kwargs.get('lin_therm_exp', 0.0)
+        self.sub_system_coupling = kwargs.get('sub_system_coupling', 0.0*u.W/u.m**3)
+        self.num_sub_systems = 1
 
         # if len(self.heat_capacity) == len(self.therm_cond) \
-        #         == len(self.lin_therm_exp) == len(self.sub_system_coupling):
-        #     self.num_sub_systems = len(self.heat_capacity)
-        # else:
-        #     raise ValueError('Heat capacity, thermal conductivity, linear '
-        #                      'thermal expansion, and subsystem coupling have not '
-        #                      'the same number of elements!')
+                #         == len(self.lin_therm_exp) == len(self.sub_system_coupling):
+                #     self.num_sub_systems = len(self.heat_capacity)
+                # else:
+                #     raise ValueError('Heat capacity, thermal conductivity, linear '
+                #                      'thermal expansion, and subsystem coupling have not '
+                #                      'the same number of elements!')
 
-    # def __str__(self):
-    #     """String representation of this class"""
-    #     output = []
-    #     try:
-    #         output += [['area', '{:.4g~P}'.format(self.area.to('nm**2'))],
-    #                    ['volume', '{:.4g~P}'.format(self.volume.to('nm**3'))]]
-    #     except AttributeError:
-    #         output += [['no area or volume set', '']]
-    #     try:
-    #         output += [['mass', '{:.4g~P}'.format(self.mass.to('kg'))],
-    #                    ['mass per unit area', f'{self.mass_unit_area:.4g~P}'],
-    #                    ['density', '{:.4g~P}'.format(self.density.to('kg/meter**3'))]]
-    #     except AttributeError:
-    #         output += [['no mass set', '']]
-    #     output += [['roughness', '{:.4g~P}'.format(self.roughness.to('nm'))],
-    #                ['Debye Waller factor', ' m²\n'.join(self.deb_wal_fac_str) + ' m²'],
-    #                ['sound velocity', '{:.4g~P}'.format(self.sound_vel.to('meter/s'))],
-    #                ['spring constant', f'{self.spring_const * u.kg/u.s**2:.4g~P}'],
-    #                ['phonon damping', '{:.4g~P}'.format(self.phonon_damping.to('kg/s'))],
-    #                ['opt. pen. depth', '{:.4g~P}'.format(self.opt_pen_depth.to('nm'))],
-    #                ['opt. refractive index', f'{self.opt_ref_index.real:.4f} \
-    #                 + {self.opt_ref_index.imag:.4f}i'],
-    #                ['opt. ref. index/strain', f'{self.opt_ref_index_per_strain.real:.4f} \
-    #                 + {self.opt_ref_index_per_strain.imag:.4f}i'],
-    #                ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
-    #                ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
-    #                ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
-    #                ['subsystem coupling', ' W/m³\n'.join(self.sub_system_coupling_str) + ' W/m³'],
-    #                ['effective spin', self.eff_spin],
-    #                ['Curie temperature', '{:.4g~P}'.format(self.curie_temp.to('K'))],
-    #                ['mean-field exch. coupling', '{:.4g~P}'.format(
-    #                    self.mf_exch_coupling.to('m**2*kg/s**2'))],
-    #                ['coupling to bath parameter', self.lamda],
-    #                ['atomic magnetic moment', '{:.4g~P}'.format(self.mag_moment.to(
-    #                    'bohr_magneton'))],
-    #                ['uniaxial anisotropy exponent', self.aniso_exponent],
-    #                ['anisotropy', '{:.4g~P}'.format(self.anisotropy.to('J/m**3'))],
-    #                ['exchange stiffness', '{:.4g~P}'.format(self.exch_stiffness.to('J/m'))],
-    #                ['saturation magnetization', '{:.4g~P}'.format(
-    #                    self.mag_saturation.to('J/T/m**3'))]]
+        self.elastic = ElasticParameters()
+        self.sound_vel = kwargs.get('sound_vel', 0.0*u.m/u.s)
+        self.phonon_damping = kwargs.get('phonon_damping', 0.0*u.kg/u.s)
+        self.spring_const = np.array([0.0])
 
-    #     return output
+        self.optical = OpticalParameters()
+        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0.0*u.angstrom**2)
+        self.opt_pen_depth = kwargs.get('opt_pen_depth', 0.0*u.nm)
+        self.opt_ref_index = kwargs.get('opt_ref_index', 0.0+0.0j)
+        self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0.0+0.0j)
 
+        self.magnetic = MagneticParameters()
+        self.eff_spin = kwargs.get('eff_spin', 0.0)
+        self.curie_temp = kwargs.get('curie_temp', 0.0*u.K)
+        self.lamda = kwargs.get('lamda', 0.0)
+        self.mag_moment = kwargs.get('mag_moment', 0.0*u.bohr_magneton)
+        self.aniso_exponent = kwargs.get('aniso_exponent', 0.0)
+        self.anisotropy = kwargs.get('anisotropy', [0.0, 0.0, 0.0]*u.J/u.m**3)
+        self.exch_stiffness = kwargs.get('exch_stiffness', 0.0*u.J/u.m)
+        self.mag_saturation = kwargs.get('mag_saturation', 0.0*u.J/u.T/u.m**3)
+        self.magnetization = kwargs.get('magnetization', np.array([0.0, 0.0, 0.0]))
+
+    def __repr__(self):
+        """String representation of this class"""
+        class_str = f"Layer: {self.name}\nID: {self.id}\n" + "="*30 + "\n"
+        class_str += self.structural.__repr__() + "\n"
+        class_str += self.thermal.__repr__() + "\n"
+        class_str += self.elastic.__repr__() + "\n"
+        class_str += self.optical.__repr__() + "\n"
+        class_str += self.magnetic.__repr__() + "\n"
+
+        return class_str
+
+    def _repr_html_(self):
+        """HTML representation of this class"""
+
+        class_str = f"<h2>Layer: {self.name}</h2><b>ID:</b> <i>{self.id}</i><br>"
+        class_str += self.structural._repr_html_()
+        class_str += self.thermal._repr_html_()
+        class_str += self.elastic._repr_html_()
+        class_str += self.optical._repr_html_()
+        class_str += self.magnetic._repr_html_()
+
+        return class_str
 
     # def get_property_dict(self, **kwargs):
     #     """get_property_dict
@@ -300,65 +266,76 @@ class Layer:
 
     @property
     def thickness(self):
-        return self.structural.thickness
+        return self.structural.thickness.quantity
 
     @thickness.setter
     def thickness(self, value):
-        self.structural.thickness = value
+        self.structural.thickness.quantity = value
 
 
     @property
     def mass(self):
-        return self.structural.mass
+        return self.structural.mass.quantity
 
     @mass.setter
     def mass(self, value):
-        self.structural.mass = value
+        raise AttributeError(
+            "'mass' is derived from density and volume and cannot be set directly. "
+            "Set 'density' or 'volume' instead."
+        )
 
 
     @property
     def mass_unit_area(self):
-        return self.structural.mass_unit_area
+        return self.structural.mass_unit_area.quantity
 
     @mass_unit_area.setter
     def mass_unit_area(self, value):
-        self.structural.mass_unit_area = value
+        raise AttributeError(
+            "'mass_unit_area' is derived from density and volume normalized to area and cannot be set directly. "
+            "Set 'density' or 'volume' instead. 'area' is fixed to 1.0 angstrom² for Layer"
+        )
 
 
     @property
     def density(self):
-        return self.structural.density
+        return self.structural.density.quantity
 
     @density.setter
     def density(self, value):
-        self.structural.density = value
+        self.structural.density.quantity = value
 
 
     @property
     def area(self):
-        return self.structural.area
+        return self.structural.area.quantity
 
     @area.setter
     def area(self, value):
-        self.structural.area = value
+        raise AttributeError(
+            "'area' is fixed to 1.0 angstrom² for Layer"
+        )
 
 
     @property
     def volume(self):
-        return self.structural.volume
+        return self.structural.volume.quantity
 
     @volume.setter
     def volume(self, value):
-        self.structural.volume = value
+        raise AttributeError(
+            "'volume' is derived from thickness and area and cannot be set directly. "
+            "Set 'thickness' or 'area' instead."
+        )
 
 
     @property
     def roughness(self):
-        return self.structural.roughness
+        return self.structural.roughness.quantity
 
     @roughness.setter
     def roughness(self, value):
-        self.structural.roughness = value
+        self.structural.roughness.quantity = value
 
 
     # ============================================================================
@@ -367,65 +344,65 @@ class Layer:
 
     @property
     def therm_cond(self):
-        return self.thermal.therm_cond
+        return self.thermal.therm_cond.quantity
 
     @therm_cond.setter
     def therm_cond(self, value):
-        self.thermal.therm_cond = value
+        self.thermal.therm_cond.quantity = value
 
 
     @property
     def heat_capacity(self):
-        return self.thermal.heat_capacity
+        return self.thermal.heat_capacity.quantity
 
     @heat_capacity.setter
     def heat_capacity(self, value):
-        self.thermal.heat_capacity = value
+        self.thermal.heat_capacity.quantity = value
 
 
     @property
     def lin_therm_exp(self):
-        return self.thermal.lin_therm_exp
+        return self.thermal.lin_therm_exp.quantity
 
     @lin_therm_exp.setter
     def lin_therm_exp(self, value):
-        self.thermal.lin_therm_exp = value
+        self.thermal.lin_therm_exp.quantity = value
 
 
     @property
     def int_lin_therm_exp(self):
-        return self.thermal.int_lin_therm_exp
+        return self.thermal.int_lin_therm_exp.quantity
 
-    @int_lin_therm_exp.setter
-    def int_lin_therm_exp(self, value):
-        self.thermal.int_lin_therm_exp = value
+    # @int_lin_therm_exp.setter
+    # def int_lin_therm_exp(self, value):
+    #     self.thermal.int_lin_therm_exp = value
 
 
     @property
     def int_heat_capacity(self):
-        return self.thermal.int_heat_capacity
+        return self.thermal.int_heat_capacity.quantity
 
-    @int_heat_capacity.setter
-    def int_heat_capacity(self, value):
-        self.thermal.int_heat_capacity = value
+    # @int_heat_capacity.setter
+    # def int_heat_capacity(self, value):
+    #     self.thermal.int_heat_capacity = value
 
 
     @property
     def sub_system_coupling(self):
-        return self.thermal.sub_system_coupling
+        return self.thermal.sub_system_coupling.quantity
 
     @sub_system_coupling.setter
     def sub_system_coupling(self, value):
-        self.thermal.sub_system_coupling = value
+        self.thermal.sub_system_coupling.quantity = value
 
 
     @property
     def num_sub_systems(self):
-        return self.thermal.num_sub_systems
+        return self.thermal.num_sub_systems.quantity
 
     @num_sub_systems.setter
     def num_sub_systems(self, value):
-        self.thermal.num_sub_systems = value
+        self.thermal.num_sub_systems.quantity = value
 
 
     # ============================================================================
@@ -434,29 +411,29 @@ class Layer:
 
     @property
     def sound_vel(self):
-        return self.elastic.sound_vel
+        return self.elastic.sound_vel.quantity
 
     @sound_vel.setter
     def sound_vel(self, value):
-        self.elastic.sound_vel = value
+        self.elastic.sound_vel.quantity = value
 
 
     @property
     def spring_const(self):
-        return self.elastic.spring_const
+        return self.elastic.spring_const.quantity
 
     @spring_const.setter
     def spring_const(self, value):
-        self.elastic.spring_const = value
+        self.elastic.spring_const.quantity = value
 
 
     @property
     def phonon_damping(self):
-        return self.elastic.phonon_damping
+        return self.elastic.phonon_damping.quantity
 
     @phonon_damping.setter
     def phonon_damping(self, value):
-        self.elastic.phonon_damping = value
+        self.elastic.phonon_damping.quantity = value
 
 
     # ============================================================================
@@ -465,38 +442,38 @@ class Layer:
 
     @property
     def opt_pen_depth(self):
-        return self.optical.opt_pen_depth
+        return self.optical.opt_pen_depth.quantity
 
     @opt_pen_depth.setter
     def opt_pen_depth(self, value):
-        self.optical.opt_pen_depth = value
+        self.optical.opt_pen_depth.quantity = value
 
 
     @property
     def opt_ref_index(self):
-        return self.optical.opt_ref_index
+        return self.optical.opt_ref_index.quantity
 
     @opt_ref_index.setter
     def opt_ref_index(self, value):
-        self.optical.opt_ref_index = value
+        self.optical.opt_ref_index.quantity = value
 
 
     @property
     def opt_ref_index_per_strain(self):
-        return self.optical.opt_ref_index_per_strain
+        return self.optical.opt_ref_index_per_strain.quantity
 
     @opt_ref_index_per_strain.setter
     def opt_ref_index_per_strain(self, value):
-        self.optical.opt_ref_index_per_strain = value
+        self.optical.opt_ref_index_per_strain.quantity = value
 
 
     @property
     def deb_wal_fac(self):
-        return self.optical.deb_wal_fac
+        return self.optical.deb_wal_fac.quantity
 
     @deb_wal_fac.setter
     def deb_wal_fac(self, value):
-        self.optical.deb_wal_fac = value
+        self.optical.deb_wal_fac.quantity = value
 
 
     # ============================================================================
@@ -505,92 +482,92 @@ class Layer:
 
     @property
     def eff_spin(self):
-        return self.magnetic.eff_spin
+        return self.magnetic.eff_spin.quantity
 
     @eff_spin.setter
     def eff_spin(self, value):
-        self.magnetic.eff_spin = value
+        self.magnetic.eff_spin.quantity = value
 
 
     @property
     def curie_temp(self):
-        return self.magnetic.curie_temp
+        return self.magnetic.curie_temp.quantity
 
     @curie_temp.setter
     def curie_temp(self, value):
-        self.magnetic.curie_temp = value
+        self.magnetic.curie_temp.quantity = value
 
 
     @property
     def mf_exch_coupling(self):
-        return self.magnetic.mf_exch_coupling
+        return self.magnetic.mf_exch_coupling.quantity
 
     @mf_exch_coupling.setter
     def mf_exch_coupling(self, value):
-        self.magnetic.mf_exch_coupling = value
+        self.magnetic.mf_exch_coupling.quantity = value
 
 
     @property
     def lamda(self):
-        return self.magnetic.lamda
+        return self.magnetic.lamda.quantity
 
     @lamda.setter
     def lamda(self, value):
-        self.magnetic.lamda = value
+        self.magnetic.lamda.quantity = value
 
 
     @property
     def mag_moment(self):
-        return self.magnetic.mag_moment
+        return self.magnetic.mag_moment.quantity
 
     @mag_moment.setter
     def mag_moment(self, value):
-        self.magnetic.mag_moment = value
+        self.magnetic.mag_moment.quantity = value
 
 
     @property
     def aniso_exponent(self):
-        return self.magnetic.aniso_exponent
+        return self.magnetic.aniso_exponent.quantity
 
     @aniso_exponent.setter
     def aniso_exponent(self, value):
-        self.magnetic.aniso_exponent = value
+        self.magnetic.aniso_exponent.quantity = value
 
 
     @property
     def anisotropy(self):
-        return self.magnetic.anisotropy
+        return self.magnetic.anisotropy.quantity
 
     @anisotropy.setter
     def anisotropy(self, value):
-        self.magnetic.anisotropy = value
+        self.magnetic.anisotropy.quantity = value
 
 
     @property
     def exch_stiffness(self):
-        return self.magnetic.exch_stiffness
+        return self.magnetic.exch_stiffness.quantity
 
     @exch_stiffness.setter
     def exch_stiffness(self, value):
-        self.magnetic.exch_stiffness = value
+        self.magnetic.exch_stiffness.quantity = value
 
 
     @property
     def mag_saturation(self):
-        return self.magnetic.mag_saturation
+        return self.magnetic.mag_saturation.quantity
 
     @mag_saturation.setter
     def mag_saturation(self, value):
-        self.magnetic.mag_saturation = value
+        self.magnetic.mag_saturation.quantity = value
 
 
     @property
     def magnetization(self):
-        return self.magnetic.magnetization
+        return self.magnetic.magnetization.quantity
 
     @magnetization.setter
     def magnetization(self, value):
-        self.magnetic.magnetization = value
+        self.magnetic.magnetization.quantity = value
 
 
 class Vacuum(Layer):
