@@ -21,9 +21,9 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Simulation']
+__all__ = ["Simulation"]
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
 import os
 import warnings
@@ -64,24 +64,31 @@ class Simulation:
     def __init__(self, S, force_recalc, **kwargs):
         self.S = S
         self.force_recalc = force_recalc
-        self.save_data = kwargs.get('save_data', True)
-        self.cache_dir = kwargs.get('cache_dir', './')
-        self.disp_messages = kwargs.get('disp_messages', True)
-        self.progress_bar = kwargs.get('progress_bar', True)
+        self.save_data = kwargs.get("save_data", True)
+        self.cache_dir = kwargs.get("cache_dir", "./")
+        self.disp_messages = kwargs.get("disp_messages", True)
+        self.progress_bar = kwargs.get("progress_bar", True)
 
     def __str__(self, output=[]):
         """String representation of this class"""
-        output = [['force recalc', self.force_recalc],
-                  ['cache directory', self.cache_dir],
-                  ['display messages', self.disp_messages],
-                  ['save data', self.save_data],
-                  ['progress bar', self.progress_bar]] + output
+        output = [
+            ["force recalc", self.force_recalc],
+            ["cache directory", self.cache_dir],
+            ["display messages", self.disp_messages],
+            ["save data", self.save_data],
+            ["progress bar", self.progress_bar],
+        ] + output
 
-        class_str = 'This is the current structure for the simulations:\n\n'
+        class_str = "This is the current structure for the simulations:\n\n"
         class_str += self.S.__str__()
-        class_str += '\n\nDisplay properties:\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt='rst',
-                              colalign=('right',), floatfmt=('.2f', '.2f'))
+        class_str += "\n\nDisplay properties:\n\n"
+        class_str += tabulate(
+            output,
+            headers=["parameter", "value"],
+            tablefmt="rst",
+            colalign=("right",),
+            floatfmt=(".2f", ".2f"),
+        )
         return class_str
 
     def disp_message(self, message):
@@ -110,11 +117,11 @@ class Simulation:
         if len(args) == 1:
             var_name = args[0]
         else:
-            var_name = '_data_'
+            var_name = "_data_"
         if self.save_data:
             np.savez(full_filename, **data)
             filename = os.path.basename(full_filename)
-            self.disp_message(f'{var_name:s} saved to file:\n\t {filename:s}')
+            self.disp_message(f"{var_name:s} saved to file:\n\t {filename:s}")
 
     @staticmethod
     def conv_with_function(y, x, handle):
@@ -133,12 +140,12 @@ class Simulation:
 
         """
         dx = np.min(np.diff(x))
-        x_lin = np.r_[np.min(x):np.max(x):dx]
+        x_lin = np.r_[np.min(x) : np.max(x) : dx]
         y_lin = np.interp(x_lin, x, y)
         x0 = np.mean(x_lin)
-        y_handle = handle(x_lin-x0)
+        y_handle = handle(x_lin - x0)
 
-        temp = np.convolve(y_lin, y_handle/y_handle.sum(), mode='same')
+        temp = np.convolve(y_lin, y_handle / y_handle.sum(), mode="same")
 
         y_conv = np.interp(x, x_lin, temp)
         # finally remove NaN entries due to the interpolation
@@ -152,7 +159,8 @@ class Simulation:
     @cache_dir.setter
     def cache_dir(self, cache_dir):
         import os.path as path
+
         if path.exists(cache_dir):
             self._cache_dir = cache_dir
         else:
-            warnings.warn('Cache dir does not exist. Please create the path first.')
+            warnings.warn("Cache dir does not exist. Please create the path first.")

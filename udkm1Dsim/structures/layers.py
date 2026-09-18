@@ -21,9 +21,9 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell']
+__all__ = ["Layer", "Vacuum", "AmorphousLayer", "UnitCell"]
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
 from inspect import isfunction
 
@@ -82,49 +82,49 @@ class Layer:
         self.magnetic = MagneticParameters()
 
         # structural parameters
-        self.thickness = kwargs.get('thickness', 0.0*u.nm)
-        self.roughness = kwargs.get('roughness', 0.0*u.nm)
-        self.density = kwargs.get('density', 0.0*u.kg/u.m**3)
+        self.thickness = kwargs.get("thickness", 0.0 * u.nm)
+        self.roughness = kwargs.get("roughness", 0.0 * u.nm)
+        self.density = kwargs.get("density", 0.0 * u.kg / u.m**3)
 
         # thermal parameters
-        self.heat_capacity = kwargs.get('heat_capacity', 0.0*u.J/u.kg/u.K)
-        self.therm_cond = kwargs.get('therm_cond', 0.0*u.W/u.m/u.K)
-        self.lin_therm_exp = kwargs.get('lin_therm_exp', 0.0)
-        self.sub_system_coupling = kwargs.get('sub_system_coupling', 0.0*u.W/u.m**3)
+        self.heat_capacity = kwargs.get("heat_capacity", 0.0 * u.J / u.kg / u.K)
+        self.therm_cond = kwargs.get("therm_cond", 0.0 * u.W / u.m / u.K)
+        self.lin_therm_exp = kwargs.get("lin_therm_exp", 0.0)
+        self.sub_system_coupling = kwargs.get("sub_system_coupling", 0.0 * u.W / u.m**3)
         self.num_sub_systems = 1
 
         # if len(self.heat_capacity) == len(self.therm_cond) \
-                #         == len(self.lin_therm_exp) == len(self.sub_system_coupling):
-                #     self.num_sub_systems = len(self.heat_capacity)
-                # else:
-                #     raise ValueError('Heat capacity, thermal conductivity, linear '
-                #                      'thermal expansion, and subsystem coupling have not '
-                #                      'the same number of elements!')
+        #         == len(self.lin_therm_exp) == len(self.sub_system_coupling):
+        #     self.num_sub_systems = len(self.heat_capacity)
+        # else:
+        #     raise ValueError('Heat capacity, thermal conductivity, linear '
+        #                      'thermal expansion, and subsystem coupling have not '
+        #                      'the same number of elements!')
 
         # elastic parameters
-        self.sound_vel = kwargs.get('sound_vel', 0.0*u.m/u.s)
-        self.phonon_damping = kwargs.get('phonon_damping', 0.0*u.kg/u.s)
+        self.sound_vel = kwargs.get("sound_vel", 0.0 * u.m / u.s)
+        self.phonon_damping = kwargs.get("phonon_damping", 0.0 * u.kg / u.s)
 
         # optical parameters
-        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0.0*u.angstrom**2)
-        self.opt_pen_depth = kwargs.get('opt_pen_depth', 0.0*u.nm)
-        self.opt_ref_index = kwargs.get('opt_ref_index', 0.0+0.0j)
-        self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0.0+0.0j)
+        self.deb_wal_fac = kwargs.get("deb_wal_fac", 0.0 * u.angstrom**2)
+        self.opt_pen_depth = kwargs.get("opt_pen_depth", 0.0 * u.nm)
+        self.opt_ref_index = kwargs.get("opt_ref_index", 0.0 + 0.0j)
+        self.opt_ref_index_per_strain = kwargs.get("opt_ref_index_per_strain", 0.0 + 0.0j)
 
         # magnetic parameters
-        self.eff_spin = kwargs.get('eff_spin', 0.0)
-        self.curie_temp = kwargs.get('curie_temp', 0.0*u.K)
-        self.lamda = kwargs.get('lamda', 0.0)
-        self.mag_moment = kwargs.get('mag_moment', 0.0*u.bohr_magneton)
-        self.aniso_exponent = kwargs.get('aniso_exponent', 0.0)
-        self.anisotropy = kwargs.get('anisotropy', [0.0, 0.0, 0.0]*u.J/u.m**3)
-        self.exch_stiffness = kwargs.get('exch_stiffness', 0.0*u.J/u.m)
-        self.mag_saturation = kwargs.get('mag_saturation', 0.0*u.J/u.T/u.m**3)
-        self.magnetization = kwargs.get('magnetization', np.array([0.0, 0.0, 0.0]))
+        self.eff_spin = kwargs.get("eff_spin", 0.0)
+        self.curie_temp = kwargs.get("curie_temp", 0.0 * u.K)
+        self.lamda = kwargs.get("lamda", 0.0)
+        self.mag_moment = kwargs.get("mag_moment", 0.0 * u.bohr_magneton)
+        self.aniso_exponent = kwargs.get("aniso_exponent", 0.0)
+        self.anisotropy = kwargs.get("anisotropy", [0.0, 0.0, 0.0] * u.J / u.m**3)
+        self.exch_stiffness = kwargs.get("exch_stiffness", 0.0 * u.J / u.m)
+        self.mag_saturation = kwargs.get("mag_saturation", 0.0 * u.J / u.T / u.m**3)
+        self.magnetization = kwargs.get("magnetization", np.array([0.0, 0.0, 0.0]))
 
     def __repr__(self):
         """String representation of this class"""
-        class_str = f"Layer: {self.name}\nID: {self.id}\n" + "="*30 + "\n"
+        class_str = f"Layer: {self.name}\nID: {self.id}\n" + "=" * 30 + "\n"
         class_str += self.structural.__repr__() + "\n"
         class_str += self.thermal.__repr__() + "\n"
         class_str += self.elastic.__repr__() + "\n"
@@ -244,8 +244,9 @@ class Layer:
     @thickness.setter
     def thickness(self, value):
         self.structural.thickness.quantity = value
-        self.elastic.calc_spring_const(self.structural.mass_unit_area.magnitude,
-                                       self.structural.thickness.magnitude)
+        self.elastic.calc_spring_const(
+            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
+        )
 
     @property
     def mass(self):
@@ -275,8 +276,9 @@ class Layer:
     @density.setter
     def density(self, value):
         self.structural.density.quantity = value
-        self.elastic.calc_spring_const(self.structural.mass_unit_area.magnitude,
-                                       self.structural.thickness.magnitude)
+        self.elastic.calc_spring_const(
+            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
+        )
 
     @property
     def area(self):
@@ -284,9 +286,7 @@ class Layer:
 
     @area.setter
     def area(self, value):
-        raise AttributeError(
-            "'area' is fixed to 1.0 angstrom² for Layer"
-        )
+        raise AttributeError("'area' is fixed to 1.0 angstrom² for Layer")
 
     @property
     def volume(self):
@@ -305,7 +305,6 @@ class Layer:
     @roughness.setter
     def roughness(self, value):
         self.structural.roughness.quantity = value
-
 
     # ============================================================================
     # Thermal parameters
@@ -384,8 +383,9 @@ class Layer:
     @sound_vel.setter
     def sound_vel(self, value):
         self.elastic.sound_vel.quantity = value
-        self.elastic.calc_spring_const(self.structural.mass_unit_area.magnitude,
-                                       self.structural.thickness.magnitude)
+        self.elastic.calc_spring_const(
+            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
+        )
 
     @property
     def spring_const(self):
@@ -405,7 +405,6 @@ class Layer:
     def phonon_damping(self, value):
         self.elastic.phonon_damping.quantity = value
 
-
     # ============================================================================
     # Optical parameters
     # ============================================================================
@@ -418,7 +417,6 @@ class Layer:
     def opt_pen_depth(self, value):
         self.optical.opt_pen_depth.quantity = value
 
-
     @property
     def opt_ref_index(self):
         return self.optical.opt_ref_index.quantity
@@ -426,7 +424,6 @@ class Layer:
     @opt_ref_index.setter
     def opt_ref_index(self, value):
         self.optical.opt_ref_index.quantity = value
-
 
     @property
     def opt_ref_index_per_strain(self):
@@ -436,7 +433,6 @@ class Layer:
     def opt_ref_index_per_strain(self, value):
         self.optical.opt_ref_index_per_strain.quantity = value
 
-
     @property
     def deb_wal_fac(self):
         return self.optical.deb_wal_fac.quantity
@@ -444,7 +440,6 @@ class Layer:
     @deb_wal_fac.setter
     def deb_wal_fac(self, value):
         self.optical.deb_wal_fac.quantity = value
-
 
     # ============================================================================
     # Magnetic parameters
@@ -458,7 +453,6 @@ class Layer:
     def eff_spin(self, value):
         self.magnetic.eff_spin.quantity = value
 
-
     @property
     def curie_temp(self):
         return self.magnetic.curie_temp.quantity
@@ -466,7 +460,6 @@ class Layer:
     @curie_temp.setter
     def curie_temp(self, value):
         self.magnetic.curie_temp.quantity = value
-
 
     @property
     def mf_exch_coupling(self):
@@ -479,7 +472,6 @@ class Layer:
             " and cannot be set directly."
         )
 
-
     @property
     def lamda(self):
         return self.magnetic.lamda.quantity
@@ -487,7 +479,6 @@ class Layer:
     @lamda.setter
     def lamda(self, value):
         self.magnetic.lamda.quantity = value
-
 
     @property
     def mag_moment(self):
@@ -497,7 +488,6 @@ class Layer:
     def mag_moment(self, value):
         self.magnetic.mag_moment.quantity = value
 
-
     @property
     def aniso_exponent(self):
         return self.magnetic.aniso_exponent.quantity
@@ -505,7 +495,6 @@ class Layer:
     @aniso_exponent.setter
     def aniso_exponent(self, value):
         self.magnetic.aniso_exponent.quantity = value
-
 
     @property
     def anisotropy(self):
@@ -515,7 +504,6 @@ class Layer:
     def anisotropy(self, value):
         self.magnetic.anisotropy.quantity = value
 
-
     @property
     def exch_stiffness(self):
         return self.magnetic.exch_stiffness.quantity
@@ -524,7 +512,6 @@ class Layer:
     def exch_stiffness(self, value):
         self.magnetic.exch_stiffness.quantity = value
 
-
     @property
     def mag_saturation(self):
         return self.magnetic.mag_saturation.quantity
@@ -532,7 +519,6 @@ class Layer:
     @mag_saturation.setter
     def mag_saturation(self, value):
         self.magnetic.mag_saturation.quantity = value
-
 
     @property
     def magnetization(self):
@@ -544,18 +530,18 @@ class Layer:
 
 
 class Vacuum(Layer):
-    def __init__(self, thickness=1*u.nm, **kwargs):
+    def __init__(self, thickness=1 * u.nm, **kwargs):
         self.thickness = thickness
-        self.density = 0.0*u.kg/u.m**3
-        self.area = 1.0*u.angstrom**2  # set as unit area
-        self.volume = self.area*self.thickness
-        self.mass = 0*u.kg
+        self.density = 0.0 * u.kg / u.m**3
+        self.area = 1.0 * u.angstrom**2  # set as unit area
+        self.volume = self.area * self.thickness
+        self.mass = 0 * u.kg
         self.mass_unit_area = self.mass
-        super().__init__('vacuum', 'vacuum', opt_ref_index=1+0.0j)
+        super().__init__("vacuum", "vacuum", opt_ref_index=1 + 0.0j)
 
     def __str__(self):
         """String representation of this class"""
-        return f'Vacuum layer of thickness: {self.thickness:.4g~P}'
+        return f"Vacuum layer of thickness: {self.thickness:.4g~P}"
 
 
 class AmorphousLayer(Layer):
@@ -640,33 +626,41 @@ class AmorphousLayer(Layer):
     def __init__(self, id, name, thickness, density, **kwargs):
         self.thickness = thickness
         self.density = density
-        self.area = 1.0*u.angstrom**2  # set as unit area
-        self.volume = self.area*self.thickness
-        self.mass = self.density*self.volume
+        self.area = 1.0 * u.angstrom**2  # set as unit area
+        self.volume = self.area * self.thickness
+        self.mass = self.density * self.volume
         self.mass_unit_area = self.mass
-        self.atom = kwargs.get('atom', [])
+        self.atom = kwargs.get("atom", [])
         super().__init__(id, name, **kwargs)
 
     def __str__(self):
         """String representation of this class"""
-        output = [['id', self.id],
-                  ['name', self.name],
-                  ['thickness', f'{self.thickness:.4g~P}'],
-                  ]
+        output = [
+            ["id", self.id],
+            ["name", self.name],
+            ["thickness", f"{self.thickness:.4g~P}"],
+        ]
         output += super().__str__()
 
         try:
-            output += [['atom', self.atom.name],
-                       ['magnetization', ''],
-                       ['amplitude', self.magnetization['amplitude']],
-                       ['phi [°]', '{:.4g~P}'.format(self.magnetization['phi'].to('deg'))],
-                       ['gamma [°]', '{:.4g~P}'.format(self.magnetization['gamma'].to('deg'))], ]
+            output += [
+                ["atom", self.atom.name],
+                ["magnetization", ""],
+                ["amplitude", self.magnetization["amplitude"]],
+                ["phi [°]", "{:.4g~P}".format(self.magnetization["phi"].to("deg"))],
+                ["gamma [°]", "{:.4g~P}".format(self.magnetization["gamma"].to("deg"))],
+            ]
         except AttributeError:
-            output += [['no atom set', '']]
+            output += [["no atom set", ""]]
 
-        class_str = 'Amorphous layer with the following properties\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt='rst',
-                              colalign=('right',), floatfmt=('.2f', '.2f'))
+        class_str = "Amorphous layer with the following properties\n\n"
+        class_str += tabulate(
+            output,
+            headers=["parameter", "value"],
+            tablefmt="rst",
+            colalign=("right",),
+            floatfmt=(".2f", ".2f"),
+        )
         return class_str
 
     @property
@@ -676,36 +670,42 @@ class AmorphousLayer(Layer):
     @atom.setter
     def atom(self, atom):
         if atom == []:  # no atom is set
-            self.magnetization = {'amplitude': 0,
-                                  'phi': 0*u.deg,
-                                  'gamma': 0*u.deg,
-                                  }
+            self.magnetization = {
+                "amplitude": 0,
+                "phi": 0 * u.deg,
+                "gamma": 0 * u.deg,
+            }
             return
 
         if not isinstance(atom, (Atom, AtomMixed)):
-            raise TypeError('Class '
-                            + type(atom).__name__
-                            + ' is no possible atom of an amorphous layer. '
-                            + 'Only Atom and AtomMixed are allowed!')
+            raise TypeError(
+                "Class "
+                + type(atom).__name__
+                + " is no possible atom of an amorphous layer. "
+                + "Only Atom and AtomMixed are allowed!"
+            )
         self._atom = atom
-        self.magnetization = {'amplitude': atom.mag_amplitude,
-                              'phi': atom.mag_phi,
-                              'gamma': atom.mag_gamma,
-                              }
+        self.magnetization = {
+            "amplitude": atom.mag_amplitude,
+            "phi": atom.mag_phi,
+            "gamma": atom.mag_gamma,
+        }
 
     @property
     def magnetization(self):
-        return {'amplitude': self._magnetization['amplitude'],
-                'phi': Q_(self._magnetization['phi'], u.rad).to('deg'),
-                'gamma': Q_(self._magnetization['gamma'], u.rad).to('deg')
-                }
+        return {
+            "amplitude": self._magnetization["amplitude"],
+            "phi": Q_(self._magnetization["phi"], u.rad).to("deg"),
+            "gamma": Q_(self._magnetization["gamma"], u.rad).to("deg"),
+        }
 
     @magnetization.setter
     def magnetization(self, magnetization):
-        self._magnetization = {'amplitude': magnetization['amplitude'],
-                               'phi': magnetization['phi'].to_base_units().magnitude,
-                               'gamma': magnetization['gamma'].to_base_units().magnitude
-                               }
+        self._magnetization = {
+            "amplitude": magnetization["amplitude"],
+            "phi": magnetization["phi"].to_base_units().magnitude,
+            "gamma": magnetization["gamma"].to_base_units().magnitude,
+        }
 
 
 class UnitCell(Layer):
@@ -795,11 +795,11 @@ class UnitCell(Layer):
     def __init__(self, id, name, c_axis, **kwargs):
         self.c_axis = c_axis
         self.thickness = c_axis
-        self.a_axis = kwargs.get('a_axis', self.c_axis)
-        self.b_axis = kwargs.get('b_axis', self.a_axis)
-        self.mass = 0.0*u.kg
-        self.mass_unit_area = 0.0*u.kg
-        self.density = 0.0*u.kg/u.m**2
+        self.a_axis = kwargs.get("a_axis", self.c_axis)
+        self.b_axis = kwargs.get("b_axis", self.a_axis)
+        self.mass = 0.0 * u.kg
+        self.mass_unit_area = 0.0 * u.kg
+        self.density = 0.0 * u.kg / u.m**2
 
         super().__init__(id, name, **kwargs)
 
@@ -811,36 +811,55 @@ class UnitCell(Layer):
 
     def __str__(self):
         """String representation of this class"""
-        output = [['id', self.id],
-                  ['name', self.name],
-                  ['a-axis', '{:.4g~P}'.format(self.a_axis.to('nm'))],
-                  ['b-axis', '{:.4g~P}'.format(self.b_axis.to('nm'))],
-                  ['c-axis', '{:.4g~P}'.format(self.c_axis.to('nm'))],
-                  ['area', '{:.4g~P}'.format(self.area.to('nm**2'))],
-                  ['volume', '{:.4g~P}'.format(self.volume.to('nm**3'))],
-                  ['mass', '{:.4g~P}'.format(self.mass.to('kg'))],
-                  ['mass per unit area', f'{self.mass_unit_area:.4g~P}'],
-                  ]
+        output = [
+            ["id", self.id],
+            ["name", self.name],
+            ["a-axis", "{:.4g~P}".format(self.a_axis.to("nm"))],
+            ["b-axis", "{:.4g~P}".format(self.b_axis.to("nm"))],
+            ["c-axis", "{:.4g~P}".format(self.c_axis.to("nm"))],
+            ["area", "{:.4g~P}".format(self.area.to("nm**2"))],
+            ["volume", "{:.4g~P}".format(self.volume.to("nm**3"))],
+            ["mass", "{:.4g~P}".format(self.mass.to("kg"))],
+            ["mass per unit area", f"{self.mass_unit_area:.4g~P}"],
+        ]
         output += super().__str__()
 
-        class_str = 'Unit Cell with the following properties\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt='rst',
-                              colalign=('right',), floatfmt=('.2f', '.2f'))
-        class_str += '\n\n' + str(self.num_atoms) + ' Constituents:\n'
+        class_str = "Unit Cell with the following properties\n\n"
+        class_str += tabulate(
+            output,
+            headers=["parameter", "value"],
+            tablefmt="rst",
+            colalign=("right",),
+            floatfmt=(".2f", ".2f"),
+        )
+        class_str += "\n\n" + str(self.num_atoms) + " Constituents:\n"
 
         atoms_str = []
         for i in range(self.num_atoms):
-            atoms_str.append([self.atoms[i][0].name,
-                              f'{self.atoms[i][1](0):0.2f}',
-                              self.atoms[i][2],
-                              '',
-                              self.atoms[i][0].mag_amplitude,
-                              self.atoms[i][0].mag_phi.to('deg').magnitude,
-                              self.atoms[i][0].mag_gamma.to('deg').magnitude,
-                              ])
-        class_str += tabulate(atoms_str, headers=['atom', 'position', 'position function',
-                                                  'magn.', 'amplitude', 'phi [°]', 'gamma [°]'],
-                              tablefmt='rst')
+            atoms_str.append(
+                [
+                    self.atoms[i][0].name,
+                    f"{self.atoms[i][1](0):0.2f}",
+                    self.atoms[i][2],
+                    "",
+                    self.atoms[i][0].mag_amplitude,
+                    self.atoms[i][0].mag_phi.to("deg").magnitude,
+                    self.atoms[i][0].mag_gamma.to("deg").magnitude,
+                ]
+            )
+        class_str += tabulate(
+            atoms_str,
+            headers=[
+                "atom",
+                "position",
+                "position function",
+                "magn.",
+                "amplitude",
+                "phi [°]",
+                "gamma [°]",
+            ],
+            tablefmt="rst",
+        )
         return class_str
 
     def visualize(self, block=True, **kwargs):
@@ -863,9 +882,9 @@ class UnitCell(Layer):
         import matplotlib.pyplot as plt
         from matplotlib import colormaps
 
-        strain = kwargs.get('strain', 0)
+        strain = kwargs.get("strain", 0)
 
-        colors = [colormaps['Set3'](x) for x in np.linspace(0, 1, self.num_atoms)]
+        colors = [colormaps["Set3"](x) for x in np.linspace(0, 1, self.num_atoms)]
         atom_ids = self.get_atom_ids()
 
         plt.figure()
@@ -874,25 +893,33 @@ class UnitCell(Layer):
             if not atoms_plotted[atom_ids.index(self.atoms[j][0].id)]:
                 label = self.atoms[j][0].id
                 atoms_plotted[atom_ids.index(self.atoms[j][0].id)] = True
-                plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                         markersize=10,
-                         markeredgecolor=[0, 0, 0],
-                         markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
-                         label=label)
+                plt.plot(
+                    1 + j,
+                    self.atoms[j][1](strain),
+                    "o",
+                    markersize=10,
+                    markeredgecolor=[0, 0, 0],
+                    markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
+                    label=label,
+                )
             else:
-                label = '_nolegend_'
-                plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                         markersize=10,
-                         markeredgecolor=[0, 0, 0],
-                         markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
-                         label=label)
+                label = "_nolegend_"
+                plt.plot(
+                    1 + j,
+                    self.atoms[j][1](strain),
+                    "o",
+                    markersize=10,
+                    markeredgecolor=[0, 0, 0],
+                    markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
+                    label=label,
+                )
 
-        plt.axis([0.1, self.num_atoms+0.9, -0.1, (1.1+strain)])
+        plt.axis([0.1, self.num_atoms + 0.9, -0.1, (1.1 + strain)])
         plt.grid(True)
 
-        plt.title(f'Strain: {strain:0.2f}%')
-        plt.ylabel('relative Position')
-        plt.xlabel('# Atoms')
+        plt.title(f"Strain: {strain:0.2f}%")
+        plt.ylabel("relative Position")
+        plt.xlabel("# Atoms")
         plt.legend()
         plt.show(block=block)
 
@@ -913,29 +940,35 @@ class UnitCell(Layer):
             position (float): relative position within unit cel [0 .. 1].
 
         """
-        s = symbols('s')
-        position_str = ''
+        s = symbols("s")
+        position_str = ""
         # test the input type of the position
         if isfunction(position):
-            raise ValueError('Please use string representation of function!')
+            raise ValueError("Please use string representation of function!")
         elif isinstance(position, str):
             try:
                 # backwards compatibility for direct lambda definition
-                if ':' in position:
+                if ":" in position:
                     # strip lambda prefix
-                    position = position.split(':')[1]
+                    position = position.split(":")[1]
                 position_str = position.strip()
-                position = lambdify(s, position, modules='numpy')
+                position = lambdify(s, position, modules="numpy")
             except Exception as e:
-                print('String input for unit cell property ' + position + ' \
-                    cannot be converted to function handle!')
+                print(
+                    "String input for unit cell property "
+                    + position
+                    + " \
+                    cannot be converted to function handle!"
+                )
                 print(e)
         elif isinstance(position, (int, float)):
-            position_str = str(position) + '*(1+s)'
-            position = lambdify(s, position_str, modules='numpy')
+            position_str = str(position) + "*(1+s)"
+            position = lambdify(s, position_str, modules="numpy")
         else:
-            raise ValueError('Atom position input has to be a scalar, or string'
-                             'which can be converted into a lambda function!')
+            raise ValueError(
+                "Atom position input has to be a scalar, or string"
+                "which can be converted into a lambda function!"
+            )
 
         # add the atom at the end of the array
         self.atoms.append([atom, position, position_str])
@@ -946,13 +979,13 @@ class UnitCell(Layer):
 
         self.magnetization.append([atom.mag_amplitude, atom.mag_phi, atom.mag_gamma])
 
-        self.mass = 0*u.kg
+        self.mass = 0 * u.kg
         for i in range(self.num_atoms):
             self.mass = self.mass + self.atoms[i][0].mass
 
         self.density = self.mass / self.volume
         # set mass per unit area
-        self.mass_unit_area = self.mass * 1*u.angstrom**2 / self.area
+        self.mass_unit_area = self.mass * 1 * u.angstrom**2 / self.area
         self.calc_spring_const()
 
     def add_multiple_atoms(self, atom, position, Nb):
@@ -999,7 +1032,7 @@ class UnitCell(Layer):
         if args:
             strain = float(np.asarray(args[0]).item())
         else:
-            strain = 0.
+            strain = 0.0
 
         res = np.zeros([self.num_atoms])
         for i, atom in enumerate(self.atoms):
@@ -1009,7 +1042,7 @@ class UnitCell(Layer):
 
     @property
     def a_axis(self):
-        return Q_(self._a_axis, u.meter).to('nm')
+        return Q_(self._a_axis, u.meter).to("nm")
 
     @a_axis.setter
     def a_axis(self, a_axis):
@@ -1017,7 +1050,7 @@ class UnitCell(Layer):
 
     @property
     def b_axis(self):
-        return Q_(self._b_axis, u.meter).to('nm')
+        return Q_(self._b_axis, u.meter).to("nm")
 
     @b_axis.setter
     def b_axis(self, b_axis):
@@ -1025,7 +1058,7 @@ class UnitCell(Layer):
 
     @property
     def c_axis(self):
-        return Q_(self._c_axis, u.meter).to('nm')
+        return Q_(self._c_axis, u.meter).to("nm")
 
     @c_axis.setter
     def c_axis(self, c_axis):

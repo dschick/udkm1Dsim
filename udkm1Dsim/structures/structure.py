@@ -21,9 +21,9 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Structure']
+__all__ = ["Structure"]
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
 
 import itertools
@@ -71,60 +71,62 @@ class Structure:
 
     def __str__(self, tabs=0, recursive=False):
         """String representation of this class"""
-        tab_str = tabs*'\t'
+        tab_str = tabs * "\t"
 
-        class_str = tab_str + 'Structure properties:\n\n'
-        class_str += tab_str + f'Name   : {self.name:s}\n'
+        class_str = tab_str + "Structure properties:\n\n"
+        class_str += tab_str + f"Name   : {self.name:s}\n"
 
         if len(self.sub_structures) == 0:
-            class_str += tab_str + 'Structure is empty\n----\n'
+            class_str += tab_str + "Structure is empty\n----\n"
             return class_str
 
-        class_str += tab_str + 'Thickness : {:.4g~P}\n'.format(self.thickness.to('nm'))
-        class_str += tab_str + '----\n'
+        class_str += tab_str + "Thickness : {:.4g~P}\n".format(self.thickness.to("nm"))
+        class_str += tab_str + "----\n"
         # traverse all substructures
         for sub_structure in self.sub_structures:
             if isinstance(sub_structure[0], Layer):
                 # the substructure is a Layer or sub-class
-                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                        sub_structure[1],
-                        sub_structure[0].name,
-                        sub_structure[1]*sub_structure[0].thickness.to('nm'))
+                class_str += tab_str + "{:d} times {:s}: {:.4g~P}\n".format(
+                    sub_structure[1],
+                    sub_structure[0].name,
+                    sub_structure[1] * sub_structure[0].thickness.to("nm"),
+                )
             else:
                 # the substructure is a Structure instance by itself
                 # call the display() method recursively
-                class_str += tab_str + f'sub-structure {sub_structure[1]:d} times:\n'
-                class_str += sub_structure[0].__str__(tabs+1, recursive=True)
-        class_str += tab_str + '----\n'
+                class_str += tab_str + f"sub-structure {sub_structure[1]:d} times:\n"
+                class_str += sub_structure[0].__str__(tabs + 1, recursive=True)
+        class_str += tab_str + "----\n"
         # do not print sub-structure superstrate or substrate
         if not recursive:
-            class_str += tab_str + 'Superstrate (semi-infinite):\n'
-            class_str += tab_str + '----\n'
+            class_str += tab_str + "Superstrate (semi-infinite):\n"
+            class_str += tab_str + "----\n"
             # check for a superstrate
             if isinstance(self.superstrate[0], Layer):
-                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                        self.superstrate[1],
-                        self.superstrate[0].name,
-                        self.superstrate[1]
-                        * self.superstrate[0].thickness.to('nm'))
+                class_str += tab_str + "{:d} times {:s}: {:.4g~P}\n".format(
+                    self.superstrate[1],
+                    self.superstrate[0].name,
+                    self.superstrate[1] * self.superstrate[0].thickness.to("nm"),
+                )
             else:
-                warnings.warn('There should be a superstrate present!')
-            class_str += tab_str + '----\n'
-            class_str += tab_str + 'Substrate (semi-infinite):\n'
-            class_str += tab_str + '----\n'
+                warnings.warn("There should be a superstrate present!")
+            class_str += tab_str + "----\n"
+            class_str += tab_str + "Substrate (semi-infinite):\n"
+            class_str += tab_str + "----\n"
             # check for a substrate
             if isinstance(self.substrate[0], Layer):
-                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                        self.substrate[1],
-                        self.substrate[0].name,
-                        self.substrate[1]
-                        * self.substrate[0].thickness.to('nm'))
+                class_str += tab_str + "{:d} times {:s}: {:.4g~P}\n".format(
+                    self.substrate[1],
+                    self.substrate[0].name,
+                    self.substrate[1] * self.substrate[0].thickness.to("nm"),
+                )
             else:
-                warnings.warn('There should be a substrate present!')
+                warnings.warn("There should be a substrate present!")
         return class_str
 
-    def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set3', linewidth=0.1,
-                  show=True):
+    def visualize(
+        self, block=True, unit="nm", fig_size=[20, 1], cmap="Set3", linewidth=0.1, show=True
+    ):
         """visualize
 
         Simple visualization of the :class:`Structure`.
@@ -152,27 +154,33 @@ class Structure:
         cm = colormaps[cmap]
         colortable = {}
         for i in range(N):
-            colortable[layer_ids[i]] = cm(i/(N-1))
+            colortable[layer_ids[i]] = cm(i / (N - 1))
 
         plt.figure(figsize=fig_size)
         ax = plt.axes()
 
         for i, name in enumerate(self.get_layer_vectors()[1]):
-            col = colortable.get(name, 'k')
-            rect = patches.Rectangle((layer_interfaces[i], 0), np.diff(layer_interfaces)[i], 1,
-                                     linewidth=linewidth, facecolor=col, edgecolor='k')
+            col = colortable.get(name, "k")
+            rect = patches.Rectangle(
+                (layer_interfaces[i], 0),
+                np.diff(layer_interfaces)[i],
+                1,
+                linewidth=linewidth,
+                facecolor=col,
+                edgecolor="k",
+            )
             ax.add_patch(rect)
 
         plt.xlim(0, thickness)
         plt.ylim(0, 1)
-        plt.xlabel(f'Distance ({unit:s})')
+        plt.xlabel(f"Distance ({unit:s})")
         plt.yticks([], [])
 
         # add labels for legend
         for layer_id, col in colortable.items():
             plt.plot(0, 0, color=col, label=layer_id)
 
-        leg = plt.legend(bbox_to_anchor=(0., 1.08, 1, .102), frameon=False, ncol=8)
+        leg = plt.legend(bbox_to_anchor=(0.0, 1.08, 1, 0.102), frameon=False, ncol=8)
 
         for line in leg.get_lines():
             line.set_linewidth(8.0)
@@ -223,26 +231,27 @@ class Structure:
         # check of the sub_structure is of type Layer
         # or its sub-classes, or Structure
         if not isinstance(sub_structure, (Layer, Structure)):
-            raise TypeError('Class '
-                            + type(sub_structure).__name__
-                            + ' is no possible sub structure. '
-                            + 'Only Layer, its sub-classes, and '
-                            + 'Structure classes are allowed!')
+            raise TypeError(
+                "Class "
+                + type(sub_structure).__name__
+                + " is no possible sub structure. "
+                + "Only Layer, its sub-classes, and "
+                + "Structure classes are allowed!"
+            )
 
         # if a Structure is added as a sub_structure, the sub_structure's
         # superstrate and substrate are ignored (Vacuum default is ignored)
         if isinstance(sub_structure, Structure):
             if not isinstance(sub_structure.superstrate[0], Vacuum):
-                warnings.warn('The superstrate of the sub_structure is ignored.')
+                warnings.warn("The superstrate of the sub_structure is ignored.")
             if not isinstance(sub_structure.substrate[0], Vacuum):
-                warnings.warn('The substrate of the sub_structure is ignored.')
+                warnings.warn("The substrate of the sub_structure is ignored.")
 
         # check the number of subsystems of the sub_structure
-        if ((self.num_sub_systems > 1)
-           and not (sub_structure.num_sub_systems == self.num_sub_systems)):
-
-            raise ValueError('The number of subsystems in each sub_structure'
-                             'must be the same!')
+        if (self.num_sub_systems > 1) and not (
+            sub_structure.num_sub_systems == self.num_sub_systems
+        ):
+            raise ValueError("The number of subsystems in each sub_structuremust be the same!")
         else:
             self.num_sub_systems = sub_structure.num_sub_systems
 
@@ -259,10 +268,12 @@ class Structure:
 
         """
         if not isinstance(layer, Layer):
-            raise TypeError('Class '
-                            + type(layer).__name__
-                            + ' is no possible superstrate. '
-                            + 'Only Layer or its sub-classes is allowed!')
+            raise TypeError(
+                "Class "
+                + type(layer).__name__
+                + " is no possible superstrate. "
+                + "Only Layer or its sub-classes is allowed!"
+            )
 
         # there is only one repetition of the superstrate layer
         self.superstrate = [layer, 1]
@@ -278,10 +289,12 @@ class Structure:
 
         """
         if not isinstance(layer, Layer):
-            raise TypeError('Class '
-                            + type(layer).__name__
-                            + ' is no possible substrate. '
-                            + 'Only Layer or its sub-classes is allowed!')
+            raise TypeError(
+                "Class "
+                + type(layer).__name__
+                + " is no possible substrate. "
+                + "Only Layer or its sub-classes is allowed!"
+            )
 
         self.substrate = [layer, N]
 
@@ -319,8 +332,10 @@ class Structure:
                 L = L + self.sub_structures[i][1]
             else:
                 # its a structure, so call the method recursively
-                L = L + self.sub_structures[i][0].get_number_of_layers() \
-                    * self.sub_structures[i][1]
+                L = (
+                    L
+                    + self.sub_structures[i][0].get_number_of_layers() * self.sub_structures[i][1]
+                )
 
         return L
 
@@ -431,16 +446,18 @@ class Structure:
                 # layer list
                 Index = layers[0].index(self.sub_structures[i][0].id)
                 # add the index N times to the indices vector
-                indices = np.append(indices, Index*np.ones(self.sub_structures[i][1]))
+                indices = np.append(indices, Index * np.ones(self.sub_structures[i][1]))
                 # create a list of N layer ids and add them to
                 # the ids list
-                temp1 = list(itertools.repeat(self.sub_structures[i][0].id,
-                                              self.sub_structures[i][1]))
+                temp1 = list(
+                    itertools.repeat(self.sub_structures[i][0].id, self.sub_structures[i][1])
+                )
                 layer_ids = layer_ids + list(temp1)
                 # create a list of N layer handles and add them to
                 # the Handles list
-                temp2 = list(itertools.repeat(self.sub_structures[i][0],
-                                              self.sub_structures[i][1]))
+                temp2 = list(
+                    itertools.repeat(self.sub_structures[i][0], self.sub_structures[i][1])
+                )
                 layer_handles = layer_handles + list(temp2)
             else:
                 # its a structure
@@ -500,10 +517,10 @@ class Structure:
               each Layer.
 
         """
-        thickness = self.get_layer_property_vector('_thickness')
+        thickness = self.get_layer_property_vector("_thickness")
         d_end = np.cumsum(thickness)
         d_start = np.hstack([[0], d_end[0:-1]])
-        d_mid = (d_start + thickness/2)
+        d_mid = d_start + thickness / 2
         if units:
             return Q_(d_start, u.m), Q_(d_end, u.m), Q_(d_mid, u.m)
         else:
@@ -533,7 +550,7 @@ class Structure:
             return res
 
     def interp_distance_at_interfaces(self, N, units=True):
-        """ interp_distance_at_interfaces
+        """interp_distance_at_interfaces
 
         Interpolates the distances at the :class:`Layer` interfaces by an odd number
         :math:`N`.
@@ -567,16 +584,19 @@ class Structure:
         # traverse all distances
         for z in dist_intf:
             inda = finderb(z, d_start)  # this is the index of a layer after the interface
-            indb = inda-1  # this is the index of a layer before the interface
+            indb = inda - 1  # this is the index of a layer before the interface
 
             # interpolate linearly N new distances at the interface
             if indb == -1:  # this is the surface interface
-                dist_interp = np.append(dist_interp, np.linspace(0, d_mid[inda], int(2+(N-1)/2)))
-            elif inda >= (len(d_mid)-1):  # this is the bottom interface
-                dist_interp = np.append(dist_interp,
-                                        np.linspace(d_mid[inda], d_end[-1], int(2+(N-1)/2)))
+                dist_interp = np.append(
+                    dist_interp, np.linspace(0, d_mid[inda], int(2 + (N - 1) / 2))
+                )
+            elif inda >= (len(d_mid) - 1):  # this is the bottom interface
+                dist_interp = np.append(
+                    dist_interp, np.linspace(d_mid[inda], d_end[-1], int(2 + (N - 1) / 2))
+                )
             else:  # this is a surface inside the structure
-                dist_interp = np.append(dist_interp, np.linspace(d_mid[indb], d_mid[inda], 2+N))
+                dist_interp = np.append(dist_interp, np.linspace(d_mid[indb], d_mid[inda], 2 + N))
 
         dist_interp = np.unique(np.sort(dist_interp))  # sort and unify the distances
         # these are the indicies of the original distances in the interpolated new array
@@ -609,9 +629,11 @@ class Structure:
             prop = np.zeros([self.get_number_of_layers()])
             for i in range(self.get_number_of_layers()):
                 prop[i] = getattr(handles[i], property_name)
-        elif ((type(getattr(handles[0], property_name)) is list) or
-                (type(getattr(handles[0], property_name)) is str) or
-                (type(getattr(handles[0], property_name)) is dict)):
+        elif (
+            (type(getattr(handles[0], property_name)) is list)
+            or (type(getattr(handles[0], property_name)) is str)
+            or (type(getattr(handles[0], property_name)) is dict)
+        ):
             # it's a list of functions or str
             prop = []
             for i in range(self.get_number_of_layers()):
@@ -677,9 +699,11 @@ class Structure:
         if np.all(numel == numel[0]):
             numel = numel[0]
         else:
-            raise IndexError(f'Property {property_name:s} has not the same number of elements '
-                             '(num_sub_systems) across the whole sample '
-                             'Structure.')
+            raise IndexError(
+                f"Property {property_name:s} has not the same number of elements "
+                "(num_sub_systems) across the whole sample "
+                "Structure."
+            )
         return numel
 
     def get_layer_handle(self, i):
@@ -730,7 +754,7 @@ class Structure:
         """
         # reverse the list of sub_structures
         structure.sub_structures.reverse()
-        for (sub_structure, N) in structure.sub_structures:
+        for sub_structure, N in structure.sub_structures:
             if isinstance(sub_structure, Structure):
                 # recursive call
                 self.reverse_sub_structures(sub_structure)

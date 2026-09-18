@@ -8,44 +8,59 @@ from udkm1Dsim import Phonon, PhononAna, PhononNum, u
 # fixtures
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def phonon(structure, tmp_path_factory):
-    return Phonon(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp('cache'),
-                  save_data=True, disp_messages=True, progress_bar=True,
-                  )
+    return Phonon(
+        structure,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=True,
+        disp_messages=True,
+        progress_bar=True,
+    )
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def phonon_num(structure, tmp_path_factory):
-    return PhononNum(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp('cache'),
-                     save_data=True, disp_messages=True, progress_bar=True,
-                     )
+    return PhononNum(
+        structure,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=True,
+        disp_messages=True,
+        progress_bar=True,
+    )
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def phonon_ana(structure, tmp_path_factory):
-    return PhononAna(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp('cache'),
-                     save_data=True, disp_messages=True, progress_bar=True,
-                     )
+    return PhononAna(
+        structure,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=True,
+        disp_messages=True,
+        progress_bar=True,
+    )
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def delays():
-    return np.r_[-1:10:0.01]*u.ps
+    return np.r_[-1:10:0.01] * u.ps
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def distances(structure):
     dists, _, _ = structure.get_distances_of_layers()
     return dists
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def temp_map(delays, distances):
     return np.zeros((len(delays), len(distances)))
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def strain_map(delays, distances):
     return np.zeros((len(delays), len(distances)))
 

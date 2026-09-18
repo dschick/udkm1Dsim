@@ -10,11 +10,30 @@ from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
 from .structures.structure import Structure
 
 u = pint.get_application_registry()
-u.formatter.default_format = '.4g~P'
+u.formatter.default_format = ".4g~P"
 Q_ = u.Quantity
 
-__all__ = ['Atom', 'AtomMixed', 'Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell', 'Structure',
-           'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization', 'LLB',
-           'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
+__all__ = [
+    "Atom",
+    "AtomMixed",
+    "Layer",
+    "Vacuum",
+    "AmorphousLayer",
+    "UnitCell",
+    "Structure",
+    "Simulation",
+    "Heat",
+    "Phonon",
+    "PhononNum",
+    "PhononAna",
+    "Magnetization",
+    "LLB",
+    "Xray",
+    "XrayKin",
+    "XrayDyn",
+    "XrayDynMag",
+    "u",
+    "Q_",
+]
 
-__version__ = '2.4.1'
+__version__ = "2.4.1"
