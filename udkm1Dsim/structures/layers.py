@@ -469,6 +469,17 @@ class Layer:
     def anisotropy(self, value):
         self.magnetic.anisotropy.quantity = value
 
+    # @anisotropy.setter
+    # def anisotropy(self, anisotropy):
+    #     self._anisotropy = np.zeros(3)
+    #     try:
+    #         if len(anisotropy) == 3:
+    #             self._anisotropy = anisotropy.to_base_units().magnitude
+    #         else:
+    #             warnings.warn('Anisotropy must be a scalar or vector of length 3!')
+    #     except TypeError:
+    #         self._anisotropy[0] = anisotropy.to_base_units().magnitude
+
     @property
     def exch_stiffness(self):
         return self.magnetic.exch_stiffness.quantity
@@ -476,6 +487,17 @@ class Layer:
     @exch_stiffness.setter
     def exch_stiffness(self, value):
         self.magnetic.exch_stiffness.quantity = value
+
+    # @exch_stiffness.setter
+    #     def exch_stiffness(self, exch_stiffness):
+    #         self._exch_stiffness = np.zeros(3)
+    #         try:
+    #             if len(exch_stiffness) == 3:
+    #                 self._exch_stiffness = exch_stiffness.to_base_units().magnitude
+    #             else:
+    #                 warnings.warn('Exchange stiffness must be a scalar or vector of length 3!')
+    #         except TypeError:
+    #             self._exch_stiffness[:] = exch_stiffness.to_base_units().magnitude
 
     @property
     def mag_saturation(self):
@@ -492,6 +514,20 @@ class Layer:
     @magnetization.setter
     def magnetization(self, value):
         self.magnetic.magnetization.quantity = value
+
+    # @property
+    # def magnetization(self):
+    #     return {'amplitude': self._magnetization['amplitude'],
+    #             'phi': Q_(self._magnetization['phi'], u.rad).to('deg'),
+    #             'gamma': Q_(self._magnetization['gamma'], u.rad).to('deg')
+    #             }
+
+    # @magnetization.setter
+    # def magnetization(self, magnetization):
+    #     self._magnetization = {'amplitude': magnetization['amplitude'],
+    #                            'phi': magnetization['phi'].to_base_units().magnitude,
+    #                            'gamma': magnetization['gamma'].to_base_units().magnitude
+    #                            }
 
 
 class Vacuum(Layer):

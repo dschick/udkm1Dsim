@@ -36,10 +36,12 @@ __docformat__ = "restructuredtext"
 
 import re
 from dataclasses import dataclass, field, fields
+from inspect import isfunction
 
 import numpy as np
 import pint
 import scipy.constants as constants
+from sympy import lambdify, symarray, symbols
 from tabulate import tabulate
 
 u = pint.get_application_registry()
@@ -82,7 +84,7 @@ class Parameter:
         return f"Parameter({self.name}={self.magnitude} {self.unit})"
 
 
-class TdependentParameter:
+class TemperatureParameter:
     """Parameter with a unit and a magnitude, which depends on temperature."""
 
     def __init__(self, unit, magnitude=0.0, name=""):
@@ -97,19 +99,13 @@ class TdependentParameter:
 
     @magnitude.setter
     def magnitude(self, value):
-        if isinstance(value, u.Quantity):
-            self._magnitude = value.to(self.unit).magnitude
-        elif isinstance(value, (int, float, complex, np.ndarray)):
-            self._magnitude = value
-        else:
-            raise TypeError(f"Cannot set Parameter '{self.name}' from type {type(value)}")
-
+        self._magnitude, string_rep = self.check_input(value)
         if self._caller is not None:
             self._caller._update_depending()
 
     @property
     def quantity(self):
-        return self._magnitude * self.unit
+        return self._magnitude
 
     @quantity.setter
     def quantity(self, value):
@@ -117,6 +113,79 @@ class TdependentParameter:
 
     def __repr__(self):
         return f"Parameter({self.name}={self.magnitude} {self.unit})"
+
+    def check_input(self, inputs, change_num_sub_systems=True):
+        """check_input
+
+        Checks the input and create a list of function handle strings with T as
+        argument. Inputs can be strings, floats, ints, or pint quantities.
+
+        Args:
+            inputs (list[str, int, float, Quantity]): list of strings, int, floats,
+                or Pint quantities.
+            change_num_sub_systems (boolean, optional): wheather the number of
+                sub-systems should be changed. Defaults to True.
+
+        Returns:
+            (tuple):
+            - *output (list[@lambda])* - list of lambda functions.
+            - *output_strs (list[str])* - list of string-representations.
+
+        """
+        output = []
+        output_strs = []
+        # if the input is not a list, we convert it to one
+        if not isinstance(inputs, list):
+            inputs = [inputs]
+        # update number of subsystems
+        # K = self.num_sub_systems
+        k = len(inputs)
+        # if k != K and change_num_sub_systems:
+        #     print(f'Number of subsystems changed from {K:d} to {k:d}.')
+        #     self.num_sub_systems = k
+
+        # traverse each list element and convert it to a function handle
+        for input in inputs:
+            T = symbols("T")
+            if isfunction(input):
+                raise ValueError("Please use string representation of function!")
+            elif isinstance(input, str):
+                try:
+                    # backwards compatibility for direct lambda definition
+                    if ":" in input:
+                        # strip lambda prefix
+                        input = input.split(":")[1]
+                    # backwards compatibility for []-indexing
+                    input = input.replace("[", "_").replace("]", "")
+                    # check for presence of indexing and use symarray as argument
+                    if "_" in input:
+                        T = symarray("T", k)
+                        output.append(lambdify([T], input, modules="numpy"))
+                    else:
+                        output.append(lambdify(T, input, modules="numpy"))
+                    output_strs.append(input.strip())
+                except Exception as e:
+                    print(
+                        "String input for layer property "
+                        + input
+                        + " \
+                        cannot be converted to function handle!"
+                    )
+                    print(e)
+            elif isinstance(input, (int, float)):
+                output.append(lambdify(T, input, modules="numpy"))
+                output_strs.append(str(float(input)))
+            elif isinstance(input, u.Quantity):
+                output.append(lambdify(T, input.to_base_units().magnitude, modules="numpy"))
+                output_strs.append(str(float(input.to_base_units().magnitude)))
+            else:
+                raise ValueError(
+                    "Layer property input has to be a single or "
+                    "list of numerics, Quantities, or function handle strings "
+                    "which can be converted into a lambda function!"
+                )
+
+        return output, output_strs
 
 
 @dataclass
@@ -223,18 +292,80 @@ class ThermalParameters(ParameterGroup):
 
     """
 
-    therm_cond: Parameter = field(default_factory=lambda: Parameter("W/(m K)", 0.0))
-    heat_capacity: Parameter = field(default_factory=lambda: Parameter("J/(kg K)", 0.0))
-    lin_therm_exp: Parameter = field(default_factory=lambda: Parameter("", 0.0))
-    int_lin_therm_exp: Parameter = field(default_factory=lambda: Parameter("", 0.0))
-    int_heat_capacity: Parameter = field(default_factory=lambda: Parameter("J/(kg K)", 0.0))
-    sub_system_coupling: Parameter = field(default_factory=lambda: Parameter("W/m**3", 0.0))
+    therm_cond: TemperatureParameter = field(
+        default_factory=lambda: TemperatureParameter("W/(m K)", 0.0)
+    )
+    heat_capacity: TemperatureParameter = field(
+        default_factory=lambda: TemperatureParameter("J/(kg K)", 0.0)
+    )
+    lin_therm_exp: TemperatureParameter = field(
+        default_factory=lambda: TemperatureParameter("", 0.0)
+    )
+    int_lin_therm_exp: TemperatureParameter = field(
+        default_factory=lambda: TemperatureParameter("K", 0.0)
+    )
+    int_heat_capacity: TemperatureParameter = field(
+        default_factory=lambda: TemperatureParameter("J/kg", 0.0)
+    )
+    sub_system_coupling: TemperatureParameter = field(
+        default_factory=lambda: TemperatureParameter("W/m**3", 0.0)
+    )
     num_sub_systems: Parameter = field(default_factory=lambda: Parameter("", 1))
 
     def __post_init__(self):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
+
+
+#     @property
+#     def int_lin_therm_exp(self):
+#         if hasattr(self, '_int_lin_therm_exp') and isinstance(self._int_lin_therm_exp, list):
+#             return self._int_lin_therm_exp
+#         else:
+#             self._int_lin_therm_exp = []
+#             self.int_lin_therm_exp_str = []
+#             T = symbols('T')
+#             for lte, ltes in zip(self.lin_therm_exp, self.lin_therm_exp_str):
+#                 try:
+#                     integral = integrate(ltes, T)
+#                     self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
+#                     self.int_lin_therm_exp_str.append(str(integral))
+#                 except Exception:
+#                     warnings.warn('\nSympy\'s analytical integration of the linear thermal '
+#                                   'expansion did not work.\n'
+#                                   'Just do it numerically with scipy.integrate.quad')
+#                     self._int_lin_therm_exp.append(lambda T: quad(lte, 0, T, limit=10000)[0])
+#                     self.int_lin_therm_exp_str.append(f'scipy.integrate.quad({ltes:s}, 0, T)[0]')
+
+#         return self._int_lin_therm_exp
+
+#     @int_lin_therm_exp.setter
+#     def int_lin_therm_exp(self, int_lin_therm_exp):
+#         self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_input(
+#                 int_lin_therm_exp)
+
+#     @property
+#     def int_heat_capacity(self):
+#         if hasattr(self, '_int_heat_capacity') and isinstance(self._int_heat_capacity, list):
+#             return self._int_heat_capacity
+#         else:
+#             self._int_heat_capacity = []
+#             self.int_heat_capacity_str = []
+#             T = symbols('T')
+#             for hc, hcs in zip(self.heat_capacity, self.heat_capacity_str):
+#                 try:
+#                     integral = integrate(hcs, T)
+#                     self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
+#                     self.int_heat_capacity_str.append(str(integral))
+#                 except Exception:
+#                     warnings.warn('\nSympy\'s analytical integration of the heat capacity '
+#                                   'did not work.\n'
+#                                   'Just do it numerically with scipy.integrate.quad')
+#                     self._int_heat_capacity.append(lambda T: quad(hc, 0, T, limit=10000)[0])
+#                     self.int_heat_capacity_str.append(f'scipy.integrate.quad({hcs:s}, 0, T)[0]')
+
+#         return self._int_heat_capacity
 
 
 @dataclass(repr=False)
@@ -285,7 +416,9 @@ class ElasticParameters(ParameterGroup):
             Z (float): acoustic impedance.
 
         """
-        self.acoustic_impedance.magnitude = np.sqrt(self.spring_const.magnitude[0] * mass/area**2)
+        self.acoustic_impedance.magnitude = np.sqrt(
+            self.spring_const.magnitude[0] * mass / area**2
+        )
 
     def set_ho_spring_constants(self, HO):
         """set_ho_spring_constants
@@ -408,96 +541,6 @@ class MagneticParameters(ParameterGroup):
             self.mf_exch_coupling.magnitude = 0
 
 
-# @property
-#     def thickness(self):
-#         return Q_(self._thickness, u.meter).to('nm')
-
-#     @thickness.setter
-#     def thickness(self, thickness):
-#         self._thickness = thickness.to_base_units().magnitude
-
-#     @property
-#     def mass(self):
-#         return Q_(self._mass, u.kg)
-
-#     @mass.setter
-#     def mass(self, mass):
-#         self._mass = mass.to_base_units().magnitude
-
-#     @property
-#     def mass_unit_area(self):
-#         return Q_(self._mass_unit_area, u.kg)
-
-#     @mass_unit_area.setter
-#     def mass_unit_area(self, mass_unit_area):
-#         self._mass_unit_area = mass_unit_area.to_base_units().magnitude
-
-#     @property
-#     def density(self):
-#         return Q_(self._density, u.kg/u.m**3)
-
-#     @density.setter
-#     def density(self, density):
-#         self._density = density.to_base_units().magnitude
-
-#     @property
-#     def area(self):
-#         return Q_(self._area, u.m**2)
-
-#     @area.setter
-#     def area(self, area):
-#         self._area = area.to_base_units().magnitude
-
-#     @property
-#     def volume(self):
-#         return Q_(self._volume, u.m**3)
-
-#     @volume.setter
-#     def volume(self, volume):
-#         self._volume = volume.to_base_units().magnitude
-
-#     @property
-#     def deb_wal_fac(self):
-#         return self._deb_wal_fac
-
-#     @deb_wal_fac.setter
-#     def deb_wal_fac(self, deb_wal_fac):
-#         self._deb_wal_fac, self.deb_wal_fac_str = self.check_input(deb_wal_fac, False)
-
-#     @property
-#     def sound_vel(self):
-#         return Q_(self._sound_vel, u.m/u.s)
-
-#     @sound_vel.setter
-#     def sound_vel(self, sound_vel):
-#         # spring constants are (re)calculated on setting the sound velocity
-#         self._sound_vel = sound_vel.to_base_units().magnitude
-#         self.calc_spring_const()
-
-#     @property
-#     def phonon_damping(self):
-#         return Q_(self._phonon_damping, u.kg/u.s)
-
-#     @phonon_damping.setter
-#     def phonon_damping(self, phonon_damping):
-#         self._phonon_damping = phonon_damping.to_base_units().magnitude
-
-#     @property
-#     def opt_pen_depth(self):
-#         return Q_(self._opt_pen_depth, u.meter).to('nanometer')
-
-#     @opt_pen_depth.setter
-#     def opt_pen_depth(self, opt_pen_depth):
-#         self._opt_pen_depth = opt_pen_depth.to_base_units().magnitude
-
-#     @property
-#     def roughness(self):
-#         return Q_(self._roughness, u.meter).to('nm')
-
-#     @roughness.setter
-#     def roughness(self, roughness):
-#         self._roughness = roughness.to_base_units().magnitude
-
 #     @property
 #     def heat_capacity(self):
 #         return self._heat_capacity
@@ -511,44 +554,11 @@ class MagneticParameters(ParameterGroup):
 #         # recalculate the anti-derivative
 #         self.int_heat_capacity
 
-#     @property
-#     def therm_cond(self):
-#         return self._therm_cond
-
-#     @therm_cond.setter
-#     def therm_cond(self, therm_cond):
-#         self._therm_cond, self.therm_cond_str = self.check_input(therm_cond)
-
-#     @property
-#     def int_heat_capacity(self):
-#         if hasattr(self, '_int_heat_capacity') and isinstance(self._int_heat_capacity, list):
-#             return self._int_heat_capacity
-#         else:
-#             self._int_heat_capacity = []
-#             self.int_heat_capacity_str = []
-#             T = symbols('T')
-#             for hc, hcs in zip(self.heat_capacity, self.heat_capacity_str):
-#                 try:
-#                     integral = integrate(hcs, T)
-#                     self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
-#                     self.int_heat_capacity_str.append(str(integral))
-#                 except Exception:
-#                     warnings.warn('\nSympy\'s analytical integration of the heat capacity '
-#                                   'did not work.\n'
-#                                   'Just do it numerically with scipy.integrate.quad')
-#                     self._int_heat_capacity.append(lambda T: quad(hc, 0, T, limit=10000)[0])
-#                     self.int_heat_capacity_str.append(f'scipy.integrate.quad({hcs:s}, 0, T)[0]')
-
-#         return self._int_heat_capacity
 
 #     @int_heat_capacity.setter
 #     def int_heat_capacity(self, int_heat_capacity):
 #         self._int_heat_capacity, self.int_heat_capacity_str = self.check_input(
 #                 int_heat_capacity)
-
-#     @property
-#     def lin_therm_exp(self):
-#         return self._lin_therm_exp
 
 #     @lin_therm_exp.setter
 #     def lin_therm_exp(self, lin_therm_exp):
@@ -560,33 +570,6 @@ class MagneticParameters(ParameterGroup):
 #         self.int_lin_therm_exp
 
 #     @property
-#     def int_lin_therm_exp(self):
-#         if hasattr(self, '_int_lin_therm_exp') and isinstance(self._int_lin_therm_exp, list):
-#             return self._int_lin_therm_exp
-#         else:
-#             self._int_lin_therm_exp = []
-#             self.int_lin_therm_exp_str = []
-#             T = symbols('T')
-#             for lte, ltes in zip(self.lin_therm_exp, self.lin_therm_exp_str):
-#                 try:
-#                     integral = integrate(ltes, T)
-#                     self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
-#                     self.int_lin_therm_exp_str.append(str(integral))
-#                 except Exception:
-#                     warnings.warn('\nSympy\'s analytical integration of the linear thermal '
-#                                   'expansion did not work.\n'
-#                                   'Just do it numerically with scipy.integrate.quad')
-#                     self._int_lin_therm_exp.append(lambda T: quad(lte, 0, T, limit=10000)[0])
-#                     self.int_lin_therm_exp_str.append(f'scipy.integrate.quad({ltes:s}, 0, T)[0]')
-
-#         return self._int_lin_therm_exp
-
-#     @int_lin_therm_exp.setter
-#     def int_lin_therm_exp(self, int_lin_therm_exp):
-#         self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_input(
-#                 int_lin_therm_exp)
-
-#     @property
 #     def sub_system_coupling(self):
 #         return self._sub_system_coupling
 
@@ -594,152 +577,3 @@ class MagneticParameters(ParameterGroup):
 #     def sub_system_coupling(self, sub_system_coupling):
 #         self._sub_system_coupling, self.sub_system_coupling_str = \
 #             self.check_input(sub_system_coupling)
-
-#     @property
-#     def eff_spin(self):
-#         return self._eff_spin
-
-#     @eff_spin.setter
-#     def eff_spin(self, eff_spin):
-#         self._eff_spin = float(eff_spin)
-#         self.calc_mf_exchange_coupling()
-
-#     @property
-#     def curie_temp(self):
-#         return Q_(self._curie_temp, u.K)
-
-#     @property
-#     def mf_exch_coupling(self):
-#         return Q_(self._mf_exch_coupling, u.m**2*u.kg/(u.s**2))
-
-#     @curie_temp.setter
-#     def curie_temp(self, curie_temp):
-#         self._curie_temp = float(curie_temp.to_base_units().magnitude)
-#         self.calc_mf_exchange_coupling()
-
-#     @property
-#     def mag_moment(self):
-#         return Q_(self._mag_moment, u.A*u.m**2).to('bohr_magneton')
-
-#     @mag_moment.setter
-#     def mag_moment(self, mag_moment):
-#         self._mag_moment = float(mag_moment.to_base_units().magnitude)
-
-#     @property
-#     def anisotropy(self):
-#         return Q_(self._anisotropy, u.J/u.m**3)
-
-#     @anisotropy.setter
-#     def anisotropy(self, anisotropy):
-#         self._anisotropy = np.zeros(3)
-#         try:
-#             if len(anisotropy) == 3:
-#                 self._anisotropy = anisotropy.to_base_units().magnitude
-#             else:
-#                 warnings.warn('Anisotropy must be a scalar or vector of length 3!')
-#         except TypeError:
-#             self._anisotropy[0] = anisotropy.to_base_units().magnitude
-
-#     @property
-#     def exch_stiffness(self):
-#         return Q_(self._exch_stiffness, u.J/u.m)
-
-#     @exch_stiffness.setter
-#     def exch_stiffness(self, exch_stiffness):
-#         self._exch_stiffness = np.zeros(3)
-#         try:
-#             if len(exch_stiffness) == 3:
-#                 self._exch_stiffness = exch_stiffness.to_base_units().magnitude
-#             else:
-#                 warnings.warn('Exchange stiffness must be a scalar or vector of length 3!')
-#         except TypeError:
-#             self._exch_stiffness[:] = exch_stiffness.to_base_units().magnitude
-
-#     @property
-#     def mag_saturation(self):
-#         return Q_(self._mag_saturation, u.J/u.T/u.m**3)
-
-#     @mag_saturation.setter
-#     def mag_saturation(self, mag_saturation):
-#         self._mag_saturation = float(mag_saturation.to_base_units().magnitude)
-
-# @property
-# def magnetization(self):
-#     return {'amplitude': self._magnetization['amplitude'],
-#             'phi': Q_(self._magnetization['phi'], u.rad).to('deg'),
-#             'gamma': Q_(self._magnetization['gamma'], u.rad).to('deg')
-#             }
-
-# @magnetization.setter
-# def magnetization(self, magnetization):
-#     self._magnetization = {'amplitude': magnetization['amplitude'],
-#                            'phi': magnetization['phi'].to_base_units().magnitude,
-#                            'gamma': magnetization['gamma'].to_base_units().magnitude
-#                            }
-
-# def check_input(self, inputs, change_num_sub_systems=True):
-#         """check_input
-
-#         Checks the input and create a list of function handle strings with T as
-#         argument. Inputs can be strings, floats, ints, or pint quantities.
-
-#         Args:
-#             inputs (list[str, int, float, Quantity]): list of strings, int, floats,
-#                 or Pint quantities.
-#             change_num_sub_systems (boolean, optional): wheather the number of
-#                 sub-systems should be changed. Defaults to True.
-
-#         Returns:
-#             (tuple):
-#             - *output (list[@lambda])* - list of lambda functions.
-#             - *output_strs (list[str])* - list of string-representations.
-
-#         """
-#         output = []
-#         output_strs = []
-#         # if the input is not a list, we convert it to one
-#         if not isinstance(inputs, list):
-#             inputs = [inputs]
-#         # update number of subsystems
-#         K = self.num_sub_systems
-#         k = len(inputs)
-#         if k != K and change_num_sub_systems:
-#             print(f'Number of subsystems changed from {K:d} to {k:d}.')
-#             self.num_sub_systems = k
-
-#         # traverse each list element and convert it to a function handle
-#         for input in inputs:
-#             T = symbols('T')
-#             if isfunction(input):
-#                 raise ValueError('Please use string representation of function!')
-#             elif isinstance(input, str):
-#                 try:
-#                     # backwards compatibility for direct lambda definition
-#                     if ':' in input:
-#                         # strip lambda prefix
-#                         input = input.split(':')[1]
-#                     # backwards compatibility for []-indexing
-#                     input = input.replace('[', '_').replace(']', '')
-#                     # check for presence of indexing and use symarray as argument
-#                     if '_' in input:
-#                         T = symarray('T', k)
-#                         output.append(lambdify([T], input, modules='numpy'))
-#                     else:
-#                         output.append(lambdify(T, input, modules='numpy'))
-#                     output_strs.append(input.strip())
-#                 except Exception as e:
-#                     print('String input for layer property ' + input + ' \
-#                         cannot be converted to function handle!')
-#                     print(e)
-#             elif isinstance(input, (int, float)):
-#                 output.append(lambdify(T, input, modules='numpy'))
-#                 output_strs.append(str(float(input)))
-#             elif isinstance(input, object):
-#                 output.append(lambdify(T, input.to_base_units().magnitude, modules='numpy'))
-#                 output_strs.append(str(float(input.to_base_units().magnitude)))
-#             else:
-#                 raise ValueError('Layer property input has to be a single or '
-#                                  'list of numerics, Quantities, or function handle strings '
-#                                  'which can be converted into a lambda function!')
-
-#         return output, output_strs
