@@ -26,7 +26,6 @@ __all__ = ['Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell']
 __docformat__ = 'restructuredtext'
 
 from inspect import isfunction
-from dataclasses import dataclass, fields
 
 import numpy as np
 import pint
@@ -77,11 +76,17 @@ class Layer:
         self.name = name
 
         self.structural = StructuralParameters()
-        self.thickness = kwargs.get("thickness", 0.0*u.nm)
+        self.thermal = ThermalParameters()
+        self.elastic = ElasticParameters()
+        self.optical = OpticalParameters()
+        self.magnetic = MagneticParameters()
+
+        # structural parameters
+        self.thickness = kwargs.get('thickness', 0.0*u.nm)
         self.roughness = kwargs.get('roughness', 0.0*u.nm)
         self.density = kwargs.get('density', 0.0*u.kg/u.m**3)
 
-        self.thermal = ThermalParameters()
+        # thermal parameters
         self.heat_capacity = kwargs.get('heat_capacity', 0.0*u.J/u.kg/u.K)
         self.therm_cond = kwargs.get('therm_cond', 0.0*u.W/u.m/u.K)
         self.lin_therm_exp = kwargs.get('lin_therm_exp', 0.0)
@@ -96,18 +101,17 @@ class Layer:
                 #                      'thermal expansion, and subsystem coupling have not '
                 #                      'the same number of elements!')
 
-        self.elastic = ElasticParameters()
+        # elastic parameters
         self.sound_vel = kwargs.get('sound_vel', 0.0*u.m/u.s)
         self.phonon_damping = kwargs.get('phonon_damping', 0.0*u.kg/u.s)
-        self.spring_const = np.array([0.0])
 
-        self.optical = OpticalParameters()
+        # optical parameters
         self.deb_wal_fac = kwargs.get('deb_wal_fac', 0.0*u.angstrom**2)
         self.opt_pen_depth = kwargs.get('opt_pen_depth', 0.0*u.nm)
         self.opt_ref_index = kwargs.get('opt_ref_index', 0.0+0.0j)
         self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0.0+0.0j)
 
-        self.magnetic = MagneticParameters()
+        # magnetic parameters
         self.eff_spin = kwargs.get('eff_spin', 0.0)
         self.curie_temp = kwargs.get('curie_temp', 0.0*u.K)
         self.lamda = kwargs.get('lamda', 0.0)
@@ -161,7 +165,7 @@ class Layer:
     #                                     'therm_cond_str', 'heat_capacity_str',
     #                                     'int_heat_capacity_str', 'sub_system_coupling_str',
     #                                     'num_sub_systems'],
-    #                            'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
+    #                          'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
     #                                       '_mass_unit_area', 'spring_const', '_phonon_damping'],
     #                            'xray': ['num_atoms', '_area', '_mass', 'deb_wal_fac_str',
     #                                     '_thickness'],
@@ -229,37 +233,6 @@ class Layer:
     #     else:
     #         self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
 
-    # def calc_spring_const(self):
-    #     r"""calc_spring_const
-
-    #     Calculates the spring constant of the layer from the mass per unit area,
-    #     sound velocity and thickness
-
-    #     .. math:: k = m \, \left(\frac{v}{c}\right)^2
-
-    #     """
-    #     try:
-    #         self.spring_const[0] = (self._mass_unit_area * (self._sound_vel/self._thickness)**2)
-    #     except AttributeError:
-    #         # no mass set, yet
-    #         self.spring_const[0] = 0
-
-    # def calc_mf_exchange_coupling(self):
-    #     r"""calc_mf_exchange_coupling
-
-    #     Calculate the mean-field exchange coupling constant
-
-    #     .. math:: J = \frac{3}{S_{eff}+1} k_B T_C
-
-    #     """
-    #     try:
-    #         self._mf_exch_coupling = 3*self.eff_spin/(self.eff_spin+1)*constants.k*self._curie_temp
-    #     except AttributeError:
-    #         # on initialization self._curie_temp
-    #         self._mf_exch_coupling = 0
-
-
-
     # ============================================================================
     # Structural parameters
     # ============================================================================
@@ -271,7 +244,8 @@ class Layer:
     @thickness.setter
     def thickness(self, value):
         self.structural.thickness.quantity = value
-
+        self.elastic.calc_spring_const(self.structural.mass_unit_area.magnitude,
+                                       self.structural.thickness.magnitude)
 
     @property
     def mass(self):
@@ -280,10 +254,8 @@ class Layer:
     @mass.setter
     def mass(self, value):
         raise AttributeError(
-            "'mass' is derived from density and volume and cannot be set directly. "
-            "Set 'density' or 'volume' instead."
+            "'mass' is derived from density and volume and cannot be set directly."
         )
-
 
     @property
     def mass_unit_area(self):
@@ -292,10 +264,9 @@ class Layer:
     @mass_unit_area.setter
     def mass_unit_area(self, value):
         raise AttributeError(
-            "'mass_unit_area' is derived from density and volume normalized to area and cannot be set directly. "
-            "Set 'density' or 'volume' instead. 'area' is fixed to 1.0 angstrom² for Layer"
+            "'mass_unit_area' is derived from 'density and volume normalized to area "
+            "and cannot be set directly. 'area' is fixed to 1.0 angstrom² for Layer"
         )
-
 
     @property
     def density(self):
@@ -304,7 +275,8 @@ class Layer:
     @density.setter
     def density(self, value):
         self.structural.density.quantity = value
-
+        self.elastic.calc_spring_const(self.structural.mass_unit_area.magnitude,
+                                       self.structural.thickness.magnitude)
 
     @property
     def area(self):
@@ -316,7 +288,6 @@ class Layer:
             "'area' is fixed to 1.0 angstrom² for Layer"
         )
 
-
     @property
     def volume(self):
         return self.structural.volume.quantity
@@ -324,10 +295,8 @@ class Layer:
     @volume.setter
     def volume(self, value):
         raise AttributeError(
-            "'volume' is derived from thickness and area and cannot be set directly. "
-            "Set 'thickness' or 'area' instead."
+            "'volume' is derived from 'thickness' and 'area' and cannot be set directly."
         )
-
 
     @property
     def roughness(self):
@@ -350,7 +319,6 @@ class Layer:
     def therm_cond(self, value):
         self.thermal.therm_cond.quantity = value
 
-
     @property
     def heat_capacity(self):
         return self.thermal.heat_capacity.quantity
@@ -358,7 +326,6 @@ class Layer:
     @heat_capacity.setter
     def heat_capacity(self, value):
         self.thermal.heat_capacity.quantity = value
-
 
     @property
     def lin_therm_exp(self):
@@ -368,24 +335,27 @@ class Layer:
     def lin_therm_exp(self, value):
         self.thermal.lin_therm_exp.quantity = value
 
-
     @property
     def int_lin_therm_exp(self):
         return self.thermal.int_lin_therm_exp.quantity
 
-    # @int_lin_therm_exp.setter
-    # def int_lin_therm_exp(self, value):
-    #     self.thermal.int_lin_therm_exp = value
-
+    @int_lin_therm_exp.setter
+    def int_lin_therm_exp(self, value):
+        raise AttributeError(
+            "'int_lin_therm_exp' is automatically derived from lin_therm_exp. "
+            "To set explicitly, modify 'Layer.thermal.int_lin_therm_exp' instead."
+        )
 
     @property
     def int_heat_capacity(self):
         return self.thermal.int_heat_capacity.quantity
 
-    # @int_heat_capacity.setter
-    # def int_heat_capacity(self, value):
-    #     self.thermal.int_heat_capacity = value
-
+    @int_heat_capacity.setter
+    def int_heat_capacity(self, value):
+        raise AttributeError(
+            "'int_heat_capacity' is automatically derived from heat_capacity. "
+            "To set explicitly, modify 'Layer.thermal.int_heat_capacity' instead."
+        )
 
     @property
     def sub_system_coupling(self):
@@ -395,7 +365,6 @@ class Layer:
     def sub_system_coupling(self, value):
         self.thermal.sub_system_coupling.quantity = value
 
-
     @property
     def num_sub_systems(self):
         return self.thermal.num_sub_systems.quantity
@@ -403,7 +372,6 @@ class Layer:
     @num_sub_systems.setter
     def num_sub_systems(self, value):
         self.thermal.num_sub_systems.quantity = value
-
 
     # ============================================================================
     # Elastic parameters
@@ -416,7 +384,8 @@ class Layer:
     @sound_vel.setter
     def sound_vel(self, value):
         self.elastic.sound_vel.quantity = value
-
+        self.elastic.calc_spring_const(self.structural.mass_unit_area.magnitude,
+                                       self.structural.thickness.magnitude)
 
     @property
     def spring_const(self):
@@ -424,8 +393,9 @@ class Layer:
 
     @spring_const.setter
     def spring_const(self, value):
-        self.elastic.spring_const.quantity = value
-
+        raise AttributeError(
+            "'spring_const' is automatically derived from sound_vel, mass, and thickness."
+        )
 
     @property
     def phonon_damping(self):
@@ -504,7 +474,10 @@ class Layer:
 
     @mf_exch_coupling.setter
     def mf_exch_coupling(self, value):
-        self.magnetic.mf_exch_coupling.quantity = value
+        raise AttributeError(
+            "'mf_exch_coupling' is derived from other 'eff_spin' and 'curie_temp' "
+            " and cannot be set directly."
+        )
 
 
     @property

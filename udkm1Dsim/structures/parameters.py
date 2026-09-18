@@ -23,6 +23,7 @@
 
 __all__ = [
     'Parameter',
+    'ParameterGroup',
     'StructuralParameters',
     'LatticeParameters',
     'ThermalParameters',
@@ -34,17 +35,18 @@ __all__ = [
 __docformat__ = 'restructuredtext'
 
 import re
+from dataclasses import dataclass, field, fields
+
 import numpy as np
 import pint
-from dataclasses import dataclass, field, fields
+import scipy.constants as constants
 from tabulate import tabulate
 
 u = pint.get_application_registry()
 
 
 class Parameter:
-    __slots__ = ("unit", "_magnitude", "name", "_caller")
-
+    """Parameter with a unit and a magnitude."""
     def __init__(self, unit, magnitude=0.0, name=""):
         self.unit = u.Unit(unit)
         self.name = name
@@ -89,8 +91,10 @@ class ParameterGroup:
                         colalign=("right", "right"))
 
     def _pretty_class_name(self):
-        return "".join(f"{word} " for word in re.sub('([A-Z][a-z]+)', r' \1',
-                                                     re.sub('([A-Z]+)', r' \1', self.__class__.__name__)).split())
+        return "".join(f"{word} "
+                       for word in re.sub('([A-Z][a-z]+)', r' \1',
+                                          re.sub('([A-Z]+)', r' \1',
+                                                 self.__class__.__name__)).split())
 
     def __repr__(self):
         class_str = self._pretty_class_name() + "\n"
@@ -177,7 +181,7 @@ class ThermalParameters(ParameterGroup):
     lin_therm_exp: Parameter = field(default_factory=lambda: Parameter("", 0.0))
     int_lin_therm_exp: Parameter = field(default_factory=lambda: Parameter("", 0.0))
     int_heat_capacity: Parameter = field(default_factory=lambda: Parameter("J/(kg K)", 0.0))
-    sub_system_coupling: Parameter = field(default_factory=lambda: Parameter("W/m³", 0.0))
+    sub_system_coupling: Parameter = field(default_factory=lambda: Parameter("W/m**3", 0.0))
     num_sub_systems: Parameter = field(default_factory=lambda: Parameter("", 1))
 
     def __post_init__(self):
@@ -199,12 +203,31 @@ class ElasticParameters(ParameterGroup):
 
     sound_vel: Parameter = field(default_factory=lambda: Parameter("m/s", 0.0))
     phonon_damping: Parameter = field(default_factory=lambda: Parameter("kg/s", 0.0))
-    spring_const: Parameter = field(default_factory=lambda: Parameter("kg/s²", 0.0))
+    spring_const: Parameter = field(default_factory=lambda: Parameter("kg/s**2",
+                                                                      np.array([0.0])))
 
     def __post_init__(self):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
+            if name in ["thickness", "density", "area"]:
+                p._caller = self
+
+    def calc_spring_const(self, mass_unit_area, thickness):
+        r"""calc_spring_const
+
+        Calculates the spring constant of the layer from the mass per unit area,
+        sound velocity and thickness
+
+        .. math:: k = m \, \left(\frac{v}{c}\right)^2
+
+        """
+        try:
+            self.spring_const.magnitude[0] = (mass_unit_area
+                                              * (self.sound_vel.magnitude/thickness)**2)
+        except (ZeroDivisionError, AttributeError):
+            # no mass set, yet
+            self.spring_const.magnitude[0] = 0
 
 
 @dataclass(repr=False)
@@ -224,7 +247,8 @@ class OpticalParameters(ParameterGroup):
 
     opt_pen_depth: Parameter = field(default_factory=lambda: Parameter("m", 0.0))
     opt_ref_index: Parameter = field(default_factory=lambda: Parameter("", 0.0))
-    opt_ref_index_per_strain: Parameter = field(default_factory=lambda: Parameter("", 0.0))
+    opt_ref_index_per_strain: Parameter = field(
+        default_factory=lambda: Parameter("", 0.0))
     deb_wal_fac: Parameter = field(default_factory=lambda: Parameter("m²", 0.0))
 
     def __post_init__(self):
@@ -254,19 +278,40 @@ class MagneticParameters(ParameterGroup):
 
     eff_spin: Parameter = field(default_factory=lambda: Parameter("", 0.0))
     curie_temp: Parameter = field(default_factory=lambda: Parameter("K", 0.0))
-    mf_exch_coupling: Parameter = field(default_factory=lambda: Parameter("m²kg/s²", 0.0))
+    mf_exch_coupling: Parameter = field(default_factory=lambda: Parameter("m**2kg/s**2", 0.0))
     lamda: Parameter = field(default_factory=lambda: Parameter("", 0.0))
     mag_moment: Parameter = field(default_factory=lambda: Parameter("bohr_magneton", 0.0))
     aniso_exponent: Parameter = field(default_factory=lambda: Parameter("", 0.0))
-    anisotropy: Parameter = field(default_factory=lambda: Parameter("J/m³", 0.0))
+    anisotropy: Parameter = field(default_factory=lambda: Parameter("J/m**3", 0.0))
     exch_stiffness: Parameter = field(default_factory=lambda: Parameter("J/m", 0.0))
-    mag_saturation: Parameter = field(default_factory=lambda: Parameter("J/T/m³", 0.0))
-    magnetization: Parameter = field(default_factory=lambda: Parameter("", 0.0))
+    mag_saturation: Parameter = field(default_factory=lambda: Parameter("J/T/m**3", 0.0))
+    magnetization: Parameter = field(
+        default_factory=lambda: Parameter("", np.array([0.0, 0.0, 0.0])))
 
     def __post_init__(self):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
+            if name in ["eff_spin", "curie_temp"]:
+                p._caller = self
+
+    def _update_depending(self):
+        self.calc_mf_exchange_coupling()
+
+    def calc_mf_exchange_coupling(self):
+        r"""calc_mf_exchange_coupling
+
+        Calculate the mean-field exchange coupling constant
+
+        .. math:: J = \frac{3}{S_{eff}+1} k_B T_C
+
+        """
+        try:
+            self.mf_exch_coupling.magnitude = 3*self.eff_spin.magnitude \
+                / (self.eff_spin.magnitude+1)*constants.k*self.curie_temp.magnitude
+        except AttributeError:
+            # on initialization self.curie_temp
+            self.mf_exch_coupling.magnitude = 0
 
 
 
