@@ -75,43 +75,46 @@ class Layer:
         self.id = id
         self.name = name
 
-        self.structural = StructuralParameters()
-        self.thermal = ThermalParameters()
-        self.elastic = ElasticParameters()
-        self.optical = OpticalParameters()
-        self.magnetic = MagneticParameters()
+        self.structural = StructuralParameters(
+            thickness=kwargs.get("thickness", 0.0 * u.nm),
+            roughness=kwargs.get("roughness", 0.0 * u.nm),
+            density=kwargs.get("density", 0.0 * u.kg / u.m**3),
+        )
+        self.thermal = ThermalParameters(
+            heat_capacity=kwargs.get("heat_capacity", 0.0 * u.J / u.kg / u.K),
+            therm_cond=kwargs.get("therm_cond", 0.0 * u.W / u.m / u.K),
+            lin_therm_exp=kwargs.get("lin_therm_exp", 0.0),
+            sub_system_coupling=kwargs.get("sub_system_coupling", 0.0 * u.W / u.m**3),
+            deb_wal_fac=kwargs.get("deb_wal_fac", 0.0 * u.angstrom**2),
+        )
+        self.elastic = ElasticParameters(
+            sound_vel=kwargs.get("sound_vel", 0.0 * u.m / u.s),
+            phonon_damping=kwargs.get("phonon_damping", 0.0 * u.kg / u.s),
+        )
+        self.optical = OpticalParameters(
+            opt_pen_depth=kwargs.get("opt_pen_depth", 0.0 * u.nm),
+            opt_ref_index=kwargs.get("opt_ref_index", 0.0 + 0.0j),
+            opt_ref_index_per_strain=kwargs.get("opt_ref_index_per_strain", 0.0 + 0.0j),
+        )
+        self.magnetic = MagneticParameters(
+            eff_spin=kwargs.get("eff_spin", 0.0),
+            curie_temp=kwargs.get("curie_temp", 0.0 * u.K),
+            lamda=kwargs.get("lamda", 0.0),
+            mag_moment=kwargs.get("mag_moment", 0.0 * u.bohr_magneton),
+            aniso_exponent=kwargs.get("aniso_exponent", 0.0),
+            anisotropy=kwargs.get("anisotropy", [0.0, 0.0, 0.0] * u.J / u.m**3),
+            exch_stiffness=kwargs.get("exch_stiffness", 0.0 * u.J / u.m),
+            mag_saturation=kwargs.get("mag_saturation", 0.0 * u.J / u.T / u.m**3),
+            magnetization=kwargs.get("magnetization", np.array([0.0, 0.0, 0.0])),
+        )
 
-        # structural parameters
-        self.thickness = kwargs.get("thickness", 0.0 * u.nm)
-        self.roughness = kwargs.get("roughness", 0.0 * u.nm)
-        self.density = kwargs.get("density", 0.0 * u.kg / u.m**3)
-
-        # thermal parameters
-        self.heat_capacity = kwargs.get("heat_capacity", 0.0 * u.J / u.kg / u.K)
-        self.therm_cond = kwargs.get("therm_cond", 0.0 * u.W / u.m / u.K)
-        self.lin_therm_exp = kwargs.get("lin_therm_exp", 0.0)
-        self.sub_system_coupling = kwargs.get("sub_system_coupling", 0.0 * u.W / u.m**3)
-        self.deb_wal_fac = kwargs.get("deb_wal_fac", 0.0 * u.angstrom**2)
-
-        # elastic parameters
-        self.sound_vel = kwargs.get("sound_vel", 0.0 * u.m / u.s)
-        self.phonon_damping = kwargs.get("phonon_damping", 0.0 * u.kg / u.s)
-
-        # optical parameters
-        self.opt_pen_depth = kwargs.get("opt_pen_depth", 0.0 * u.nm)
-        self.opt_ref_index = kwargs.get("opt_ref_index", 0.0 + 0.0j)
-        self.opt_ref_index_per_strain = kwargs.get("opt_ref_index_per_strain", 0.0 + 0.0j)
-
-        # magnetic parameters
-        self.eff_spin = kwargs.get("eff_spin", 0.0)
-        self.curie_temp = kwargs.get("curie_temp", 0.0 * u.K)
-        self.lamda = kwargs.get("lamda", 0.0)
-        self.mag_moment = kwargs.get("mag_moment", 0.0 * u.bohr_magneton)
-        self.aniso_exponent = kwargs.get("aniso_exponent", 0.0)
-        self.anisotropy = kwargs.get("anisotropy", [0.0, 0.0, 0.0] * u.J / u.m**3)
-        self.exch_stiffness = kwargs.get("exch_stiffness", 0.0 * u.J / u.m)
-        self.mag_saturation = kwargs.get("mag_saturation", 0.0 * u.J / u.T / u.m**3)
-        self.magnetization = kwargs.get("magnetization", np.array([0.0, 0.0, 0.0]))
+        # calc depending parameters across ParameterGroups
+        self.elastic.calc_spring_const(
+            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
+        )
+        self.elastic.calc_acoustic_impedance(
+            self.structural.mass.magnitude, self.structural.area.magnitude
+        )
 
     def __repr__(self):
         """String representation of this class"""

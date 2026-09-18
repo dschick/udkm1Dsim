@@ -34,7 +34,6 @@ __all__ = [
 __docformat__ = "restructuredtext"
 
 import re
-from dataclasses import dataclass, field, fields
 
 import numpy as np
 import pint
@@ -44,12 +43,12 @@ from tabulate import tabulate
 from .parameters import Parameter, TemperatureParameter
 
 u = pint.get_application_registry()
-@dataclass
+
 class ParameterGroup:
     """A group of Parameters with units."""
 
     def _table_representation(self, style="double_grid"):
-        rows = [[f.name, getattr(self, f.name).quantity] for f in fields(self)]
+        rows = [[name, p.quantity] for name, p in vars(self).items()]
         return tabulate(
             rows, headers=["Parameter", "Value"], tablefmt=style, colalign=("right", "right")
         )
@@ -71,7 +70,6 @@ class ParameterGroup:
         return f"<h3>{self._pretty_class_name()}</h3>" + self._table_representation(style="html")
 
 
-@dataclass(repr=False)
 class StructuralParameters(ParameterGroup):
     """Structural parameters of a layer.
 
@@ -85,15 +83,17 @@ class StructuralParameters(ParameterGroup):
 
     """
 
-    thickness: Parameter = field(default_factory=lambda: Parameter("m", 0.0))
-    density: Parameter = field(default_factory=lambda: Parameter("kg/m**3", 0.0))
-    area: Parameter = field(default_factory=lambda: Parameter("m**2", 1.0 * u.angstrom**2))
-    roughness: Parameter = field(default_factory=lambda: Parameter("m", 0.0))
-    mass: Parameter = field(default_factory=lambda: Parameter("kg", 0.0))
-    mass_unit_area: Parameter = field(default_factory=lambda: Parameter("kg", 0.0))
-    volume: Parameter = field(default_factory=lambda: Parameter("m**3", 0.0))
+    def __init__(self, thickness=0.0, density=0.0, area=1.0 * u.angstrom**2, roughness=0.0):
+        self.thickness = Parameter("m", thickness)
+        self.density = Parameter("kg/m**3", density)
+        self.area = Parameter("m**2", area)
+        self.roughness = Parameter("m", roughness)
+        self.mass = Parameter("kg", 0.0)
+        self.mass_unit_area = Parameter("kg", 0.0)
+        self.volume = Parameter("m**3", 0.0)
 
-    def __post_init__(self):
+        self._update_depending()
+
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
@@ -108,7 +108,6 @@ class StructuralParameters(ParameterGroup):
         )
 
 
-@dataclass(repr=False)
 class LatticeParameters(ParameterGroup):
     """Lattice parameters of a unit cell.
 
@@ -117,17 +116,16 @@ class LatticeParameters(ParameterGroup):
     c_axis (float): lattice parameter c [m].
     """
 
-    a_axis: Parameter = field(default_factory=lambda: Parameter("m", 0.0))
-    b_axis: Parameter = field(default_factory=lambda: Parameter("m", 0.0))
-    c_axis: Parameter = field(default_factory=lambda: Parameter("m", 0.0))
+    def __init__(self, a_axis=0.0, b_axis=0.0, c_axis=0.0):
+        self.a_axis = Parameter("m", a_axis)
+        self.b_axis = Parameter("m", b_axis)
+        self.c_axis = Parameter("m", c_axis)
 
-    def __post_init__(self):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
 
 
-@dataclass(repr=False)
 class ThermalParameters(ParameterGroup):
     """Thermal parameters of a layer.
 
@@ -146,24 +144,23 @@ class ThermalParameters(ParameterGroup):
 
     """
 
-    therm_cond: TemperatureParameter = field(
-        default_factory=lambda: TemperatureParameter("W/(m K)", 0.0)
-    )
-    heat_capacity: TemperatureParameter = field(
-        default_factory=lambda: TemperatureParameter("J/(kg K)", 0.0)
-    )
-    lin_therm_exp: TemperatureParameter = field(
-        default_factory=lambda: TemperatureParameter("", 0.0)
-    )
-    sub_system_coupling: TemperatureParameter = field(
-        default_factory=lambda: TemperatureParameter("W/m**3", 0.0)
-    )
-    deb_wal_fac: TemperatureParameter = field(
-        default_factory=lambda: TemperatureParameter("m**2", 0.0)
-    )
-    num_sub_systems: Parameter = field(default_factory=lambda: Parameter("", 1))
+    def __init__(
+        self,
+        therm_cond=0.0,
+        heat_capacity=0.0,
+        lin_therm_exp=0.0,
+        sub_system_coupling=0.0,
+        deb_wal_fac=0.0,
+    ):
+        self.therm_cond = TemperatureParameter("W/(m K)", therm_cond)
+        self.heat_capacity = TemperatureParameter("J/(kg K)", heat_capacity)
+        self.lin_therm_exp = TemperatureParameter("", lin_therm_exp)
+        self.sub_system_coupling = TemperatureParameter("W/m**3", sub_system_coupling)
+        self.deb_wal_fac = TemperatureParameter("m**2", deb_wal_fac)
+        self.num_sub_systems = Parameter("", 1)
 
-    def __post_init__(self):
+        self._update_depending()
+
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
@@ -186,7 +183,7 @@ class ThermalParameters(ParameterGroup):
             print("'num_sub_systems' is not consistent for all "
                   "'ThermalParameters' for this layer!")
 
-@dataclass(repr=False)
+
 class ElasticParameters(ParameterGroup):
     """Elastic and phonon parameters of a layer.
 
@@ -198,12 +195,12 @@ class ElasticParameters(ParameterGroup):
 
     """
 
-    sound_vel: Parameter = field(default_factory=lambda: Parameter("m/s", 0.0))
-    phonon_damping: Parameter = field(default_factory=lambda: Parameter("kg/s", 0.0))
-    spring_const: Parameter = field(default_factory=lambda: Parameter("kg/s**2", np.array([0.0])))
-    acoustic_impedance: Parameter = field(default_factory=lambda: Parameter("kg/m/s", 0.0))
+    def __init__(self, sound_vel=0.0, phonon_damping=0.0, spring_const=0.0):
+        self.sound_vel = Parameter("m/s", sound_vel)
+        self.phonon_damping = Parameter("kg/s", phonon_damping)
+        self.spring_const = Parameter("kg/s**2", np.array([0.0]))
+        self.acoustic_impedance = Parameter("kg/m/s", 0.0)
 
-    def __post_init__(self):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
@@ -255,7 +252,6 @@ class ElasticParameters(ParameterGroup):
         self.spring_const.magnitude = np.hstack((self.spring_const.magnitude, HO))
 
 
-@dataclass(repr=False)
 class OpticalParameters(ParameterGroup):
     r"""Optical adn X-ray parameters of a layer.
 
@@ -268,24 +264,29 @@ class OpticalParameters(ParameterGroup):
 
     """
 
-    opt_pen_depth: Parameter = field(default_factory=lambda: Parameter("m", 0.0))
-    opt_ref_index: Parameter = field(default_factory=lambda: Parameter("", 0.0))
-    opt_ref_index_per_strain: Parameter = field(default_factory=lambda: Parameter("", 0.0))
+    def __init__(
+            self,
+            opt_pen_depth=0.0,
+            opt_ref_index=0.0 + 0.0j,
+            opt_ref_index_per_strain=0.0 + 0.0j
+            ):
+        self.opt_pen_depth = Parameter("m", opt_pen_depth)
+        self.opt_ref_index = Parameter("", opt_ref_index)
+        self.opt_ref_index_per_strain = Parameter("", opt_ref_index_per_strain)
 
-    def __post_init__(self):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
 
     # def set_opt_pen_depth_from_ref_index(self, wavelength):
     #     """set_opt_pen_depth_from_ref_index
-
+    #
     #     Set the optical penetration depth from the optical referactive index
     #     for a given wavelength.
-
+    #
     #     Args:
     #         wavelength (Quantity): wavelength as Pint Quantitiy.
-
+    #
     #     """
     #     if np.imag(self.opt_ref_index) == 0:
     #         self.opt_pen_depth = Q_(np.inf, u.m)
@@ -293,7 +294,6 @@ class OpticalParameters(ParameterGroup):
     #         self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
 
 
-@dataclass(repr=False)
 class MagneticParameters(ParameterGroup):
     """Magnetic parameters of a layer.
 
@@ -312,20 +312,31 @@ class MagneticParameters(ParameterGroup):
 
     """
 
-    eff_spin: Parameter = field(default_factory=lambda: Parameter("", 0.0))
-    curie_temp: Parameter = field(default_factory=lambda: Parameter("K", 0.0))
-    mf_exch_coupling: Parameter = field(default_factory=lambda: Parameter("m**2kg/s**2", 0.0))
-    lamda: Parameter = field(default_factory=lambda: Parameter("", 0.0))
-    mag_moment: Parameter = field(default_factory=lambda: Parameter("bohr_magneton", 0.0))
-    aniso_exponent: Parameter = field(default_factory=lambda: Parameter("", 0.0))
-    anisotropy: Parameter = field(default_factory=lambda: Parameter("J/m**3", 0.0))
-    exch_stiffness: Parameter = field(default_factory=lambda: Parameter("J/m", 0.0))
-    mag_saturation: Parameter = field(default_factory=lambda: Parameter("J/T/m**3", 0.0))
-    magnetization: Parameter = field(
-        default_factory=lambda: Parameter("", np.array([0.0, 0.0, 0.0]))
-    )
+    def __init__(
+        self,
+        eff_spin=0.0,
+        curie_temp=0.0,
+        lamda=0.0,
+        mag_moment=0.0,
+        aniso_exponent=0.0,
+        anisotropy=0.0,
+        exch_stiffness=0.0,
+        mag_saturation=0.0,
+        magnetization=np.array([0.0, 0.0, 0.0]),
+    ):
+        self.eff_spin = Parameter("", eff_spin)
+        self.curie_temp = Parameter("K", curie_temp)
+        self.mf_exch_coupling = Parameter("m**2kg/s**2", 0.0)
+        self.lamda = Parameter("", lamda)
+        self.mag_moment = Parameter("bohr_magneton", mag_moment)
+        self.aniso_exponent = Parameter("", aniso_exponent)
+        self.anisotropy = Parameter("J/m**3", anisotropy)
+        self.exch_stiffness = Parameter("J/m", exch_stiffness)
+        self.mag_saturation = Parameter("J/T/m**3", mag_saturation)
+        self.magnetization = Parameter("", magnetization)
 
-    def __post_init__(self):
+        self._update_depending()
+
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
