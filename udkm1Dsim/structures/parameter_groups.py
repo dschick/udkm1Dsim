@@ -38,6 +38,7 @@ import re
 import numpy as np
 import pint
 import scipy.constants as constants
+from sympy.core.numbers import Zero
 from tabulate import tabulate
 
 from .parameters import Parameter, TemperatureParameter
@@ -157,7 +158,7 @@ class ThermalParameters(ParameterGroup):
         self.lin_therm_exp = TemperatureParameter("", lin_therm_exp)
         self.sub_system_coupling = TemperatureParameter("W/m**3", sub_system_coupling)
         self.deb_wal_fac = TemperatureParameter("m**2", deb_wal_fac)
-        self.num_sub_systems = Parameter("", 1)
+        self.num_sub_systems = Parameter("", 0)
 
         self._update_depending()
 
@@ -170,18 +171,21 @@ class ThermalParameters(ParameterGroup):
     def _update_depending(self):
         K = self.num_sub_systems.magnitude
         current_num_sub_systems = []
-        for name, p in vars(self).items():
+        for _, p in vars(self).items():
             if isinstance(p, TemperatureParameter):
                 current_num_sub_systems.append(len(p.magnitude))
 
         max_num = max(current_num_sub_systems)
         if max_num != K:
             self.num_sub_systems.magnitude = max_num
-            print(f"'num_sub_systems' has been updated from {K} to {max_num}.")
+            if K > 0:
+                print(f"'num_sub_systems' has been updated from {K} to {max_num}.")
 
         if len(set(current_num_sub_systems)) != 1:
             print("'num_sub_systems' is not consistent for all "
-                  "'ThermalParameters' for this layer!")
+                  "'ThermalParameters' for this layer including\n"
+                  "'heat_capacity', 'therm_cond', 'lin_therm_exp', "
+                  "'sub_system_coupling', and 'deb_wal_fac'!")
 
 
 class ElasticParameters(ParameterGroup):
