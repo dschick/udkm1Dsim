@@ -32,7 +32,7 @@ import pint
 from sympy import lambdify, symbols
 from tabulate import tabulate
 
-from udkm1Dsim.structures.parameters import (
+from udkm1Dsim.structures.parameter_groups import (
     ElasticParameters,
     MagneticParameters,
     OpticalParameters,
