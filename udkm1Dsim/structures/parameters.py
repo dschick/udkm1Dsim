@@ -37,11 +37,13 @@ __docformat__ = "restructuredtext"
 import re
 from dataclasses import dataclass, field, fields
 from inspect import isfunction
+import warnings
 
 import numpy as np
 import pint
 import scipy.constants as constants
-from sympy import lambdify, symarray, symbols, sympify
+from scipy.integrate import quad
+from sympy import integrate, lambdify, symarray, symbols, sympify
 from sympy.printing.numpy import NumPyPrinter
 from tabulate import tabulate
 
@@ -90,7 +92,9 @@ class TemperatureParameter(Parameter):
 
     def __init__(self, unit, magnitude=0.0, name=""):
         super().__init__(unit, magnitude=0.0, name="")
-        self.symbol = None
+        self._functional = []
+        self._integral = []
+        self._integral_expr = []
 
     @property
     def magnitude(self):
@@ -99,34 +103,63 @@ class TemperatureParameter(Parameter):
     @magnitude.setter
     def magnitude(self, value):
         self._magnitude = self.parse_input(value)
+        # reset of dependent parameters on change
+        self._functional = []
+        self._integral = []
+        self._integral_expr = []
         if self._caller is not None:
             self._caller._update_depending()
 
     @property
     def functional(self):
-        functionals = []
-        for expression in self._magnitude:
-            symbols = sorted(expression.free_symbols, key=lambda s: s.name)
-            if len(symbols) == 0:
-                symbols = ['T']
+        if self._functional == []:
+            for expression in self._magnitude:
+                syms = sorted(expression.free_symbols, key=lambda s: s.name)
+                if len(syms) == 0:
+                    syms = ['T']
 
-            if len(symbols) == 1:
-                is_vector = False
-            else:
-                is_vector = True
+                if len(syms) == 1:
+                    is_vector = False
+                else:
+                    is_vector = True
 
-            if is_vector:
-                body = NumPyPrinter().doprint(expression)
-                unpack = "".join(f"    T_{i} = T[{i}]\n" for i in range(len(symbols)))
-                src = f"def _f(T):\n{unpack}    return {body}\n"
-                ns = {'numpy': np}
-                exec(src, ns)
-                f = ns["_f"]
-                functionals.append(f)
-            else:
-                functionals.append(lambdify(symbols, expression, modules="numpy"))
+                if is_vector:
+                    body = NumPyPrinter().doprint(expression)
+                    unpack = "".join(f"    T_{i} = T[{i}]\n" for i in range(len(syms)))
+                    src = f"def _f(T):\n{unpack}    return {body}\n"
+                    ns = {'numpy': np}
+                    exec(src, ns)
+                    f = ns["_f"]
+                    self._functional.append(f)
+                else:
+                    self._functional.append(lambdify(syms, expression, modules="numpy"))
 
-        return functionals
+        return self._functional
+
+    @property
+    def integral(self):
+        if self._integral == []:
+            self._integral_expr = []
+            T = symbols("T")
+            for hc, hcs in zip(self.functional, self.magnitude):
+                try:
+                    integral = integrate(hcs, T)
+                    self._integral.append(lambdify(T, integral, modules='numpy'))
+                    self._integral_expr.append(integral)
+                except Exception:
+                    warnings.warn('\nSympy\'s analytical integration of the heat capacity '
+                                    'did not work.\n'
+                                    'Just do it numerically with scipy.integrate.quad')
+                    self._integral.append(lambda T: quad(hc, 0, T, limit=10000)[0])
+                    self._integral_expr.append(f'scipy.integrate.quad({hcs:s}, 0, T)[0]')
+
+        return self._integral
+
+    @property
+    def integral_expr(self):
+        if self._integral_expr == []:
+            self.integral
+        return self._integral_expr
 
     @property
     def quantity(self):
@@ -179,10 +212,10 @@ class TemperatureParameter(Parameter):
 
             if '_' in input:
                 # the temperature is input as a vector
-                self.symbol = symarray("T", k)
+                T = symarray("T", k)
             else:
                 # the temperature is input as a scalar
-                self.symbol = symbols("T")
+                T = symbols("T")
             try:
                 expressions.append(sympify(input))
             except Exception as e:
@@ -288,12 +321,8 @@ class ThermalParameters(ParameterGroup):
             [W/(m K)].
     lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
         expansion coefficient (relative).
-    int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
-        linear thermal expansion coefficient.
     heat_capacity (list[@lambda]): list of T-dependent heat capacity
         function [J/(kg K)].
-    int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
-        capacity function.
     sub_system_coupling (list[@lambda]): list of coupling functions of
         different subsystems [W/m³].
     num_sub_systems (int): number of subsystems for heat and phonons
@@ -310,12 +339,7 @@ class ThermalParameters(ParameterGroup):
     lin_therm_exp: TemperatureParameter = field(
         default_factory=lambda: TemperatureParameter("", 0.0)
     )
-    int_lin_therm_exp: TemperatureParameter = field(
-        default_factory=lambda: TemperatureParameter("K", 0.0)
-    )
-    int_heat_capacity: TemperatureParameter = field(
-        default_factory=lambda: TemperatureParameter("J/kg", 0.0)
-    )
+ 
     sub_system_coupling: TemperatureParameter = field(
         default_factory=lambda: TemperatureParameter("W/m**3", 0.0)
     )

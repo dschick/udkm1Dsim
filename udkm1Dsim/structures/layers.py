@@ -274,31 +274,43 @@ class Layer:
 
     @property
     def therm_cond(self):
-        return self.thermal.therm_cond.quantity
+        return self.thermal.therm_cond.functional
 
     @therm_cond.setter
     def therm_cond(self, value):
         self.thermal.therm_cond.quantity = value
 
     @property
+    def therm_cond_expr(self):
+            return self.thermal.therm_cond.quantity
+
+    @property
     def heat_capacity(self):
-        return self.thermal.heat_capacity.quantity
+        return self.thermal.heat_capacity.functional
 
     @heat_capacity.setter
     def heat_capacity(self, value):
         self.thermal.heat_capacity.quantity = value
 
     @property
+    def heat_capacity_expr(self):
+            return self.thermal.heat_capacity.quantity
+
+    @property
     def lin_therm_exp(self):
-        return self.thermal.lin_therm_exp.quantity
+        return self.thermal.lin_therm_exp.functional
 
     @lin_therm_exp.setter
     def lin_therm_exp(self, value):
         self.thermal.lin_therm_exp.quantity = value
 
     @property
+    def lin_therm_exp_expr(self):
+            return self.thermal.lin_therm_exp.quantity
+
+    @property
     def int_lin_therm_exp(self):
-        return self.thermal.int_lin_therm_exp.quantity
+        return self.thermal.lin_therm_exp.integral
 
     @int_lin_therm_exp.setter
     def int_lin_therm_exp(self, value):
@@ -308,8 +320,12 @@ class Layer:
         )
 
     @property
+    def int_lin_therm_exp_expr(self):
+        return self.thermal.lin_therm_exp.integral_expr
+
+    @property
     def int_heat_capacity(self):
-        return self.thermal.int_heat_capacity.quantity
+        return self.thermal.heat_capacity.integral
 
     @int_heat_capacity.setter
     def int_heat_capacity(self, value):
@@ -317,6 +333,10 @@ class Layer:
             "'int_heat_capacity' is automatically derived from heat_capacity. "
             "To set explicitly, modify 'Layer.thermal.int_heat_capacity' instead."
         )
+
+    @property
+    def int_heat_capacity_expr(self):
+        return self.thermal.heat_capacity.integral_expr
 
     @property
     def sub_system_coupling(self):
