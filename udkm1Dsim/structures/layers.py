@@ -139,52 +139,52 @@ class Layer:
 
         return class_str
 
-    # def get_property_dict(self, **kwargs):
-    #     """get_property_dict
+    def get_property_dict(self, **kwargs):
+        """get_property_dict
 
-    #     Returns a dictionary with all parameters. objects or dicts and
-    #     objects are converted to strings. if a type is given, only these
-    #     properties are returned.
+        Returns a dictionary with all parameters. objects or dicts and
+        objects are converted to strings. if a type is given, only these
+        properties are returned.
 
-    #     Args:
-    #         **kwargs (list[str]): types of requested properties.
+        Args:
+            **kwargs (list[str]): types of requested properties.
 
-    #     Returns:
-    #         R (dict): dictionary with requested properties.
+        Returns:
+            R (dict): dictionary with requested properties.
 
-    #     """
-    #     # initialize input parser and define defaults and validators
-    #     properties_by_types = {'heat': ['_thickness', '_mass_unit_area', '_density',
-    #                                     '_opt_pen_depth', 'opt_ref_index',
-    #                                     'therm_cond_str', 'heat_capacity_str',
-    #                                     'int_heat_capacity_str', 'sub_system_coupling_str',
-    #                                     'num_sub_systems'],
-    #                          'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
-    #                                       '_mass_unit_area', 'spring_const', '_phonon_damping'],
-    #                            'xray': ['num_atoms', '_area', '_mass', 'deb_wal_fac_str',
-    #                                     '_thickness'],
-    #                            'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
-    #                                        'opt_ref_index_per_strain'],
-    #                            'magnetic': ['_thickness', 'magnetization', 'eff_spin',
-    #                                         '_curie_temp', '_aniso_exponents', '_anisotropy',
-    #                                         '_exch_stiffness', '_mag_saturation', 'lamda'],
-    #                            }
+        """
+        # initialize input parser and define defaults and validators
+        properties_by_types = {'heat': ['_thickness', '_mass_unit_area', '_density',
+                                        '_opt_pen_depth', 'opt_ref_index',
+                                        'therm_cond_str', 'heat_capacity_str',
+                                        'int_heat_capacity_str', 'sub_system_coupling_str',
+                                        'num_sub_systems'],
+                             'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
+                                          '_mass_unit_area', 'spring_const', '_phonon_damping'],
+                               'xray': ['num_atoms', '_area', '_mass', 'deb_wal_fac_str',
+                                        '_thickness'],
+                               'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
+                                           'opt_ref_index_per_strain'],
+                               'magnetic': ['_thickness', 'magnetization', 'eff_spin',
+                                            '_curie_temp', '_aniso_exponents', '_anisotropy',
+                                            '_exch_stiffness', '_mag_saturation', 'lamda'],
+                               }
 
-    #     types = (kwargs.get('types', 'all'))
-    #     if type(types) is not list:
-    #         types = [types]
-    #     attrs = vars(self)
-    #     R = {}
-    #     for t in types:
-    #         # define the property names by the given type
-    #         if t == 'all':
-    #             return attrs
-    #         else:
-    #             S = dict((key, value) for key, value in attrs.items()
-    #                      if key in properties_by_types[t])
-    #             R.update(S)
+        types = (kwargs.get('types', 'all'))
+        if type(types) is not list:
+            types = [types]
+        attrs = vars(self)
+        R = {}
+        for t in types:
+            # define the property names by the given type
+            if t == 'all':
+                return attrs
+            else:
+                S = dict((key, value) for key, value in attrs.items()
+                         if key in properties_by_types[t])
+                R.update(S)
 
-    #     return R
+        return R
 
     # ============================================================================
     # Structural parameters
@@ -334,7 +334,7 @@ class Layer:
 
     @property
     def sub_system_coupling(self):
-        return self.thermal.sub_system_coupling.quantity
+        return self.thermal.sub_system_coupling.functional
 
     @sub_system_coupling.setter
     def sub_system_coupling(self, value):
@@ -350,11 +350,11 @@ class Layer:
 
     @property
     def num_sub_systems(self):
-        return self.thermal.num_sub_systems.quantity
+        return self.thermal.num_sub_systems.magnitude
 
     @num_sub_systems.setter
     def num_sub_systems(self, value):
-        self.thermal.num_sub_systems.quantity = value
+        self.thermal.num_sub_systems.magnitude = value
 
     # ============================================================================
     # Elastic parameters
