@@ -82,6 +82,43 @@ class Parameter:
         return f"Parameter({self.name}={self.magnitude} {self.unit})"
 
 
+class TdependentParameter:
+    """Parameter with a unit and a magnitude, which depends on temperature."""
+
+    def __init__(self, unit, magnitude=0.0, name=""):
+        self.unit = u.Unit(unit)
+        self.name = name
+        self._caller = None
+        self.magnitude = magnitude
+
+    @property
+    def magnitude(self):
+        return self._magnitude
+
+    @magnitude.setter
+    def magnitude(self, value):
+        if isinstance(value, u.Quantity):
+            self._magnitude = value.to(self.unit).magnitude
+        elif isinstance(value, (int, float, complex, np.ndarray)):
+            self._magnitude = value
+        else:
+            raise TypeError(f"Cannot set Parameter '{self.name}' from type {type(value)}")
+
+        if self._caller is not None:
+            self._caller._update_depending()
+
+    @property
+    def quantity(self):
+        return self._magnitude * self.unit
+
+    @quantity.setter
+    def quantity(self, value):
+        self.magnitude = value
+
+    def __repr__(self):
+        return f"Parameter({self.name}={self.magnitude} {self.unit})"
+
+
 @dataclass
 class ParameterGroup:
     """A group of Parameters with units."""
@@ -239,6 +276,22 @@ class ElasticParameters(ParameterGroup):
             # no mass set, yet
             self.spring_const.magnitude[0] = 0
 
+    def set_ho_spring_constants(self, HO):
+        """set_ho_spring_constants
+
+        Set the higher orders of the spring constant for anharmonic
+        phonon simulations.
+
+        Args:
+            HO (ndarray[float]): higher order spring constants.
+
+        """
+        # reset old higher order spring constants
+        self.spring_const.magnitude = np.delete(
+            self.spring_const.magnitude, np.r_[1 : len(self.spring_const.magnitude)]
+        )
+        self.spring_const.magnitude = np.hstack((self.spring_const.magnitude, HO))
+
 
 @dataclass(repr=False)
 class OpticalParameters(ParameterGroup):
@@ -264,6 +317,21 @@ class OpticalParameters(ParameterGroup):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
+
+    # def set_opt_pen_depth_from_ref_index(self, wavelength):
+    #     """set_opt_pen_depth_from_ref_index
+
+    #     Set the optical penetration depth from the optical referactive index
+    #     for a given wavelength.
+
+    #     Args:
+    #         wavelength (Quantity): wavelength as Pint Quantitiy.
+
+    #     """
+    #     if np.imag(self.opt_ref_index) == 0:
+    #         self.opt_pen_depth = Q_(np.inf, u.m)
+    #     else:
+    #         self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
 
 
 @dataclass(repr=False)
