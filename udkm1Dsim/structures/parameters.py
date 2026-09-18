@@ -131,17 +131,25 @@ class TemperatureParameter(Parameter):
         if self._integral == []:
             self._integral_expr = []
             T = symbols("T")
-            for hc, hcs in zip(self.functional, self.magnitude):
+            for functional, expression in zip(self.functional, self.magnitude):
+                syms = sorted(expression.free_symbols, key=lambda s: s.name)
+                if len(syms) == 0:
+                    syms = ['T']
+                if len(syms) == 1:
+                    T = symbols("T")
+                else:
+                    T = symarray("T", len(syms))
+
                 try:
-                    integral = integrate(hcs, T)
+                    integral = integrate(expression, T)
                     self._integral.append(lambdify(T, integral, modules='numpy'))
                     self._integral_expr.append(integral)
                 except Exception:
                     warnings.warn('\nSympy\'s analytical integration of the heat capacity '
                                     'did not work.\n'
                                     'Just do it numerically with scipy.integrate.quad')
-                    self._integral.append(lambda T: quad(hc, 0, T, limit=10000)[0])
-                    self._integral_expr.append(f'scipy.integrate.quad({hcs:s}, 0, T)[0]')
+                    self._integral.append(lambda T: quad(functional, 0, T, limit=10000)[0])
+                    self._integral_expr.append(f'scipy.integrate.quad({str(expression)}, 0, T)[0]')
 
         return self._integral
 
