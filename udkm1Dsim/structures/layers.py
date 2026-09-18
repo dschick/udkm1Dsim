@@ -192,47 +192,6 @@ class Layer:
 
     #     return R
 
-    # def get_acoustic_impedance(self):
-    #     """get_acoustic_impedance
-
-    #     Calculates the acoustic impedance.
-
-    #     Returns:
-    #         Z (float): acoustic impedance.
-
-    #     """
-    #     Z = np.sqrt(self.spring_const[0] * self.mass/self.area**2)
-    #     return Z
-
-    # def set_ho_spring_constants(self, HO):
-    #     """set_ho_spring_constants
-
-    #     Set the higher orders of the spring constant for anharmonic
-    #     phonon simulations.
-
-    #     Args:
-    #         HO (ndarray[float]): higher order spring constants.
-
-    #     """
-    #     # reset old higher order spring constants
-    #     self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
-    #     self.spring_const = np.hstack((self.spring_const, HO))
-
-    # def set_opt_pen_depth_from_ref_index(self, wavelength):
-    #     """set_opt_pen_depth_from_ref_index
-
-    #     Set the optical penetration depth from the optical referactive index
-    #     for a given wavelength.
-
-    #     Args:
-    #         wavelength (Quantity): wavelength as Pint Quantitiy.
-
-    #     """
-    #     if np.imag(self.opt_ref_index) == 0:
-    #         self.opt_pen_depth = Q_(np.inf, u.m)
-    #     else:
-    #         self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
-
     # ============================================================================
     # Structural parameters
     # ============================================================================
@@ -246,6 +205,9 @@ class Layer:
         self.structural.thickness.quantity = value
         self.elastic.calc_spring_const(
             self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
+        )
+        self.elastic.calc_acoustic_impedance(
+            self.structural.mass.magnitude, self.structural.area.magnitude
         )
 
     @property
@@ -385,6 +347,9 @@ class Layer:
         self.elastic.sound_vel.quantity = value
         self.elastic.calc_spring_const(
             self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
+        )
+        self.elastic.calc_acoustic_impedance(
+            self.structural.mass.magnitude, self.structural.area.magnitude
         )
 
     @property

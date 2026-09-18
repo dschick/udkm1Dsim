@@ -242,22 +242,22 @@ class ElasticParameters(ParameterGroup):
     """Elastic and phonon parameters of a layer.
 
     sound_vel (float): longitudinal sound velocity in the layer [m/s].
+    phonon_damping (float): damping constant of phonon propagation [kg/s].
     spring_const (ndarray[float]): spring constant of the layer [kg/s²]
         and higher orders.
-    phonon_damping (float): damping constant of phonon propagation [kg/s].
+    acoustic_impedance (float): acoustic impedence of a layer [kg/m/s].
 
     """
 
     sound_vel: Parameter = field(default_factory=lambda: Parameter("m/s", 0.0))
     phonon_damping: Parameter = field(default_factory=lambda: Parameter("kg/s", 0.0))
     spring_const: Parameter = field(default_factory=lambda: Parameter("kg/s**2", np.array([0.0])))
+    acoustic_impedance: Parameter = field(default_factory=lambda: Parameter("kg/m/s", 0.0))
 
     def __post_init__(self):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
-            if name in ["thickness", "density", "area"]:
-                p._caller = self
 
     def calc_spring_const(self, mass_unit_area, thickness):
         r"""calc_spring_const
@@ -275,6 +275,17 @@ class ElasticParameters(ParameterGroup):
         except (ZeroDivisionError, AttributeError):
             # no mass set, yet
             self.spring_const.magnitude[0] = 0
+
+    def calc_acoustic_impedance(self, mass, area):
+        """calc_acoustic_impedance
+
+        Calculates the acoustic impedance.
+
+        Returns:
+            Z (float): acoustic impedance.
+
+        """
+        self.acoustic_impedance.magnitude = np.sqrt(self.spring_const.magnitude[0] * mass/area**2)
 
     def set_ho_spring_constants(self, HO):
         """set_ho_spring_constants
