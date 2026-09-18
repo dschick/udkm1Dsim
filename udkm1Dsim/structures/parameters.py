@@ -229,7 +229,6 @@ class TemperatureParameter(Parameter):
 
         return expressions
 
-
 @dataclass
 class ParameterGroup:
     """A group of Parameters with units."""
@@ -344,9 +343,8 @@ class ThermalParameters(ParameterGroup):
     sub_system_coupling: TemperatureParameter = field(
         default_factory=lambda: TemperatureParameter("W/m**3", 0.0)
     )
-
     deb_wal_fac: TemperatureParameter = field(
-        default_factory=lambda: TemperatureParameter("m*3", 0.0)
+        default_factory=lambda: TemperatureParameter("m**2", 0.0)
     )
     num_sub_systems: Parameter = field(default_factory=lambda: Parameter("", 1))
 
@@ -354,13 +352,23 @@ class ThermalParameters(ParameterGroup):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
+            if isinstance(p, TemperatureParameter):
+                p._caller = self
 
-    # update number of subsystems
-    # K = self.num_sub_systems
-    # k = len(inputs)
-    # if k != K and change_num_sub_systems:
-    #     print(f'Number of subsystems changed from {K:d} to {k:d}.')
-    #     self.num_sub_systems = k
+    def _update_depending(self):
+        K = self.num_sub_systems.magnitude
+        current_num_sub_systems = []
+        for name, p in vars(self).items():
+            if isinstance(p, TemperatureParameter):
+                current_num_sub_systems.append(len(p.magnitude))
+
+        max_num = max(current_num_sub_systems)
+        if max_num != K:
+            self.num_sub_systems.magnitude = max_num
+            print(f"'num_sub_systems' has been updated from {K} to {max_num}.")
+
+        if len(set(current_num_sub_systems)) != 1:
+            print("'num_sub_systems' is not consistent for all 'ThermalParameters' for this layer!")
 
 @dataclass(repr=False)
 class ElasticParameters(ParameterGroup):
@@ -530,41 +538,3 @@ class MagneticParameters(ParameterGroup):
         except AttributeError:
             # on initialization self.curie_temp
             self.mf_exch_coupling.magnitude = 0
-
-
-#     @property
-#     def heat_capacity(self):
-#         return self._heat_capacity
-
-#     @heat_capacity.setter
-#     def heat_capacity(self, heat_capacity):
-#         # (re)calculate the integrated heat capacity
-#         self._heat_capacity, self.heat_capacity_str = self.check_input(heat_capacity)
-#         # delete last anti-derivative
-#         self._int_heat_capacity = None
-#         # recalculate the anti-derivative
-#         self.int_heat_capacity
-
-
-#     @int_heat_capacity.setter
-#     def int_heat_capacity(self, int_heat_capacity):
-#         self._int_heat_capacity, self.int_heat_capacity_str = self.check_input(
-#                 int_heat_capacity)
-
-#     @lin_therm_exp.setter
-#     def lin_therm_exp(self, lin_therm_exp):
-#         # (re)calculate the integrated linear thermal expansion coefficient
-#         self._lin_therm_exp, self.lin_therm_exp_str = self.check_input(lin_therm_exp)
-#         # delete last anti-derivative
-#         self._int_lin_therm_exp = None
-#         # recalculate the anti-derivative
-#         self.int_lin_therm_exp
-
-#     @property
-#     def sub_system_coupling(self):
-#         return self._sub_system_coupling
-
-#     @sub_system_coupling.setter
-#     def sub_system_coupling(self, sub_system_coupling):
-#         self._sub_system_coupling, self.sub_system_coupling_str = \
-#             self.check_input(sub_system_coupling)

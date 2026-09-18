@@ -91,22 +91,13 @@ class Layer:
         self.therm_cond = kwargs.get("therm_cond", 0.0 * u.W / u.m / u.K)
         self.lin_therm_exp = kwargs.get("lin_therm_exp", 0.0)
         self.sub_system_coupling = kwargs.get("sub_system_coupling", 0.0 * u.W / u.m**3)
-        self.num_sub_systems = 1
-
-        # if len(self.heat_capacity) == len(self.therm_cond) \
-        #         == len(self.lin_therm_exp) == len(self.sub_system_coupling):
-        #     self.num_sub_systems = len(self.heat_capacity)
-        # else:
-        #     raise ValueError('Heat capacity, thermal conductivity, linear '
-        #                      'thermal expansion, and subsystem coupling have not '
-        #                      'the same number of elements!')
+        self.deb_wal_fac = kwargs.get("deb_wal_fac", 0.0 * u.angstrom**2)
 
         # elastic parameters
         self.sound_vel = kwargs.get("sound_vel", 0.0 * u.m / u.s)
         self.phonon_damping = kwargs.get("phonon_damping", 0.0 * u.kg / u.s)
 
         # optical parameters
-        self.deb_wal_fac = kwargs.get("deb_wal_fac", 0.0 * u.angstrom**2)
         self.opt_pen_depth = kwargs.get("opt_pen_depth", 0.0 * u.nm)
         self.opt_ref_index = kwargs.get("opt_ref_index", 0.0 + 0.0j)
         self.opt_ref_index_per_strain = kwargs.get("opt_ref_index_per_strain", 0.0 + 0.0j)
@@ -348,11 +339,11 @@ class Layer:
 
     @property
     def deb_wal_fac(self):
-        return self.optical.deb_wal_fac.quantity
+        return self.thermal.deb_wal_fac.quantity
 
     @deb_wal_fac.setter
     def deb_wal_fac(self, value):
-        self.optical.deb_wal_fac.quantity = value
+        self.thermal.deb_wal_fac.quantity = value
 
     @property
     def num_sub_systems(self):
