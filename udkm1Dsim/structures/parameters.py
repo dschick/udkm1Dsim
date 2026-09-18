@@ -41,7 +41,8 @@ from inspect import isfunction
 import numpy as np
 import pint
 import scipy.constants as constants
-from sympy import lambdify, symarray, symbols
+from sympy import lambdify, symarray, symbols, sympify
+from sympy.printing.numpy import NumPyPrinter
 from tabulate import tabulate
 
 u = pint.get_application_registry()
@@ -84,14 +85,12 @@ class Parameter:
         return f"Parameter({self.name}={self.magnitude} {self.unit})"
 
 
-class TemperatureParameter:
+class TemperatureParameter(Parameter):
     """Parameter with a unit and a magnitude, which depends on temperature."""
 
     def __init__(self, unit, magnitude=0.0, name=""):
-        self.unit = u.Unit(unit)
-        self.name = name
-        self._caller = None
-        self.magnitude = magnitude
+        super().__init__(unit, magnitude=0.0, name="")
+        self.symbol = None
 
     @property
     def magnitude(self):
@@ -99,13 +98,39 @@ class TemperatureParameter:
 
     @magnitude.setter
     def magnitude(self, value):
-        self._magnitude, string_rep = self.check_input(value)
+        self._magnitude = self.parse_input(value)
         if self._caller is not None:
             self._caller._update_depending()
 
     @property
+    def functional(self):
+        functionals = []
+        for expression in self._magnitude:
+            symbols = sorted(expression.free_symbols, key=lambda s: s.name)
+            if len(symbols) == 0:
+                symbols = ['T']
+
+            if len(symbols) == 1:
+                is_vector = False
+            else:
+                is_vector = True
+
+            if is_vector:
+                body = NumPyPrinter().doprint(expression)
+                unpack = "".join(f"    T_{i} = T[{i}]\n" for i in range(len(symbols)))
+                src = f"def _f(T):\n{unpack}    return {body}\n"
+                ns = {'numpy': np}
+                exec(src, ns)
+                f = ns["_f"]
+                functionals.append(f)
+            else:
+                functionals.append(lambdify(symbols, expression, modules="numpy"))
+
+        return functionals
+
+    @property
     def quantity(self):
-        return self._magnitude
+        return self.magnitude
 
     @quantity.setter
     def quantity(self, value):
@@ -114,78 +139,62 @@ class TemperatureParameter:
     def __repr__(self):
         return f"Parameter({self.name}={self.magnitude} {self.unit})"
 
-    def check_input(self, inputs, change_num_sub_systems=True):
-        """check_input
+    def parse_input(self, inputs):
+        """parse_input
 
-        Checks the input and create a list of function handle strings with T as
+        Parses the input and create a list of function handle strings with T as
         argument. Inputs can be strings, floats, ints, or pint quantities.
 
         Args:
             inputs (list[str, int, float, Quantity]): list of strings, int, floats,
                 or Pint quantities.
-            change_num_sub_systems (boolean, optional): wheather the number of
-                sub-systems should be changed. Defaults to True.
 
         Returns:
             (tuple):
-            - *output (list[@lambda])* - list of lambda functions.
-            - *output_strs (list[str])* - list of string-representations.
+            - *expressions (list[@expres])* - list of sympy expressions from sympify.
 
         """
-        output = []
-        output_strs = []
+        expressions = []
         # if the input is not a list, we convert it to one
         if not isinstance(inputs, list):
             inputs = [inputs]
-        # update number of subsystems
-        # K = self.num_sub_systems
         k = len(inputs)
-        # if k != K and change_num_sub_systems:
-        #     print(f'Number of subsystems changed from {K:d} to {k:d}.')
-        #     self.num_sub_systems = k
 
         # traverse each list element and convert it to a function handle
         for input in inputs:
-            T = symbols("T")
+            # first create a string
             if isfunction(input):
                 raise ValueError("Please use string representation of function!")
             elif isinstance(input, str):
-                try:
-                    # backwards compatibility for direct lambda definition
-                    if ":" in input:
-                        # strip lambda prefix
-                        input = input.split(":")[1]
-                    # backwards compatibility for []-indexing
-                    input = input.replace("[", "_").replace("]", "")
-                    # check for presence of indexing and use symarray as argument
-                    if "_" in input:
-                        T = symarray("T", k)
-                        output.append(lambdify([T], input, modules="numpy"))
-                    else:
-                        output.append(lambdify(T, input, modules="numpy"))
-                    output_strs.append(input.strip())
-                except Exception as e:
-                    print(
-                        "String input for layer property "
-                        + input
-                        + " \
-                        cannot be converted to function handle!"
-                    )
-                    print(e)
+                # backwards compatibility for direct lambda definition
+                if ":" in input:
+                    # strip lambda prefix
+                    input = input.split(":")[1]
+                # backwards compatibility for []-indexing
+                input = input.replace("[", "_").replace("]", "")
             elif isinstance(input, (int, float)):
-                output.append(lambdify(T, input, modules="numpy"))
-                output_strs.append(str(float(input)))
+                input = str(input)
             elif isinstance(input, u.Quantity):
-                output.append(lambdify(T, input.to_base_units().magnitude, modules="numpy"))
-                output_strs.append(str(float(input.to_base_units().magnitude)))
-            else:
-                raise ValueError(
-                    "Layer property input has to be a single or "
-                    "list of numerics, Quantities, or function handle strings "
-                    "which can be converted into a lambda function!"
-                )
+                input = str(input.to_base_units().magnitude)
 
-        return output, output_strs
+            if '_' in input:
+                # the temperature is input as a vector
+                self.symbol = symarray("T", k)
+            else:
+                # the temperature is input as a scalar
+                self.symbol = symbols("T")
+            try:
+                expressions.append(sympify(input))
+            except Exception as e:
+                print(
+                    "String input for layer property "
+                    + input
+                    + " \
+                    cannot be converted to function handle!"
+                )
+                print(e)
+
+        return expressions
 
 
 @dataclass
@@ -316,6 +325,13 @@ class ThermalParameters(ParameterGroup):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
+
+    # update number of subsystems
+    # K = self.num_sub_systems
+    # k = len(inputs)
+    # if k != K and change_num_sub_systems:
+    #     print(f'Number of subsystems changed from {K:d} to {k:d}.')
+    #     self.num_sub_systems = k
 
 
 #     @property
