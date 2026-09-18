@@ -347,6 +347,14 @@ class Layer:
         self.thermal.sub_system_coupling.quantity = value
 
     @property
+    def deb_wal_fac(self):
+        return self.optical.deb_wal_fac.quantity
+
+    @deb_wal_fac.setter
+    def deb_wal_fac(self, value):
+        self.optical.deb_wal_fac.quantity = value
+
+    @property
     def num_sub_systems(self):
         return self.thermal.num_sub_systems.quantity
 
@@ -417,14 +425,6 @@ class Layer:
     @opt_ref_index_per_strain.setter
     def opt_ref_index_per_strain(self, value):
         self.optical.opt_ref_index_per_strain.quantity = value
-
-    @property
-    def deb_wal_fac(self):
-        return self.optical.deb_wal_fac.quantity
-
-    @deb_wal_fac.setter
-    def deb_wal_fac(self, value):
-        self.optical.deb_wal_fac.quantity = value
 
     # ============================================================================
     # Magnetic parameters
@@ -552,13 +552,14 @@ class Layer:
 
 class Vacuum(Layer):
     def __init__(self, thickness=1 * u.nm, **kwargs):
+
+        super().__init__("vacuum", "vacuum", opt_ref_index=1 + 0.0j)
         self.thickness = thickness
         self.density = 0.0 * u.kg / u.m**3
-        self.area = 1.0 * u.angstrom**2  # set as unit area
-        self.volume = self.area * self.thickness
-        self.mass = 0 * u.kg
-        self.mass_unit_area = self.mass
-        super().__init__("vacuum", "vacuum", opt_ref_index=1 + 0.0j)
+        # self.area = 1.0 * u.angstrom**2  # set as unit area
+        #self.volume = self.area * self.thickness
+        #self.mass = 0 * u.kg
+        #self.mass_unit_area = self.mass
 
     def __str__(self):
         """String representation of this class"""

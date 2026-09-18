@@ -324,7 +324,9 @@ class ThermalParameters(ParameterGroup):
     heat_capacity (list[@lambda]): list of T-dependent heat capacity
         function [J/(kg K)].
     sub_system_coupling (list[@lambda]): list of coupling functions of
-        different subsystems [W/m³].
+        different subsystems [W/m³].    
+    deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
+                    `\langle u^2\rangle` [m²].
     num_sub_systems (int): number of subsystems for heat and phonons
         (electrons, lattice, spins, ...).
 
@@ -339,9 +341,12 @@ class ThermalParameters(ParameterGroup):
     lin_therm_exp: TemperatureParameter = field(
         default_factory=lambda: TemperatureParameter("", 0.0)
     )
- 
     sub_system_coupling: TemperatureParameter = field(
         default_factory=lambda: TemperatureParameter("W/m**3", 0.0)
+    )
+
+    deb_wal_fac: TemperatureParameter = field(
+        default_factory=lambda: TemperatureParameter("m*3", 0.0)
     )
     num_sub_systems: Parameter = field(default_factory=lambda: Parameter("", 1))
 
@@ -356,57 +361,6 @@ class ThermalParameters(ParameterGroup):
     # if k != K and change_num_sub_systems:
     #     print(f'Number of subsystems changed from {K:d} to {k:d}.')
     #     self.num_sub_systems = k
-
-
-#     @property
-#     def int_lin_therm_exp(self):
-#         if hasattr(self, '_int_lin_therm_exp') and isinstance(self._int_lin_therm_exp, list):
-#             return self._int_lin_therm_exp
-#         else:
-#             self._int_lin_therm_exp = []
-#             self.int_lin_therm_exp_str = []
-#             T = symbols('T')
-#             for lte, ltes in zip(self.lin_therm_exp, self.lin_therm_exp_str):
-#                 try:
-#                     integral = integrate(ltes, T)
-#                     self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
-#                     self.int_lin_therm_exp_str.append(str(integral))
-#                 except Exception:
-#                     warnings.warn('\nSympy\'s analytical integration of the linear thermal '
-#                                   'expansion did not work.\n'
-#                                   'Just do it numerically with scipy.integrate.quad')
-#                     self._int_lin_therm_exp.append(lambda T: quad(lte, 0, T, limit=10000)[0])
-#                     self.int_lin_therm_exp_str.append(f'scipy.integrate.quad({ltes:s}, 0, T)[0]')
-
-#         return self._int_lin_therm_exp
-
-#     @int_lin_therm_exp.setter
-#     def int_lin_therm_exp(self, int_lin_therm_exp):
-#         self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_input(
-#                 int_lin_therm_exp)
-
-#     @property
-#     def int_heat_capacity(self):
-#         if hasattr(self, '_int_heat_capacity') and isinstance(self._int_heat_capacity, list):
-#             return self._int_heat_capacity
-#         else:
-#             self._int_heat_capacity = []
-#             self.int_heat_capacity_str = []
-#             T = symbols('T')
-#             for hc, hcs in zip(self.heat_capacity, self.heat_capacity_str):
-#                 try:
-#                     integral = integrate(hcs, T)
-#                     self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
-#                     self.int_heat_capacity_str.append(str(integral))
-#                 except Exception:
-#                     warnings.warn('\nSympy\'s analytical integration of the heat capacity '
-#                                   'did not work.\n'
-#                                   'Just do it numerically with scipy.integrate.quad')
-#                     self._int_heat_capacity.append(lambda T: quad(hc, 0, T, limit=10000)[0])
-#                     self.int_heat_capacity_str.append(f'scipy.integrate.quad({hcs:s}, 0, T)[0]')
-
-#         return self._int_heat_capacity
-
 
 @dataclass(repr=False)
 class ElasticParameters(ParameterGroup):
@@ -487,15 +441,12 @@ class OpticalParameters(ParameterGroup):
     opt_ref_index_per_strain (ndarray[float]): optical refractive
         index change per strain - real and imagenary part
         :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
-    deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
-                `\langle u^2\rangle` [m²].
 
     """
 
     opt_pen_depth: Parameter = field(default_factory=lambda: Parameter("m", 0.0))
     opt_ref_index: Parameter = field(default_factory=lambda: Parameter("", 0.0))
     opt_ref_index_per_strain: Parameter = field(default_factory=lambda: Parameter("", 0.0))
-    deb_wal_fac: Parameter = field(default_factory=lambda: Parameter("m²", 0.0))
 
     def __post_init__(self):
         # automatically set the name of the parameters
