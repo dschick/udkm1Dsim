@@ -21,10 +21,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = [
-    "Parameter",
-    "TemperatureParameter"
-]
+__all__ = ["Parameter", "TemperatureParameter"]
 
 __docformat__ = "restructuredtext"
 
@@ -106,7 +103,7 @@ class TemperatureParameter(Parameter):
             for expression in self._magnitude:
                 syms = sorted(expression.free_symbols, key=lambda s: s.name)
                 if len(syms) == 0:
-                    syms = ['T']
+                    syms = ["T"]
 
                 if len(syms) == 1:
                     is_vector = False
@@ -117,7 +114,7 @@ class TemperatureParameter(Parameter):
                     body = NumPyPrinter().doprint(expression)
                     unpack = "".join(f"    T_{i} = T[{i}]\n" for i in range(len(syms)))
                     src = f"def _f(T):\n{unpack}    return {body}\n"
-                    ns = {'numpy': np}
+                    ns = {"numpy": np}
                     exec(src, ns)
                     f = ns["_f"]
                     self._functional.append(f)
@@ -134,7 +131,7 @@ class TemperatureParameter(Parameter):
             for functional, expression in zip(self.functional, self.magnitude):
                 syms = sorted(expression.free_symbols, key=lambda s: s.name)
                 if len(syms) == 0:
-                    syms = ['T']
+                    syms = ["T"]
                 if len(syms) == 1:
                     T = symbols("T")
                 else:
@@ -142,14 +139,16 @@ class TemperatureParameter(Parameter):
 
                 try:
                     integral = integrate(expression, T)
-                    self._integral.append(lambdify(T, integral, modules='numpy'))
+                    self._integral.append(lambdify(T, integral, modules="numpy"))
                     self._integral_expr.append(integral)
                 except Exception:
-                    warnings.warn('\nSympy\'s analytical integration of the heat capacity '
-                                    'did not work.\n'
-                                    'Just do it numerically with scipy.integrate.quad')
+                    warnings.warn(
+                        "\nSympy's analytical integration of the heat capacity "
+                        "did not work.\n"
+                        "Just do it numerically with scipy.integrate.quad"
+                    )
                     self._integral.append(lambda T: quad(functional, 0, T, limit=10000)[0])
-                    self._integral_expr.append(f'scipy.integrate.quad({str(expression)}, 0, T)[0]')
+                    self._integral_expr.append(f"scipy.integrate.quad({str(expression)}, 0, T)[0]")
 
         return self._integral
 
@@ -208,7 +207,7 @@ class TemperatureParameter(Parameter):
             elif isinstance(input, u.Quantity):
                 input = str(input.to_base_units().magnitude)
 
-            if '_' in input:
+            if "_" in input:
                 # the temperature is input as a vector
                 T = symarray("T", k)  # noqa: F841
             else:

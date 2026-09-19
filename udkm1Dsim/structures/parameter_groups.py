@@ -38,12 +38,12 @@ import re
 import numpy as np
 import pint
 import scipy.constants as constants
-from sympy.core.numbers import Zero
 from tabulate import tabulate
 
 from .parameters import Parameter, TemperatureParameter
 
 u = pint.get_application_registry()
+
 
 class ParameterGroup:
     """A group of Parameters with units."""
@@ -182,10 +182,12 @@ class ThermalParameters(ParameterGroup):
                 print(f"'num_sub_systems' has been updated from {K} to {max_num}.")
 
         if len(set(current_num_sub_systems)) != 1:
-            print("'num_sub_systems' is not consistent for all "
-                  "'ThermalParameters' for this layer including\n"
-                  "'heat_capacity', 'therm_cond', 'lin_therm_exp', "
-                  "'sub_system_coupling', and 'deb_wal_fac'!")
+            print(
+                "'num_sub_systems' is not consistent for all "
+                "'ThermalParameters' for this layer including\n"
+                "'heat_capacity', 'therm_cond', 'lin_therm_exp', "
+                "'sub_system_coupling', and 'deb_wal_fac'!"
+            )
 
 
 class ElasticParameters(ParameterGroup):
@@ -269,11 +271,8 @@ class OpticalParameters(ParameterGroup):
     """
 
     def __init__(
-            self,
-            opt_pen_depth=0.0,
-            opt_ref_index=0.0 + 0.0j,
-            opt_ref_index_per_strain=0.0 + 0.0j
-            ):
+        self, opt_pen_depth=0.0, opt_ref_index=0.0 + 0.0j, opt_ref_index_per_strain=0.0 + 0.0j
+    ):
         self.opt_pen_depth = Parameter("m", opt_pen_depth)
         self.opt_ref_index = Parameter("", opt_ref_index)
         self.opt_ref_index_per_strain = Parameter("", opt_ref_index_per_strain)

@@ -154,34 +154,55 @@ class Layer:
 
         """
         # initialize input parser and define defaults and validators
-        properties_by_types = {'heat': ['_thickness', '_mass_unit_area', '_density',
-                                        '_opt_pen_depth', 'opt_ref_index',
-                                        'therm_cond_str', 'heat_capacity_str',
-                                        'int_heat_capacity_str', 'sub_system_coupling_str',
-                                        'num_sub_systems'],
-                             'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
-                                          '_mass_unit_area', 'spring_const', '_phonon_damping'],
-                               'xray': ['num_atoms', '_area', '_mass', 'deb_wal_fac_str',
-                                        '_thickness'],
-                               'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
-                                           'opt_ref_index_per_strain'],
-                               'magnetic': ['_thickness', 'magnetization', 'eff_spin',
-                                            '_curie_temp', '_aniso_exponents', '_anisotropy',
-                                            '_exch_stiffness', '_mag_saturation', 'lamda'],
-                               }
+        properties_by_types = {
+            "heat": [
+                "_thickness",
+                "_mass_unit_area",
+                "_density",
+                "_opt_pen_depth",
+                "opt_ref_index",
+                "therm_cond_str",
+                "heat_capacity_str",
+                "int_heat_capacity_str",
+                "sub_system_coupling_str",
+                "num_sub_systems",
+            ],
+            "phonon": [
+                "num_sub_systems",
+                "int_lin_therm_exp_str",
+                "_thickness",
+                "_mass_unit_area",
+                "spring_const",
+                "_phonon_damping",
+            ],
+            "xray": ["num_atoms", "_area", "_mass", "deb_wal_fac_str", "_thickness"],
+            "optical": ["_c_axis", "_opt_pen_depth", "opt_ref_index", "opt_ref_index_per_strain"],
+            "magnetic": [
+                "_thickness",
+                "magnetization",
+                "eff_spin",
+                "_curie_temp",
+                "_aniso_exponents",
+                "_anisotropy",
+                "_exch_stiffness",
+                "_mag_saturation",
+                "lamda",
+            ],
+        }
 
-        types = (kwargs.get('types', 'all'))
+        types = kwargs.get("types", "all")
         if type(types) is not list:
             types = [types]
         attrs = vars(self)
         R = {}
         for t in types:
             # define the property names by the given type
-            if t == 'all':
+            if t == "all":
                 return attrs
             else:
-                S = dict((key, value) for key, value in attrs.items()
-                         if key in properties_by_types[t])
+                S = dict(
+                    (key, value) for key, value in attrs.items() if key in properties_by_types[t]
+                )
                 R.update(S)
 
         return R
@@ -276,7 +297,7 @@ class Layer:
 
     @property
     def therm_cond_expr(self):
-            return self.thermal.therm_cond.quantity
+        return self.thermal.therm_cond.quantity
 
     @property
     def heat_capacity(self):
@@ -288,7 +309,7 @@ class Layer:
 
     @property
     def heat_capacity_expr(self):
-            return self.thermal.heat_capacity.quantity
+        return self.thermal.heat_capacity.quantity
 
     @property
     def lin_therm_exp(self):
@@ -300,7 +321,7 @@ class Layer:
 
     @property
     def lin_therm_exp_expr(self):
-            return self.thermal.lin_therm_exp.quantity
+        return self.thermal.lin_therm_exp.quantity
 
     @property
     def int_lin_therm_exp(self):
@@ -551,9 +572,9 @@ class Vacuum(Layer):
         self.thickness = thickness
         self.density = 0.0 * u.kg / u.m**3
         # self.area = 1.0 * u.angstrom**2  # set as unit area
-        #self.volume = self.area * self.thickness
-        #self.mass = 0 * u.kg
-        #self.mass_unit_area = self.mass
+        # self.volume = self.area * self.thickness
+        # self.mass = 0 * u.kg
+        # self.mass_unit_area = self.mass
 
     def __str__(self):
         """String representation of this class"""
