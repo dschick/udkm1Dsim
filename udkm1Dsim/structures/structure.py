@@ -28,6 +28,7 @@ __docformat__ = "restructuredtext"
 
 import itertools
 import warnings
+from functools import reduce
 
 import numpy as np
 import pint
@@ -607,172 +608,172 @@ class Structure:
         else:
             return dist_interp, original_indicies
 
-    def get_layer_property_vector(self, property_name):
-        """get_layer_property_vector
-
-        Returns a vector for a property of all :class:`Layer` in the
-        Structure. The property is determined by the `property_name` and
-        returns a scalar value or a function handle.
-
-        Args:
-            property_name (str): name of property to return as array
-
-        Returns:
-            prop (ndarray[float, @lambda]): array of a property for all Layer
-            in the Structure.
-
-        """
-        # get the Handle to all Layer in the Structure
-        handles = self.get_layer_vectors()[2]
-
-        from functools import reduce
-
-        def _resolve_layer_attr(layer, property_name):
-            """Resolve a possibly dotted property path (e.g. 'structural.thickness')
-            on a Layer, unwrapping Parameter objects to their underlying value."""
-            obj = reduce(getattr, property_name.split('.'), layer)
-            return obj
-
-        if property_name[0] == "_":
-
-            stripped_name = property_name[1:]
-            # now lets find this property
-            found = False
-            for name, p in vars(handles[0]).items():
-                if isinstance(p, ParameterGroup):
-                    for name2, p2 in vars(p).items():
-                        if name2 == stripped_name:
-                            found = True
-                            break
-                if found:
-                    break
-
-            property_name = f"{name}.{name2}.magnitude"
-
-        property_handle = _resolve_layer_attr(handles[0], property_name)
-
-        if callable(property_handle):
-            # it's a function
-            prop = np.zeros([self.get_number_of_layers()])
-            for i in range(self.get_number_of_layers()):
-                prop[i] = _resolve_layer_attr(handles[i], property_name)
-        elif type(property_handle) in [list, str, dict]:
-            # it's a list of functions or str
-            prop = []
-            for i in range(self.get_number_of_layers()):
-                # Prop = Prop + getattr(Handles[i],types)
-                prop.append(_resolve_layer_attr(handles[i], property_name))
-        elif type(property_handle) is Q_:
-            # its a pint quantity
-            unit = getattr(handles[0], property_name).units
-            prop = np.empty([self.get_number_of_layers()])
-            for i in range(self.get_number_of_layers()):
-                prop[i] = _resolve_layer_attr(handles[i], property_name).magnitude
-            prop *= unit
-        else:
-            # its a number or array
-            layers = self.get_unique_layers()
-            temp = np.zeros([len(layers[0]), 1])
-            set_dtype = float
-            for i, layer in enumerate(layers[1]):
-                value = _resolve_layer_attr(layer, property_name)
-                if np.iscomplexobj(value):
-                    set_dtype = np.complex128
-                try:
-                    temp[i] = len(value)
-                except TypeError:
-                    temp[i] = 1
-            max_dim = int(np.max(temp))
-            if max_dim > 1:
-                prop = np.empty([self.get_number_of_layers(), max_dim], dtype=set_dtype)
-            else:
-                prop = np.empty([self.get_number_of_layers()], dtype=set_dtype)
-            del temp
-            # traverse all layers
-            for i in range(self.get_number_of_layers()):
-                temp = _resolve_layer_attr(handles[i], property_name)
-                if np.iscomplexobj(temp):
-                    prop.dtype = np.complex128
-                if max_dim > 1:
-                    prop[i, :] = temp
-                else:
-                    prop[i] = np.asarray(temp).item()
-
-        return prop
-
     # def get_layer_property_vector(self, property_name):
-    #         """get_layer_property_vector
-    
-    #         Returns a vector for a property of all :class:`Layer` in the
-    #         Structure. The property is determined by the `property_name` and
-    #         returns a scalar value or a function handle.
-    
-    #         Args:
-    #             property_name (str): name of property to return as array
-    
-    #         Returns:
-    #             prop (ndarray[float, @lambda]): array of a property for all Layer
-    #             in the Structure.
-    
-    #         """
-    #         handles = self.get_layer_vectors()[2]
-    #         N = self.get_number_of_layers()
-    
-    #         # a leading underscore means "find this parameter inside whichever
-    #         # ParameterGroup owns it" and read its raw (unit-stripped) magnitude
-    #         if property_name.startswith("_"):
-    #             stripped_name = property_name[1:]
-    #             group_name = next(
-    #                 (name for name, group in vars(handles[0]).items()
-    #                 if isinstance(group, ParameterGroup) and stripped_name in vars(group)),
-    #                 None,
-    #             )
-    #             if group_name is None:
-    #                 raise AttributeError(
-    #                     f"No ParameterGroup field named '{stripped_name}' found on Layer"
-    #                 )
-    #             property_name = f"{group_name}.{stripped_name}.magnitude"
-    
-    #         path = property_name.split(".")
-    
-    #         def resolve(layer):
-    #             return reduce(getattr, path, layer)
-    
-    #         first = resolve(handles[0])
-    
-    #         if callable(first):
-    #             # it's a function
-    #             prop = np.fromiter((resolve(h) for h in handles), dtype=float, count=N)
-    #         elif isinstance(first, (list, str, dict)):
-    #             # it's a list of functions or str
-    #             prop = [resolve(h) for h in handles]
-    #         elif isinstance(first, Q_):
-    #             # it's a pint quantity
-    #             unit = first.units
-    #             prop = np.fromiter((resolve(h).magnitude for h in handles), dtype=float, count=N)
-    #             prop *= unit
+    #     """get_layer_property_vector
+
+    #     Returns a vector for a property of all :class:`Layer` in the
+    #     Structure. The property is determined by the `property_name` and
+    #     returns a scalar value or a function handle.
+
+    #     Args:
+    #         property_name (str): name of property to return as array
+
+    #     Returns:
+    #         prop (ndarray[float, @lambda]): array of a property for all Layer
+    #         in the Structure.
+
+    #     """
+    #     # get the Handle to all Layer in the Structure
+    #     handles = self.get_layer_vectors()[2]
+
+    #     from functools import reduce
+
+    #     def _resolve_layer_attr(layer, property_name):
+    #         """Resolve a possibly dotted property path (e.g. 'structural.thickness')
+    #         on a Layer, unwrapping Parameter objects to their underlying value."""
+    #         obj = reduce(getattr, property_name.split('.'), layer)
+    #         return obj
+
+    #     if property_name[0] == "_":
+
+    #         stripped_name = property_name[1:]
+    #         # now lets find this property
+    #         found = False
+    #         for name, p in vars(handles[0]).items():
+    #             if isinstance(p, ParameterGroup):
+    #                 for name2, p2 in vars(p).items():
+    #                     if name2 == stripped_name:
+    #                         found = True
+    #                         break
+    #             if found:
+    #                 break
+
+    #         property_name = f"{name}.{name2}.magnitude"
+
+    #     property_handle = _resolve_layer_attr(handles[0], property_name)
+
+    #     if callable(property_handle):
+    #         # it's a function
+    #         prop = np.zeros([self.get_number_of_layers()])
+    #         for i in range(self.get_number_of_layers()):
+    #             prop[i] = _resolve_layer_attr(handles[i], property_name)
+    #     elif type(property_handle) in [list, str, dict]:
+    #         # it's a list of functions or str
+    #         prop = []
+    #         for i in range(self.get_number_of_layers()):
+    #             # Prop = Prop + getattr(Handles[i],types)
+    #             prop.append(_resolve_layer_attr(handles[i], property_name))
+    #     elif type(property_handle) is Q_:
+    #         # its a pint quantity
+    #         unit = getattr(handles[0], property_name).units
+    #         prop = np.empty([self.get_number_of_layers()])
+    #         for i in range(self.get_number_of_layers()):
+    #             prop[i] = _resolve_layer_attr(handles[i], property_name).magnitude
+    #         prop *= unit
+    #     else:
+    #         # its a number or array
+    #         layers = self.get_unique_layers()
+    #         temp = np.zeros([len(layers[0]), 1])
+    #         set_dtype = float
+    #         for i, layer in enumerate(layers[1]):
+    #             value = _resolve_layer_attr(layer, property_name)
+    #             if np.iscomplexobj(value):
+    #                 set_dtype = np.complex128
+    #             try:
+    #                 temp[i] = len(value)
+    #             except TypeError:
+    #                 temp[i] = 1
+    #         max_dim = int(np.max(temp))
+    #         if max_dim > 1:
+    #             prop = np.empty([self.get_number_of_layers(), max_dim], dtype=set_dtype)
     #         else:
-    #             # it's a number or array -- infer dtype/shape from the unique layers only
-    #             _, unique_layers = self.get_unique_layers()
-    #             set_dtype = float
-    #             max_dim = 1
-    #             for layer in unique_layers:
-    #                 value = resolve(layer)
-    #                 if np.iscomplexobj(value):
-    #                     set_dtype = np.complex128
-    #                 max_dim = max(max_dim, len(value) if hasattr(value, "__len__") else 1)
-    
-    #             shape = [N, max_dim] if max_dim > 1 else [N]
-    #             prop = np.empty(shape, dtype=set_dtype)
-    
-    #             for i, h in enumerate(handles):
-    #                 temp = resolve(h)
-    #                 if max_dim > 1:
-    #                     prop[i, :] = temp
-    #                 else:
-    #                     prop[i] = np.asarray(temp).item()
-    
-    #         return prop
+    #             prop = np.empty([self.get_number_of_layers()], dtype=set_dtype)
+    #         del temp
+    #         # traverse all layers
+    #         for i in range(self.get_number_of_layers()):
+    #             temp = _resolve_layer_attr(handles[i], property_name)
+    #             if np.iscomplexobj(temp):
+    #                 prop.dtype = np.complex128
+    #             if max_dim > 1:
+    #                 prop[i, :] = temp
+    #             else:
+    #                 prop[i] = np.asarray(temp).item()
+
+    #     return prop
+
+    def get_layer_property_vector(self, property_name):
+            """get_layer_property_vector
+
+            Returns a vector for a property of all :class:`Layer` in the
+            Structure. The property is determined by the `property_name` and
+            returns a scalar value or a function handle.
+
+            Args:
+                property_name (str): name of property to return as array
+
+            Returns:
+                prop (ndarray[float, @lambda]): array of a property for all Layer
+                in the Structure.
+
+            """
+            handles = self.get_layer_vectors()[2]
+            N = self.get_number_of_layers()
+
+            # a leading underscore means "find this parameter inside whichever
+            # ParameterGroup owns it" and read its magnitude in base units
+            if property_name.startswith("_"):
+                stripped_name = property_name[1:]
+                group_name = next(
+                    (name for name, group in vars(handles[0]).items()
+                    if isinstance(group, ParameterGroup) and stripped_name in vars(group)),
+                    None,
+                )
+                if group_name is None:
+                    raise AttributeError(
+                        f"No ParameterGroup field named '{stripped_name}' found on Layer"
+                    )
+                property_name = f"{group_name}.{stripped_name}.magnitude"
+
+            path = property_name.split(".")
+
+            def resolve(layer):
+                return reduce(getattr, path, layer)
+
+            first = resolve(handles[0])
+
+            if callable(first):
+                # it's a function
+                prop = np.fromiter((resolve(h) for h in handles), dtype=float, count=N)
+            elif isinstance(first, (list, str, dict)):
+                # it's a list of functions or str
+                prop = [resolve(h) for h in handles]
+            elif isinstance(first, Q_):
+                # it's a pint quantity
+                unit = first.units
+                prop = np.fromiter((resolve(h).magnitude for h in handles), dtype=float, count=N)
+                prop *= unit
+            else:
+                # it's a number or array -- infer dtype/shape from the unique layers only
+                _, unique_layers = self.get_unique_layers()
+                set_dtype = float
+                max_dim = 1
+                for layer in unique_layers:
+                    value = resolve(layer)
+                    if np.iscomplexobj(value):
+                        set_dtype = np.complex128
+                    max_dim = max(max_dim, len(value) if hasattr(value, "__len__") else 1)
+
+                shape = [N, max_dim] if max_dim > 1 else [N]
+                prop = np.empty(shape, dtype=set_dtype)
+
+                for i, h in enumerate(handles):
+                    temp = resolve(h)
+                    if max_dim > 1:
+                        prop[i, :] = temp
+                    else:
+                        prop[i] = np.asarray(temp).item()
+
+            return prop
 
     def get_numel_of_layer_property(self, property_name):
         """get_numel_of_layer_property
