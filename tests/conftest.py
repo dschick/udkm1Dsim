@@ -2,7 +2,7 @@
 
 import pytest
 
-from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Layer, Structure, UnitCell, Vacuum, u, Parameter, TemperatureParameter
+from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Layer, Structure, UnitCell, Vacuum, u, Parameter, TemperatureParameter, VectorParameter
 
 
 # fixtures
@@ -21,6 +21,14 @@ def parameter():
 @pytest.fixture(scope="module")
 def temperature_parameter():
     return TemperatureParameter("J/kg/K", 0, "temperature_parameter")
+
+
+# vector parameter
+
+
+@pytest.fixture
+def vector_parameter():
+    return VectorParameter("T", name="B")
 
 
 # atoms
