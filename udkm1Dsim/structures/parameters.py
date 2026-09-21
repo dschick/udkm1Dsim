@@ -186,6 +186,18 @@ class VectorParameter(Parameter):
             self._to_magnitude(gamma, u.rad, self.angle_unit),
         ])
 
+    @property
+    def polar_rad(self):
+        """[r, phi, gamma] as floats: r in self.unit, angles in rad."""
+        return self._polar_rad()  # fresh array each call, safe to mutate
+
+    @polar_rad.setter
+    def polar_rad(self, value):
+        arr = np.asarray(value, dtype=float)
+        if arr.shape != (3,):
+            raise ValueError(f"Parameter '{self.name}' needs (r, phi, gamma)")
+        self._set_polar_rad(arr)
+
     def __repr__(self):
         return f"VectorParameter({self.name}={self._magnitude.tolist()} {self.unit})"
 
