@@ -193,12 +193,12 @@ class TemperatureParameter(Parameter):
     """Parameter with a unit and a magnitude, which depends on temperature."""
 
     def __init__(self, unit, magnitude=0.0, name=""):
-        super().__init__(unit, magnitude=magnitude, name=name)
         self._functional = []
         self._functional_backend = ""
         self._num_sub_systems = 0
         self._integral = []
         self._integral_expr = []
+        super().__init__(unit, magnitude=magnitude, name=name)
 
     @property
     def magnitude(self):
