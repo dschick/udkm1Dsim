@@ -33,6 +33,10 @@ import pint
 from scipy.integrate import quad
 from sympy import integrate, lambdify, symarray, symbols, sympify
 from sympy.printing.numpy import NumPyPrinter
+from ..helpers import (
+    convert_cartesian_to_polar,
+    convert_polar_to_cartesian
+)
 
 u = pint.get_application_registry()
 
@@ -73,6 +77,117 @@ class Parameter:
     def __repr__(self):
         return f"Parameter({self.name}={self.magnitude} {self.unit})"
 
+
+class VectorParameter(Parameter):
+    """3D vector Parameter with a unit, settable in cartesian or polar form.
+
+    `magnitude` holds the cartesian components (x, y, z) in `self.unit`.
+    Polar form is (r, phi, gamma) as in convert_polar_to_cartesian:
+    phi is the angle from +z, gamma the angle in the xy-plane from +x.
+    """
+
+    def __init__(self, unit, magnitude=(0.0, 0.0, 0.0), name="",
+                 angle_unit="deg"):
+        self.angle_unit = u.Unit(angle_unit)  # unit for bare-float angles
+        super().__init__(unit, magnitude, name)
+
+    @classmethod
+    def from_polar(cls, unit, r, phi, gamma, name="", angle_unit="deg"):
+        vec = cls(unit, name=name, angle_unit=angle_unit)
+        vec.polar = (r, phi, gamma)
+        return vec
+
+    @staticmethod
+    def _to_magnitude(value, unit, default=None):
+        """Float in `unit`; bare numbers are taken to be in `default` (or `unit`)."""
+        if not isinstance(value, u.Quantity):
+            value = value * (default if default is not None else unit)
+        return value.to(unit).magnitude
+
+    # ---- cartesian (magnitude / quantity) --------------------------------
+    @property
+    def magnitude(self):
+        return self._magnitude.copy()  # copy: no silent in-place edits
+
+    @magnitude.setter
+    def magnitude(self, value):
+        if isinstance(value, u.Quantity):
+            value = value.to(self.unit).magnitude
+        arr = np.asarray(value)
+        if arr.dtype.kind not in "iuf":
+            raise TypeError(f"Cannot set Parameter '{self.name}' from {type(value)}")
+        if arr.shape != (3,):
+            raise ValueError(f"Parameter '{self.name}' needs exactly 3 components")
+        # float cast matters: the helpers use zeros_like and would truncate ints
+        Parameter.magnitude.fset(self, arr.astype(float))
+
+    @property
+    def cartesian(self):
+        """(x, y, z) as a pint Quantity."""
+        return self.quantity
+
+    @cartesian.setter
+    def cartesian(self, value):
+        self.magnitude = value
+
+    # ---- polar (r, phi, gamma) -------------------------------------------
+    def _polar_rad(self):
+        """[r, phi, gamma] as floats, angles in rad."""
+        return convert_cartesian_to_polar(self._magnitude)
+
+    def _set_polar_rad(self, polar):
+        if polar[0] < 0:
+            raise ValueError("r must be >= 0")
+        self.magnitude = convert_polar_to_cartesian(np.asarray(polar, dtype=float))
+
+    def _set_component(self, index, value):
+        polar = self._polar_rad()
+        if index == 0:
+            polar[0] = self._to_magnitude(value, self.unit)
+        else:
+            polar[index] = self._to_magnitude(value, u.rad, self.angle_unit)
+        self._set_polar_rad(polar)
+
+    @property
+    def r(self):
+        return self._polar_rad()[0] * self.unit
+
+    @r.setter
+    def r(self, value):
+        self._set_component(0, value)
+
+    @property
+    def phi(self):
+        return (self._polar_rad()[1] * u.rad).to(self.angle_unit)
+
+    @phi.setter
+    def phi(self, value):
+        self._set_component(1, value)
+
+    @property
+    def gamma(self):
+        return (self._polar_rad()[2] * u.rad).to(self.angle_unit)
+
+    @gamma.setter
+    def gamma(self, value):
+        self._set_component(2, value)
+
+    @property
+    def polar(self):
+        """(r, phi, gamma) as pint Quantities."""
+        return self.r, self.phi, self.gamma
+
+    @polar.setter
+    def polar(self, value):
+        r, phi, gamma = value
+        self._set_polar_rad([
+            self._to_magnitude(r, self.unit),
+            self._to_magnitude(phi, u.rad, self.angle_unit),
+            self._to_magnitude(gamma, u.rad, self.angle_unit),
+        ])
+
+    def __repr__(self):
+        return f"VectorParameter({self.name}={self._magnitude.tolist()} {self.unit})"
 
 class TemperatureParameter(Parameter):
     """Parameter with a unit and a magnitude, which depends on temperature."""

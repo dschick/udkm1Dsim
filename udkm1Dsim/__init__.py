@@ -7,7 +7,7 @@ from .simulations.simulation import Simulation
 from .simulations.xrays import Xray, XrayDyn, XrayDynMag, XrayKin
 from .structures.atoms import Atom, AtomMixed
 from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
-from .structures.parameters import Parameter, TemperatureParameter
+from .structures.parameters import Parameter, TemperatureParameter, VectorParameter
 from .structures.parameter_groups import (
     ElasticParameters,
     LatticeParameters,
@@ -44,7 +44,8 @@ __all__ = [
     "PhononAna",
     "Magnetization",
     "LLB",
-    "TemperatureParameter"
+    "TemperatureParameter",
+    "VectorParameter",
     "Xray",
     "XrayKin",
     "XrayDyn",
