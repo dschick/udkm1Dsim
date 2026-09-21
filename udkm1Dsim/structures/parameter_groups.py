@@ -325,8 +325,8 @@ class MagneticParameters(ParameterGroup):
         lamda=0.0,
         mag_moment=0.0,
         aniso_exponent=0.0,
-        anisotropy=0.0,
-        exch_stiffness=0.0,
+        anisotropy=np.array([0.0, 0.0, 0.0]),
+        exch_stiffness=np.array([0.0, 0.0, 0.0]),
         mag_saturation=0.0,
         magnetization=np.array([0.0, 0.0, 0.0]),
     ):
@@ -346,11 +346,13 @@ class MagneticParameters(ParameterGroup):
         # automatically set the name of the parameters
         for name, p in vars(self).items():
             p.name = name
-            if name in ["eff_spin", "curie_temp"]:
+            if name in ["eff_spin", "curie_temp", "exch_stiffness", "anisotropy"]:
                 p._caller = self
 
     def _update_depending(self):
         self.calc_mf_exchange_coupling()
+        self.check_array(self.exch_stiffness, "Exchange stiffness")
+        self.check_array(self.anisotropy, "Anisotropy")
 
     def calc_mf_exchange_coupling(self):
         r"""calc_mf_exchange_coupling
@@ -371,3 +373,18 @@ class MagneticParameters(ParameterGroup):
         except AttributeError:
             # on initialization self.curie_temp
             self.mf_exch_coupling.magnitude = 0
+
+    def check_array(self, parameter, name):
+        unit = parameter.unit
+        value = np.asarray(parameter.magnitude)
+
+        if value.ndim == 0:
+            value = np.full(3, value)
+        elif value.shape == (1,):
+            value = np.full(3, value[0])
+        elif value.shape != (3,):
+            raise ValueError(
+                f"{name} must be a scalar or a vector of length 3!"
+            )
+
+        parameter.quantity = u.Quantity(value, unit)

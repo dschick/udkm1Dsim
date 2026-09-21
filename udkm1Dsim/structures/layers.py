@@ -103,8 +103,8 @@ class Layer:
             lamda=kwargs.get("lamda", 0.0),
             mag_moment=kwargs.get("mag_moment", 0.0 * u.bohr_magneton),
             aniso_exponent=kwargs.get("aniso_exponent", 0.0),
-            anisotropy=kwargs.get("anisotropy", [0.0, 0.0, 0.0] * u.J / u.m**3),
-            exch_stiffness=kwargs.get("exch_stiffness", 0.0 * u.J / u.m),
+            anisotropy=kwargs.get("anisotropy", np.array([0.0, 0.0, 0.0]) * u.J / u.m**3),
+            exch_stiffness=kwargs.get("exch_stiffness", np.array([0.0, 0.0, 0.0]) * u.J / u.m),
             mag_saturation=kwargs.get("mag_saturation", 0.0 * u.J / u.T / u.m**3),
             magnetization=kwargs.get("magnetization", np.array([0.0, 0.0, 0.0])),
         )
@@ -509,17 +509,6 @@ class Layer:
     def anisotropy(self, value):
         self.magnetic.anisotropy.quantity = value
 
-    # @anisotropy.setter
-    # def anisotropy(self, anisotropy):
-    #     self._anisotropy = np.zeros(3)
-    #     try:
-    #         if len(anisotropy) == 3:
-    #             self._anisotropy = anisotropy.to_base_units().magnitude
-    #         else:
-    #             warnings.warn('Anisotropy must be a scalar or vector of length 3!')
-    #     except TypeError:
-    #         self._anisotropy[0] = anisotropy.to_base_units().magnitude
-
     @property
     def exch_stiffness(self):
         return self.magnetic.exch_stiffness.quantity
@@ -527,17 +516,6 @@ class Layer:
     @exch_stiffness.setter
     def exch_stiffness(self, value):
         self.magnetic.exch_stiffness.quantity = value
-
-    # @exch_stiffness.setter
-    #     def exch_stiffness(self, exch_stiffness):
-    #         self._exch_stiffness = np.zeros(3)
-    #         try:
-    #             if len(exch_stiffness) == 3:
-    #                 self._exch_stiffness = exch_stiffness.to_base_units().magnitude
-    #             else:
-    #                 warnings.warn('Exchange stiffness must be a scalar or vector of length 3!')
-    #         except TypeError:
-    #             self._exch_stiffness[:] = exch_stiffness.to_base_units().magnitude
 
     @property
     def mag_saturation(self):
@@ -578,6 +556,26 @@ class AmorphousLayer(Layer):
     """
     def __init__(self, id, name, thickness, density, **kwargs):
         super().__init__(id, name, thickness=thickness, density=density, **kwargs)
+        self.atom = kwargs.get('atom', [])
+
+    @property
+    def atom(self):
+        return self._atom
+
+    @atom.setter
+    def atom(self, atom):
+        if atom == []:  # no atom is set
+            self.magnetic.magnetization.polar = (0, 0*u.deg, 0*u.deg)
+            return
+
+        if not isinstance(atom, (Atom, AtomMixed)):
+            raise TypeError('Class '
+                            + type(atom).__name__
+                            + ' is no possible atom of an amorphous layer. '
+                            + 'Only Atom and AtomMixed are allowed!')
+        self._atom = atom
+        self.magnetic.magnetization.polar = (atom.mag_amplitude, atom.mag_phi, atom.mag_gamma)
+
 
 
 class UnitCell(Layer):
@@ -702,59 +700,6 @@ class UnitCell(Layer):
         )
 
         return class_str
-
-    # def __str__(self):
-    #     """String representation of this class"""
-    #     output = [
-    #         ["id", self.id],
-    #         ["name", self.name],
-    #         ["a-axis", "{:.4g~P}".format(self.a_axis.to("nm"))],
-    #         ["b-axis", "{:.4g~P}".format(self.b_axis.to("nm"))],
-    #         ["c-axis", "{:.4g~P}".format(self.c_axis.to("nm"))],
-    #         ["area", "{:.4g~P}".format(self.area.to("nm**2"))],
-    #         ["volume", "{:.4g~P}".format(self.volume.to("nm**3"))],
-    #         ["mass", "{:.4g~P}".format(self.mass.to("kg"))],
-    #         ["mass per unit area", f"{self.mass_unit_area:.4g~P}"],
-    #     ]
-    #     output += super().__str__()
-
-    #     class_str = "Unit Cell with the following properties\n\n"
-    #     class_str += tabulate(
-    #         output,
-    #         headers=["parameter", "value"],
-    #         tablefmt="rst",
-    #         colalign=("right",),
-    #         floatfmt=(".2f", ".2f"),
-    #     )
-    #     class_str += "\n\n" + str(self.num_atoms) + " Constituents:\n"
-
-    #     atoms_str = []
-    #     for i in range(self.num_atoms):
-    #         atoms_str.append(
-    #             [
-    #                 self.atoms[i][0].name,
-    #                 f"{self.atoms[i][1](0):0.2f}",
-    #                 self.atoms[i][2],
-    #                 "",
-    #                 self.atoms[i][0].mag_amplitude,
-    #                 self.atoms[i][0].mag_phi.to("deg").magnitude,
-    #                 self.atoms[i][0].mag_gamma.to("deg").magnitude,
-    #             ]
-    #         )
-    #     class_str += tabulate(
-    #         atoms_str,
-    #         headers=[
-    #             "atom",
-    #             "position",
-    #             "position function",
-    #             "magn.",
-    #             "amplitude",
-    #             "phi [°]",
-    #             "gamma [°]",
-    #         ],
-    #         tablefmt="rst",
-    #     )
-    #     return class_str
 
     def visualize(self, block=True, **kwargs):
         """visualize
