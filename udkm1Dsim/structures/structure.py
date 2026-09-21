@@ -609,7 +609,7 @@ class Structure:
         else:
             return dist_interp, original_indicies
 
-    def get_layer_property_vector(self, property_name):
+    def get_layer_property_vector(self, property_name, backend=None):
         """get_layer_property_vector
 
         Returns a vector for a property of all :class:`Layer` in the
@@ -648,8 +648,13 @@ class Structure:
         path = property_name.split(".")
 
         def resolve(layer):
+            # backend switching logics
+            if backend is not None and path[-1] == "functional":
+                parent = reduce(getattr, path[:-1], layer)
+                return parent.get_functional(backend=backend)
             return reduce(getattr, path, layer)
 
+        # the first layer to determine the data type of the property from
         first = resolve(handles[0])
 
         if callable(first):
