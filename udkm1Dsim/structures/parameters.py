@@ -81,6 +81,7 @@ class TemperatureParameter(Parameter):
         super().__init__(unit, magnitude=magnitude, name=name)
         self._functional = []
         self._functional_backend = ""
+        self._num_sub_systems = 0
         self._integral = []
         self._integral_expr = []
 
@@ -127,19 +128,20 @@ class TemperatureParameter(Parameter):
             self._functional = []
 
             for expression in self._magnitude:
+                is_vector = False
                 syms = sorted(expression.free_symbols, key=lambda s: s.name)
                 if len(syms) == 0:
+                    # constant value
                     syms = ["T"]
-
-                if len(syms) == 1:
-                    is_vector = False
-                else:
+                elif len(syms) > 1 or any("_" in s.name for s in expression.free_symbols):
+                    # is a vector for more than 1 variables or "_" in its name
                     is_vector = True
+                    syms = symarray("T", self._num_sub_systems)
 
                 if is_vector or backend=="numba":
                     body = NumPyPrinter().doprint(expression)
                     if is_vector:
-                        unpack = "".join(f"    T_{i} = T[{i}]\n" for i in range(len(syms)))
+                        unpack = "".join(f"    T_{i} = T[{i}]\n" for i in range(self._num_sub_systems))
                         src = f"def _f(T):\n{unpack}    return {body}\n"
                     else:
                         src = f"def _f(T):\n    return {body}\n"
@@ -234,7 +236,7 @@ class TemperatureParameter(Parameter):
         # if the input is not a list, we convert it to one
         if not isinstance(inputs, list):
             inputs = [inputs]
-        k = len(inputs)
+        self._num_sub_systems = len(inputs)
 
         # traverse each list element and convert it to a function handle
         for input in inputs:
@@ -255,7 +257,7 @@ class TemperatureParameter(Parameter):
 
             if "_" in input:
                 # the temperature is input as a vector
-                T = symarray("T", k)  # noqa: F841
+                T = symarray("T", self._num_sub_systems)  # noqa: F841
             else:
                 # the temperature is input as a scalar
                 T = symbols("T")  # noqa: F841
