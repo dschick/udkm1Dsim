@@ -158,12 +158,14 @@ class TemperatureParameter(Parameter):
         _BACKENDS = ["scipy", "numba"]
         if backend not in _BACKENDS:
             raise ValueError(f"'{backend}' is not a valid backend and must be one of: {_BACKENDS}")
+
         if backend == "numba":
             try:
                 from numba import njit
                 self._njit = njit
             except ImportError:
-                raise ImportError("Cannot import 'numba - please change 'backend' to default 'scipy'")
+                raise ImportError("Cannot import 'numba - please change 'backend' "
+                                  "to default 'scipy'")
         return backend
 
     @property
