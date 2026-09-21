@@ -7,6 +7,15 @@ from .simulations.simulation import Simulation
 from .simulations.xrays import Xray, XrayDyn, XrayDynMag, XrayKin
 from .structures.atoms import Atom, AtomMixed
 from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
+from .structures.parameters import Parameter, TemperatureParameter
+from .structures.parameter_groups import (
+    ElasticParameters,
+    LatticeParameters,
+    MagneticParameters,
+    OpticalParameters,
+    StructuralParameters,
+    ThermalParameters,
+)
 from .structures.structure import Structure
 
 u = pint.get_application_registry()
@@ -16,6 +25,12 @@ Q_ = u.Quantity
 __all__ = [
     "Atom",
     "AtomMixed",
+    "ElasticParameters",
+    "LatticeParameters",
+    "MagneticParameters",
+    "OpticalParameters",
+    "StructuralParameters",
+    "ThermalParameters",
     "Layer",
     "Vacuum",
     "AmorphousLayer",
@@ -23,11 +38,13 @@ __all__ = [
     "Structure",
     "Simulation",
     "Heat",
+    "Parameter",
     "Phonon",
     "PhononNum",
     "PhononAna",
     "Magnetization",
     "LLB",
+    "TemperatureParameter"
     "Xray",
     "XrayKin",
     "XrayDyn",
