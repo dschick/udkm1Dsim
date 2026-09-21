@@ -179,7 +179,7 @@ def test_layer_anisotropy(layer):
 
 
 def test_layer_exch_stiffness(layer):
-    assert_equal(layer.exch_stiffness, 1 * u.J / u.m)
+    assert_equal(layer.exch_stiffness, [1, 1, 1] * u.J / u.m)
 
 
 def test_layer_mag_saturation(layer):

@@ -66,7 +66,7 @@ def test_calc_sticks_from_temp_map(phonon_num, temp_map, delta_temp_map):
 def test_phonon_num_ode_func(benchmark, structure, delays, sticks):
     L = structure.get_number_of_layers()
     masses = structure.get_layer_property_vector("_mass_unit_area")
-    spring_consts = structure.get_layer_property_vector("spring_const")
+    spring_consts = structure.get_layer_property_vector("_spring_const")
     damping = structure.get_layer_property_vector("_phonon_damping")
     force_from_heat = PhononNum.calc_force_from_heat(sticks, spring_consts)
     x0 = np.zeros([2 * L])

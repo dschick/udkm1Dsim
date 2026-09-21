@@ -181,10 +181,7 @@ class Magnetization(Simulation):
             [d_start, _, _] = self.S.get_distances_of_layers(False)
             idx = finderb(distances, d_start)
 
-            magnetizations = self.S.get_layer_property_vector("_magnetization")
-            init_mag[:, 0] = np.array([mag["amplitude"] for mag in magnetizations])[idx]
-            init_mag[:, 1] = np.array([mag["phi"] for mag in magnetizations])[idx]
-            init_mag[:, 2] = np.array([mag["gamma"] for mag in magnetizations])[idx]
+            init_mag = self.S.get_layer_property_vector("magnetic.magnetization.polar")[idx, :]
         else:
             if np.size(init_mag) == 3:
                 # it is the same initial magnetization for all layers
@@ -423,11 +420,11 @@ class LLB(Magnetization):
         init_mag = convert_polar_to_cartesian(init_mag)
         # get layer properties
         curie_temps = self.S.get_layer_property_vector("_curie_temp")
-        eff_spins = self.S.get_layer_property_vector("eff_spin")
-        lambdas = self.S.get_layer_property_vector("lamda")
-        mf_exch_couplings = self.S.get_layer_property_vector("mf_exch_coupling")
+        eff_spins = self.S.get_layer_property_vector("_eff_spin")
+        lambdas = self.S.get_layer_property_vector("_lamda")
+        mf_exch_couplings = self.S.get_layer_property_vector("_mf_exch_coupling")
         mag_moments = self.S.get_layer_property_vector("_mag_moment")
-        aniso_exponents = self.S.get_layer_property_vector("aniso_exponent")
+        aniso_exponents = self.S.get_layer_property_vector("_aniso_exponent")
         anisotropies = self.S.get_layer_property_vector("_anisotropy")
         mag_saturations = self.S.get_layer_property_vector("_mag_saturation")
         exch_stiffnesses = self.get_directional_exchange_stiffnesses()
@@ -557,7 +554,7 @@ class LLB(Magnetization):
         for i, (k, v) in enumerate(self.S.get_all_positions_per_unique_layer().items()):
             relevant_temps[k] = []
             # unique layer properties
-            curie_temp = unique_layers[1][i]._curie_temp
+            curie_temp = unique_layers[1][i].curie_temp.magnitude
             # mean-field magnetization is only calculated for a non-zero Curie
             # temperature of magnetic layers
             if curie_temp > 0:
@@ -1026,7 +1023,7 @@ class LLB(Magnetization):
 
         """
         x = np.divide(
-            mf_exch_couplings.to("m**2*kg/s**2").magnitude * mf_magnetizations,
+            mf_exch_couplings * mf_magnetizations,
             constants.k * temp_map,
         )
 
@@ -1216,11 +1213,11 @@ class LLB(Magnetization):
         chi_long[under_tc] = np.divide(
             mag_moments[under_tc] * dBdx,
             temp_map[under_tc] * constants.k
-            - (mf_exch_couplings.to("m**2*kg/s**2").magnitude)[under_tc] * dBdx,
+            - (mf_exch_couplings)[under_tc] * dBdx,
         )
         chi_long[over_tc] = np.divide(
             mag_moments[over_tc] * curie_temps[over_tc],
-            (mf_exch_couplings.to("m**2*kg/s**2").magnitude)[over_tc]
+            (mf_exch_couplings)[over_tc]
             * (temp_map[over_tc] - curie_temps[over_tc]),
         )
 

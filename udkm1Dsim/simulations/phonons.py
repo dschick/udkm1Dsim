@@ -280,7 +280,7 @@ class Phonon(Simulation):
         delta_temp_map = np.reshape(delta_temp_map, [M, L, K])
 
         thicknesses = self.S.get_layer_property_vector("_thickness")
-        int_lin_therm_exps = self.S.get_layer_property_vector("_int_lin_therm_exp")
+        int_lin_therm_exps = self.S.get_layer_property_vector("int_lin_therm_exp")
 
         # evaluated initial integrated linear thermal expansion from T1 to T2
         int_alpha_T0 = np.zeros([L, K])
@@ -492,7 +492,7 @@ class PhononNum(Phonon):
             L = self.S.get_number_of_layers()
             masses = self.S.get_layer_property_vector("_mass_unit_area")
             thicknesses = self.S.get_layer_property_vector("_thickness")
-            spring_consts = self.S.get_layer_property_vector("spring_const")
+            spring_consts = self.S.get_layer_property_vector("_spring_const")
             damping = self.S.get_layer_property_vector("_phonon_damping")
             force_from_heat = PhononNum.calc_force_from_heat(sticks, spring_consts)
 
@@ -1019,7 +1019,7 @@ class PhononAna(Phonon):
             omega = np.zeros([L, 1], dtype=np.complex128)
 
             masses = self.S.get_layer_property_vector("_mass_unit_area")
-            spring_consts = self.S.get_layer_property_vector("spring_const")
+            spring_consts = self.S.get_layer_property_vector("_spring_const")
             spring_consts = np.hstack((0, spring_consts))  # set the first spring free
 
             for i in range(L):  # defining main diagonal
