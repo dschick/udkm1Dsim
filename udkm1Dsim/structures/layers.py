@@ -364,11 +364,15 @@ class Layer:
 
     @property
     def deb_wal_fac(self):
-        return self.thermal.deb_wal_fac.quantity
+        return self.thermal.deb_wal_fac.functional
 
     @deb_wal_fac.setter
     def deb_wal_fac(self, value):
         self.thermal.deb_wal_fac.quantity = value
+
+    @property
+    def deb_wal_fac_expr(self):
+        return self.thermal.deb_wal_fac.quantity
 
     @property
     def num_sub_systems(self):
