@@ -63,6 +63,7 @@ class Heat(Simulation):
             calculations.
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer.
+        backend (str): pde solver backend - either default scipy or numba.
 
     Attributes:
         S (Structure): sample structure to calculate simulations on.
@@ -76,6 +77,7 @@ class Heat(Simulation):
             calculations.
         intp_at_interface (int): number of additional spacial points at the
             interface of each layer.
+        backend (str): pde solver backend - either default scipy or numba.
         excitation (dict{ndarray[float, Quantity]}): excitation parameters
             fluence, delay_pump, pulse_width, wavelength, theta, polarization,
             multilayer_absorption, backside
@@ -1426,6 +1428,27 @@ class Heat(Simulation):
             )
 
         return np.reshape(dudt, K * N, order="F")
+
+    @property
+    def backend(self):
+        return self._backend
+
+    @backend.setter
+    def backend(self, backend):
+        if backend in ["scipy", "numba"]:
+            self._backend = backend
+        else:
+            warnings.warn("Backend must be either _scipy_ or _matlab_. Set to _scipy_ default!")
+            self._backend = "scipy"
+
+        if self._backend == "numba":
+            try:
+                import numba
+                self.numba = numba
+            except ImportError:
+                raise ImportError(
+                    "Cannot import 'numba - please change 'backend' to default 'scipy'"
+                )
 
     @property
     def excitation(self):
