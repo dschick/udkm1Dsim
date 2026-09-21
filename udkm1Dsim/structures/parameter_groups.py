@@ -104,9 +104,12 @@ class StructuralParameters(ParameterGroup):
     def _update_depending(self):
         self.volume.magnitude = self.thickness.magnitude * self.area.magnitude
         self.mass.magnitude = self.density.magnitude * self.volume.magnitude
-        self.mass_unit_area.quantity = (
-            self.mass.quantity / self.area.quantity * 1.0 * u.angstrom**2
-        )
+        try:
+            self.mass_unit_area.quantity = (
+                self.mass.quantity / self.area.quantity * 1.0 * u.angstrom**2
+            )
+        except ZeroDivisionError:
+            self.mass_unit_area.quantity = 0 * u.kg
 
 
 class LatticeParameters(ParameterGroup):
