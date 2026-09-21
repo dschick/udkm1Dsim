@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - example for XrayKin added by [#204]
 - superstrate introduced by [#204] closing [#134]
 - enable automatic numerical integration of layer properties if sympy fails ([#198]) replacing [#110] and closing issue [#109] and [#108]
+- Parameter and ParamterGroup classes organizing paramters closing [#162] by [#215]
+- enable Numba-compatible parameter functionals which are calculated on demand and are cached, closing [#206] and [#208]  by [#215]
+- VectorParameter enabling input and output in cartesian or polar coordinates closing [#138] by [#215]
 
 [#185]: https://github.com/dschick/udkm1Dsim/pull/185
 [#188]: https://github.com/dschick/udkm1Dsim/pull/188
@@ -24,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#204]: https://github.com/dschick/udkm1Dsim/pull/204
 [#202]: https://github.com/dschick/udkm1Dsim/issue/202
 [#134]: https://github.com/dschick/udkm1Dsim/issue/134
+[#162]: https://github.com/dschick/udkm1Dsim/discussions/162
+[#138]: https://github.com/dschick/udkm1Dsim/issue/138
+[#206]: https://github.com/dschick/udkm1Dsim/issue/206
+[#208]: https://github.com/dschick/udkm1Dsim/issue/208
+[#215]: https://github.com/dschick/udkm1Dsim/pull/215
 
 ### Changed
 
