@@ -383,8 +383,6 @@ class MagneticParameters(ParameterGroup):
         elif value.shape == (1,):
             value = np.full(3, value[0])
         elif value.shape != (3,):
-            raise ValueError(
-                f"{name} must be a scalar or a vector of length 3!"
-            )
+            raise ValueError(f"{name} must be a scalar or a vector of length 3!")
 
         parameter.quantity = u.Quantity(value, unit)

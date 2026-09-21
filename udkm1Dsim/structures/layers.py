@@ -554,9 +554,10 @@ class AmorphousLayer(Layer):
     Use :class:`Layer` instead.
 
     """
+
     def __init__(self, id, name, thickness, density, **kwargs):
         super().__init__(id, name, thickness=thickness, density=density, **kwargs)
-        self.atom = kwargs.get('atom', [])
+        self.atom = kwargs.get("atom", [])
 
     @property
     def atom(self):
@@ -565,46 +566,48 @@ class AmorphousLayer(Layer):
     @atom.setter
     def atom(self, atom):
         if atom == []:  # no atom is set
-            self.magnetic.magnetization.polar = (0, 0*u.deg, 0*u.deg)
+            self.magnetic.magnetization.polar = (0, 0 * u.deg, 0 * u.deg)
             return
 
         if not isinstance(atom, (Atom, AtomMixed)):
-            raise TypeError('Class '
-                            + type(atom).__name__
-                            + ' is no possible atom of an amorphous layer. '
-                            + 'Only Atom and AtomMixed are allowed!')
+            raise TypeError(
+                "Class "
+                + type(atom).__name__
+                + " is no possible atom of an amorphous layer. "
+                + "Only Atom and AtomMixed are allowed!"
+            )
         self._atom = atom
         self.magnetic.magnetization.polar = (atom.mag_amplitude, atom.mag_phi, atom.mag_gamma)
-
 
 
 class UnitCell(Layer):
     r"""Layer
 
-        Representation of unit cells made of one or multiple Atom or AtomMixed
-        instances at defined positions.
-        A unit cell consists of structural, lattice, thermal, elastic, optical, and magnetic properties.
-        These properties are organized into dedicated parameter groups:
+    Representation of unit cells made of one or multiple Atom or AtomMixed
+    instances at defined positions.
+    A unit cell consists of structural, lattice, thermal, elastic, optical,
+    and magnetic properties. These properties are organized into dedicated
+    parameter groups:
 
-        * :class:`StructuralParameters`
-        * :class:`LatticeParameters`
-        * :class:`ThermalParameters`
-        * :class:`ElasticParameters`
-        * :class:`OpticalParameters`
-        * :class:`MagneticParameters`
+    * :class:`StructuralParameters`
+    * :class:`LatticeParameters`
+    * :class:`ThermalParameters`
+    * :class:`ElasticParameters`
+    * :class:`OpticalParameters`
+    * :class:`MagneticParameters`
 
-        The parameter groups are accessible through the corresponding
-        attributes of the layer.
+    The parameter groups are accessible through the corresponding
+    attributes of the layer.
 
-        Args:
-            id (str): id of the layer.
-            name (str): name of the layer.
+    Args:
+        id (str): id of the layer.
+        name (str): name of the layer.
 
-        Attributes:
-            id (str): id of the layer.
-            name (str): name of the layer.
+    Attributes:
+        id (str): id of the layer.
+        name (str): name of the layer.
 
-        """
+    """
 
     def __init__(self, id, name, c_axis, **kwargs):
         super().__init__(id, name, **kwargs)
@@ -825,7 +828,7 @@ class UnitCell(Layer):
 
         self.density = self.mass / self.volume
         # set mass per unit area
-        self.structural.mass_unit_area.quantity = self.mass* 1 * u.angstrom**2 / self.area
+        self.structural.mass_unit_area.quantity = self.mass * 1 * u.angstrom**2 / self.area
         self.elastic.calc_spring_const(
             self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
         )
@@ -927,4 +930,3 @@ class UnitCell(Layer):
         self.elastic.calc_spring_const(
             self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
         )
-

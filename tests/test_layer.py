@@ -20,19 +20,20 @@ def test_layer_id(layer):
 def test_layer_name(layer):
     assert layer.name == "base layer"
 
+
 # ============================================================================
 # Structural parameters
 # ============================================================================
+
 
 def test_layer_roughness(layer):
     assert_equal(layer.roughness, 0.5 * u.angstrom)
 
 
-
-
 # ============================================================================
 # Thermal parameters
 # ============================================================================
+
 
 def test_layer_therm_cond(layer):
     assert layer.therm_cond[0](300) == 1
@@ -55,7 +56,7 @@ def test_layer_int_lin_therm_exp(layer):
 
 
 def test_layer_int_lin_therm_exp_expr(layer):
-    T = sp.symbols('T')
+    T = sp.symbols("T")
     assert layer.int_lin_therm_exp_expr[0].equals(1.0e-5 * T)
 
 
@@ -81,7 +82,7 @@ def test_layer_int_heat_capacity(layer):
 
 
 def test_layer_int_heat_capacity_expr(layer):
-    T = sp.symbols('T')
+    T = sp.symbols("T")
     assert layer.int_heat_capacity_expr[0].equals(10.0 * T)
 
 
@@ -115,6 +116,7 @@ def test_layer_deb_wal_fac_expr(layer):
 # Elastic parameters
 # ============================================================================
 
+
 def test_layer_sound_vel(layer):
     assert_equal(layer.sound_vel, 6 * u.nm / u.ps)
 
@@ -126,7 +128,8 @@ def test_layer_phonon_damping(layer):
 def test_layer_set_ho_spring_constants(layer):
     assert layer.spring_const == 0.0
     layer.elastic.set_ho_spring_constants([1.0, 2.0, 3.0])
-    assert np.allclose(layer.spring_const, [0.0, 1.0, 2.0, 3.0]*u.kg/u.s**2)
+    assert np.allclose(layer.spring_const, [0.0, 1.0, 2.0, 3.0] * u.kg / u.s**2)
+
 
 # ============================================================================
 # Optical parameters
@@ -145,9 +148,11 @@ def test_layer_opt_ref_index(layer):
 def test_layer_opt_ref_index_per_strain(layer):
     assert layer.opt_ref_index_per_strain == 1 - 1j
 
+
 # ============================================================================
 # Magnetic parameters
 # ============================================================================
+
 
 def test_layer_eff_spin(layer):
     assert layer.eff_spin == 1

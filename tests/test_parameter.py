@@ -1,18 +1,17 @@
 #!/usr/bin/env python
 
 import numpy as np
+import pint
 import pytest
 import sympy as sp
-import pint
 from pint.testing import assert_allclose as assert_approx
-from pint.testing import assert_equal
 
-from udkm1Dsim import u
-from udkm1Dsim import VectorParameter
+from udkm1Dsim import VectorParameter, u
 
 # tests
 
 # Parameter
+
 
 @pytest.mark.parametrize(
     "input, expected",
@@ -82,7 +81,9 @@ def test_temperature_parameter(temperature_parameter, input, expected, expected_
 )
 def test_temperature_parameter_list(temperature_parameter, input, expected, expected_expr):
     temperature_parameter.quantity = input
-    for i, (functional, expression) in enumerate(zip(temperature_parameter.functional, temperature_parameter.magnitude)):
+    for i, (functional, expression) in enumerate(
+        zip(temperature_parameter.functional, temperature_parameter.magnitude)
+    ):
         if isinstance(input[i], str) and "_" in input[i]:
             assert functional([300, 300, 300]) == expected[i]
         else:
@@ -193,9 +194,7 @@ def test_vector_parameter_polar_getter(vector_parameter, cartesian, expected):
     assert r.units == u.T
     assert phi.units == u.deg
     assert gamma.units == u.deg
-    np.testing.assert_allclose(
-        [r.magnitude, phi.magnitude, gamma.magnitude], expected, atol=1e-12
-    )
+    np.testing.assert_allclose([r.magnitude, phi.magnitude, gamma.magnitude], expected, atol=1e-12)
     # single components agree with the tuple
     assert_approx(vector_parameter.r, r)
     assert_approx(vector_parameter.phi, phi)
@@ -294,9 +293,7 @@ def test_vector_parameter_negative_r(vector_parameter, attribute, value):
 def test_vector_parameter_polar_rad(vector_parameter):
     vector_parameter.magnitude = (1.0, 1.0, 1.0)
     polar_rad = vector_parameter.polar_rad
-    np.testing.assert_allclose(
-        polar_rad, [np.sqrt(3), np.arccos(1 / np.sqrt(3)), np.pi / 4]
-    )
+    np.testing.assert_allclose(polar_rad, [np.sqrt(3), np.arccos(1 / np.sqrt(3)), np.pi / 4])
     polar_rad[0] = 99.0  # fresh array, mutating it changes nothing
     np.testing.assert_allclose(vector_parameter.polar_rad[0], np.sqrt(3))
 

@@ -7,7 +7,6 @@ from .simulations.simulation import Simulation
 from .simulations.xrays import Xray, XrayDyn, XrayDynMag, XrayKin
 from .structures.atoms import Atom, AtomMixed
 from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
-from .structures.parameters import Parameter, TemperatureParameter, VectorParameter
 from .structures.parameter_groups import (
     ElasticParameters,
     LatticeParameters,
@@ -16,6 +15,7 @@ from .structures.parameter_groups import (
     StructuralParameters,
     ThermalParameters,
 )
+from .structures.parameters import Parameter, TemperatureParameter, VectorParameter
 from .structures.structure import Structure
 
 u = pint.get_application_registry()

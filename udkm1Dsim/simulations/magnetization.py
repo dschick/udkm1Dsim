@@ -1212,13 +1212,11 @@ class LLB(Magnetization):
         chi_long = np.zeros_like(temp_map)
         chi_long[under_tc] = np.divide(
             mag_moments[under_tc] * dBdx,
-            temp_map[under_tc] * constants.k
-            - (mf_exch_couplings)[under_tc] * dBdx,
+            temp_map[under_tc] * constants.k - (mf_exch_couplings)[under_tc] * dBdx,
         )
         chi_long[over_tc] = np.divide(
             mag_moments[over_tc] * curie_temps[over_tc],
-            (mf_exch_couplings)[over_tc]
-            * (temp_map[over_tc] - curie_temps[over_tc]),
+            (mf_exch_couplings)[over_tc] * (temp_map[over_tc] - curie_temps[over_tc]),
         )
 
         return chi_long

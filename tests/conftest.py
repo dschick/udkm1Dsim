@@ -2,8 +2,19 @@
 
 import pytest
 
-from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Layer, Structure, UnitCell, Vacuum, u, Parameter, TemperatureParameter, VectorParameter
-
+from udkm1Dsim import (
+    AmorphousLayer,
+    Atom,
+    AtomMixed,
+    Layer,
+    Parameter,
+    Structure,
+    TemperatureParameter,
+    UnitCell,
+    Vacuum,
+    VectorParameter,
+    u,
+)
 
 # fixtures
 

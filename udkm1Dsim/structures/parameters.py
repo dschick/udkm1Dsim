@@ -33,10 +33,8 @@ import pint
 from scipy.integrate import quad
 from sympy import integrate, lambdify, symarray, symbols, sympify
 from sympy.printing.numpy import NumPyPrinter
-from ..helpers import (
-    convert_cartesian_to_polar,
-    convert_polar_to_cartesian
-)
+
+from ..helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
 
 u = pint.get_application_registry()
 
@@ -86,8 +84,7 @@ class VectorParameter(Parameter):
     phi is the angle from +z, gamma the angle in the xy-plane from +x.
     """
 
-    def __init__(self, unit, magnitude=(0.0, 0.0, 0.0), name="",
-                 angle_unit="deg"):
+    def __init__(self, unit, magnitude=(0.0, 0.0, 0.0), name="", angle_unit="deg"):
         self.angle_unit = u.Unit(angle_unit)  # unit for bare-float angles
         super().__init__(unit, magnitude, name)
 
@@ -180,11 +177,13 @@ class VectorParameter(Parameter):
     @polar.setter
     def polar(self, value):
         r, phi, gamma = value
-        self._set_polar_rad([
-            self._to_magnitude(r, self.unit),
-            self._to_magnitude(phi, u.rad, self.angle_unit),
-            self._to_magnitude(gamma, u.rad, self.angle_unit),
-        ])
+        self._set_polar_rad(
+            [
+                self._to_magnitude(r, self.unit),
+                self._to_magnitude(phi, u.rad, self.angle_unit),
+                self._to_magnitude(gamma, u.rad, self.angle_unit),
+            ]
+        )
 
     @property
     def polar_rad(self):
@@ -200,6 +199,7 @@ class VectorParameter(Parameter):
 
     def __repr__(self):
         return f"VectorParameter({self.name}={self._magnitude.tolist()} {self.unit})"
+
 
 class TemperatureParameter(Parameter):
     """Parameter with a unit and a magnitude, which depends on temperature."""
@@ -265,18 +265,20 @@ class TemperatureParameter(Parameter):
                     is_vector = True
                     syms = symarray("T", self._num_sub_systems)
 
-                if is_vector or backend=="numba":
+                if is_vector or backend == "numba":
                     body = NumPyPrinter().doprint(expression)
                     if is_vector:
-                        unpack = "".join(f"    T_{i} = T[{i}]\n" for i in range(self._num_sub_systems))
+                        unpack = "".join(
+                            f"    T_{i} = T[{i}]\n" for i in range(self._num_sub_systems)
+                        )
                         src = f"def _f(T):\n{unpack}    return {body}\n"
                     else:
                         src = f"def _f(T):\n    return {body}\n"
                     ns = {"numpy": np}
                     exec(src, ns)
                     f = ns["_f"]
-                    if backend=="numba":
-                        f = self._njit(fastmath=True, error_model='numpy')(f)
+                    if backend == "numba":
+                        f = self._njit(fastmath=True, error_model="numpy")(f)
                     self._functional.append(f)
                 else:
                     self._functional.append(lambdify(syms, expression, modules="numpy"))
@@ -291,10 +293,12 @@ class TemperatureParameter(Parameter):
         if backend == "numba":
             try:
                 from numba import njit
+
                 self._njit = njit
             except ImportError:
-                raise ImportError("Cannot import 'numba - please change 'backend' "
-                                  "to default 'scipy'")
+                raise ImportError(
+                    "Cannot import 'numba - please change 'backend' to default 'scipy'"
+                )
         return backend
 
     @property
