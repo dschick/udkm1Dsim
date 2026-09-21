@@ -1123,9 +1123,9 @@ class Heat(Simulation):
                 init_temp,
                 d_distances,
                 d_start,
-                self.S.get_layer_property_vector("therm_cond"),
-                self.S.get_layer_property_vector("heat_capacity"),
-                self.S.get_layer_property_vector("sub_system_coupling"),
+                self.S.get_layer_property_vector("therm_cond", backend="scipy"),
+                self.S.get_layer_property_vector("heat_capacity", backend="scipy"),
+                self.S.get_layer_property_vector("sub_system_coupling", backend="scipy"),
                 densities,
                 indices,
                 dAdz,
@@ -1141,8 +1141,30 @@ class Heat(Simulation):
 
             temp_map = np.array(temp_map).reshape([M, N, K], order="F")
         elif self.backend == "numba":
-            print("Here we call the new NUMBA engine")
-            temp_map = np.zeros([M, N, K])
+            from .solvers import HeatDiffusionNumba
+            temp_map = HeatDiffusionNumba.solve_problem(
+                            self.progress_bar,
+                            delays,
+                            N,
+                            K,
+                            init_temp,
+                            d_distances,
+                            d_start,
+                            self.S.get_layer_property_vector("therm_cond", backend="numba"),
+                            self.S.get_layer_property_vector("heat_capacity", backend="numba"),
+                            self.S.get_layer_property_vector("sub_system_coupling", backend="numba"),
+                            densities,
+                            indices,
+                            dAdz,
+                            fluence,
+                            delay_pump,
+                            pulse_width,
+                            self._boundary_conditions["top_type"],
+                            self._boundary_conditions["top_value"],
+                            self._boundary_conditions["bottom_type"],
+                            self._boundary_conditions["bottom_value"],
+                            self.ode_options
+                        )
         else:
             raise ValueError(f"Backend {self.backend} for heat diffusion is not implemented!")
 
