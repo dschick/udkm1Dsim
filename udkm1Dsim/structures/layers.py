@@ -612,9 +612,9 @@ class UnitCell(Layer):
         super().__init__(id, name, **kwargs)
 
         self.lattice = LatticeParameters(
-            a_axis=kwargs.get("a_axis", 0.0 * u.angstrom),
-            b_axis=kwargs.get("b_axis", 0.0 * u.angstrom),
-            c_axis=kwargs.get("c_axis", 0.0 * u.angstrom),
+            c_axis=c_axis,
+            a_axis=kwargs.get("a_axis", c_axis),
+            b_axis=kwargs.get("b_axis", c_axis),
         )
 
         self.thickness = c_axis
