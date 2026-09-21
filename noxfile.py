@@ -3,8 +3,7 @@ import nox
 reuse_venv = False
 
 
-@nox.session(python="3.13",
-             venv_backend="uv", reuse_venv=reuse_venv)
+@nox.session(python="3.13", venv_backend="uv", reuse_venv=reuse_venv)
 def lint(session):
     session.install(".", "--group", "lint")
     session.run("ruff", "check", "udkm1Dsim/", "tests/", "examples/")
@@ -15,20 +14,16 @@ def lint(session):
     [
         ("3.10", "1.26.4"),
         ("3.10", "2.0.0"),
-
         ("3.11", "1.26.4"),
         ("3.11", "2.0.0"),
         ("3.11", "2.3.0"),
         ("3.11", "2.4.1"),
-
         ("3.12", "1.26.4"),
         ("3.12", "2.0.0"),
         ("3.12", "2.3.0"),
         ("3.12", "2.4.1"),
-
         ("3.13", "2.3.0"),
         ("3.13", "2.4.1"),
-
         ("3.14", "2.3.0"),
         ("3.14", "2.4.1"),
     ],
@@ -43,11 +38,13 @@ def tests(session, numpy):
 @nox.session(venv_backend="uv", reuse_venv=reuse_venv)
 def coverage(session):
     session.install(".", "--group", "test")
-    session.run("pytest",
-                "--cov=udkm1Dsim",
-                "--cov-report=term-missing:skip-covered",
-                "--ignore=tests/benchmarks",
-                "tests/")
+    session.run(
+        "pytest",
+        "--cov=udkm1Dsim",
+        "--cov-report=term-missing:skip-covered",
+        "--ignore=tests/benchmarks",
+        "tests/",
+    )
 
 
 @nox.session(venv_backend="uv", python="3.13", reuse_venv=reuse_venv)

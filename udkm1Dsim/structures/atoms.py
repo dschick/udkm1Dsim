@@ -21,9 +21,9 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Atom', 'AtomMixed']
+__all__ = ["Atom", "AtomMixed"]
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
 import os
 import warnings
@@ -76,53 +76,76 @@ class Atom:
 
     def __init__(self, symbol, **kwargs):
         self.symbol = symbol
-        self.id = kwargs.get('id', symbol)
-        self.ionicity = kwargs.get('ionicity', 0)
-        self.mag_amplitude = kwargs.get('mag_amplitude', 0.0)
-        self.mag_phi = kwargs.get('mag_phi', 0.0*u.deg)
-        self.mag_gamma = kwargs.get('mag_gamma', 0.0*u.deg)
+        self.id = kwargs.get("id", symbol)
+        self.ionicity = kwargs.get("ionicity", 0)
+        self.mag_amplitude = kwargs.get("mag_amplitude", 0.0)
+        self.mag_phi = kwargs.get("mag_phi", 0.0 * u.deg)
+        self.mag_gamma = kwargs.get("mag_gamma", 0.0 * u.deg)
 
         try:
-            filename = os.path.join(os.path.dirname(__file__),
-                                    '../parameters/elements.dat')
-            symbols = np.genfromtxt(filename, dtype='U2', usecols=(0))
-            elements = np.genfromtxt(filename, dtype='U15, i8, f8', usecols=(1, 2, 3))
+            filename = os.path.join(os.path.dirname(__file__), "../parameters/elements.dat")
+            symbols = np.genfromtxt(filename, dtype="U2", usecols=(0))
+            elements = np.genfromtxt(filename, dtype="U15, i8, f8", usecols=(1, 2, 3))
             [rowidx] = np.where(symbols == self.symbol)
             element = elements[rowidx[0]]
         except Exception as e:
-            print('Cannot load element specific data from elements data file!')
+            print("Cannot load element specific data from elements data file!")
             print(e)
 
         self.name = element[0]
         self.atomic_number_z = element[1]
         self.mass_number_a = element[2]
-        self._mass = self.mass_number_a*constants.atomic_mass
-        self.mass = self._mass*u.kg
+        self._mass = self.mass_number_a * constants.atomic_mass
+        self.mass = self._mass * u.kg
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
-            filename=kwargs.get('atomic_form_factor_path', ''),
-            source=kwargs.get('atomic_form_factor_source', 'chantler'))
+            filename=kwargs.get("atomic_form_factor_path", ""),
+            source=kwargs.get("atomic_form_factor_source", "chantler"),
+        )
         self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
-            filename=kwargs.get('magnetic_form_factor_path', ''))
+            filename=kwargs.get("magnetic_form_factor_path", "")
+        )
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
     def __str__(self):
         """String representation of this class"""
-        output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
-                                'ionicity', 'Cromer Mann coeff', '', '',
-                                'magn. amplitude', 'magn. phi', 'magn. gamma'],
-                  'value': [self.id, self.symbol, self.name, self.atomic_number_z,
-                            self.mass_number_a, '{:.4g~P}'.format(self.mass.to('kg')),
-                            self.ionicity,
-                            np.array_str(self.cromer_mann_coeff[0:4]),
-                            np.array_str(self.cromer_mann_coeff[4:8]),
-                            np.array_str(self.cromer_mann_coeff[8:]),
-                            self.mag_amplitude, '{:.4g~P}'.format(self.mag_phi.to('deg')),
-                            '{:.4g~P}'.format(self.mag_gamma.to('deg'))]}
+        output = {
+            "parameter": [
+                "id",
+                "symbol",
+                "name",
+                "atomic number Z",
+                "mass number A",
+                "mass",
+                "ionicity",
+                "Cromer Mann coeff",
+                "",
+                "",
+                "magn. amplitude",
+                "magn. phi",
+                "magn. gamma",
+            ],
+            "value": [
+                self.id,
+                self.symbol,
+                self.name,
+                self.atomic_number_z,
+                self.mass_number_a,
+                "{:.4g~P}".format(self.mass.to("kg")),
+                self.ionicity,
+                np.array_str(self.cromer_mann_coeff[0:4]),
+                np.array_str(self.cromer_mann_coeff[4:8]),
+                np.array_str(self.cromer_mann_coeff[8:]),
+                self.mag_amplitude,
+                "{:.4g~P}".format(self.mag_phi.to("deg")),
+                "{:.4g~P}".format(self.mag_gamma.to("deg")),
+            ],
+        }
 
-        return 'Atom with the following properties\n' + \
-               tabulate(output, colalign=('right',), tablefmt='rst', floatfmt=('.2f', '.2f'))
+        return "Atom with the following properties\n" + tabulate(
+            output, colalign=("right",), tablefmt="rst", floatfmt=(".2f", ".2f")
+        )
 
-    def read_atomic_form_factor_coeff(self, source='chantler', filename=''):
+    def read_atomic_form_factor_coeff(self, source="chantler", filename=""):
         """read_atomic_form_factor_coeff
 
         The coefficients for the atomic form factor :math:`f` in dependence of
@@ -140,26 +163,28 @@ class Atom:
 
         """
         if not filename:
-            if source not in ['chantler', 'henke']:
-                raise ValueError('The source of the atomic form factors must be '
-                                 'either chantler or henke!')
+            if source not in ["chantler", "henke"]:
+                raise ValueError(
+                    "The source of the atomic form factors must be either chantler or henke!"
+                )
 
-            if source == 'chantler':
-                sub_path = f'chantler/{self.symbol.lower():s}.cf'
-            elif source == 'henke':
-                sub_path = f'henke/{self.symbol.lower():s}.nff'
+            if source == "chantler":
+                sub_path = f"chantler/{self.symbol.lower():s}.cf"
+            elif source == "henke":
+                sub_path = f"henke/{self.symbol.lower():s}.nff"
 
-            filename = os.path.join(os.path.dirname(__file__),
-                                    f'../parameters/atomic_form_factors/{sub_path:s}')
+            filename = os.path.join(
+                os.path.dirname(__file__), f"../parameters/atomic_form_factors/{sub_path:s}"
+            )
         try:
             f = np.genfromtxt(filename, skip_header=0)
         except FileNotFoundError:
-            print(f'Atomic form factor file {filename:s} not found!')
+            print(f"Atomic form factor file {filename:s} not found!")
             raise
 
         return f
 
-    @u.wraps(None, (None, 'eV'), strict=False)
+    @u.wraps(None, (None, "eV"), strict=False)
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
@@ -178,12 +203,14 @@ class Atom:
 
         """
         # interpolate the real and imaginary part in dependence of E
-        f1 = np.interp(energy, self.atomic_form_factor_coeff[:, 0],
-                       self.atomic_form_factor_coeff[:, 1])
-        f2 = np.interp(energy, self.atomic_form_factor_coeff[:, 0],
-                       self.atomic_form_factor_coeff[:, 2])
+        f1 = np.interp(
+            energy, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 1]
+        )
+        f2 = np.interp(
+            energy, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 2]
+        )
 
-        return f1 - f2*1j
+        return f1 - f2 * 1j
 
     def read_cromer_mann_coeff(self):
         r"""read_cromer_mann_coeff
@@ -197,18 +224,20 @@ class Atom:
             cm (ndarray[float]): Cromer-Mann coefficients.
 
         """
-        filename = os.path.join(os.path.dirname(__file__),
-                                '../parameters/atomic_form_factors/cromermann.txt')
+        filename = os.path.join(
+            os.path.dirname(__file__), "../parameters/atomic_form_factors/cromermann.txt"
+        )
         try:
-            cm = np.genfromtxt(filename, skip_header=1,
-                               usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
+            cm = np.genfromtxt(
+                filename, skip_header=1, usecols=(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+            )
         except FileNotFoundError:
-            print(f'Cromer Mann coefficient file {filename:s} not found!')
+            print(f"Cromer Mann coefficient file {filename:s} not found!")
             raise
 
         return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
 
-    @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
+    @u.wraps(None, (None, "eV", "m**-1"), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
         r"""get_cm_atomic_form_factor
 
@@ -252,24 +281,24 @@ class Atom:
 
         """
         # convert from 1/nm to 1/Å and to a real column vector
-        qz = np.array(qz*1e10, ndmin=2)
+        qz = np.array(qz * 1e10, ndmin=2)
         energy = np.array(energy, ndmin=1)
         if np.size(qz, 0) != len(energy):
-            raise TypeError('qz need to have as many rows as energies!')
+            raise TypeError("qz need to have as many rows as energies!")
 
         f = np.zeros_like(qz, dtype=complex)
 
         for i, en in enumerate(energy):
             _qz = qz[i, :].reshape(-1, 1)
 
-            f_cm = np.dot(self.cromer_mann_coeff[0:3],
-                          np.exp(np.outer(-self.cromer_mann_coeff[4:7],
-                                          (_qz/(4*np.pi))**2)))
-            f[i, :] = f_cm + self.get_atomic_form_factor(en) -\
-                np.sum(self.cromer_mann_coeff[0:3])
+            f_cm = np.dot(
+                self.cromer_mann_coeff[0:3],
+                np.exp(np.outer(-self.cromer_mann_coeff[4:7], (_qz / (4 * np.pi)) ** 2)),
+            )
+            f[i, :] = f_cm + self.get_atomic_form_factor(en) - np.sum(self.cromer_mann_coeff[0:3])
         return f
 
-    def read_magnetic_form_factor_coeff(self, filename=''):
+    def read_magnetic_form_factor_coeff(self, filename=""):
         """read_magnetic_form_factor_coeff
 
         The coefficients for the magnetic form factor :math:`m` in dependence
@@ -284,18 +313,20 @@ class Atom:
 
         """
         if not filename:
-            filename = os.path.join(os.path.dirname(__file__),
-                                    f'../parameters/magnetic_form_factors/{self.symbol:s}.mf')
+            filename = os.path.join(
+                os.path.dirname(__file__),
+                f"../parameters/magnetic_form_factors/{self.symbol:s}.mf",
+            )
         try:
             m = np.genfromtxt(filename)
         except FileNotFoundError:
-            print(f'Magnetic form factor file {filename:s} not found!')
+            print(f"Magnetic form factor file {filename:s} not found!")
             # return zero array
             m = np.zeros([1, 3])
 
         return m
 
-    @u.wraps(None, (None, 'eV'), strict=False)
+    @u.wraps(None, (None, "eV"), strict=False)
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
@@ -315,16 +346,18 @@ class Atom:
 
         """
         # interpolate the real and imaginary part in dependence of E
-        m1 = np.interp(energy, self.magnetic_form_factor_coeff[:, 0],
-                       self.magnetic_form_factor_coeff[:, 1])
-        m2 = np.interp(energy, self.magnetic_form_factor_coeff[:, 0],
-                       self.magnetic_form_factor_coeff[:, 2])
+        m1 = np.interp(
+            energy, self.magnetic_form_factor_coeff[:, 0], self.magnetic_form_factor_coeff[:, 1]
+        )
+        m2 = np.interp(
+            energy, self.magnetic_form_factor_coeff[:, 0], self.magnetic_form_factor_coeff[:, 2]
+        )
 
-        return m1 - m2*1j
+        return m1 - m2 * 1j
 
     @property
     def mag_phi(self):
-        return Q_(self._mag_phi, u.rad).to('deg')
+        return Q_(self._mag_phi, u.rad).to("deg")
 
     @mag_phi.setter
     def mag_phi(self, mag_phi):
@@ -332,7 +365,7 @@ class Atom:
 
     @property
     def mag_gamma(self):
-        return Q_(self._mag_gamma, u.rad).to('deg')
+        return Q_(self._mag_gamma, u.rad).to("deg")
 
     @mag_gamma.setter
     def mag_gamma(self, mag_gamma):
@@ -378,11 +411,11 @@ class AtomMixed(Atom):
 
     def __init__(self, symbol, **kwargs):
         self.symbol = symbol
-        self.id = kwargs.get('id', symbol)
-        self.name = kwargs.get('name', symbol)
-        self.mag_amplitude = kwargs.get('mag_amplitude', 0)
-        self.mag_phi = kwargs.get('mag_phi', 0*u.deg)
-        self.mag_gamma = kwargs.get('mag_gamma', 0*u.deg)
+        self.id = kwargs.get("id", symbol)
+        self.name = kwargs.get("name", symbol)
+        self.mag_amplitude = kwargs.get("mag_amplitude", 0)
+        self.mag_phi = kwargs.get("mag_phi", 0 * u.deg)
+        self.mag_gamma = kwargs.get("mag_gamma", 0 * u.deg)
         self.ionicity = 0
         self.atomic_number_z = 0
         self.mass_number_a = 0
@@ -390,29 +423,52 @@ class AtomMixed(Atom):
         self.atoms = []
         self.num_atoms = 0
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
-            filename=kwargs.get('atomic_form_factor_path', ''))
+            filename=kwargs.get("atomic_form_factor_path", "")
+        )
         self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
-            filename=kwargs.get('magnetic_form_factor_path', ''))
+            filename=kwargs.get("magnetic_form_factor_path", "")
+        )
 
     def __str__(self):
         """String representation of this class"""
 
-        output = {'parameter': ['id', 'symbol', 'name', 'atomic number Z', 'mass number A', 'mass',
-                                'ionicity', 'magn. amplitude', 'magn. phi', 'magn. gamma'],
-                  'value': [self.id, self.symbol, self.name, self.atomic_number_z,
-                            self.mass_number_a, '{:.4g~P}'.format(self.mass.to('kg')),
-                            self.ionicity, self.mag_amplitude,
-                            '{:.4g~P}'.format(self.mag_phi.to('deg')),
-                            '{:.4g~P}'.format(self.mag_gamma.to('deg'))]}
+        output = {
+            "parameter": [
+                "id",
+                "symbol",
+                "name",
+                "atomic number Z",
+                "mass number A",
+                "mass",
+                "ionicity",
+                "magn. amplitude",
+                "magn. phi",
+                "magn. gamma",
+            ],
+            "value": [
+                self.id,
+                self.symbol,
+                self.name,
+                self.atomic_number_z,
+                self.mass_number_a,
+                "{:.4g~P}".format(self.mass.to("kg")),
+                self.ionicity,
+                self.mag_amplitude,
+                "{:.4g~P}".format(self.mag_phi.to("deg")),
+                "{:.4g~P}".format(self.mag_gamma.to("deg")),
+            ],
+        }
 
         output_atom = []
         for i in range(self.num_atoms):
-            output_atom.append([self.atoms[i][0].name, f'{self.atoms[i][1]*100:.1f} %'])
+            output_atom.append([self.atoms[i][0].name, f"{self.atoms[i][1] * 100:.1f} %"])
 
-        return ('AtomMixed with the following properties\n'
-                + tabulate(output, colalign=('right',), tablefmt='rst', floatfmt=('.2f', '.2f'))
-                + f'\n{self.num_atoms:d} Constituents:\n'
-                + tabulate(output_atom, colalign=('right',), floatfmt=('.2f', '.2f')))
+        return (
+            "AtomMixed with the following properties\n"
+            + tabulate(output, colalign=("right",), tablefmt="rst", floatfmt=(".2f", ".2f"))
+            + f"\n{self.num_atoms:d} Constituents:\n"
+            + tabulate(output_atom, colalign=("right",), floatfmt=(".2f", ".2f"))
+        )
 
     def add_atom(self, atom, fraction):
         """add_atom
@@ -435,9 +491,9 @@ class AtomMixed(Atom):
             self.mass = self.mass + fraction * atom.mass
             self.ionicity = self.ionicity + fraction * atom.ionicity
         else:
-            warnings.warn('Only Atom objects can be added to a MixedAtom!')
+            warnings.warn("Only Atom objects can be added to a MixedAtom!")
 
-    def read_atomic_form_factor_coeff(self, filename=''):
+    def read_atomic_form_factor_coeff(self, filename=""):
         """read_atomic_form_factor_coeff
 
         The coefficients for the atomic form factor :math:`f` in dependence of
@@ -457,12 +513,12 @@ class AtomMixed(Atom):
         try:
             f = np.genfromtxt(filename, skip_header=0)
         except FileNotFoundError:
-            print(f'Atomic form factor file {filename:s} not found!')
+            print(f"Atomic form factor file {filename:s} not found!")
             raise
 
         return f
 
-    @u.wraps(None, (None, 'eV'), strict=False)
+    @u.wraps(None, (None, "eV"), strict=False)
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
@@ -488,7 +544,7 @@ class AtomMixed(Atom):
 
         return f
 
-    @u.wraps(None, (None, 'eV', 'm**-1'), strict=False)
+    @u.wraps(None, (None, "eV", "m**-1"), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
         """get_cm_atomic_form_factor
 
@@ -510,14 +566,16 @@ class AtomMixed(Atom):
             for i in range(self.num_atoms):
                 f += self.atoms[i][0].get_cm_atomic_form_factor(energy, qz) * self.atoms[i][1]
         else:
-            warnings.warn('Cromer-Mann correction cannot be applied to '
-                          'atomic form factors from external files. '
-                          'Returning uncorrected values instead!')
+            warnings.warn(
+                "Cromer-Mann correction cannot be applied to "
+                "atomic form factors from external files. "
+                "Returning uncorrected values instead!"
+            )
             f = self.get_atomic_form_factor(energy)
 
         return f
 
-    def read_magnetic_form_factor_coeff(self, filename=''):
+    def read_magnetic_form_factor_coeff(self, filename=""):
         """read_magnetic_form_factor_coeff
 
         The coefficients for the magnetic form factor :math:`m` in dependence
@@ -537,13 +595,13 @@ class AtomMixed(Atom):
         try:
             m = np.genfromtxt(filename)
         except FileNotFoundError:
-            print(f'Magnetic form factor file {filename:s} not found!')
+            print(f"Magnetic form factor file {filename:s} not found!")
             # return zero array
             m = np.zeros([1, 3])
 
         return m
 
-    @u.wraps(None, (None, 'eV'), strict=False)
+    @u.wraps(None, (None, "eV"), strict=False)
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
@@ -569,7 +627,7 @@ class AtomMixed(Atom):
 
     @property
     def mag_phi(self):
-        return Q_(self._mag_phi, u.rad).to('deg')
+        return Q_(self._mag_phi, u.rad).to("deg")
 
     @mag_phi.setter
     def mag_phi(self, mag_phi):
@@ -577,7 +635,7 @@ class AtomMixed(Atom):
 
     @property
     def mag_gamma(self):
-        return Q_(self._mag_gamma, u.rad).to('deg')
+        return Q_(self._mag_gamma, u.rad).to("deg")
 
     @mag_gamma.setter
     def mag_gamma(self, mag_gamma):

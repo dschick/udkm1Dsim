@@ -9,11 +9,16 @@ from udkm1Dsim.helpers import finderb
 # fixtures
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def heat(structure, tmp_path_factory):
-    return Heat(structure, force_recalc=True, cache_dir=tmp_path_factory.mktemp('cache'),
-                save_data=True, disp_messages=True, progress_bar=True,
-                )
+    return Heat(
+        structure,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=True,
+        disp_messages=True,
+        progress_bar=True,
+    )
 
 
 # benchmarks
@@ -36,23 +41,21 @@ def test_get_temperature_after_delta_excitation(heat):
 
 def test_calc_energy_map(benchmark, heat):
     dists, _, _ = heat.S.get_distances_of_layers()
-    temp_map = 1000*np.ones((100, len(dists)))
+    temp_map = 1000 * np.ones((100, len(dists)))
     benchmark(heat.calc_energy_map, temp_map, 300)
 
 
 def test_calc_energy_flux_map(benchmark, heat):
-    delays = np.r_[-1:10:0.01]*u.ps
+    delays = np.r_[-1:10:0.01] * u.ps
     dists, _, _ = heat.S.get_distances_of_layers()
 
-    temp_map = 1000*np.ones((100, len(dists)))
+    temp_map = 1000 * np.ones((100, len(dists)))
     delta_map = temp_map
     benchmark(heat.calc_energy_flux_map, temp_map, delta_map, delays)
 
 
 def test_odefunc(benchmark, heat):
-    distances, _ = heat.S.interp_distance_at_interfaces(
-        heat.intp_at_interface, False
-        )
+    distances, _ = heat.S.interp_distance_at_interfaces(heat.intp_at_interface, False)
     N = len(distances)
     K = heat.S.num_sub_systems
     d_start, _, _ = heat.S.get_distances_of_layers(False)
@@ -63,32 +66,33 @@ def test_odefunc(benchmark, heat):
     delay_pump = 0
     pulse_width = 0
 
-    densities = heat.S.get_layer_property_vector('_density')
+    densities = heat.S.get_layer_property_vector("_density")
     init_temp = heat.check_initial_temperature(300, distances)
-    therm_conds = heat.S.get_layer_property_vector('therm_cond')
-    heat_capacities = heat.S.get_layer_property_vector('heat_capacity')
-    sub_system_couplings = heat.S.get_layer_property_vector('sub_system_coupling')
+    therm_conds = heat.S.get_layer_property_vector("therm_cond")
+    heat_capacities = heat.S.get_layer_property_vector("heat_capacity")
+    sub_system_couplings = heat.S.get_layer_property_vector("sub_system_coupling")
 
-    benchmark(Heat.odefunc,
-              0,
-              init_temp,
-              N,
-              K,
-              d_distances,
-              d_start,
-              therm_conds,
-              heat_capacities,
-              sub_system_couplings,
-              densities[indices],
-              indices,
-              dAdz,
-              fluence,
-              delay_pump,
-              pulse_width,
-              0,
-              0,
-              0,
-              0,
-              None,
-              None
-              )
+    benchmark(
+        Heat.odefunc,
+        0,
+        init_temp,
+        N,
+        K,
+        d_distances,
+        d_start,
+        therm_conds,
+        heat_capacities,
+        sub_system_couplings,
+        densities[indices],
+        indices,
+        dAdz,
+        fluence,
+        delay_pump,
+        pulse_width,
+        0,
+        0,
+        0,
+        0,
+        None,
+        None,
+    )

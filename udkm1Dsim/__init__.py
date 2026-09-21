@@ -7,14 +7,51 @@ from .simulations.simulation import Simulation
 from .simulations.xrays import Xray, XrayDyn, XrayDynMag, XrayKin
 from .structures.atoms import Atom, AtomMixed
 from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
+from .structures.parameter_groups import (
+    ElasticParameters,
+    LatticeParameters,
+    MagneticParameters,
+    OpticalParameters,
+    StructuralParameters,
+    ThermalParameters,
+)
+from .structures.parameters import Parameter, TemperatureParameter, VectorParameter
 from .structures.structure import Structure
 
 u = pint.get_application_registry()
-u.formatter.default_format = '.4g~P'
+u.formatter.default_format = ".4g~P"
 Q_ = u.Quantity
 
-__all__ = ['Atom', 'AtomMixed', 'Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell', 'Structure',
-           'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization', 'LLB',
-           'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
+__all__ = [
+    "Atom",
+    "AtomMixed",
+    "ElasticParameters",
+    "LatticeParameters",
+    "MagneticParameters",
+    "OpticalParameters",
+    "StructuralParameters",
+    "ThermalParameters",
+    "Layer",
+    "Vacuum",
+    "AmorphousLayer",
+    "UnitCell",
+    "Structure",
+    "Simulation",
+    "Heat",
+    "Parameter",
+    "Phonon",
+    "PhononNum",
+    "PhononAna",
+    "Magnetization",
+    "LLB",
+    "TemperatureParameter",
+    "VectorParameter",
+    "Xray",
+    "XrayKin",
+    "XrayDyn",
+    "XrayDynMag",
+    "u",
+    "Q_",
+]
 
-__version__ = '2.4.1'
+__version__ = "2.4.1"

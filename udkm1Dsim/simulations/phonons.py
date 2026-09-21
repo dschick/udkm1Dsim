@@ -21,9 +21,9 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Phonon', 'PhononNum', 'PhononAna']
+__all__ = ["Phonon", "PhononNum", "PhononAna"]
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
 from os import path
 from time import time
@@ -69,15 +69,16 @@ class Phonon(Simulation):
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-        self.only_heat = kwargs.get('only_heat', False)
+        self.only_heat = kwargs.get("only_heat", False)
 
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        output = [['only heat', self.only_heat],
-                  ] + output
+        output = [
+            ["only heat", self.only_heat],
+        ] + output
 
-        class_str = 'Phonon simulation properties:\n\n'
+        class_str = "Phonon simulation properties:\n\n"
         class_str += super().__str__(output)
 
         return class_str
@@ -111,7 +112,7 @@ class Phonon(Simulation):
         for value in kwargs.values():
             param.append(value)
 
-        return self.S.get_hash(types='phonon') + '_' + make_hash_md5(param)
+        return self.S.get_hash(types="phonon") + "_" + make_hash_md5(param)
 
     def get_all_strains_per_unique_layer(self, strain_map):
         """get_all_strains_per_unique_layer
@@ -162,16 +163,19 @@ class Phonon(Simulation):
         else:
             N = np.asarray(N).ravel()
             if N.size != L:
-                raise ValueError('The dimension of N must be either 1 or the number '
-                                 f'of unique layers ({L:d}) the structure!')
+                raise ValueError(
+                    "The dimension of N must be either 1 or the number "
+                    f"of unique layers ({L:d}) the structure!"
+                )
             N = N.astype(int)
 
         for i, value in enumerate(all_strains):
             min_strain = np.min(value)
             max_strain = np.max(value)
 
-            strains.append(np.sort(np.unique(
-                np.r_[0, np.linspace(min_strain, max_strain, int(N[i]))])))
+            strains.append(
+                np.sort(np.unique(np.r_[0, np.linspace(min_strain, max_strain, int(N[i]))]))
+            )
 
         return strains
 
@@ -205,24 +209,32 @@ class Phonon(Simulation):
                 delta_temp_map = np.zeros([M, L])
                 delta_temp_map[0, :] = temp
             elif (np.size(delta_temp_map, 0) != M) or (np.size(delta_temp_map, 1) != L):
-                raise ValueError('The given temperature difference map does not have the '
-                                 'dimension M x L, where M is the number of delay steps '
-                                 'and L the number of layers!')
+                raise ValueError(
+                    "The given temperature difference map does not have the "
+                    "dimension M x L, where M is the number of delay steps "
+                    "and L the number of layers!"
+                )
         else:
             if np.shape(delta_temp_map) == (1, L, K):
                 temp = delta_temp_map
                 delta_temp_map = np.zeros([K, L, K])
                 delta_temp_map[0, :, :] = temp
-            elif ((np.size(delta_temp_map, 0) != M)
-                  or (np.size(delta_temp_map, 1) != L)
-                  or (np.size(delta_temp_map, 2) != K)):
-                raise ValueError('The given temperature difference map does not have the '
-                                 'dimension M x L x K, where M is the number of delay steps '
-                                 'and L the number of layers and K is the number of subsystems!')
+            elif (
+                (np.size(delta_temp_map, 0) != M)
+                or (np.size(delta_temp_map, 1) != L)
+                or (np.size(delta_temp_map, 2) != K)
+            ):
+                raise ValueError(
+                    "The given temperature difference map does not have the "
+                    "dimension M x L x K, where M is the number of delay steps "
+                    "and L the number of layers and K is the number of subsystems!"
+                )
 
         if np.shape(temp_map) != np.shape(delta_temp_map):
-            raise ValueError('The temperature map does not have the same size as the '
-                             'temperature difference map!')
+            raise ValueError(
+                "The temperature map does not have the same size as the "
+                "temperature difference map!"
+            )
 
         return temp_map, delta_temp_map
 
@@ -267,8 +279,8 @@ class Phonon(Simulation):
         temp_map = np.reshape(temp_map, [M, L, K])
         delta_temp_map = np.reshape(delta_temp_map, [M, L, K])
 
-        thicknesses = self.S.get_layer_property_vector('_thickness')
-        int_lin_therm_exps = self.S.get_layer_property_vector('_int_lin_therm_exp')
+        thicknesses = self.S.get_layer_property_vector("_thickness")
+        int_lin_therm_exps = self.S.get_layer_property_vector("int_lin_therm_exp")
 
         # evaluated initial integrated linear thermal expansion from T1 to T2
         int_alpha_T0 = np.zeros([L, K])
@@ -281,8 +293,9 @@ class Phonon(Simulation):
         # traverse subsystems
         for ii in range(L):
             for iii in range(K):
-                int_alpha_T0[ii, iii] = int_lin_therm_exps[ii][iii](temp_map[0, ii, iii]
-                                                                    - delta_temp_map[0, ii, iii])
+                int_alpha_T0[ii, iii] = int_lin_therm_exps[ii][iii](
+                    temp_map[0, ii, iii] - delta_temp_map[0, ii, iii]
+                )
 
         # calculate sticks for all subsystems for all delay steps
         # traverse time
@@ -298,13 +311,15 @@ class Phonon(Simulation):
 
                 # calculate the length of the sticks of each subsystem and sum
                 # them up
-                sticks_sub_systems[i, :, :] = np.tile(thicknesses, (K, 1)).T \
-                    * np.exp(int_alpha_T-int_alpha_T0) - np.tile(thicknesses, (K, 1)).T
+                sticks_sub_systems[i, :, :] = (
+                    np.tile(thicknesses, (K, 1)).T * np.exp(int_alpha_T - int_alpha_T0)
+                    - np.tile(thicknesses, (K, 1)).T
+                )
                 sticks[i, :] = np.sum(sticks_sub_systems[i, :, :], 1)
             else:  # no temperature change, so keep the current sticks
                 if i > 0:
-                    sticks_sub_systems[i, :, :] = sticks_sub_systems[i-1, :, :]
-                    sticks[i, :] = sticks[i-1, :]
+                    sticks_sub_systems[i, :, :] = sticks_sub_systems[i - 1, :, :]
+                    sticks[i, :] = sticks[i - 1, :]
         return sticks, sticks_sub_systems
 
 
@@ -344,17 +359,17 @@ class PhononNum(Phonon):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.ode_options = {
-            'method': 'RK23',
-            'first_step': None,
-            'max_step': np.inf,
-            'rtol': 1e-3,
-            'atol': 1e-6,
-            }
+            "method": "RK23",
+            "first_step": None,
+            "max_step": np.inf,
+            "rtol": 1e-3,
+            "atol": 1e-6,
+        }
 
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        class_str = 'Numerical Phonon simulation properties:\n\n'
+        class_str = "Numerical Phonon simulation properties:\n\n"
         class_str += super().__str__()
 
         return class_str
@@ -376,20 +391,17 @@ class PhononNum(Phonon):
             strain_map (ndarray[float]): spatio-temporal strain profile.
 
         """
-        filename = 'strain_map_num_' \
-                   + self.get_hash(delays, temp_map, delta_temp_map) \
-                   + '.npz'
+        filename = "strain_map_num_" + self.get_hash(delays, temp_map, delta_temp_map) + ".npz"
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
             tmp = np.load(full_filename)
-            strain_map = tmp['strain_map']
-            self.disp_message('_strain_map_ loaded from file:\n\t' + filename)
+            strain_map = tmp["strain_map"]
+            self.disp_message("_strain_map_ loaded from file:\n\t" + filename)
         else:
             # file does not exist so calculate and save
-            strain_map, _, _ = \
-                self.calc_strain_map(delays, temp_map, delta_temp_map)
-            self.save(full_filename, {'strain_map': strain_map}, '_strain_map_num_')
+            strain_map, _, _ = self.calc_strain_map(delays, temp_map, delta_temp_map)
+            self.save(full_filename, {"strain_map": strain_map}, "_strain_map_num_")
         return strain_map
 
     def calc_strain_map(self, delays, temp_map, delta_temp_map):
@@ -454,11 +466,11 @@ class PhononNum(Phonon):
 
         # initialize
         L = self.S.get_number_of_layers()
-        thicknesses = self.S.get_layer_property_vector('_thickness')
-        x0 = np.zeros([2*L])  # initial condition for the shift of the layers
+        thicknesses = self.S.get_layer_property_vector("_thickness")
+        x0 = np.zeros([2 * L])  # initial condition for the shift of the layers
 
         try:
-            delays = delays.to('s').magnitude
+            delays = delays.to("s").magnitude
         except AttributeError:
             pass
 
@@ -466,29 +478,29 @@ class PhononNum(Phonon):
         [temp_map, delta_temp_map] = self.check_temp_maps(temp_map, delta_temp_map, delays)
 
         # calculate the sticks due to heat expansion first for all delay steps
-        self.disp_message('Calculating linear thermal expansion ...')
+        self.disp_message("Calculating linear thermal expansion ...")
         sticks, sticks_sub_systems = self.calc_sticks_from_temp_map(temp_map, delta_temp_map)
 
         if self.only_heat:
             # no coherent dynamics so calculate the strain directly
-            strain_map = sticks/np.tile(thicknesses, [np.size(sticks, 0), 1])
+            strain_map = sticks / np.tile(thicknesses, [np.size(sticks, 0), 1])
             velocities = np.zeros_like(strain_map)  # this is quasi-static
         else:
             # include coherent dynamics
-            self.disp_message('Calculating coherent dynamics with ODE solver ...')
+            self.disp_message("Calculating coherent dynamics with ODE solver ...")
 
             L = self.S.get_number_of_layers()
-            masses = self.S.get_layer_property_vector('_mass_unit_area')
-            thicknesses = self.S.get_layer_property_vector('_thickness')
-            spring_consts = self.S.get_layer_property_vector('spring_const')
-            damping = self.S.get_layer_property_vector('_phonon_damping')
+            masses = self.S.get_layer_property_vector("_mass_unit_area")
+            thicknesses = self.S.get_layer_property_vector("_thickness")
+            spring_consts = self.S.get_layer_property_vector("_spring_const")
+            damping = self.S.get_layer_property_vector("_phonon_damping")
             force_from_heat = PhononNum.calc_force_from_heat(sticks, spring_consts)
 
             # apply scipy's ode-solver together
             if self.progress_bar:  # with tqdm progressbar
                 pbar = tqdm()
-                pbar.set_description(f'Delay = {delays[0]*1e12:.3f} ps')
-                state = [delays[0], abs(delays[-1]-delays[0])/100]
+                pbar.set_description(f"Delay = {delays[0] * 1e12:.3f} ps")
+                state = [delays[0], abs(delays[-1] - delays[0]) / 100]
             else:  # without progressbar
                 pbar = None
                 state = None
@@ -497,10 +509,10 @@ class PhononNum(Phonon):
                 PhononNum.ode_func,
                 [delays[0], delays[-1]],
                 x0,
-                args=(delays, force_from_heat, damping, spring_consts, masses, L,
-                      pbar, state),
+                args=(delays, force_from_heat, damping, spring_consts, masses, L, pbar, state),
                 t_eval=delays,
-                **self.ode_options)
+                **self.ode_options,
+            )
 
             if pbar is not None:  # close tqdm progressbar if used
                 pbar.close()
@@ -510,17 +522,17 @@ class PhononNum(Phonon):
             # contains x(t) = X(:,1:N) and v(t) = X(:,N+1:end) the
             # positions and velocities of the layers, respectively.
             temp = np.diff(sol.y[0:L, :].T, 1, 1)
-            strain_map = np.zeros([temp.shape[0], temp.shape[1]+1])
+            strain_map = np.zeros([temp.shape[0], temp.shape[1] + 1])
             strain_map[:, :-1] = temp
-            strain_map = strain_map/np.tile(thicknesses[:], [np.size(temp, 0), 1])
+            strain_map = strain_map / np.tile(thicknesses[:], [np.size(temp, 0), 1])
             velocities = sol.y[L:, :].T
-        self.disp_message('Elapsed time for _strain_map_:'
-                          f' {time()-t1:f} s')
+        self.disp_message(f"Elapsed time for _strain_map_: {time() - t1:f} s")
         return strain_map, sticks_sub_systems, velocities
 
     @staticmethod
-    def ode_func(t, X, delays, force_from_heat, damping, spring_consts, masses, L,
-                 pbar=None, state=None):
+    def ode_func(
+        t, X, delays, force_from_heat, damping, spring_consts, masses, L, pbar=None, state=None
+    ):
         r"""ode_func
 
         Provides the according ode function for the ode solver which has to be
@@ -553,10 +565,10 @@ class PhononNum(Phonon):
         if pbar is not None:
             # set everything for the tqdm progressbar
             last_t, dt = state
-            n = (t - last_t)/dt
+            n = (t - last_t) / dt
             if n >= 1:
                 pbar.update(1)
-                pbar.set_description(f'Delay = {t*1e12:.3f} ps')
+                pbar.set_description(f"Delay = {t * 1e12:.3f} ps")
                 state[0] = t
             elif n < 0:
                 state[0] = t
@@ -566,17 +578,16 @@ class PhononNum(Phonon):
         v = X[L:]
 
         # the output must be a column vector
-        X_prime = np.zeros([2*L])
+        X_prime = np.zeros([2 * L])
 
         # accelerations = derivative of velocities
         X_prime[L:] = (
             PhononNum.calc_force_from_damping(v, damping, masses)
             + PhononNum.calc_force_from_spring(
-                np.r_[np.diff(x), 0],
-                np.r_[0, np.diff(x)],
-                spring_consts)
+                np.r_[np.diff(x), 0], np.r_[0, np.diff(x)], spring_consts
+            )
             + force_from_heat[:, finderb(t, delays)].squeeze()
-            )/masses
+        ) / masses
 
         # velocities = derivative of positions
         X_prime[0:L] = v
@@ -625,10 +636,10 @@ class PhononNum(Phonon):
         temp2 = np.zeros([len(d_X1), spring_order])
 
         for i in range(spring_order):
-            temp1[:, i] = d_X1**(i+1)
-            temp2[:, i] = d_X2**(i+1)
+            temp1[:, i] = d_X1 ** (i + 1)
+            temp2[:, i] = d_X2 ** (i + 1)
 
-        F = np.sum(coeff2*temp2, 1) - np.sum(coeff1*temp1, 1)
+        F = np.sum(coeff2 * temp2, 1) - np.sum(coeff1 * temp1, 1)
 
         return F
 
@@ -652,10 +663,10 @@ class PhononNum(Phonon):
         # traverse time
         for i in range(M):
             F[:, i] = -PhononNum.calc_force_from_spring(
-                np.hstack((sticks[i, 0:L-1], 0)),
-                np.hstack((0, sticks[i, 0:L-1])),
-                spring_consts
-                )
+                np.hstack((sticks[i, 0 : L - 1], 0)),
+                np.hstack((0, sticks[i, 0 : L - 1])),
+                spring_consts,
+            )
 
         return F
 
@@ -680,7 +691,7 @@ class PhononNum(Phonon):
             F (ndarray[float]): force from damping.
 
         """
-        F = masses*damping*np.diff(v, 0)
+        F = masses * damping * np.diff(v, 0)
 
         return F
 
@@ -723,7 +734,7 @@ class PhononAna(Phonon):
     def __str__(self, output=[]):
         """String representation of this class"""
 
-        class_str = 'Analytical Phonon simulation properties:\n\n'
+        class_str = "Analytical Phonon simulation properties:\n\n"
         class_str += super().__str__()
 
         return class_str
@@ -748,25 +759,21 @@ class PhononAna(Phonon):
             - *B (ndarray[float])* - coefficient vector B of general solution.
 
         """
-        filename = 'strain_map_ana_' \
-                   + self.get_hash(delays, temp_map, delta_temp_map) \
-                   + '.npz'
+        filename = "strain_map_ana_" + self.get_hash(delays, temp_map, delta_temp_map) + ".npz"
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
             tmp = np.load(full_filename)
-            strain_map = tmp['strain_map']
-            A = tmp['A']
-            B = tmp['B']
-            self.disp_message('_strain_map_ loaded from file:\n\t' + filename)
+            strain_map = tmp["strain_map"]
+            A = tmp["A"]
+            B = tmp["B"]
+            self.disp_message("_strain_map_ loaded from file:\n\t" + filename)
         else:
             # file does not exist so calculate and save
-            strain_map, A, B = \
-                self.calc_strain_map(delays, temp_map, delta_temp_map)
-            self.save(full_filename, {'strain_map': strain_map,
-                                      'A': A,
-                                      'B': B},
-                      '_strain_map_ana_')
+            strain_map, A, B = self.calc_strain_map(delays, temp_map, delta_temp_map)
+            self.save(
+                full_filename, {"strain_map": strain_map, "A": A, "B": B}, "_strain_map_ana_"
+            )
         return strain_map, A, B
 
     def calc_strain_map(self, delays, temp_map, delta_temp_map):
@@ -885,12 +892,12 @@ class PhononAna(Phonon):
         M = len(delays)
 
         try:
-            delays = delays.to('s').magnitude
+            delays = delays.to("s").magnitude
         except AttributeError:
             pass
 
         delay0 = delays[0]  # initial delay
-        thicknesses = self.S.get_layer_property_vector('_thickness')
+        thicknesses = self.S.get_layer_property_vector("_thickness")
         X = np.zeros([M, L])  # shifts of the layers
         V = np.zeros_like(X)  # velocities of the layers
         A = np.zeros_like(X)  # coefficient vector for eigenwert solution
@@ -901,12 +908,12 @@ class PhononAna(Phonon):
         [temp_map, delta_temp_map] = self.check_temp_maps(temp_map, delta_temp_map, delays)
 
         # calculate the sticks due to heat expansion first for all delay steps
-        self.disp_message('Calculating linear thermal expansion ...')
+        self.disp_message("Calculating linear thermal expansion ...")
         sticks, _ = self.calc_sticks_from_temp_map(temp_map, delta_temp_map)
 
         if self.only_heat:
             # no coherent dynamics so calculate the strain directly
-            strain_map = sticks/np.tile(thicknesses, [np.size(sticks, 0), 1])
+            strain_map = sticks / np.tile(thicknesses, [np.size(sticks, 0), 1])
         else:
             # solve the eigenproblem for the structure to obtains the
             # eigenvectors X_i and eigenfreqeuencies omega for the L
@@ -914,19 +921,27 @@ class PhononAna(Phonon):
             Xi, omega = self.solve_eigenproblem()
             # calculate the actual strain map with the solution of the
             # eigenproblem and the external force (sticks, thermal stress)
-            self.disp_message('Calculating _strain_map_ ...')
+            self.disp_message("Calculating _strain_map_ ...")
             if self.progress_bar:
-                iterator = trange(M, desc='Progress', leave=True)
+                iterator = trange(M, desc="Progress", leave=True)
             else:
                 iterator = range(M)
             for i in iterator:
-                dt = delays[i]-delay0  # this is the time step
+                dt = delays[i] - delay0  # this is the time step
                 # calculate the current shift X and velocity V of all
                 # layers using the ansatz
-                X[i, :] = np.real(np.dot(Xi, (A[i, :].T*np.cos(omega*dt)
-                                              + B[i, :].T*np.sin(omega*dt))))
-                V[i, :] = np.real(np.dot(Xi, (omega*(-A[i, :].T*np.sin(omega*dt)
-                                              + B[i, :].T*np.cos(omega*dt)))))
+                X[i, :] = np.real(
+                    np.dot(Xi, (A[i, :].T * np.cos(omega * dt) + B[i, :].T * np.sin(omega * dt)))
+                )
+                V[i, :] = np.real(
+                    np.dot(
+                        Xi,
+                        (
+                            omega
+                            * (-A[i, :].T * np.sin(omega * dt) + B[i, :].T * np.cos(omega * dt))
+                        ),
+                    )
+                )
                 # remember the velocities and shifts as ic for the next
                 # time step
                 X0 = X[i, :].T
@@ -934,19 +949,22 @@ class PhononAna(Phonon):
                 # the strain can only be calculated for L-1 layers, so
                 # we neglect the last one
                 if i > 0:
-                    strain_map[i, 0:-1] = (np.diff(X[i, :])
-                                           + sticks[i-1, 0:-1])/thicknesses[0:-1].T
+                    strain_map[i, 0:-1] = (np.diff(X[i, :]) + sticks[i - 1, 0:-1]) / thicknesses[
+                        0:-1
+                    ].T
                 else:
                     # initial sticks are zero
-                    strain_map[i, 0:-1] = np.diff(X[i, :])/thicknesses[0:-1].T
+                    strain_map[i, 0:-1] = np.diff(X[i, :]) / thicknesses[0:-1].T
                 # calculate everything for the next step
-                if i < (M-1):  # check, if there is a next step
+                if i < (M - 1):  # check, if there is a next step
                     if np.any(delta_temp_map[i, :]):  # there is a temperature change
                         delay0 = delays[i]  # set new initial delay
                         # determining the shifts due to inserted sticks
                         # as new initial conditions
                         if i > 0:
-                            temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T-sticks[i-1, :].T)))
+                            temp = np.flipud(
+                                np.cumsum(np.flipud(sticks[i, :].T - sticks[i - 1, :].T))
+                            )
                         else:
                             # initial sticks are zero
                             temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T)))
@@ -954,16 +972,15 @@ class PhononAna(Phonon):
                         # determining the coefficient vectors A and B of
                         # the general solution of X(t) using the initial
                         # conditions X0 and V0
-                        A[i+1, :] = np.real(np.linalg.solve(Xi, X0))
-                        B[i+1, :] = np.real((np.linalg.solve(Xi, V0)/omega).T)
+                        A[i + 1, :] = np.real(np.linalg.solve(Xi, X0))
+                        B[i + 1, :] = np.real((np.linalg.solve(Xi, V0) / omega).T)
                     else:
                         # no temperature change, so keep the current As,
                         # Bs, and sticks
-                        A[i+1, :] = A[i, :]
-                        B[i+1, :] = B[i, :]
+                        A[i + 1, :] = A[i, :]
+                        B[i + 1, :] = B[i, :]
 
-        self.disp_message('Elapsed time for _strain_map_:'
-                          f' {time()-t1:f} s')
+        self.disp_message(f"Elapsed time for _strain_map_: {time() - t1:f} s")
 
         return strain_map, A, B
 
@@ -983,37 +1000,35 @@ class PhononAna(Phonon):
 
         """
         # create the file name to look for
-        filename = 'eigenvalues_' \
-                   + self.S.get_hash(types='phonon') \
-                   + '.npz'
+        filename = "eigenvalues_" + self.S.get_hash(types="phonon") + ".npz"
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
             tmp = np.load(full_filename)
-            Xi = tmp['Xi']
-            omega = tmp['omega']
-            self.disp_message('_eigen_values_ loaded from file:\n\t' + filename)
+            Xi = tmp["Xi"]
+            omega = tmp["omega"]
+            self.disp_message("_eigen_values_ loaded from file:\n\t" + filename)
         else:
             # file does not exist so calculate and save
             t1 = time()
-            self.disp_message('Calculating _eigen_values_ ...')
+            self.disp_message("Calculating _eigen_values_ ...")
             # initialize
             L = self.S.get_number_of_layers()
             K = np.zeros([L, L])  # initializing three-diagonal springs-masses matrix.
             # initializing a vector for eigenfrequencies
             omega = np.zeros([L, 1], dtype=np.complex128)
 
-            masses = self.S.get_layer_property_vector('_mass_unit_area')
-            spring_consts = self.S.get_layer_property_vector('spring_const')
+            masses = self.S.get_layer_property_vector("_mass_unit_area")
+            spring_consts = self.S.get_layer_property_vector("_spring_const")
             spring_consts = np.hstack((0, spring_consts))  # set the first spring free
 
             for i in range(L):  # defining main diagonal
-                K[i, i] = -(spring_consts[i] + spring_consts[i+1])/masses[i]
+                K[i, i] = -(spring_consts[i] + spring_consts[i + 1]) / masses[i]
 
             # defining the two other diagonals - nearest neighbor interaction
             for i in range(1, L):
-                K[i, i-1] = spring_consts[i]/masses[i]
-                K[i-1, i] = spring_consts[i]/masses[i-1]
+                K[i, i - 1] = spring_consts[i] / masses[i]
+                K[i - 1, i] = spring_consts[i] / masses[i - 1]
 
             # determining the eigenvectors and the eigenvalues
             lambd, Xi = np.linalg.eig(K)
@@ -1021,10 +1036,9 @@ class PhononAna(Phonon):
             # calculate the eigenfrequencies from the eigenvalues
             omega = np.sqrt(-lambd)
 
-            self.disp_message('Elapsed time for _eigen_values_:'
-                              f' {time()-t1:f} s')
+            self.disp_message(f"Elapsed time for _eigen_values_: {time() - t1:f} s")
             # save the result to file
-            self.save(full_filename, {'Xi': Xi, 'omega': omega}, '_eigen_values_')
+            self.save(full_filename, {"Xi": Xi, "omega": omega}, "_eigen_values_")
 
         return Xi, omega
 
@@ -1070,7 +1084,7 @@ class PhononAna(Phonon):
         L = self.S.get_number_of_layers()
         M = A.shape[0]  # nb of delays
         E = np.zeros([M, L])
-        masses = self.S.get_layer_property_vector('_mass_unit_area')
+        masses = self.S.get_layer_property_vector("_mass_unit_area")
 
         # get the eigenVectors and eigenFrequencies
         Xi, omega = self.solve_eigenproblem()
@@ -1084,7 +1098,6 @@ class PhononAna(Phonon):
         # traverse time
         for i in range(M):
             # calculate the energy for the jth mode
-            E[i, :] = np.real(0.5 * (A[i, :].T**2 + B[i, :].T**2) * omega**2
-                              * M_tilde)
+            E[i, :] = np.real(0.5 * (A[i, :].T ** 2 + B[i, :].T ** 2) * omega**2 * M_tilde)
 
         return np.real(omega[idx]), E[:, idx]

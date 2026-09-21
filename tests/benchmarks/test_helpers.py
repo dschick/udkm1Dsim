@@ -15,7 +15,7 @@ from udkm1Dsim.helpers import (
 
 @pytest.mark.benchmark
 def test_make_hash_md5():
-    make_hash_md5([{'item1': np.ones((10, 10, 10))}])
+    make_hash_md5([{"item1": np.ones((10, 10, 10))}])
 
 
 @pytest.mark.benchmark
@@ -25,10 +25,7 @@ def test_m_power_x():
 
 @pytest.mark.benchmark
 def test_m_times_n():
-    m_times_n(
-        np.random.rand(100, 10, 4, 4),
-        np.random.rand(100, 10, 4, 4)
-        )
+    m_times_n(np.random.rand(100, 10, 4, 4), np.random.rand(100, 10, 4, 4))
 
 
 @pytest.mark.benchmark
