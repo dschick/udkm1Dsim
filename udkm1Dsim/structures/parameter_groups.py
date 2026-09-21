@@ -40,7 +40,7 @@ import pint
 import scipy.constants as constants
 from tabulate import tabulate
 
-from .parameters import Parameter, TemperatureParameter
+from .parameters import Parameter, TemperatureParameter, VectorParameter
 
 u = pint.get_application_registry()
 
@@ -176,7 +176,7 @@ class ThermalParameters(ParameterGroup):
         current_num_sub_systems = []
         for _, p in vars(self).items():
             if isinstance(p, TemperatureParameter):
-                current_num_sub_systems.append(len(p.magnitude))
+                current_num_sub_systems.append(p._num_sub_systems)
 
         max_num = max(current_num_sub_systems)
         if max_num != K:
@@ -339,7 +339,7 @@ class MagneticParameters(ParameterGroup):
         self.anisotropy = Parameter("J/m**3", anisotropy)
         self.exch_stiffness = Parameter("J/m", exch_stiffness)
         self.mag_saturation = Parameter("J/T/m**3", mag_saturation)
-        self.magnetization = Parameter("", magnetization)
+        self.magnetization = VectorParameter("", magnetization)
 
         self._update_depending()
 

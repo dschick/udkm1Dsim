@@ -555,20 +555,6 @@ class Layer:
     def magnetization(self, value):
         self.magnetic.magnetization.quantity = value
 
-    # @property
-    # def magnetization(self):
-    #     return {'amplitude': self._magnetization['amplitude'],
-    #             'phi': Q_(self._magnetization['phi'], u.rad).to('deg'),
-    #             'gamma': Q_(self._magnetization['gamma'], u.rad).to('deg')
-    #             }
-
-    # @magnetization.setter
-    # def magnetization(self, magnetization):
-    #     self._magnetization = {'amplitude': magnetization['amplitude'],
-    #                            'phi': magnetization['phi'].to_base_units().magnitude,
-    #                            'gamma': magnetization['gamma'].to_base_units().magnitude
-    #                            }
-
 
 class Vacuum(Layer):
     def __init__(self, thickness=1 * u.nm, **kwargs):
