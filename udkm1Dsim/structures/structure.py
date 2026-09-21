@@ -654,6 +654,28 @@ class Structure:
                 return parent.get_functional(backend=backend)
             return reduce(getattr, path, layer)
 
+        def stack(getter):
+            """Build a [N] or [N, max_dim] array from getter(layer).
+            Shape/dtype are inferred from the unique layers only."""
+            _, unique_layers = self.get_unique_layers()
+            set_dtype = float
+            max_dim = 1
+            for layer in unique_layers:
+                value = getter(layer)
+                if np.iscomplexobj(value):
+                    set_dtype = np.complex128
+                max_dim = max(max_dim, np.size(value))
+
+            shape = [N, max_dim] if max_dim > 1 else [N]
+            arr = np.empty(shape, dtype=set_dtype)
+            for i, h in enumerate(handles):
+                temp = getter(h)
+                if max_dim > 1:
+                    arr[i, :] = temp
+                else:
+                    arr[i] = np.asarray(temp).item()
+            return arr
+
         # the first layer to determine the data type of the property from
         first = resolve(handles[0])
 
@@ -664,30 +686,12 @@ class Structure:
             # it's a list of functions or str
             prop = [resolve(h) for h in handles]
         elif isinstance(first, Q_):
-            # it's a pint quantity
+            # it's a pint quantity (scalar or array-like)
             unit = first.units
-            prop = np.fromiter((resolve(h).magnitude for h in handles), dtype=float, count=N)
-            prop *= unit
+            prop = Q_(stack(lambda l: resolve(l).to(unit).magnitude), unit)
         else:
-            # it's a number or array -- infer dtype/shape from the unique layers only
-            _, unique_layers = self.get_unique_layers()
-            set_dtype = float
-            max_dim = 1
-            for layer in unique_layers:
-                value = resolve(layer)
-                if np.iscomplexobj(value):
-                    set_dtype = np.complex128
-                max_dim = max(max_dim, len(value) if hasattr(value, "__len__") else 1)
-
-            shape = [N, max_dim] if max_dim > 1 else [N]
-            prop = np.empty(shape, dtype=set_dtype)
-
-            for i, h in enumerate(handles):
-                temp = resolve(h)
-                if max_dim > 1:
-                    prop[i, :] = temp
-                else:
-                    prop[i] = np.asarray(temp).item()
+            # it's a number or array
+            prop = stack(resolve)
 
         return prop
 
