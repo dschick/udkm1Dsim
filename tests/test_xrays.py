@@ -252,3 +252,15 @@ def test_xray_dyn_mag_inhomogeneous_reflectivity(xray_dyn_mag, strain_map_mixed,
         xray_dyn_mag.inhomogeneous_reflectivity(strain_map=strain_map_mixed,
                                                 magnetization_map=magnetization_map,
                                                 calc_type='distributed')
+
+
+def test_xray_dyn_mag_inhomogeneous_reflectivity_polarization(
+        xray_dyn_mag,
+        strain_map_mixed,
+        magnetization_map):
+    xray_dyn_mag.energy = 800*u.eV
+    xray_dyn_mag.theta = np.r_[1:10]*u.deg
+    xray_dyn_mag.set_incoming_polarization(5, [(0*u.deg, 0), (45*u.deg, 0), (90*u.deg, 0)])
+    xray_dyn_mag.set_outgoing_polarization(5, [(0, 0)])
+    xray_dyn_mag.inhomogeneous_reflectivity(strain_map=strain_map_mixed,
+                                            magnetization_map=magnetization_map)
