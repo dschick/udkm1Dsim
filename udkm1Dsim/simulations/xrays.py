@@ -2224,7 +2224,10 @@ class XrayDynMag(Xray):
         """
         # initialize
         M = np.size(strain_map, 0)  # delay steps
-        R, R_phi, T, T_phi = [], [], [], []
+        R = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
+        R_phi = np.zeros_like(R)
+        T = np.zeros_like(R)
+        T_phi = np.zeros_like(R)
 
         if self.progress_bar:
             iterator = trange(M, desc='Progress', leave=True)
@@ -2266,16 +2269,13 @@ class XrayDynMag(Xray):
             RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
             RT_phi = m_times_n(last_A_inv_phi, m_times_n(last_A_phi, RT_phi))
 
-            R_i, T_i = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
+            R[i, :, :], T[i, :, :] = XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
                 RT, self.pol_in, self.pol_out)
-            R_phi_i, T_phi_i = \
+            R_phi[i, :, :], T_phi[i, :, :] = \
                 XrayDynMag.calc_reflectivity_transmissivity_from_matrix(
                     RT_phi, self.pol_in, self.pol_out)
-            R.append(R_i)
-            R_phi.append(R_phi_i)
-            T.append(T_i)
-            T_phi.append(T_phi_i)
-        return np.array(R), np.array(R_phi), np.array(T), np.array(T_phi)
+
+        return R, R_phi, T, T_phi
 
     def parallel_inhomogeneous_reflectivity(self, strain_map, magnetization_map, dask_client):
         """parallel_inhomogeneous_reflectivity
