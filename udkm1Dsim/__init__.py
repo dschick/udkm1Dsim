@@ -17,4 +17,4 @@ __all__ = ['Atom', 'AtomMixed', 'Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell',
            'Simulation', 'Heat', 'Phonon', 'PhononNum', 'PhononAna', 'Magnetization', 'LLB',
            'Xray', 'XrayKin', 'XrayDyn', 'XrayDynMag', 'u', 'Q_']
 
-__version__ = '2.4.1'
+__version__ = '2.4.2'
