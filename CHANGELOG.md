@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - example for XrayKin added by [#204]
 - superstrate introduced by [#204] closing [#134]
 - enable automatic numerical integration of layer properties if sympy fails ([#198]) replacing [#110] and closing issue [#109] and [#108]
+- `XrayDynMag.set_polarization` accepts elliptical incoming and outgoing polarizations to set both at the same time ([#217])
 
 [#185]: https://github.com/dschick/udkm1Dsim/pull/185
 [#188]: https://github.com/dschick/udkm1Dsim/pull/188
@@ -24,11 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#204]: https://github.com/dschick/udkm1Dsim/pull/204
 [#202]: https://github.com/dschick/udkm1Dsim/issue/202
 [#134]: https://github.com/dschick/udkm1Dsim/issue/134
+[#217]: https://github.com/dschick/udkm1Dsim/pull/217
 
 ### Changed
 
 - substrates can be a single layer
 - Vacuum is default superstrate and substrate
+- `XrayDynMag` polarization setters check the consistency of the number of incoming and outgoing elliptical polarizations ([#217])
 
 ### Deprecated
 
@@ -37,9 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - bug in energy spectrum calculation of analytical phonons ([#212]) closing issue [#84]
+- bug for multiple elliptical polarizations in `XrayDynMag.inhomogeneous_reflectivity` ([#217]) closing issue [#196]
+- `XrayDynMag.get_hash` includes the elliptical polarization vectors ([#217])
 
 [#212]: https://github.com/dschick/udkm1Dsim/pull/212
 [#84]: https://github.com/dschick/udkm1Dsim/issue/84
+[#196]: https://github.com/dschick/udkm1Dsim/issue/196
 
 ### Security
 
