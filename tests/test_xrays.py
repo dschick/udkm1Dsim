@@ -262,5 +262,49 @@ def test_xray_dyn_mag_inhomogeneous_reflectivity_polarization(
     xray_dyn_mag.theta = np.r_[1:10]*u.deg
     xray_dyn_mag.set_incoming_polarization(5, [(0*u.deg, 0), (45*u.deg, 0), (90*u.deg, 0)])
     xray_dyn_mag.set_outgoing_polarization(5, [(0, 0)])
-    xray_dyn_mag.inhomogeneous_reflectivity(strain_map=strain_map_mixed,
-                                            magnetization_map=magnetization_map)
+    assert xray_dyn_mag.num_pol == 3
+    R, R_phi, T, T_phi = xray_dyn_mag.inhomogeneous_reflectivity(
+        strain_map=strain_map_mixed, magnetization_map=magnetization_map)
+    assert R.shape == (strain_map_mixed.shape[0],) + xray_dyn_mag._qz.shape + (3,)
+    # single polarization results equal the respective multi-polarization slices
+    xray_dyn_mag.set_incoming_polarization(5, (45*u.deg, 0))
+    R_single, _, _, _ = xray_dyn_mag.inhomogeneous_reflectivity(
+        strain_map=strain_map_mixed, magnetization_map=magnetization_map)
+    assert R_single.ndim == 3
+    np.testing.assert_allclose(R_single, R[..., 1])
+
+
+def test_xray_dyn_mag_set_polarization_consistency(xray_dyn_mag):
+    xray_dyn_mag.set_polarization(5, 5, [(0, 0), (1, 0), (2, 0)], [(0, 0), (1, 0), (2, 0)])
+    assert xray_dyn_mag.num_pol == 3
+    # changing only one side to a different number of polarizations must fail
+    # and keep the previous state
+    with pytest.raises(ValueError, match='set_polarization'):
+        xray_dyn_mag.set_outgoing_polarization(5, [(0, 0), (1, 0)])
+    assert xray_dyn_mag.pol_out.shape == (3, 2)
+    with pytest.raises(ValueError, match='set_polarization'):
+        xray_dyn_mag.set_incoming_polarization(5, [(0, 0), (1, 0)])
+    assert xray_dyn_mag.pol_in.shape == (3, 2)
+    # a single polarization on one side is always allowed
+    xray_dyn_mag.set_outgoing_polarization(3)
+    assert xray_dyn_mag.num_pol == 3
+    xray_dyn_mag.set_outgoing_polarization(0)
+    assert xray_dyn_mag.num_pol == 3
+    # changing both at the same time
+    xray_dyn_mag.set_polarization(5, 5, [(0, 0), (1, 0)], [(0, 0), (1, 0)])
+    assert xray_dyn_mag.num_pol == 2
+    with pytest.raises(ValueError):
+        xray_dyn_mag.set_polarization(5, 5, [(0, 0), (1, 0)], [(0, 0), (1, 0), (2, 0)])
+    assert xray_dyn_mag.num_pol == 2
+    xray_dyn_mag.set_polarization(3, 0)
+    assert xray_dyn_mag.num_pol == 1
+
+
+def test_xray_dyn_mag_get_hash_elliptical(xray_dyn_mag):
+    xray_dyn_mag.set_polarization(5, 0, (0*u.deg, 0))
+    hash_1 = xray_dyn_mag.get_hash()
+    xray_dyn_mag.set_polarization(5, 0, (45*u.deg, 0))
+    hash_2 = xray_dyn_mag.get_hash()
+    xray_dyn_mag.set_polarization(5, 0, [(0*u.deg, 0), (45*u.deg, 0)])
+    hash_3 = xray_dyn_mag.get_hash()
+    assert len({hash_1, hash_2, hash_3}) == 3
