@@ -1785,7 +1785,8 @@ class XrayDynMag(Xray):
             hash (str): unique hash.
 
         """
-        param = [self.pol_in_state, self.pol_out_state, self._qz, self._energy]
+        param = [self.pol_in_state, self.pol_out_state, self.pol_in, self.pol_out,
+                 self._qz, self._energy]
 
         if "strain_map" in kwargs:
             strain_map = kwargs.get("strain_map")
@@ -1800,6 +1801,39 @@ class XrayDynMag(Xray):
 
         return self.S.get_hash(types=["xray", "magnetic"]) + "_" + make_hash_md5(param)
 
+    def set_polarization(self, pol_in_state, pol_out_state,
+                         polarization_in=None, polarization_out=None):
+        r"""set_polarization
+
+        Sets the incoming and analyzer (outgoing) polarization at the same time.
+        This is required to change the number of multiple elliptical
+        polarizations of both, the incoming and outgoing polarization, as the
+        individual setters check consistency against the currently set
+        counterpart.
+
+        Args:
+            pol_in_state (int): incoming polarization state id.
+            pol_out_state (int): outgoing polarization state id.
+            polarization_in (list[tuple[alpha (Quantity), ellipticity (float)]],
+                optional): elliptical incoming polarization, see
+                :meth:`set_incoming_polarization`.
+            polarization_out (list[tuple[alpha (Quantity), ellipticity (float)]],
+                optional): elliptical outgoing polarization, see
+                :meth:`set_outgoing_polarization`.
+
+        """
+        pol_in_state, pol_in = self.calc_incoming_polarization(pol_in_state, polarization_in)
+        pol_out_state, pol_out = self.calc_outgoing_polarization(pol_out_state,
+                                                                 polarization_out)
+        self.match_polarizations(pol_in, pol_out)
+
+        self.pol_in_state, self.pol_in = pol_in_state, pol_in
+        self.pol_out_state, self.pol_out = pol_out_state, pol_out
+        self.disp_message('incoming polarizations set to: '
+                          f'{self.polarizations[self.pol_in_state]:s}')
+        self.disp_message('analyzer polarizations set to: '
+                          f'{self.polarizations[self.pol_out_state]:s}')
+
     def set_incoming_polarization(self, pol_in_state, polarization=None):
         r"""set_incoming_polarization
 
@@ -1811,6 +1845,10 @@ class XrayDynMag(Xray):
         :math:`0° \leq \alpha \leq +180°`
         :math:`-1 \leq e \leq +1`
 
+        The number of multiple incoming polarizations must be either 1 or equal
+        to the number of currently set outgoing polarizations. Use
+        :meth:`set_polarization` to change both at the same time.
+
         Args:
             pol_in_state (int): incoming polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
@@ -1818,52 +1856,13 @@ class XrayDynMag(Xray):
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
+        pol_in_state, pol_in = self.calc_incoming_polarization(pol_in_state, polarization)
+        if self.pol_out is not None:
+            self._check_polarizations(pol_in, self.pol_out)
 
-        self.pol_in_state = pol_in_state
-        if self.pol_in_state == 1:  # circ +
-            self.pol_in = np.array([-np.sqrt(0.5), -1j * np.sqrt(0.5)], dtype=np.complex128)
-        elif self.pol_in_state == 2:  # circ -
-            self.pol_in = np.array([np.sqrt(0.5), -1j * np.sqrt(0.5)], dtype=np.complex128)
-        elif self.pol_in_state == 3:  # sigma
-            self.pol_in = np.array([1, 0], dtype=np.complex128)
-        elif self.pol_in_state == 4:  # pi
-            self.pol_in = np.array([0, 1], dtype=np.complex128)
-        elif self.pol_in_state == 5:  # elliptical
-            if polarization is None:
-                raise ValueError(
-                    "For elliptical polarization a single or list tuple of azimuth "
-                    "angle alpha and ellipticity e must be provided."
-                )
-            if type(polarization) is tuple:
-                polarization = [polarization]
-
-            N = len(polarization)
-            self.pol_in = np.zeros((N, 2), dtype=np.complex128)
-            for i, (alpha, ellipticity) in enumerate(polarization):
-                try:
-                    alpha = alpha.to("rad").magnitude
-                except AttributeError:
-                    pass
-
-                if ellipticity > 1 or ellipticity < -1:
-                    raise ValueError("ellipticity must be -1 <= e <= +1")
-                else:
-                    epsilon = np.arctan(ellipticity)
-
-                self.pol_in[i, :] = np.array(
-                    [
-                        np.cos(alpha) * np.cos(epsilon) - 1j * np.sin(alpha) * np.sin(epsilon),
-                        np.sin(alpha) * np.cos(epsilon) + 1j * np.cos(alpha) * np.sin(epsilon),
-                    ],
-                    dtype=np.complex128,
-                )
-        else:  # unpolarized
-            self.pol_in_state = 0  # catch any number and set state to 0
-            self.pol_in = np.array([np.sqrt(0.5), np.sqrt(0.5)], dtype=np.complex128)
-
-        self.disp_message(
-            f"incoming polarizations set to: {self.polarizations[self.pol_in_state]:s}"
-        )
+        self.pol_in_state, self.pol_in = pol_in_state, pol_in
+        self.disp_message('incoming polarizations set to: '
+                          f'{self.polarizations[self.pol_in_state]:s}')
 
     def set_outgoing_polarization(self, pol_out_state, polarization=None):
         r"""set_outgoing_polarization
@@ -1876,6 +1875,10 @@ class XrayDynMag(Xray):
         :math:`0° \leq \alpha \leq +180°`
         :math:`-1 \leq e \leq +1`
 
+        The number of multiple outgoing polarizations must be either 1 or equal
+        to the number of currently set incoming polarizations. Use
+        :meth:`set_polarization` to change both at the same time.
+
         Args:
             pol_out_state (int): outgoing polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
@@ -1883,52 +1886,179 @@ class XrayDynMag(Xray):
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
+        pol_out_state, pol_out = self.calc_outgoing_polarization(pol_out_state, polarization)
+        if self.pol_in is not None:
+            self._check_polarizations(self.pol_in, pol_out)
 
-        self.pol_out_state = pol_out_state
-        if self.pol_out_state == 1:  # circ +
-            self.pol_out = np.array([-np.sqrt(0.5), 1j * np.sqrt(0.5)], dtype=np.complex128)
-        elif self.pol_out_state == 2:  # circ -
-            self.pol_out = np.array([np.sqrt(0.5), 1j * np.sqrt(0.5)], dtype=np.complex128)
-        elif self.pol_out_state == 3:  # sigma
-            self.pol_out = np.array([1, 0], dtype=np.complex128)
-        elif self.pol_out_state == 4:  # pi
-            self.pol_out = np.array([0, 1], dtype=np.complex128)
-        elif self.pol_out_state == 5:  # elliptical
-            if polarization is None:
-                raise ValueError(
-                    "For elliptical polarization a single or list tuple of azimuth "
-                    "angle alpha and ellipticity e must be provided."
-                )
-            if type(polarization) is tuple:
-                polarization = [polarization]
+        self.pol_out_state, self.pol_out = pol_out_state, pol_out
+        self.disp_message('analyzer polarizations set to: '
+                          f'{self.polarizations[self.pol_out_state]:s}')
 
-            N = len(polarization)
-            self.pol_out = np.zeros((N, 2), dtype=np.complex128)
-            for i, (alpha, ellipticity) in enumerate(polarization):
-                try:
-                    alpha = alpha.to("rad").magnitude
-                except AttributeError:
-                    pass
+    @staticmethod
+    def calc_incoming_polarization(pol_in_state, polarization=None):
+        """calc_incoming_polarization
 
-                if ellipticity > 1 or ellipticity < -1:
-                    raise ValueError("ellipticity must be -1 <= e <= +1")
-                else:
-                    epsilon = np.arctan(ellipticity)
+        Calculates the incoming polarization factor for a given state.
 
-                self.pol_out[i, :] = np.array(
-                    [
-                        np.cos(alpha) * np.cos(epsilon) - 1j * np.sin(alpha) * np.sin(epsilon),
-                        np.sin(alpha) * np.cos(epsilon) + 1j * np.cos(alpha) * np.sin(epsilon),
-                    ],
-                    dtype=np.complex128,
-                )
+        Args:
+            pol_in_state (int): incoming polarization state id.
+            polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
+                elliptical polarization, see :meth:`set_incoming_polarization`.
+
+        Returns:
+            (tuple):
+            - *pol_in_state (int)* - incoming polarization state id.
+            - *pol_in (ndarray[complex])* - incoming polarization factor.
+
+        """
+        if (pol_in_state == 1):  # circ +
+            pol_in = np.array([-np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.complex128)
+        elif (pol_in_state == 2):  # circ -
+            pol_in = np.array([np.sqrt(.5), -1j*np.sqrt(.5)], dtype=np.complex128)
+        elif (pol_in_state == 3):  # sigma
+            pol_in = np.array([1, 0], dtype=np.complex128)
+        elif (pol_in_state == 4):  # pi
+            pol_in = np.array([0, 1], dtype=np.complex128)
+        elif (pol_in_state == 5):  # elliptical
+            pol_in = XrayDynMag.calc_elliptical_polarization(polarization)
+        else:  # unpolarized
+            pol_in_state = 0  # catch any number and set state to 0
+            pol_in = np.array([np.sqrt(.5), np.sqrt(.5)], dtype=np.complex128)
+        return pol_in_state, pol_in
+
+    @staticmethod
+    def calc_outgoing_polarization(pol_out_state, polarization=None):
+        """calc_outgoing_polarization
+
+        Calculates the outgoing polarization factor for a given state.
+
+        Args:
+            pol_out_state (int): outgoing polarization state id.
+            polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
+                elliptical polarization, see :meth:`set_outgoing_polarization`.
+
+        Returns:
+            (tuple):
+            - *pol_out_state (int)* - outgoing polarization state id.
+            - *pol_out (ndarray[complex])* - outgoing polarization factor.
+
+        """
+        if (pol_out_state == 1):  # circ +
+            pol_out = np.array([-np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.complex128)
+        elif (pol_out_state == 2):  # circ -
+            pol_out = np.array([np.sqrt(.5), 1j*np.sqrt(.5)], dtype=np.complex128)
+        elif (pol_out_state == 3):  # sigma
+            pol_out = np.array([1, 0], dtype=np.complex128)
+        elif (pol_out_state == 4):  # pi
+            pol_out = np.array([0, 1], dtype=np.complex128)
+        elif (pol_out_state == 5):  # elliptical
+            pol_out = XrayDynMag.calc_elliptical_polarization(polarization)
         else:  # no analyzer
-            self.pol_out_state = 0  # catch any number and set state to 0
-            self.pol_out = np.array([], dtype=np.complex128)
+            pol_out_state = 0  # catch any number and set state to 0
+            pol_out = np.array([], dtype=np.complex128)
+        return pol_out_state, pol_out
 
-        self.disp_message(
-            f"analyzer polarizations set to: {self.polarizations[self.pol_out_state]:s}"
-        )
+    @staticmethod
+    def calc_elliptical_polarization(polarization):
+        r"""calc_elliptical_polarization
+
+        Calculates the polarization factors for a single or list of tuple of
+        the azimuth angle :math:`\alpha` and the ellipticity :math:`e`.
+
+        Args:
+            polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) [deg]
+                ellipticity (-+1 -> circular left/right; 0 -> linear)
+
+        Returns:
+            pol (ndarray[complex]): polarization factors of shape (N, 2).
+
+        """
+        if polarization is None:
+            raise ValueError('For elliptical polarization a single or list tuple of azimuth '
+                             'angle alpha and ellipticity e must be provided.')
+        if type(polarization) is tuple:
+            polarization = [polarization]
+
+        N = len(polarization)
+        pol = np.zeros((N, 2), dtype=np.complex128)
+        for i, (alpha, ellipticity) in enumerate(polarization):
+            try:
+                alpha = alpha.to('rad').magnitude
+            except AttributeError:
+                pass
+
+            if ellipticity > 1 or ellipticity < -1:
+                raise ValueError('ellipticity must be -1 <= e <= +1')
+            else:
+                epsilon = np.arctan(ellipticity)
+
+            pol[i, :] = np.array([np.cos(alpha)*np.cos(epsilon)
+                                  - 1j*np.sin(alpha)*np.sin(epsilon),
+                                  np.sin(alpha)*np.cos(epsilon)
+                                  + 1j*np.cos(alpha)*np.sin(epsilon)],
+                                 dtype=np.complex128)
+        return pol
+
+    @staticmethod
+    def match_polarizations(pol_in, pol_out):
+        """match_polarizations
+
+        Checks that the number of incoming and outgoing polarizations is either
+        equal or one of them is 1, and tiles the single one to the length of
+        the other.
+
+        Args:
+            pol_in (ndarray[complex]): incoming polarization factor.
+            pol_out (ndarray[complex]): outgoing polarization factor.
+
+        Returns:
+            (tuple):
+            - *pol_in (ndarray[complex])* - incoming polarization factors of
+              shape (num_pol, 2).
+            - *pol_out (ndarray[complex])* - outgoing polarization factors of
+              shape (num_pol, 2) or (num_pol, 0) for no analyzer.
+            - *num_pol (int)* - number of polarizations.
+
+        """
+        # add second dimension to polarization vectors for iteration
+        pol_in = np.atleast_2d(pol_in)
+        pol_out = np.atleast_2d(pol_out)
+
+        num_pol_in = pol_in.shape[0]
+        num_pol_out = pol_out.shape[0]
+
+        if (num_pol_in > 1) and (num_pol_out > 1) and (num_pol_in != num_pol_out):
+            raise ValueError(f'the number of multiple incoming (#{num_pol_in:d}) and outgoing '
+                             f'(#{num_pol_out:d}) elliptical polarizations must be the same.')
+        num_pol = max(num_pol_in, num_pol_out)
+        if num_pol_in < num_pol:
+            pol_in = np.tile(pol_in, (num_pol, 1))
+        if num_pol_out < num_pol:
+            pol_out = np.tile(pol_out, (num_pol, 1))
+        return pol_in, pol_out, num_pol
+
+    def _check_polarizations(self, pol_in, pol_out):
+        """_check_polarizations
+
+        Checks the consistency of incoming and outgoing polarizations and adds
+        a hint to :meth:`set_polarization` to the error message.
+
+        Args:
+            pol_in (ndarray[complex]): incoming polarization factor.
+            pol_out (ndarray[complex]): outgoing polarization factor.
+
+        """
+        try:
+            self.match_polarizations(pol_in, pol_out)
+        except ValueError as e:
+            raise ValueError(f'{e} Use set_polarization() to change the incoming and '
+                             'outgoing polarizations at the same time.') from None
+
+    @property
+    def num_pol(self):
+        """int: number of incoming/outgoing polarization pairs."""
+        return self.match_polarizations(self.pol_in, self.pol_out)[2]
 
     def homogeneous_reflectivity(self, *args):
         r"""homogeneous_reflectivity
@@ -2337,7 +2467,9 @@ class XrayDynMag(Xray):
         """
         # initialize
         M = np.size(strain_map, 0)  # delay steps
-        R = np.zeros([M, np.size(self._qz, 0), np.size(self._qz, 1)])
+        num_pol = self.num_pol
+        shape = (M,) + self._qz.shape + ((num_pol,) if num_pol > 1 else ())
+        R = np.zeros(shape)
         R_phi = np.zeros_like(R)
         T = np.zeros_like(R)
         T_phi = np.zeros_like(R)
@@ -2428,10 +2560,10 @@ class XrayDynMag(Xray):
         # initialize
         res = []
         M = np.size(strain_map, 0)  # delay steps
-        N = np.size(self._qz, 0)  # energy steps
-        K = np.size(self._qz, 1)  # qz steps
+        num_pol = self.num_pol
+        shape = (M,) + self._qz.shape + ((num_pol,) if num_pol > 1 else ())
 
-        R = np.zeros([M, N, K])
+        R = np.zeros(shape)
         R_phi = np.zeros_like(R)
         T = np.zeros_like(R)
         T_phi = np.zeros_like(R)
@@ -3106,27 +3238,7 @@ class XrayDynMag(Xray):
         )
 
         # enable multiple polarizations
-        # add second dimension to polarization vectors for iteration
-        pol_in = np.atleast_2d(pol_in)
-        pol_out = np.atleast_2d(pol_out)
-
-        num_pol_in = pol_in.shape[0]
-        num_pol_out = pol_out.shape[0]
-
-        # check length of polarizations lists and equalize if necessary
-        if (num_pol_in > 1) and (num_pol_out > 1) and (num_pol_in != num_pol_out):
-            raise ValueError(
-                f"the number of multiple incoming (#{num_pol_in:d}) and outgoing "
-                f"(#{num_pol_out:d}) elliptical polarizations must be the same."
-            )
-        elif num_pol_in > num_pol_out:
-            pol_out = np.tile(pol_out, (num_pol_in, 1))
-            num_pol = num_pol_in
-        elif num_pol_out > num_pol_in:
-            pol_in = np.tile(pol_in, (num_pol_out, 1))
-            num_pol = num_pol_out
-        else:  # equal size
-            num_pol = num_pol_in
+        pol_in, pol_out, num_pol = XrayDynMag.match_polarizations(pol_in, pol_out)
 
         R = np.empty((Ref.shape[0], Ref.shape[1], num_pol))
         T = np.empty((Ref.shape[0], Ref.shape[1], num_pol))
