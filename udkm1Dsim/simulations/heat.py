@@ -1265,9 +1265,10 @@ class Heat(Simulation):
     @backend.setter
     def backend(self, backend):
         if backend not in ["scipy", "numba"]:
-            raise ValueError("Backend must be either 'scipy' or 'numba'. Set to 'scipy' default!")
+            raise ValueError("Backend must be either 'scipy' or 'numba'!")
 
         if backend == "numba" and not HAS_NUMBA:
+            warnings.warn("Backend 'numba' is not installed. Fallback to default 'scipy'.")
             backend = "scipy"
 
         self._backend = backend

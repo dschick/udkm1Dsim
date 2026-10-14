@@ -35,6 +35,7 @@ from sympy import integrate, lambdify, symarray, symbols, sympify
 from sympy.printing.numpy import NumPyPrinter
 
 from ..helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
+from ..simulations.solvers import HAS_NUMBA
 
 u = pint.get_application_registry()
 
@@ -286,19 +287,18 @@ class TemperatureParameter(Parameter):
         return self._functional
 
     def _get_backend(self, backend):
-        _BACKENDS = ["scipy", "numba"]
-        if backend not in _BACKENDS:
-            raise ValueError(f"'{backend}' is not a valid backend and must be one of: {_BACKENDS}")
+        if backend not in ["scipy", "numba"]:
+            raise ValueError("Backend must be either 'scipy' or 'numba'!")
 
         if backend == "numba":
-            try:
+            if HAS_NUMBA:
                 from numba import njit
 
                 self._njit = njit
-            except ImportError:
-                raise ImportError(
-                    "Cannot import 'numba - please change 'backend' to default 'scipy'"
-                )
+            else:
+                warnings.warn("Backend 'numba' is not installed. Fallback to default 'scipy'.")
+                backend = "scipy"
+
         return backend
 
     @property
