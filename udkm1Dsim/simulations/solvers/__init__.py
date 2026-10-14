@@ -1,7 +1,4 @@
-from .heat_diffusion_numba import HeatDiffusionNumba
-from .heat_diffusion_scipy import HeatDiffusionScipy
-
-__all__ = ["HAS_NUMBA", "HeatDiffusionNumba", "HeatDiffusionScipy"]
+__all__ = ["HAS_NUMBA"]
 
 # the optional `numba` dependency is probed here and nowhere else
 try:

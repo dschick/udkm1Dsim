@@ -112,7 +112,7 @@ class Heat(Simulation):
             "backside": False,
         }
         self._distances = np.array([])
-        self._backend = "scipy"
+        self.backend = kwargs.get("backend", "scipy")
         self.boundary_types = ["isolator", "temperature", "flux"]
         self._boundary_conditions = {
             "top_type": 0,
@@ -144,6 +144,7 @@ class Heat(Simulation):
             ["excitation multilayer absorption", self.excitation["multilayer_absorption"]],
             ["excitation backside", self.excitation["backside"]],
             ["heat diffusion", self.heat_diffusion],
+            ['backend', self.backend],
             ["interpolate at interfaces", self.intp_at_interface],
             [
                 "distances",
@@ -1115,11 +1116,11 @@ class Heat(Simulation):
         densities = self.S.get_layer_property_vector("_density")
 
         if self.backend == 'numba':
-            from .solvers import HeatDiffusionNumba as solver
+            from .solvers.heat_numba import solve
         else:
-            from .solvers import HeatDiffusionScipy as solver
+            from .solvers.heat_scipy import solve
 
-        temp_map = solver.solve_problem(
+        temp_map = solve(
             self.progress_bar,
             delays,
             N,

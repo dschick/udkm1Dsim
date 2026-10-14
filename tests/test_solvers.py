@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from udkm1Dsim.simulations.solvers import HeatDiffusionScipy
+from udkm1Dsim.simulations.solvers.heat_scipy import odefunc
 
 # tests
 
@@ -30,7 +30,7 @@ def test_ode_func():
     pbar = None
     state = (0, 1)
 
-    HeatDiffusionScipy.odefunc(
+    odefunc(
         t,
         u,
         N,
