@@ -34,6 +34,12 @@ from ...helpers import multi_gauss
 
 
 class HeatDiffusionScipy:
+    """HeatDiffusionScipy
+
+    Solves the 1D heat diffusion equation with scipy's ``solve_ivp``.
+
+    """
+
     @staticmethod
     def solve_problem(
         progress_bar,
@@ -58,6 +64,45 @@ class HeatDiffusionScipy:
         bc_bottom_value,
         ode_options,
     ):
+        """solve_problem
+
+        Solves the 1D heat diffusion equation for all sub-systems on the given
+        spatial grid and delays using scipy's ``solve_ivp`` with
+        :meth:`odefunc` as right-hand side.
+
+        Args:
+            progress_bar (bool): enable tqdm progress bar.
+            delays (ndarray[float]): delays range of simulation [s].
+            N (int): number of spatial grid points.
+            K (int): number of sub-systems.
+            init_temp (ndarray[float]): initial temperature profile of shape
+                (N, K) [K].
+            d_distances (ndarray[float]): derivative of spatial grid [m].
+            d_start (ndarray[float]): start points of the actual layers [m].
+            therm_conds (list[list[@lambda]]): T-dependent thermal conductivity
+                function handles of all layers and sub-systems.
+            heat_capacities (list[list[@lambda]]): T-dependent heat capacity
+                function handles of all layers and sub-systems.
+            sub_system_couplings (list[list[@lambda]]): T-dependent sub-system
+                coupling function handles of all layers and sub-systems.
+            densities (ndarray[float]): densities of all layers [kg/m³].
+            indices (ndarray[int]): indices of actual layers in respect to
+                interpolated spatial grid.
+            dAdz (ndarray[float]): differential absorption profile [1/m].
+            fluence (ndarray[float]): excitation fluences [J/m²].
+            delay_pump (ndarray[float]): delays of the excitations [s].
+            pulse_width (ndarray[float]): pulse widths of the excitations [s].
+            bc_top_type (int): top boundary type.
+            bc_top_value (ndarray[float]): top boundary value.
+            bc_bottom_type (int): bottom boundary type.
+            bc_bottom_value (ndarray[float]): bottom boundary value.
+            ode_options (dict): options passed to the ode solver.
+
+        Returns:
+            temp_map (ndarray[float]): spatio-temporal temperature map of
+            shape (M, N*K) with M delays, flattened in Fortran order.
+
+        """
         if progress_bar:  # with tqdm progressbar
             pbar = tqdm()
             pbar.set_description(f"Delay = {delays[0] * 1e12:.3f} ps")
