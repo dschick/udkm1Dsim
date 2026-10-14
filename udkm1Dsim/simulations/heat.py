@@ -1114,62 +1114,36 @@ class Heat(Simulation):
         indices = finderb(distances, d_start)
         densities = self.S.get_layer_property_vector("_density")
 
-        if self.backend == "scipy":
-            from .solvers import HeatDiffusionScipy
-
-            temp_map = HeatDiffusionScipy.solve_problem(
-                self.progress_bar,
-                delays,
-                N,
-                K,
-                init_temp,
-                d_distances,
-                d_start,
-                self.S.get_layer_property_vector("therm_cond", backend="scipy"),
-                self.S.get_layer_property_vector("heat_capacity", backend="scipy"),
-                self.S.get_layer_property_vector("sub_system_coupling", backend="scipy"),
-                densities,
-                indices,
-                dAdz,
-                fluence,
-                delay_pump,
-                pulse_width,
-                self._boundary_conditions["top_type"],
-                self._boundary_conditions["top_value"],
-                self._boundary_conditions["bottom_type"],
-                self._boundary_conditions["bottom_value"],
-                self.ode_options
-            )
-
-            temp_map = np.array(temp_map).reshape([M, N, K], order="F")
-        elif self.backend == "numba":
-            from .solvers import HeatDiffusionNumba
-            temp_map = HeatDiffusionNumba.solve_problem(
-                            self.progress_bar,
-                            delays,
-                            N,
-                            K,
-                            init_temp,
-                            d_distances,
-                            d_start,
-                            self.S.get_layer_property_vector("therm_cond", backend="numba"),
-                            self.S.get_layer_property_vector("heat_capacity", backend="numba"),
-                            self.S.get_layer_property_vector("sub_system_coupling",
-                                                             backend="numba"),
-                            densities,
-                            indices,
-                            dAdz,
-                            fluence,
-                            delay_pump,
-                            pulse_width,
-                            self._boundary_conditions["top_type"],
-                            self._boundary_conditions["top_value"],
-                            self._boundary_conditions["bottom_type"],
-                            self._boundary_conditions["bottom_value"],
-                            self.ode_options
-                        )
+        if self.backend == 'numba':
+            from .solvers import HeatDiffusionNumba as solver
         else:
-            raise ValueError(f"Backend {self.backend} for heat diffusion is not implemented!")
+            from .solvers import HeatDiffusionScipy as solver
+
+        temp_map = solver.solve_problem(
+            self.progress_bar,
+            delays,
+            N,
+            K,
+            init_temp,
+            d_distances,
+            d_start,
+            self.S.get_layer_property_vector("therm_cond", backend=self.backend),
+            self.S.get_layer_property_vector("heat_capacity", backend=self.backend),
+            self.S.get_layer_property_vector("sub_system_coupling", backend=self.backend),
+            densities,
+            indices,
+            dAdz,
+            fluence,
+            delay_pump,
+            pulse_width,
+            self._boundary_conditions["top_type"],
+            self._boundary_conditions["top_value"],
+            self._boundary_conditions["bottom_type"],
+            self._boundary_conditions["bottom_value"],
+            self.ode_options
+        )
+
+        temp_map = np.array(temp_map).reshape([M, N, K], order="F")
 
         if np.any(fluence):
             self.disp_message(
