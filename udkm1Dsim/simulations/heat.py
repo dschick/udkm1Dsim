@@ -37,6 +37,7 @@ from scipy.optimize import brentq
 from ..helpers import finderb, make_hash_md5
 from ..structures.layers import Layer
 from .simulation import Simulation
+from .solvers import HAS_NUMBA
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -1152,7 +1153,8 @@ class Heat(Simulation):
                             d_start,
                             self.S.get_layer_property_vector("therm_cond", backend="numba"),
                             self.S.get_layer_property_vector("heat_capacity", backend="numba"),
-                            self.S.get_layer_property_vector("sub_system_coupling", backend="numba"),
+                            self.S.get_layer_property_vector("sub_system_coupling",
+                                                             backend="numba"),
                             densities,
                             indices,
                             dAdz,
@@ -1287,20 +1289,13 @@ class Heat(Simulation):
 
     @backend.setter
     def backend(self, backend):
-        if backend in ["scipy", "numba"]:
-            self._backend = backend
-        else:
-            warnings.warn("Backend must be either _scipy_ or _matlab_. Set to _scipy_ default!")
-            self._backend = "scipy"
+        if backend not in ["scipy", "numba"]:
+            raise ValueError("Backend must be either 'scipy' or 'numba'. Set to 'scipy' default!")
 
-        if self._backend == "numba":
-            try:
-                import numba
-                self.numba = numba
-            except ImportError:
-                raise ImportError(
-                    "Cannot import 'numba - please change 'backend' to default 'scipy'"
-                )
+        if self._backend == "numba" and not HAS_NUMBA:
+            backend = "scipy"
+
+        self._backend = backend
 
     @property
     def excitation(self):
