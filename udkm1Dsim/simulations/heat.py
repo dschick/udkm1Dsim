@@ -112,6 +112,7 @@ class Heat(Simulation):
             "backside": False,
         }
         self._distances = np.array([])
+        self._backend = "scipy"
         self.boundary_types = ["isolator", "temperature", "flux"]
         self._boundary_conditions = {
             "top_type": 0,
@@ -1292,7 +1293,7 @@ class Heat(Simulation):
         if backend not in ["scipy", "numba"]:
             raise ValueError("Backend must be either 'scipy' or 'numba'. Set to 'scipy' default!")
 
-        if self._backend == "numba" and not HAS_NUMBA:
+        if backend == "numba" and not HAS_NUMBA:
             backend = "scipy"
 
         self._backend = backend

@@ -5,6 +5,7 @@ import pytest
 from pint.testing import assert_allclose
 
 from udkm1Dsim import Heat, u
+from udkm1Dsim.simulations.solvers import HAS_NUMBA
 
 # fixtures
 
@@ -227,54 +228,6 @@ def test_calc_energy_flux_map(heat):
     heat.calc_energy_flux_map(temp_map, delta_map, delays)
 
 
-def test_ode_func(heat):
-    t = np.r_[0:1]
-    u = np.r_[0:2]
-    N = 2
-    K = 1
-    d_x_grid = np.r_[0.5, 0.5]
-    x = np.r_[0:2]
-    thermal_conds = [[lambda T: 1], [lambda T: 1]]
-    heat_capacities = [[lambda T: 1], [lambda T: 1]]
-    sub_system_coupling = [[lambda T: 1], [lambda T: 1]]
-    densities = np.r_[1:3]
-    indices = np.r_[0:2]
-    dAdz = np.r_[0:2]
-    fluence = np.r_[1]
-    delay_pump = np.r_[0]
-    pulse_length = np.r_[1]
-    bc_top_type = "isolator"
-    bc_top_value = np.r_[1]
-    bc_bottom_type = "isolator"
-    bc_bottom_value = np.r_[1]
-    pbar = None
-    state = (0, 1)
-
-    heat.odefunc(
-        t,
-        u,
-        N,
-        K,
-        d_x_grid,
-        x,
-        thermal_conds,
-        heat_capacities,
-        sub_system_coupling,
-        densities,
-        indices,
-        dAdz,
-        fluence,
-        delay_pump,
-        pulse_length,
-        bc_top_type,
-        bc_top_value,
-        bc_bottom_type,
-        bc_bottom_value,
-        pbar,
-        state,
-    )
-
-
 def test_boundary_conditions(heat):
     heat.boundary_conditions = {"top_type": "isolator", "bottom_type": "isolator"}
     assert heat.boundary_conditions == {"top_type": "isolator", "bottom_type": "isolator"}
@@ -320,3 +273,29 @@ def test_boundary_conditions(heat):
 def test_distances(heat):
     heat.distances = np.r_[0:10e-9:1e-10] * u.nm
     assert_allclose(heat.distances, np.r_[0:10e-9:1e-10] * u.nm)
+
+
+def test_backend(heat):
+    assert heat.backend == "scipy"
+
+    with pytest.raises(ValueError):
+        heat.backend = "matlab"
+
+    heat.backend = "numba"
+    if HAS_NUMBA:
+        assert heat.backend == "numba"
+    else:
+        # without numba being installed the backend falls back to scipy
+        assert heat.backend == "scipy"
+
+    heat.backend = "scipy"
+    assert heat.backend == "scipy"
+
+
+def test_get_hash_is_backend_independent(heat):
+    """both backends must yield the same results, hence cached results must
+    not be invalidated by a change of the backend"""
+    hash_scipy = heat.get_hash(np.r_[0:10:1], 300)
+    heat.backend = "numba"
+    assert heat.get_hash(np.r_[0:10:1], 300) == hash_scipy
+    heat.backend = "scipy"

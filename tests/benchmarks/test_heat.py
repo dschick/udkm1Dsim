@@ -5,6 +5,7 @@ import pytest
 
 from udkm1Dsim import Heat, u
 from udkm1Dsim.helpers import finderb
+from udkm1Dsim.simulations.solvers import HeatDiffusionScipy
 
 # fixtures
 
@@ -73,7 +74,7 @@ def test_odefunc(benchmark, heat):
     sub_system_couplings = heat.S.get_layer_property_vector("sub_system_coupling")
 
     benchmark(
-        Heat.odefunc,
+        HeatDiffusionScipy.odefunc,
         0,
         init_temp,
         N,
