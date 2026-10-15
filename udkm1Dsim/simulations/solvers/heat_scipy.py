@@ -21,6 +21,21 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
+"""Scipy-based solver for the N-temperature heat diffusion model.
+
+This is the default backend of the :class:`Heat` simulation. The 1D heat
+diffusion equation is solved by the method of lines with
+``scipy.integrate.solve_ivp`` and :meth:`odefunc` as right-hand side.
+
+The temperature-dependent material parameters are evaluated once per unique
+layer for all of its grid points instead of once per grid point. The implicit
+solvers ``Radau`` and ``BDF`` are handed the :meth:`jacobian_sparsity`
+pattern, so that the finite-difference Jacobian costs a number of right-hand
+side evaluations, which scales with the number of sub-systems instead of the
+number of unknowns, and the linear systems are solved by a sparse LU.
+
+"""
+
 __all__ = ["jacobian_sparsity", "odefunc", "solve"]
 
 __docformat__ = "restructuredtext"
@@ -261,7 +276,7 @@ def odefunc(
             state[0] = t
 
     # reshape input temperature
-    u = np.array(u).reshape([N, K], order="F")
+    u = np.array(u, dtype=float).reshape([N, K], order="F")
     # initialize arrays
     dudt = np.zeros([N, K])
     ks = np.zeros([N, K])
