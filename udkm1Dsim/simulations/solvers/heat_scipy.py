@@ -253,7 +253,7 @@ def odefunc(
         )
     else:  # isolator
         dudt[-1, :] = (
-            (ks[-1, :] * (u[-1, :] - u[-2, :]) / d_x_grid[-1] ** 2 + source[-1, :])
+            (ks[-1, :] * (u[-2, :] - u[-1, :]) / d_x_grid[-1] ** 2 + source[-1, :])
             / cs[-1, :]
             / rhos[-1]
         )
