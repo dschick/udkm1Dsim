@@ -21,16 +21,20 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ["odefunc", "solve"]
+__all__ = ["jacobian_sparsity", "odefunc", "solve"]
 
 __docformat__ = "restructuredtext"
 
 
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.sparse import diags, kron
 from tqdm.auto import tqdm
 
 from ...helpers import multi_gauss
+
+# solvers of solve_ivp that make use of a Jacobian sparsity pattern
+_IMPLICIT_METHODS = ("Radau", "BDF")
 
 
 def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
@@ -42,6 +46,12 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
     Solves the 1D heat diffusion equation for all sub-systems on the given
     spatial grid and delays using scipy's ``solve_ivp`` with
     :meth:`odefunc` as right-hand side.
+
+    The ``max_step`` of the ode solver is limited to a tenth of the shortest
+    pulse width of all excitations, so that the solver cannot step over a pump
+    pulse. For the implicit solvers ``Radau`` and ``BDF`` the
+    :meth:`jacobian_sparsity` pattern is handed to the solver, unless
+    ``jac`` or ``jac_sparsity`` is given in the ``ode_options``.
 
     Args:
         init_temp (ndarray[float]): initial temperature profile of shape
@@ -67,7 +77,8 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
         boundary_conditions (dict): boundary conditions with keys
             ``top_type``, ``top_value``, ``bottom_type``, and
             ``bottom_value``.
-        ode_options (dict): options passed to scipy's ``solve_ivp``.
+        ode_options (dict): options passed to scipy's ``solve_ivp``. A
+            given ``max_step`` is only decreased by the pulse widths.
         progress_bar (bool, optional): enable tqdm progress bar. Defaults
             to False.
 
@@ -91,6 +102,24 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
     else:  # without progressbar
         pbar = None
         state = None
+
+    options = dict(ode_options)
+    # an adaptive solver can choose a step larger than the pump pulse, where
+    # the source term is still zero, so the pulses are resolved with 10 steps
+    widths = np.atleast_1d(np.asarray(pulse_width, dtype=float))
+    widths = widths[(np.atleast_1d(np.asarray(fluence, dtype=float)) != 0) & (widths > 0)]
+    if widths.size > 0:
+        max_step = options.get("max_step")
+        max_step = np.inf if max_step is None else max_step
+        options["max_step"] = min(max_step, np.min(widths) / 10)
+    # the finite-difference Jacobian of the implicit solvers is calculated much
+    # faster on the sparsity pattern, which also enables a sparse LU
+    if (
+        options.get("method", "RK45") in _IMPLICIT_METHODS
+        and "jac" not in options
+        and "jac_sparsity" not in options
+    ):
+        options["jac_sparsity"] = jacobian_sparsity(N, K)
 
     sol = solve_ivp(
         odefunc,
@@ -118,12 +147,36 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
             state,
         ),
         t_eval=delays,
-        **ode_options,
+        **options,
     )
     if pbar is not None:  # close tqdm progressbar if used
         pbar.close()
 
     return np.array(sol.y.T).reshape([M, N, K], order='F')
+
+
+def jacobian_sparsity(N, K):
+    r"""jacobian_sparsity
+
+    Sparsity pattern of the Jacobian of :meth:`odefunc` for :math:`N` grid
+    points and :math:`K` sub-systems. The temperature of a grid point depends
+    on its own and its neighbours' temperatures of the same sub-system due to
+    the diffusion and on the temperatures of all sub-systems of its own and its
+    neighbouring grid points due to the sub-system coupling and the thermal
+    conductivities, which may take the temperatures of all sub-systems. The
+    unknowns are ordered grid point first per sub-system, as in the
+    column-major flattening of the :math:`N \times K` temperature array.
+
+    Args:
+        N (int): number of spatial grid points.
+        K (int): number of sub-systems.
+
+    Returns:
+        sparsity (scipy.sparse.csc_matrix): sparsity pattern.
+
+    """
+    tridiagonal = diags([np.ones(N - 1), np.ones(N), np.ones(N - 1)], [-1, 0, 1], shape=(N, N))
+    return kron(np.ones((K, K)), tridiagonal, format="csc")
 
 
 def odefunc(
