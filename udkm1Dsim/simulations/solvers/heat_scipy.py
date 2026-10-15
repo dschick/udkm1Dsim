@@ -34,7 +34,7 @@ from ...helpers import multi_gauss
 
 
 def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
-          therm_conds, heat_capacities, sub_system_couplings,
+          therm_conds, therm_cond_takes_vector, heat_capacities, sub_system_couplings,
           densities, indices, dAdz, boundary_conditions, ode_options,
           progress_bar=False):
     """solve
@@ -53,6 +53,9 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
         fluence (ndarray[float]): excitation fluences [J/m²].
         therm_conds (list[list[@lambda]]): T-dependent thermal conductivity
             function handles of all layers and sub-systems.
+        therm_cond_takes_vector (list[list[bool]]): true if the thermal
+            conductivity function handle must be called with the temperatures
+            of all sub-systems instead of a scalar temperature.
         heat_capacities (list[list[@lambda]]): T-dependent heat capacity
             function handles of all layers and sub-systems.
         sub_system_couplings (list[list[@lambda]]): T-dependent sub-system
@@ -95,6 +98,7 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
             K,
             d_distances,
             therm_conds,
+            therm_cond_takes_vector,
             heat_capacities,
             sub_system_couplings,
             densities[indices],
@@ -126,6 +130,7 @@ def odefunc(
     K,
     d_x_grid,
     thermal_conds,
+    therm_cond_takes_vector,
     heat_capacities,
     sub_system_coupling,
     densities,
@@ -153,6 +158,9 @@ def odefunc(
         d_x_grid (ndarray[float]): derivative of spatial grid [m].
         thermal_conds (list[list[@lambda]]): T-dependent thermal
             conductivity function handles of all layers and sub-systems.
+        therm_cond_takes_vector (list[list[bool]]): true if the thermal
+            conductivity function handle must be called with the temperatures
+            of all sub-systems instead of a scalar temperature.
         heat_capacities (list[list[@lambda]]): T-dependent heat capacity
             function handles of all layers and sub-systems.
         sub_system_coupling (list[list[@lambda]]): T-dependent sub-system
@@ -213,12 +221,12 @@ def odefunc(
     for ii in range(N):
         idx = indices[ii]
         for iii in range(K):
-            try:
-                # temperature argument should be scalar
-                ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
-            except (IndexError, TypeError):
-                # temperature argument should be a vector
+            if therm_cond_takes_vector[idx][iii]:
+                # temperature argument is a vector
                 ks[ii, iii] = thermal_conds[idx][iii](u[ii, :])
+            else:
+                # temperature argument is a scalar
+                ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
 
             cs[ii, iii] = heat_capacities[idx][iii](u[ii, iii])
             source[ii, iii] = source[ii, iii] + sub_system_coupling[idx][iii](u[ii, :])

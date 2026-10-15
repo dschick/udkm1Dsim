@@ -13,8 +13,8 @@ def test_ode_func():
     N = 2
     K = 1
     d_x_grid = np.r_[0.5, 0.5]
-    x = np.r_[0:2]
     thermal_conds = [[lambda T: 1], [lambda T: 1]]
+    therm_cond_takes_vector = [[False], [False]]
     heat_capacities = [[lambda T: 1], [lambda T: 1]]
     sub_system_coupling = [[lambda T: 1], [lambda T: 1]]
     densities = np.r_[1:3]
@@ -36,8 +36,8 @@ def test_ode_func():
         N,
         K,
         d_x_grid,
-        x,
         thermal_conds,
+        therm_cond_takes_vector,
         heat_capacities,
         sub_system_coupling,
         densities,
