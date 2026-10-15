@@ -209,6 +209,7 @@ class TemperatureParameter(Parameter):
         self._functional = []
         self._functional_backend = ""
         self._num_sub_systems = 0
+        self._takes_temperature_vector = []
         self._integral = []
         self._integral_expr = []
         super().__init__(unit, magnitude=magnitude, name=name)
@@ -221,6 +222,13 @@ class TemperatureParameter(Parameter):
     def magnitude(self, value):
         # here the sympy expression is stored
         self._magnitude = self.parse_input(value)
+        # an expression takes the temperature vector of all sub-systems for
+        # more than 1 variable or "_" in its name
+        self._takes_temperature_vector = [
+            len(expression.free_symbols) > 1
+            or any("_" in s.name for s in expression.free_symbols)
+            for expression in self._magnitude
+        ]
         # reset of dependent parameters on change
         self._functional = []
         self._functional_backend = ""
@@ -228,6 +236,12 @@ class TemperatureParameter(Parameter):
         self._integral_expr = []
         if self._caller is not None:
             self._caller._update_depending()
+
+    @property
+    def takes_temperature_vector(self):
+        """list[bool]: true if the functional of a sub-system must be called
+        with the temperatures of all sub-systems instead of a scalar."""
+        return self._takes_temperature_vector
 
     @property
     def functional(self):
@@ -255,20 +269,19 @@ class TemperatureParameter(Parameter):
             # clear possible old functionals
             self._functional = []
 
-            for expression in self._magnitude:
-                is_vector = False
+            for expression, takes_temperature_vector in zip(
+                self._magnitude, self._takes_temperature_vector
+            ):
                 syms = sorted(expression.free_symbols, key=lambda s: s.name)
                 if len(syms) == 0:
                     # constant value
                     syms = ["T"]
-                elif len(syms) > 1 or any("_" in s.name for s in expression.free_symbols):
-                    # is a vector for more than 1 variables or "_" in its name
-                    is_vector = True
+                elif takes_temperature_vector:
                     syms = symarray("T", self._num_sub_systems)
 
-                if is_vector or backend == "numba":
+                if takes_temperature_vector or backend == "numba":
                     body = NumPyPrinter().doprint(expression)
-                    if is_vector:
+                    if takes_temperature_vector:
                         unpack = "".join(
                             f"    T_{i} = T[{i}]\n" for i in range(self._num_sub_systems)
                         )
