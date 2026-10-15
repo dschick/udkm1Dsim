@@ -144,7 +144,7 @@ class Heat(Simulation):
             ["excitation multilayer absorption", self.excitation["multilayer_absorption"]],
             ["excitation backside", self.excitation["backside"]],
             ["heat diffusion", self.heat_diffusion],
-            ['backend', self.backend],
+            ["backend", self.backend],
             ["interpolate at interfaces", self.intp_at_interface],
             [
                 "distances",
@@ -1099,52 +1099,41 @@ class Heat(Simulation):
 
         """
         t1 = time()
-        M = len(delays)
-        K = self.S.num_sub_systems
         backside = self._excitation["backside"]
         init_temp = self.check_initial_temperature(init_temp, distances)
         d_start, _, _ = self.S.get_distances_of_layers(False)
 
-        d_distances = np.diff(distances)
-        N = len(distances)
         if np.any(fluence):
             dAdz = self.get_absorption_profile(distances=distances, backside=backside)
         else:
             dAdz = np.zeros_like(distances)
 
+        # indices of the actual layers in respect to the spatial grid
         indices = finderb(distances, d_start)
         densities = self.S.get_layer_property_vector("_density")
 
-        if self.backend == 'numba':
+        if self.backend == "numba":
             from .solvers.heat_numba import solve
         else:
             from .solvers.heat_scipy import solve
 
-        temp_map = solve(
-            self.progress_bar,
-            delays,
-            N,
-            K,
-            init_temp,
-            d_distances,
-            d_start,
-            self.S.get_layer_property_vector("therm_cond", backend=self.backend),
-            self.S.get_layer_property_vector("heat_capacity", backend=self.backend),
-            self.S.get_layer_property_vector("sub_system_coupling", backend=self.backend),
-            densities,
-            indices,
-            dAdz,
-            fluence,
-            delay_pump,
-            pulse_width,
-            self._boundary_conditions["top_type"],
-            self._boundary_conditions["top_value"],
-            self._boundary_conditions["bottom_type"],
-            self._boundary_conditions["bottom_value"],
-            self.ode_options
-        )
-
-        temp_map = np.array(temp_map).reshape([M, N, K], order="F")
+        temp_map = solve(init_temp,
+                         distances,
+                         delays,
+                         delay_pump,
+                         pulse_width,
+                         fluence,
+                         self.S.get_layer_property_vector("therm_cond", backend=self.backend),
+                         self.S.get_layer_property_vector("heat_capacity", backend=self.backend),
+                         self.S.get_layer_property_vector("sub_system_coupling",
+                                                          backend=self.backend),
+                         densities,
+                         indices,
+                         dAdz,
+                         self._boundary_conditions,
+                         self.ode_options,
+                         self.progress_bar
+                    )
 
         if np.any(fluence):
             self.disp_message(

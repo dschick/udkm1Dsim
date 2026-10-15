@@ -33,29 +33,10 @@ from tqdm.auto import tqdm
 from ...helpers import multi_gauss
 
 
-def solve(
-    progress_bar,
-    delays,
-    N,
-    K,
-    init_temp,
-    d_distances,
-    d_start,
-    therm_conds,
-    heat_capacities,
-    sub_system_couplings,
-    densities,
-    indices,
-    dAdz,
-    fluence,
-    delay_pump,
-    pulse_width,
-    bc_top_type,
-    bc_top_value,
-    bc_bottom_type,
-    bc_bottom_value,
-    ode_options,
-):
+def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
+          therm_conds, heat_capacities, sub_system_couplings,
+          densities, indices, dAdz, boundary_conditions, ode_options,
+          progress_bar=False):
     """solve
 
     Solves the 1D heat diffusion equation for all sub-systems on the given
@@ -95,6 +76,11 @@ def solve(
         shape (M, N*K) with M delays, flattened in Fortran order.
 
     """
+    M = len(delays)
+    N = np.size(init_temp, 0)
+    K = np.size(init_temp, 1)
+    d_distances = np.diff(distances)
+
     if progress_bar:  # with tqdm progressbar
         pbar = tqdm()
         pbar.set_description(f"Delay = {delays[0] * 1e12:.3f} ps")
@@ -111,7 +97,6 @@ def solve(
             N,
             K,
             d_distances,
-            d_start,
             therm_conds,
             heat_capacities,
             sub_system_couplings,
@@ -121,10 +106,10 @@ def solve(
             fluence,
             delay_pump,
             pulse_width,
-            bc_top_type,
-            bc_top_value,
-            bc_bottom_type,
-            bc_bottom_value,
+            boundary_conditions['top_type'],
+            boundary_conditions['top_value'],
+            boundary_conditions['bottom_type'],
+            boundary_conditions['bottom_value'],
             pbar,
             state,
         ),
@@ -134,7 +119,8 @@ def solve(
     if pbar is not None:  # close tqdm progressbar if used
         pbar.close()
 
-    return sol.y.T
+    return np.array(sol.y.T).reshape([M, N, K], order='F')
+
 
 def odefunc(
     t,
@@ -142,7 +128,6 @@ def odefunc(
     N,
     K,
     d_x_grid,
-    x,
     thermal_conds,
     heat_capacities,
     sub_system_coupling,
@@ -254,9 +239,7 @@ def odefunc(
         )
     else:  # isolator
         dudt[0, :] = (
-            (ks[0, :] * (u[1, :] - u[0, :]) / d_x_grid[0] ** 2 + source[0, :])
-            / cs[0, :]
-            / rhos[0]
+            (ks[0, :] * (u[1, :] - u[0, :]) / d_x_grid[0] ** 2 + source[0, :]) / cs[0, :] / rhos[0]
         )
 
     if bc_bottom_type == 1:  # temperature
@@ -264,8 +247,7 @@ def odefunc(
     elif bc_bottom_type == 2:  # flux
         dudt[-1, :] = (
             (
-                (bc_bottom_value - ks[-1, :] * (u[-1, :] - u[-2, :]) / d_x_grid[-1])
-                / d_x_grid[-1]
+                (bc_bottom_value - ks[-1, :] * (u[-1, :] - u[-2, :]) / d_x_grid[-1]) / d_x_grid[-1]
                 + source[-1, :]
             )
             / cs[-1, :]
