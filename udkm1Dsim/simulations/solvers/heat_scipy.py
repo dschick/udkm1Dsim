@@ -258,19 +258,20 @@ def odefunc(
             / rhos[-1]
         )
 
-    # calculate derivative
-    for ii in range(1, N - 1):
-        dudt[ii, :] = (
+    # calculate derivative of the interior nodes
+    d_lower = d_x_grid[:-1, np.newaxis]
+    d_upper = d_x_grid[1:, np.newaxis]
+    dudt[1:-1, :] = (
+        (
             (
-                (
-                    ks[ii + 1, :] * (u[ii + 1, :] - u[ii, :]) / (d_x_grid[ii])
-                    - ks[ii, :] * (u[ii, :] - u[ii - 1, :]) / (d_x_grid[ii - 1])
-                )
-                / ((d_x_grid[ii] + d_x_grid[ii - 1]) / 2)
-                + source[ii, :]
+                ks[2:, :] * (u[2:, :] - u[1:-1, :]) / d_upper
+                - ks[1:-1, :] * (u[1:-1, :] - u[:-2, :]) / d_lower
             )
-            / cs[ii, :]
-            / rhos[ii]
+            / ((d_upper + d_lower) / 2)
+            + source[1:-1, :]
         )
+        / cs[1:-1, :]
+        / rhos[1:-1, np.newaxis]
+    )
 
     return np.reshape(dudt, K * N, order="F")
