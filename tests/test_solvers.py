@@ -18,7 +18,7 @@ def test_ode_func():
     heat_capacities = [[lambda T: 1], [lambda T: 1]]
     sub_system_coupling = [[lambda T: 1], [lambda T: 1]]
     densities = np.r_[1:3]
-    indices = np.r_[0:2]
+    groups = [(0, np.r_[0]), (1, np.r_[1])]
     dAdz = np.r_[0:2]
     fluence = np.r_[1]
     delay_pump = np.r_[0]
@@ -41,7 +41,7 @@ def test_ode_func():
         heat_capacities,
         sub_system_coupling,
         densities,
-        indices,
+        groups,
         dAdz,
         fluence,
         delay_pump,

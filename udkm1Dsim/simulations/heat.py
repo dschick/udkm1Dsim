@@ -1108,9 +1108,21 @@ class Heat(Simulation):
         else:
             dAdz = np.zeros_like(distances)
 
-        # indices of the actual layers in respect to the spatial grid
-        indices = finderb(distances, d_start)
-        densities = self.S.get_layer_property_vector("_density")
+        # indices of the unique layers in respect to the spatial grid, so that
+        # the solver can group the grid points of identical layers
+        _, unique_layers = self.S.get_unique_layers()
+        unique_indices = np.asarray(self.S.get_layer_vectors()[0], dtype=int)
+        indices = unique_indices[finderb(distances, d_start)]
+        # properties of the unique layers
+        therm_conds = [layer.thermal.therm_cond.get_functional(self.backend)
+                       for layer in unique_layers]
+        therm_cond_takes_vector = [layer.thermal.therm_cond.takes_temperature_vector
+                                   for layer in unique_layers]
+        heat_capacities = [layer.thermal.heat_capacity.get_functional(self.backend)
+                           for layer in unique_layers]
+        sub_system_couplings = [layer.thermal.sub_system_coupling.get_functional(self.backend)
+                                for layer in unique_layers]
+        densities = np.array([layer.structural.density.magnitude for layer in unique_layers])
 
         if self.backend == "numba":
             from .solvers.heat_numba import solve
@@ -1123,14 +1135,10 @@ class Heat(Simulation):
                          delay_pump,
                          pulse_width,
                          fluence,
-                         self.S.get_layer_property_vector("thermal.therm_cond.functional",
-                                                          backend=self.backend),
-                         self.S.get_layer_property_vector(
-                             "thermal.therm_cond.takes_temperature_vector"),
-                         self.S.get_layer_property_vector("thermal.heat_capacity.functional",
-                                                          backend=self.backend),
-                         self.S.get_layer_property_vector("thermal.sub_system_coupling.functional",
-                                                          backend=self.backend),
+                         therm_conds,
+                         therm_cond_takes_vector,
+                         heat_capacities,
+                         sub_system_couplings,
                          densities,
                          indices,
                          dAdz,

@@ -52,16 +52,16 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
         pulse_width (ndarray[float]): pulse widths of the excitations [s].
         fluence (ndarray[float]): excitation fluences [J/m²].
         therm_conds (list[list[@lambda]]): T-dependent thermal conductivity
-            function handles of all layers and sub-systems.
+            function handles of all unique layers and sub-systems.
         therm_cond_takes_vector (list[list[bool]]): true if the thermal
             conductivity function handle must be called with the temperatures
             of all sub-systems instead of a scalar temperature.
         heat_capacities (list[list[@lambda]]): T-dependent heat capacity
-            function handles of all layers and sub-systems.
+            function handles of all unique layers and sub-systems.
         sub_system_couplings (list[list[@lambda]]): T-dependent sub-system
-            coupling function handles of all layers and sub-systems.
-        densities (ndarray[float]): densities of all layers [kg/m³].
-        indices (ndarray[int]): indices of actual layers in respect to
+            coupling function handles of all unique layers and sub-systems.
+        densities (ndarray[float]): densities of all unique layers [kg/m³].
+        indices (ndarray[int]): indices of unique layers in respect to
             interpolated spatial grid.
         dAdz (ndarray[float]): differential absorption profile [1/m].
         boundary_conditions (dict): boundary conditions with keys
@@ -80,6 +80,9 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
     N = np.size(init_temp, 0)
     K = np.size(init_temp, 1)
     d_distances = np.diff(distances)
+    # group the grid points by layer to evaluate the material parameters of a
+    # layer for all of its grid points at once
+    groups = [(idx, np.flatnonzero(indices == idx)) for idx in np.unique(indices)]
 
     if progress_bar:  # with tqdm progressbar
         pbar = tqdm()
@@ -102,7 +105,7 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
             heat_capacities,
             sub_system_couplings,
             densities[indices],
-            indices,
+            groups,
             dAdz,
             fluence,
             delay_pump,
@@ -134,7 +137,7 @@ def odefunc(
     heat_capacities,
     sub_system_coupling,
     densities,
-    indices,
+    groups,
     dAdz,
     fluence,
     delay_pump,
@@ -167,8 +170,8 @@ def odefunc(
             coupling function handles of all layers and sub-systems.
         densities (ndarray[float]): densities at each spatial grid point
             [kg/m³].
-        indices (ndarray[int]): indices of actual layers in respect to
-            interpolated spatial grid.
+        groups (list[tuple]): layer index and indices of its grid points
+            for each layer.
         dAdz (ndarray[float]): differential absorption profile [1/m].
         fluence (ndarray[float]): excitation fluences [J/m²].
         delay_pump (ndarray[float]): delays of the excitations [s].
@@ -217,19 +220,21 @@ def odefunc(
     if np.any(fluence):
         source[:, 0] = dAdz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
 
-    # calculate temperature-dependent parameters
-    for ii in range(N):
-        idx = indices[ii]
+    # calculate temperature-dependent parameters once per layer for all of
+    # its grid points - vector arguments index the sub-systems along axis 0
+    for idx, sel in groups:
+        T_sel = u[sel, :]
+        T_vec = T_sel.T
         for iii in range(K):
             if therm_cond_takes_vector[idx][iii]:
                 # temperature argument is a vector
-                ks[ii, iii] = thermal_conds[idx][iii](u[ii, :])
+                ks[sel, iii] = thermal_conds[idx][iii](T_vec)
             else:
                 # temperature argument is a scalar
-                ks[ii, iii] = thermal_conds[idx][iii](u[ii, iii])
+                ks[sel, iii] = thermal_conds[idx][iii](T_sel[:, iii])
 
-            cs[ii, iii] = heat_capacities[idx][iii](u[ii, iii])
-            source[ii, iii] = source[ii, iii] + sub_system_coupling[idx][iii](u[ii, :])
+            cs[sel, iii] = heat_capacities[idx][iii](T_sel[:, iii])
+            source[sel, iii] += sub_system_coupling[idx][iii](T_vec)
 
     # boundary conditions
     if bc_top_type == 1:  # temperature
