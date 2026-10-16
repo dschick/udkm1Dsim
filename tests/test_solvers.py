@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from udkm1Dsim.simulations.solvers import heat_scipy
+from udkm1Dsim.simulations.solvers import heat_scipy, phonon_scipy
 from udkm1Dsim.simulations.solvers.heat_scipy import jacobian_sparsity, odefunc
 
 # tests
@@ -184,3 +184,41 @@ def test_solve_max_step_and_jac_sparsity(monkeypatch):
     # a user-defined jacobian is not overwritten
     opts = run({"method": "BDF", "jac_sparsity": "user"}, np.r_[0, 0], np.r_[0, 0])
     assert opts["jac_sparsity"] == "user"
+
+
+def test_phonon_solve_max_step(monkeypatch):
+    captured = {}
+
+    def fake_solve_ivp(fun, t_span, y0, args, t_eval, **options):
+        captured.update(options)
+        return SimpleNamespace(y=np.tile(y0, (len(t_eval), 1)).T)
+
+    monkeypatch.setattr(phonon_scipy, "solve_ivp", fake_solve_ivp)
+
+    L = 4
+    masses = np.full(L, 1e-25)
+    spring_consts = np.full(L, 10.0)
+    dt_stab = phonon_scipy.stability_time_step(spring_consts, masses)
+    # highest eigenfrequency of the chain is bounded by sqrt(4 k / m)
+    assert dt_stab == pytest.approx(1 / np.sqrt(4 * 10.0 / 1e-25))
+
+    def run(ode_options):
+        captured.clear()
+        phonon_scipy.solve(
+            np.zeros(2 * L),
+            np.r_[0:1e-12:11j],
+            np.zeros((L, 11)),
+            np.zeros(L),
+            spring_consts,
+            masses,
+            ode_options,
+        )
+        return captured
+
+    # explicit solvers are limited to the stability time step
+    assert run({"method": "RK23", "max_step": np.inf})["max_step"] == dt_stab
+    assert run({"method": "RK45", "max_step": None})["max_step"] == dt_stab
+    # a smaller max_step of the user is kept
+    assert run({"method": "RK45", "max_step": dt_stab / 2})["max_step"] == dt_stab / 2
+    # implicit solvers are not limited
+    assert run({"method": "Radau", "max_step": np.inf})["max_step"] == np.inf

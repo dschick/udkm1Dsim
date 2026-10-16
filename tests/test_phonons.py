@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from udkm1Dsim import Phonon, PhononAna, PhononNum, u
+from udkm1Dsim.simulations.solvers import HAS_NUMBA
 
 # fixtures
 
@@ -57,7 +58,18 @@ def distances(structure):
 
 @pytest.fixture(scope="module")
 def temp_map(delays, distances):
-    return np.zeros((len(delays), len(distances)))
+    # 100 K step-like heating of the top 20 layers at t = 0
+    t = delays.to("s").magnitude
+    temp_map = 300 * np.ones((len(delays), len(distances)))
+    temp_map[np.ix_(t >= 0, np.r_[0:20])] += 100
+    return temp_map
+
+
+@pytest.fixture(scope="module")
+def delta_temp_map(temp_map):
+    delta_temp_map = np.zeros_like(temp_map)
+    delta_temp_map[1:] = np.diff(temp_map, axis=0)
+    return delta_temp_map
 
 
 @pytest.fixture(scope="module")
@@ -75,8 +87,8 @@ def test_phonon_str(phonon):
     phonon.__str__()
 
 
-def test_get_hash(phonon, delays, distances, temp_map):
-    phonon.get_hash(delays, temp_map, temp_map)
+def test_get_hash(phonon, delays, distances, temp_map, delta_temp_map):
+    phonon.get_hash(delays, temp_map, delta_temp_map)
 
 
 def test_get_all_strains_per_unique_layer(phonon, strain_map):
@@ -87,12 +99,12 @@ def test_get_reduced_strains_per_unique_layer(phonon, strain_map):
     assert np.allclose(phonon.get_reduced_strains_per_unique_layer(strain_map), [])
 
 
-def test_check_temp_maps(phonon, temp_map, delays):
-    phonon.check_temp_maps(temp_map, temp_map, delays)
+def test_check_temp_maps(phonon, temp_map, delays, delta_temp_map):
+    phonon.check_temp_maps(temp_map, delta_temp_map, delays)
 
 
-def test_calc_sticks_from_temp_map(phonon, temp_map):
-    phonon.calc_sticks_from_temp_map(temp_map, temp_map)
+def test_calc_sticks_from_temp_map(phonon, temp_map, delta_temp_map):
+    phonon.calc_sticks_from_temp_map(temp_map, delta_temp_map)
 
 
 # PhononNum
@@ -102,10 +114,60 @@ def test_phonon_num_str(phonon_num):
     phonon_num.__str__()
 
 
-def test_phonon_num_get_strain_map(phonon_num, delays, temp_map):
-    phonon_num.get_strain_map(delays, temp_map, temp_map)
+def test_phonon_num_get_strain_map(phonon_num, delays, temp_map, delta_temp_map):
+    phonon_num.get_strain_map(delays, temp_map, delta_temp_map)
     phonon_num.force_recalc = False
-    phonon_num.get_strain_map(delays, temp_map, temp_map)
+    phonon_num.get_strain_map(delays, temp_map, delta_temp_map)
+    phonon_num.force_recalc = True
+
+
+def test_phonon_num_backend(phonon_num):
+    assert phonon_num.backend == "scipy"
+
+    with pytest.raises(ValueError):
+        phonon_num.backend = "matlab"
+
+    phonon_num.backend = "numba"
+    if HAS_NUMBA:
+        assert phonon_num.backend == "numba"
+    else:
+        # without numba being installed the backend falls back to scipy
+        assert phonon_num.backend == "scipy"
+
+    phonon_num.backend = "scipy"
+    assert phonon_num.backend == "scipy"
+
+
+def test_phonon_num_get_hash_is_backend_independent(phonon_num, delays, temp_map, delta_temp_map):
+    """both backends must yield the same results, hence cached results must
+    not be invalidated by a change of the backend"""
+    hash_scipy = phonon_num.get_hash(delays, temp_map, delta_temp_map)
+    phonon_num.backend = "numba"
+    assert phonon_num.get_hash(delays, temp_map, delta_temp_map) == hash_scipy
+    phonon_num.backend = "scipy"
+
+
+@pytest.mark.skipif(not HAS_NUMBA, reason="numba is not installed")
+def test_phonon_num_backends_agree(phonon_num, delays, temp_map, delta_temp_map):
+    """the step-like heating of the top 20 layers launches the same strain
+    wave with both backends"""
+    ode_options = dict(phonon_num.ode_options)
+    phonon_num.ode_options.update({"rtol": 1e-8, "atol": 1e-12})
+    strain_maps = []
+    try:
+        for backend in ["scipy", "numba"]:
+            phonon_num.backend = backend
+            # calc_strain_map, since the cached results do not depend on the backend
+            strain_maps.append(phonon_num.calc_strain_map(delays, temp_map, delta_temp_map)[0])
+    finally:
+        phonon_num.backend = "scipy"
+        phonon_num.ode_options = ode_options
+
+    assert np.all(np.isfinite(strain_maps[1]))
+    # the heated layers expand by about 1e-3 and launch a strain wave
+    assert np.max(strain_maps[0]) > 5e-4
+    assert np.max(np.abs(strain_maps[0][:, 20:])) > 1e-4
+    np.testing.assert_allclose(strain_maps[1], strain_maps[0], atol=1e-6)
 
 
 # PhononAna
@@ -115,12 +177,12 @@ def test_phonon_ana_str(phonon_ana):
     phonon_ana.__str__()
 
 
-def test_phonon_ana_get_strain_map(phonon_ana, delays, temp_map):
-    phonon_ana.get_strain_map(delays, temp_map, temp_map)
+def test_phonon_ana_get_strain_map(phonon_ana, delays, temp_map, delta_temp_map):
+    phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
     phonon_ana.force_recalc = False
-    phonon_ana.get_strain_map(delays, temp_map, temp_map)
+    phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
 
 
-def test_phonon_ana_get_energy_per_eigenmode(phonon_ana, delays, temp_map):
-    _, A, B = phonon_ana.get_strain_map(delays, temp_map, temp_map)
+def test_phonon_ana_get_energy_per_eigenmode(phonon_ana, delays, temp_map, delta_temp_map):
+    _, A, B = phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
     phonon_ana.get_energy_per_eigenmode(A, B)

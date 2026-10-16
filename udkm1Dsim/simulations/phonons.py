@@ -25,15 +25,16 @@ __all__ = ["Phonon", "PhononNum", "PhononAna"]
 
 __docformat__ = "restructuredtext"
 
+import warnings
 from os import path
 from time import time
 
 import numpy as np
-from scipy.integrate import solve_ivp
-from tqdm.auto import tqdm, trange
+from tqdm.auto import trange
 
-from ..helpers import finderb, make_hash_md5
+from ..helpers import make_hash_md5
 from .simulation import Simulation
+from .solvers import HAS_NUMBA, phonon_scipy
 
 
 class Phonon(Simulation):
@@ -341,6 +342,7 @@ class PhononNum(Phonon):
         progress_bar (boolean): enable tqdm progress bar.
         only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
+        backend (str): ode solver backend - either default scipy or numba.
 
     Attributes:
         S (Structure): sample structure to calculate simulations on.
@@ -352,14 +354,17 @@ class PhononNum(Phonon):
         progress_bar (boolean): enable tqdm progress bar.
         only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
-        ode_options (dict): options for scipy solve_ivp ode solver.
+        backend (str): ode solver backend - either default scipy or numba.
+        ode_options (dict): options for scipy solve_ivp ode solver. The numba
+            backend uses ``rtol``, ``atol``, ``max_step`` and ``first_step``.
 
     """
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
+        self.backend = kwargs.get("backend", "scipy")
         self.ode_options = {
-            "method": "RK23",
+            "method": "RK45",
             "first_step": None,
             "max_step": np.inf,
             "rtol": 1e-3,
@@ -369,8 +374,12 @@ class PhononNum(Phonon):
     def __str__(self, output=[]):
         """String representation of this class"""
 
+        output = [
+            ["backend", self.backend],
+        ] + output
+
         class_str = "Numerical Phonon simulation properties:\n\n"
-        class_str += super().__str__()
+        class_str += super().__str__(output)
 
         return class_str
 
@@ -494,206 +503,50 @@ class PhononNum(Phonon):
             thicknesses = self.S.get_layer_property_vector("_thickness")
             spring_consts = self.S.get_layer_property_vector("_spring_const")
             damping = self.S.get_layer_property_vector("_phonon_damping")
-            force_from_heat = PhononNum.calc_force_from_heat(sticks, spring_consts)
+            force_from_heat = phonon_scipy.force_from_heat(sticks, spring_consts)
 
-            # apply scipy's ode-solver together
-            if self.progress_bar:  # with tqdm progressbar
-                pbar = tqdm()
-                pbar.set_description(f"Delay = {delays[0] * 1e12:.3f} ps")
-                state = [delays[0], abs(delays[-1] - delays[0]) / 100]
-            else:  # without progressbar
-                pbar = None
-                state = None
+            if self.backend == "numba":
+                from .solvers.phonon_numba import solve
+            else:
+                from .solvers.phonon_scipy import solve
 
-            sol = solve_ivp(
-                PhononNum.ode_func,
-                [delays[0], delays[-1]],
+            X = solve(
                 x0,
-                args=(delays, force_from_heat, damping, spring_consts, masses, L, pbar, state),
-                t_eval=delays,
-                **self.ode_options,
+                delays,
+                force_from_heat,
+                damping,
+                spring_consts,
+                masses,
+                self.ode_options,
+                self.progress_bar,
             )
-
-            if pbar is not None:  # close tqdm progressbar if used
-                pbar.close()
 
             # calculate the strain_map as the second spacial derivative
             # of the layer shift x(t). The result of the ode solver
             # contains x(t) = X(:,1:N) and v(t) = X(:,N+1:end) the
             # positions and velocities of the layers, respectively.
-            temp = np.diff(sol.y[0:L, :].T, 1, 1)
+            temp = np.diff(X[:, 0:L], 1, 1)
             strain_map = np.zeros([temp.shape[0], temp.shape[1] + 1])
             strain_map[:, :-1] = temp
             strain_map = strain_map / np.tile(thicknesses[:], [np.size(temp, 0), 1])
-            velocities = sol.y[L:, :].T
+            velocities = X[:, L:]
         self.disp_message(f"Elapsed time for _strain_map_: {time() - t1:f} s")
         return strain_map, sticks_sub_systems, velocities
 
-    @staticmethod
-    def ode_func(
-        t, X, delays, force_from_heat, damping, spring_consts, masses, L, pbar=None, state=None
-    ):
-        r"""ode_func
+    @property
+    def backend(self):
+        return self._backend
 
-        Provides the according ode function for the ode solver which has to be
-        solved. The ode function has the input :math:`t` and :math:`X(t)` and
-        calculates the temporal derivative :math:`\dot{X}(t)` where the vector
+    @backend.setter
+    def backend(self, backend):
+        if backend not in ["scipy", "numba"]:
+            raise ValueError("Backend must be either 'scipy' or 'numba'!")
 
-        .. math::
+        if backend == "numba" and not HAS_NUMBA:
+            warnings.warn("Backend 'numba' is not installed. Fallback to default 'scipy'.")
+            backend = "scipy"
 
-            X(t) = [x(t) \; \dot{x}(t)] \quad \mbox{and } \quad
-            \dot{X}(t) = [\dot{x}(t) \; \ddot{x}(t)] .
-
-        :math:`x(t)` is the actual shift of each layer.
-
-        Args:
-            t (ndarray[float]): internal time steps of the ode solver.
-            X (ndarray[float]): internal variable of the ode solver.
-            delays (ndarray[float]): delays range of simulation [s].
-            force_from_heat (ndarray[float]): force due to thermal expansion.
-            damping (ndarray[float]): phonon damping.
-            spring_consts (ndarray[float]): spring constants of masses.
-            masses (ndarray[float]): masses of layers.
-            L (int): number of layers.
-            pbar (tqdm): tqdm progressbar.
-            state (list[float]): state variables for progress bar.
-
-        Returns:
-            X_prime (ndarray[float]): velocities and accelerations of masses.
-
-        """
-        if pbar is not None:
-            # set everything for the tqdm progressbar
-            last_t, dt = state
-            n = (t - last_t) / dt
-            if n >= 1:
-                pbar.update(1)
-                pbar.set_description(f"Delay = {t * 1e12:.3f} ps")
-                state[0] = t
-            elif n < 0:
-                state[0] = t
-
-        # start with the actual ode function
-        x = X[0:L]
-        v = X[L:]
-
-        # the output must be a column vector
-        X_prime = np.zeros([2 * L])
-
-        # accelerations = derivative of velocities
-        X_prime[L:] = (
-            PhononNum.calc_force_from_damping(v, damping, masses)
-            + PhononNum.calc_force_from_spring(
-                np.r_[np.diff(x), 0], np.r_[0, np.diff(x)], spring_consts
-            )
-            + force_from_heat[:, finderb(t, delays)].squeeze()
-        ) / masses
-
-        # velocities = derivative of positions
-        X_prime[0:L] = v
-
-        return X_prime
-
-    @staticmethod
-    def calc_force_from_spring(d_X1, d_X2, spring_consts):
-        r"""calc_force_from_spring
-
-        Calculates the force :math:`F_i^{spring}` acting on each mass due to
-        the displacement between the left and right site of that mass.
-
-        .. math::
-
-            F_i^{spring} = -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1})
-
-        We introduce-higher order inter-atomic potentials by
-
-        .. math::
-
-            k_i(x_i-x_{i-1}) = \sum_{j=1}^{M} k_i^j (x_i-x_{i-1})^j
-
-        where :math:`M` is the order of the spring constants.
-
-        Args:
-            d_X1 (ndarray[float]): left displacements.
-            d_X2 (ndarray[float]): right displacements.
-            spring_consts (ndarray[float]): spring constants of masses.
-
-        Returns:
-            F (ndarray[float]): force from springs.
-
-        """
-        try:
-            spring_order = np.size(spring_consts, 1)
-        except IndexError:
-            spring_order = 1
-
-        spring_consts = np.reshape(spring_consts, [np.size(spring_consts, 0), spring_order])
-
-        coeff1 = np.vstack((-spring_consts[0:-1, :], np.zeros([1, spring_order])))
-        coeff2 = np.vstack((np.zeros([1, spring_order]), -spring_consts[0:-1, :]))
-
-        temp1 = np.zeros([len(d_X1), spring_order])
-        temp2 = np.zeros([len(d_X1), spring_order])
-
-        for i in range(spring_order):
-            temp1[:, i] = d_X1 ** (i + 1)
-            temp2[:, i] = d_X2 ** (i + 1)
-
-        F = np.sum(coeff2 * temp2, 1) - np.sum(coeff1 * temp1, 1)
-
-        return F
-
-    @staticmethod
-    def calc_force_from_heat(sticks, spring_consts):
-        """calc_force_from_heat
-
-        Calculates the force acting on each mass due to the heat expansion,
-        which is modeled by spacer sticks.
-
-        Args:
-            sticks (ndarray[float]): spacer sticks.
-            spring_consts (ndarray[float]): spring constants of masses.
-
-        Returns:
-            F (ndarray[float]): force from thermal expansion.
-
-        """
-        M, L = np.shape(sticks)
-        F = np.zeros([L, M])
-        # traverse time
-        for i in range(M):
-            F[:, i] = -PhononNum.calc_force_from_spring(
-                np.hstack((sticks[i, 0 : L - 1], 0)),
-                np.hstack((0, sticks[i, 0 : L - 1])),
-                spring_consts,
-            )
-
-        return F
-
-    @staticmethod
-    def calc_force_from_damping(v, damping, masses):
-        r"""calc_force_from_damping
-
-        Calculates the force acting on each mass in a linear spring due to
-        damping (:math:`\gamma_i`) according to the shift velocity difference
-        :math:`v_{i}-v_{i-1}` with :math:`v_i(t) = \dot{x}_i(t)`:
-
-        .. math::
-
-            F_i^{damp} = \gamma_i(\dot{x}_i-\dot{x}_{i-1})
-
-        Args:
-            v (ndarray[float]): velocity of masses.
-            damping (ndarray[float]): phonon damping.
-            masses (ndarray[float]): masses.
-
-        Returns:
-            F (ndarray[float]): force from damping.
-
-        """
-        F = masses * damping * np.diff(v, 0)
-
-        return F
+        self._backend = backend
 
 
 class PhononAna(Phonon):
