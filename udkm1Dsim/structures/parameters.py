@@ -225,8 +225,7 @@ class TemperatureParameter(Parameter):
         # an expression takes the temperature vector of all sub-systems for
         # more than 1 variable or "_" in its name
         self._takes_temperature_vector = [
-            len(expression.free_symbols) > 1
-            or any("_" in s.name for s in expression.free_symbols)
+            len(expression.free_symbols) > 1 or any("_" in s.name for s in expression.free_symbols)
             for expression in self._magnitude
         ]
         # reset of dependent parameters on change
