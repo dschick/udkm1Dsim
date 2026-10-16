@@ -1114,14 +1114,19 @@ class Heat(Simulation):
         unique_indices = np.asarray(self.S.get_layer_vectors()[0], dtype=int)
         indices = unique_indices[finderb(distances, d_start)]
         # properties of the unique layers
-        therm_conds = [layer.thermal.therm_cond.get_functional(self.backend)
-                       for layer in unique_layers]
-        therm_cond_takes_vector = [layer.thermal.therm_cond.takes_temperature_vector
-                                   for layer in unique_layers]
-        heat_capacities = [layer.thermal.heat_capacity.get_functional(self.backend)
-                           for layer in unique_layers]
-        sub_system_couplings = [layer.thermal.sub_system_coupling.get_functional(self.backend)
-                                for layer in unique_layers]
+        therm_conds = [
+            layer.thermal.therm_cond.get_functional(self.backend) for layer in unique_layers
+        ]
+        therm_cond_takes_vector = [
+            layer.thermal.therm_cond.takes_temperature_vector for layer in unique_layers
+        ]
+        heat_capacities = [
+            layer.thermal.heat_capacity.get_functional(self.backend) for layer in unique_layers
+        ]
+        sub_system_couplings = [
+            layer.thermal.sub_system_coupling.get_functional(self.backend)
+            for layer in unique_layers
+        ]
         densities = np.array([layer.structural.density.magnitude for layer in unique_layers])
 
         if self.backend == "numba":
@@ -1129,23 +1134,24 @@ class Heat(Simulation):
         else:
             from .solvers.heat_scipy import solve
 
-        temp_map = solve(init_temp,
-                         distances,
-                         delays,
-                         delay_pump,
-                         pulse_width,
-                         fluence,
-                         therm_conds,
-                         therm_cond_takes_vector,
-                         heat_capacities,
-                         sub_system_couplings,
-                         densities,
-                         indices,
-                         dAdz,
-                         self._boundary_conditions,
-                         self.ode_options,
-                         self.progress_bar
-                    )
+        temp_map = solve(
+            init_temp,
+            distances,
+            delays,
+            delay_pump,
+            pulse_width,
+            fluence,
+            therm_conds,
+            therm_cond_takes_vector,
+            heat_capacities,
+            sub_system_couplings,
+            densities,
+            indices,
+            dAdz,
+            self._boundary_conditions,
+            self.ode_options,
+            self.progress_bar,
+        )
 
         if np.any(fluence):
             self.disp_message(

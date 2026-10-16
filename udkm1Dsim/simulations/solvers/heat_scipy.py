@@ -52,10 +52,24 @@ from ...helpers import multi_gauss
 _IMPLICIT_METHODS = ("Radau", "BDF")
 
 
-def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
-          therm_conds, therm_cond_takes_vector, heat_capacities, sub_system_couplings,
-          densities, indices, dAdz, boundary_conditions, ode_options,
-          progress_bar=False):
+def solve(
+    init_temp,
+    distances,
+    delays,
+    delay_pump,
+    pulse_width,
+    fluence,
+    therm_conds,
+    therm_cond_takes_vector,
+    heat_capacities,
+    sub_system_couplings,
+    densities,
+    indices,
+    dAdz,
+    boundary_conditions,
+    ode_options,
+    progress_bar=False,
+):
     """solve
 
     Solves the 1D heat diffusion equation for all sub-systems on the given
@@ -154,10 +168,10 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
             fluence,
             delay_pump,
             pulse_width,
-            boundary_conditions['top_type'],
-            boundary_conditions['top_value'],
-            boundary_conditions['bottom_type'],
-            boundary_conditions['bottom_value'],
+            boundary_conditions["top_type"],
+            boundary_conditions["top_value"],
+            boundary_conditions["bottom_type"],
+            boundary_conditions["bottom_value"],
             pbar,
             state,
         ),
@@ -167,7 +181,7 @@ def solve(init_temp, distances, delays, delay_pump, pulse_width, fluence,
     if pbar is not None:  # close tqdm progressbar if used
         pbar.close()
 
-    return np.array(sol.y.T).reshape([M, N, K], order='F')
+    return np.array(sol.y.T).reshape([M, N, K], order="F")
 
 
 def jacobian_sparsity(N, K):

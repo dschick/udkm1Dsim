@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 
 from udkm1Dsim import PhononNum, u
+from udkm1Dsim.simulations.solvers.phonon_scipy import force_from_heat as calc_force_from_heat
+from udkm1Dsim.simulations.solvers.phonon_scipy import odefunc
 
 # fixtures
 
@@ -68,11 +70,11 @@ def test_phonon_num_ode_func(benchmark, structure, delays, sticks):
     masses = structure.get_layer_property_vector("_mass_unit_area")
     spring_consts = structure.get_layer_property_vector("_spring_const")
     damping = structure.get_layer_property_vector("_phonon_damping")
-    force_from_heat = PhononNum.calc_force_from_heat(sticks, spring_consts)
+    force_from_heat = calc_force_from_heat(sticks, spring_consts)
     x0 = np.zeros([2 * L])
     delays = delays.to("s").magnitude
     benchmark(
-        PhononNum.ode_func,
+        odefunc,
         0,
         x0,
         delays,
