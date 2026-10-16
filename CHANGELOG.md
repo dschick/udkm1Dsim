@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Parameter and ParamterGroup classes organizing paramters closing [#162] by [#215]
 - enable Numba-compatible parameter functionals which are calculated on demand and are cached, closing [#206] and [#208]  by [#215]
 - VectorParameter enabling input and output in cartesian or polar coordinates closing [#138] by [#215]
+- `XrayDynMag.set_polarization` accepts elliptical incoming and outgoing polarizations to set both at the same time ([#217])
 
 [#185]: https://github.com/dschick/udkm1Dsim/pull/185
 [#188]: https://github.com/dschick/udkm1Dsim/pull/188
@@ -32,11 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [#206]: https://github.com/dschick/udkm1Dsim/issue/206
 [#208]: https://github.com/dschick/udkm1Dsim/issue/208
 [#215]: https://github.com/dschick/udkm1Dsim/pull/215
+[#217]: https://github.com/dschick/udkm1Dsim/pull/217
 
 ### Changed
 
 - substrates can be a single layer
 - Vacuum is default superstrate and substrate
+- `XrayDynMag` polarization setters check the consistency of the number of incoming and outgoing elliptical polarizations ([#217])
 
 ### Deprecated
 
@@ -45,9 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - bug in energy spectrum calculation of analytical phonons ([#212]) closing issue [#84]
+- bug for multiple elliptical polarizations in `XrayDynMag.inhomogeneous_reflectivity` ([#217]) closing issue [#196]
+- `XrayDynMag.get_hash` includes the elliptical polarization vectors ([#217])
 
 [#212]: https://github.com/dschick/udkm1Dsim/pull/212
 [#84]: https://github.com/dschick/udkm1Dsim/issue/84
+[#196]: https://github.com/dschick/udkm1Dsim/issue/196
 
 ### Security
 

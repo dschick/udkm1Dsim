@@ -1,0 +1,372 @@
+#!/usr/bin/env python
+
+# The MIT License (MIT)
+# Copyright (c) 2020 Daniel Schick
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+# OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+# OR OTHER DEALINGS IN THE SOFTWARE.
+
+"""Scipy-based solver for the N-temperature heat diffusion model.
+
+This is the default backend of the :class:`Heat` simulation. The 1D heat
+diffusion equation is solved by the method of lines with
+``scipy.integrate.solve_ivp`` and :meth:`odefunc` as right-hand side.
+
+The temperature-dependent material parameters are evaluated once per unique
+layer for all of its grid points instead of once per grid point. The implicit
+solvers ``Radau`` and ``BDF`` are handed the :meth:`jacobian_sparsity`
+pattern, so that the finite-difference Jacobian costs a number of right-hand
+side evaluations, which scales with the number of sub-systems instead of the
+number of unknowns, and the linear systems are solved by a sparse LU.
+
+"""
+
+__all__ = ["jacobian_sparsity", "odefunc", "solve"]
+
+__docformat__ = "restructuredtext"
+
+
+import numpy as np
+from scipy.integrate import solve_ivp
+from scipy.sparse import diags, kron
+from tqdm.auto import tqdm
+
+from ...helpers import multi_gauss
+
+# solvers of solve_ivp that make use of a Jacobian sparsity pattern
+_IMPLICIT_METHODS = ("Radau", "BDF")
+
+
+def solve(
+    init_temp,
+    distances,
+    delays,
+    delay_pump,
+    pulse_width,
+    fluence,
+    therm_conds,
+    therm_cond_takes_vector,
+    heat_capacities,
+    sub_system_couplings,
+    densities,
+    indices,
+    dAdz,
+    boundary_conditions,
+    ode_options,
+    progress_bar=False,
+):
+    """solve
+
+    Solves the 1D heat diffusion equation for all sub-systems on the given
+    spatial grid and delays using scipy's ``solve_ivp`` with
+    :meth:`odefunc` as right-hand side.
+
+    The ``max_step`` of the ode solver is limited to a tenth of the shortest
+    pulse width of all excitations, so that the solver cannot step over a pump
+    pulse. For the implicit solvers ``Radau`` and ``BDF`` the
+    :meth:`jacobian_sparsity` pattern is handed to the solver, unless
+    ``jac`` or ``jac_sparsity`` is given in the ``ode_options``.
+
+    Args:
+        init_temp (ndarray[float]): initial temperature profile of shape
+            (N, K) for N spatial grid points and K sub-systems [K].
+        distances (ndarray[float]): spatial grid for calculation [m].
+        delays (ndarray[float]): delays range of simulation [s].
+        delay_pump (ndarray[float]): delays of the excitations [s].
+        pulse_width (ndarray[float]): pulse widths of the excitations [s].
+        fluence (ndarray[float]): excitation fluences [J/m²].
+        therm_conds (list[list[@lambda]]): T-dependent thermal conductivity
+            function handles of all unique layers and sub-systems.
+        therm_cond_takes_vector (list[list[bool]]): true if the thermal
+            conductivity function handle must be called with the temperatures
+            of all sub-systems instead of a scalar temperature.
+        heat_capacities (list[list[@lambda]]): T-dependent heat capacity
+            function handles of all unique layers and sub-systems.
+        sub_system_couplings (list[list[@lambda]]): T-dependent sub-system
+            coupling function handles of all unique layers and sub-systems.
+        densities (ndarray[float]): densities of all unique layers [kg/m³].
+        indices (ndarray[int]): indices of unique layers in respect to
+            interpolated spatial grid.
+        dAdz (ndarray[float]): differential absorption profile [1/m].
+        boundary_conditions (dict): boundary conditions with keys
+            ``top_type``, ``top_value``, ``bottom_type``, and
+            ``bottom_value``.
+        ode_options (dict): options passed to scipy's ``solve_ivp``. A
+            given ``max_step`` is only decreased by the pulse widths.
+        progress_bar (bool, optional): enable tqdm progress bar. Defaults
+            to False.
+
+    Returns:
+        temp_map (ndarray[float]): spatio-temporal temperature map of
+        shape (M, N, K) for M delays [K].
+
+    """
+    M = len(delays)
+    N = np.size(init_temp, 0)
+    K = np.size(init_temp, 1)
+    d_distances = np.diff(distances)
+    # group the grid points by layer to evaluate the material parameters of a
+    # layer for all of its grid points at once
+    groups = [(idx, np.flatnonzero(indices == idx)) for idx in np.unique(indices)]
+
+    if progress_bar:  # with tqdm progressbar
+        pbar = tqdm()
+        pbar.set_description(f"Delay = {delays[0] * 1e12:.3f} ps")
+        state = [delays[0], abs(delays[-1] - delays[0]) / 100]
+    else:  # without progressbar
+        pbar = None
+        state = None
+
+    options = dict(ode_options)
+    # an adaptive solver can choose a step larger than the pump pulse, where
+    # the source term is still zero, so the pulses are resolved with 10 steps
+    widths = np.atleast_1d(np.asarray(pulse_width, dtype=float))
+    widths = widths[(np.atleast_1d(np.asarray(fluence, dtype=float)) != 0) & (widths > 0)]
+    if widths.size > 0:
+        max_step = options.get("max_step")
+        max_step = np.inf if max_step is None else max_step
+        options["max_step"] = min(max_step, np.min(widths) / 10)
+    # the finite-difference Jacobian of the implicit solvers is calculated much
+    # faster on the sparsity pattern, which also enables a sparse LU
+    if (
+        options.get("method", "RK45") in _IMPLICIT_METHODS
+        and "jac" not in options
+        and "jac_sparsity" not in options
+    ):
+        options["jac_sparsity"] = jacobian_sparsity(N, K)
+
+    sol = solve_ivp(
+        odefunc,
+        [delays[0], delays[-1]],
+        np.reshape(init_temp, K * N, order="F"),
+        args=(
+            N,
+            K,
+            d_distances,
+            therm_conds,
+            therm_cond_takes_vector,
+            heat_capacities,
+            sub_system_couplings,
+            densities[indices],
+            groups,
+            dAdz,
+            fluence,
+            delay_pump,
+            pulse_width,
+            boundary_conditions["top_type"],
+            boundary_conditions["top_value"],
+            boundary_conditions["bottom_type"],
+            boundary_conditions["bottom_value"],
+            pbar,
+            state,
+        ),
+        t_eval=delays,
+        **options,
+    )
+    if pbar is not None:  # close tqdm progressbar if used
+        pbar.close()
+
+    return np.array(sol.y.T).reshape([M, N, K], order="F")
+
+
+def jacobian_sparsity(N, K):
+    r"""jacobian_sparsity
+
+    Sparsity pattern of the Jacobian of :meth:`odefunc` for :math:`N` grid
+    points and :math:`K` sub-systems. The temperature of a grid point depends
+    on its own and its neighbours' temperatures of the same sub-system due to
+    the diffusion and on the temperatures of all sub-systems of its own and its
+    neighbouring grid points due to the sub-system coupling and the thermal
+    conductivities, which may take the temperatures of all sub-systems. The
+    unknowns are ordered grid point first per sub-system, as in the
+    column-major flattening of the :math:`N \times K` temperature array.
+
+    Args:
+        N (int): number of spatial grid points.
+        K (int): number of sub-systems.
+
+    Returns:
+        sparsity (scipy.sparse.csc_matrix): sparsity pattern.
+
+    """
+    tridiagonal = diags([np.ones(N - 1), np.ones(N), np.ones(N - 1)], [-1, 0, 1], shape=(N, N))
+    return kron(np.ones((K, K)), tridiagonal, format="csc")
+
+
+def odefunc(
+    t,
+    u,
+    N,
+    K,
+    d_x_grid,
+    thermal_conds,
+    therm_cond_takes_vector,
+    heat_capacities,
+    sub_system_coupling,
+    densities,
+    groups,
+    dAdz,
+    fluence,
+    delay_pump,
+    pulse_length,
+    bc_top_type,
+    bc_top_value,
+    bc_bottom_type,
+    bc_bottom_value,
+    pbar,
+    state,
+):
+    """odefunc
+
+    Ordinary differential equation that is solved for 1D heat diffusion.
+
+    Args:
+        t (float): internal time step of the ode solver [s].
+        u (ndarray[float]): internal variable of the ode solver.
+        N (int): number of spatial grid points.
+        K (int): number of sub-systems.
+        d_x_grid (ndarray[float]): derivative of spatial grid [m].
+        thermal_conds (list[list[@lambda]]): T-dependent thermal
+            conductivity function handles of all layers and sub-systems.
+        therm_cond_takes_vector (list[list[bool]]): true if the thermal
+            conductivity function handle must be called with the temperatures
+            of all sub-systems instead of a scalar temperature.
+        heat_capacities (list[list[@lambda]]): T-dependent heat capacity
+            function handles of all layers and sub-systems.
+        sub_system_coupling (list[list[@lambda]]): T-dependent sub-system
+            coupling function handles of all layers and sub-systems.
+        densities (ndarray[float]): densities at each spatial grid point
+            [kg/m³].
+        groups (list[tuple]): layer index and indices of its grid points
+            for each layer.
+        dAdz (ndarray[float]): differential absorption profile [1/m].
+        fluence (ndarray[float]): excitation fluences [J/m²].
+        delay_pump (ndarray[float]): delays of the excitations [s].
+        pulse_length (ndarray[float]): pulse widths of the excitations [s].
+        bc_top_type (int): top boundary type.
+        bc_top_value (ndarray[float]): top boundary value.
+        bc_bottom_type (int): bottom boundary type.
+        bc_bottom_value (ndarray[float]): bottom boundary value.
+        pbar (tqdm, None): tqdm progressbar or None if disabled.
+        state (list[float], None): last updated delay and update interval
+            of the progress bar or None if disabled.
+
+    Returns:
+        dudt (ndarray[float]): temporal derivative of internal variable.
+
+    """
+    # state is a list containing last updated time t:
+    # state = [last_t, dt]
+    # I used a list because its values can be carried between function
+    # calls throughout the ODE integration
+    if pbar is not None:
+        # set everything for the tqdm progressbar
+        last_t, dt = state
+        try:
+            n = int((float(np.asarray(t).item()) - last_t) / dt)
+        except ValueError:
+            n = 0
+
+        if n >= 1:
+            pbar.update(n)
+            pbar.set_description(f"Delay = {t * 1e12:.3f} ps")
+            state[0] = t
+        elif n < 0:
+            state[0] = t
+
+    # reshape input temperature
+    u = np.array(u, dtype=float).reshape([N, K], order="F")
+    # initialize arrays
+    dudt = np.zeros([N, K])
+    ks = np.zeros([N, K])
+    cs = np.zeros([N, K])
+    rhos = densities
+
+    # calculate external source
+    source = np.zeros([N, K])
+    if np.any(fluence):
+        source[:, 0] = dAdz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
+
+    # calculate temperature-dependent parameters once per layer for all of
+    # its grid points - vector arguments index the sub-systems along axis 0
+    for idx, sel in groups:
+        T_sel = u[sel, :]
+        T_vec = T_sel.T
+        for iii in range(K):
+            if therm_cond_takes_vector[idx][iii]:
+                # temperature argument is a vector
+                ks[sel, iii] = thermal_conds[idx][iii](T_vec)
+            else:
+                # temperature argument is a scalar
+                ks[sel, iii] = thermal_conds[idx][iii](T_sel[:, iii])
+
+            cs[sel, iii] = heat_capacities[idx][iii](T_sel[:, iii])
+            source[sel, iii] += sub_system_coupling[idx][iii](T_vec)
+
+    # boundary conditions
+    if bc_top_type == 1:  # temperature
+        u[0, :] = bc_top_value
+    elif bc_top_type == 2:  # flux
+        dudt[0, :] = (
+            (
+                (ks[0, :] * (u[1, :] - u[0, :]) / d_x_grid[0] + bc_top_value) / d_x_grid[0]
+                + source[0, :]
+            )
+            / cs[0, :]
+            / rhos[0]
+        )
+    else:  # isolator
+        dudt[0, :] = (
+            (ks[0, :] * (u[1, :] - u[0, :]) / d_x_grid[0] ** 2 + source[0, :]) / cs[0, :] / rhos[0]
+        )
+
+    if bc_bottom_type == 1:  # temperature
+        u[-1, :] = bc_bottom_value
+    elif bc_bottom_type == 2:  # flux
+        dudt[-1, :] = (
+            (
+                (bc_bottom_value - ks[-1, :] * (u[-1, :] - u[-2, :]) / d_x_grid[-1]) / d_x_grid[-1]
+                + source[-1, :]
+            )
+            / cs[-1, :]
+            / rhos[-1]
+        )
+    else:  # isolator
+        dudt[-1, :] = (
+            (ks[-1, :] * (u[-2, :] - u[-1, :]) / d_x_grid[-1] ** 2 + source[-1, :])
+            / cs[-1, :]
+            / rhos[-1]
+        )
+
+    # calculate derivative of the interior nodes
+    d_lower = d_x_grid[:-1, np.newaxis]
+    d_upper = d_x_grid[1:, np.newaxis]
+    dudt[1:-1, :] = (
+        (
+            (
+                ks[2:, :] * (u[2:, :] - u[1:-1, :]) / d_upper
+                - ks[1:-1, :] * (u[1:-1, :] - u[:-2, :]) / d_lower
+            )
+            / ((d_upper + d_lower) / 2)
+            + source[1:-1, :]
+        )
+        / cs[1:-1, :]
+        / rhos[1:-1, np.newaxis]
+    )
+
+    return np.reshape(dudt, K * N, order="F")

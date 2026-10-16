@@ -35,6 +35,7 @@ from sympy import integrate, lambdify, symarray, symbols, sympify
 from sympy.printing.numpy import NumPyPrinter
 
 from ..helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
+from ..simulations.solvers import HAS_NUMBA
 
 u = pint.get_application_registry()
 
@@ -208,6 +209,7 @@ class TemperatureParameter(Parameter):
         self._functional = []
         self._functional_backend = ""
         self._num_sub_systems = 0
+        self._takes_temperature_vector = []
         self._integral = []
         self._integral_expr = []
         super().__init__(unit, magnitude=magnitude, name=name)
@@ -220,6 +222,12 @@ class TemperatureParameter(Parameter):
     def magnitude(self, value):
         # here the sympy expression is stored
         self._magnitude = self.parse_input(value)
+        # an expression takes the temperature vector of all sub-systems for
+        # more than 1 variable or "_" in its name
+        self._takes_temperature_vector = [
+            len(expression.free_symbols) > 1 or any("_" in s.name for s in expression.free_symbols)
+            for expression in self._magnitude
+        ]
         # reset of dependent parameters on change
         self._functional = []
         self._functional_backend = ""
@@ -227,6 +235,12 @@ class TemperatureParameter(Parameter):
         self._integral_expr = []
         if self._caller is not None:
             self._caller._update_depending()
+
+    @property
+    def takes_temperature_vector(self):
+        """list[bool]: true if the functional of a sub-system must be called
+        with the temperatures of all sub-systems instead of a scalar."""
+        return self._takes_temperature_vector
 
     @property
     def functional(self):
@@ -254,20 +268,19 @@ class TemperatureParameter(Parameter):
             # clear possible old functionals
             self._functional = []
 
-            for expression in self._magnitude:
-                is_vector = False
+            for expression, takes_temperature_vector in zip(
+                self._magnitude, self._takes_temperature_vector
+            ):
                 syms = sorted(expression.free_symbols, key=lambda s: s.name)
                 if len(syms) == 0:
                     # constant value
                     syms = ["T"]
-                elif len(syms) > 1 or any("_" in s.name for s in expression.free_symbols):
-                    # is a vector for more than 1 variables or "_" in its name
-                    is_vector = True
+                elif takes_temperature_vector:
                     syms = symarray("T", self._num_sub_systems)
 
-                if is_vector or backend == "numba":
+                if takes_temperature_vector or backend == "numba":
                     body = NumPyPrinter().doprint(expression)
-                    if is_vector:
+                    if takes_temperature_vector:
                         unpack = "".join(
                             f"    T_{i} = T[{i}]\n" for i in range(self._num_sub_systems)
                         )
@@ -286,19 +299,18 @@ class TemperatureParameter(Parameter):
         return self._functional
 
     def _get_backend(self, backend):
-        _BACKENDS = ["scipy", "numba"]
-        if backend not in _BACKENDS:
-            raise ValueError(f"'{backend}' is not a valid backend and must be one of: {_BACKENDS}")
+        if backend not in ["scipy", "numba"]:
+            raise ValueError("Backend must be either 'scipy' or 'numba'!")
 
         if backend == "numba":
-            try:
+            if HAS_NUMBA:
                 from numba import njit
 
                 self._njit = njit
-            except ImportError:
-                raise ImportError(
-                    "Cannot import 'numba - please change 'backend' to default 'scipy'"
-                )
+            else:
+                warnings.warn("Backend 'numba' is not installed. Fallback to default 'scipy'.")
+                backend = "scipy"
+
         return backend
 
     @property

@@ -5,6 +5,7 @@ import pytest
 
 from udkm1Dsim import Heat, u
 from udkm1Dsim.helpers import finderb
+from udkm1Dsim.simulations.solvers.heat_scipy import odefunc
 
 # fixtures
 
@@ -60,31 +61,40 @@ def test_odefunc(benchmark, heat):
     K = heat.S.num_sub_systems
     d_start, _, _ = heat.S.get_distances_of_layers(False)
     d_distances = np.diff(distances)
-    indices = finderb(distances, d_start)
     dAdz = np.zeros_like(distances)
     fluence = 0
     delay_pump = 0
     pulse_width = 0
 
-    densities = heat.S.get_layer_property_vector("_density")
+    # prepare the inputs per unique layer as in Heat.calc_heat_diffusion
+    _, unique_layers = heat.S.get_unique_layers()
+    unique_indices = np.asarray(heat.S.get_layer_vectors()[0], dtype=int)
+    indices = unique_indices[finderb(distances, d_start)]
+    groups = [(idx, np.flatnonzero(indices == idx)) for idx in np.unique(indices)]
+    therm_conds = [layer.thermal.therm_cond.get_functional() for layer in unique_layers]
+    therm_cond_takes_vector = [
+        layer.thermal.therm_cond.takes_temperature_vector for layer in unique_layers
+    ]
+    heat_capacities = [layer.thermal.heat_capacity.get_functional() for layer in unique_layers]
+    sub_system_couplings = [
+        layer.thermal.sub_system_coupling.get_functional() for layer in unique_layers
+    ]
+    densities = np.array([layer.structural.density.magnitude for layer in unique_layers])
     init_temp = heat.check_initial_temperature(300, distances)
-    therm_conds = heat.S.get_layer_property_vector("therm_cond")
-    heat_capacities = heat.S.get_layer_property_vector("heat_capacity")
-    sub_system_couplings = heat.S.get_layer_property_vector("sub_system_coupling")
 
     benchmark(
-        Heat.odefunc,
+        odefunc,
         0,
         init_temp,
         N,
         K,
         d_distances,
-        d_start,
         therm_conds,
+        therm_cond_takes_vector,
         heat_capacities,
         sub_system_couplings,
         densities[indices],
-        indices,
+        groups,
         dAdz,
         fluence,
         delay_pump,
