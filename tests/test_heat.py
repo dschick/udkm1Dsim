@@ -213,6 +213,29 @@ def test_get_diffusion_temp_map(heat):
     heat.get_temp_map(delays, init_temp)
 
 
+@pytest.mark.skipif(not HAS_NUMBA, reason="numba is not installed")
+def test_get_diffusion_temp_map_numba(heat):
+    """the numba backend for the heat diffusion is not implemented, yet"""
+    heat.heat_diffusion = True
+    heat.excitation = {
+        "fluence": [10] * u.mJ / u.cm**2,
+        "delay_pump": [0] * u.ps,
+        "pulse_width": [0.1] * u.ps,
+        "wavelength": 800 * u.nm,
+        "polarization": "p",
+        "theta": 45 * u.deg,
+        "multilayer_absorption": True,
+        "backside": False,
+    }
+    heat.backend = "numba"
+    try:
+        # calc_temp_map, since the cached results do not depend on the backend
+        with pytest.raises(NotImplementedError):
+            heat.calc_temp_map(np.r_[-1:10:0.01] * u.ps, 300 * u.K)
+    finally:
+        heat.backend = "scipy"
+
+
 def test_calc_energy_map(heat):
     dists, _, _ = heat.S.get_distances_of_layers()
     temp_map = np.zeros((10, len(dists)))

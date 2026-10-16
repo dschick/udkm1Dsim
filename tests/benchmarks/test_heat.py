@@ -71,13 +71,13 @@ def test_odefunc(benchmark, heat):
     unique_indices = np.asarray(heat.S.get_layer_vectors()[0], dtype=int)
     indices = unique_indices[finderb(distances, d_start)]
     groups = [(idx, np.flatnonzero(indices == idx)) for idx in np.unique(indices)]
-    therm_conds = [layer.thermal.therm_cond.get_functional() for layer in unique_layers]
+    therm_conds = [layer.thermal.therm_cond.functional for layer in unique_layers]
     therm_cond_takes_vector = [
         layer.thermal.therm_cond.takes_temperature_vector for layer in unique_layers
     ]
-    heat_capacities = [layer.thermal.heat_capacity.get_functional() for layer in unique_layers]
+    heat_capacities = [layer.thermal.heat_capacity.functional for layer in unique_layers]
     sub_system_couplings = [
-        layer.thermal.sub_system_coupling.get_functional() for layer in unique_layers
+        layer.thermal.sub_system_coupling.functional for layer in unique_layers
     ]
     densities = np.array([layer.structural.density.magnitude for layer in unique_layers])
     init_temp = heat.check_initial_temperature(300, distances)

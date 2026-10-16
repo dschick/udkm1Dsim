@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
+import inspect
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-from udkm1Dsim.simulations.solvers import heat_scipy, phonon_scipy
+from udkm1Dsim.simulations.solvers import heat_numba, heat_scipy, phonon_scipy
 from udkm1Dsim.simulations.solvers.heat_scipy import jacobian_sparsity, odefunc
 
 # tests
@@ -222,3 +223,13 @@ def test_phonon_solve_max_step(monkeypatch):
     assert run({"method": "RK45", "max_step": dt_stab / 2})["max_step"] == dt_stab / 2
     # implicit solvers are not limited
     assert run({"method": "Radau", "max_step": np.inf})["max_step"] == np.inf
+
+
+def test_heat_numba_solve_not_implemented():
+    # same interface as the scipy solver, which the Heat class calls
+    scipy_params = list(inspect.signature(heat_scipy.solve).parameters)
+    numba_params = list(inspect.signature(heat_numba.solve).parameters)
+    assert numba_params[: len(scipy_params)] == scipy_params
+
+    with pytest.raises(NotImplementedError):
+        heat_numba.solve(*(None,) * 15)

@@ -32,10 +32,8 @@ import numpy as np
 import pint
 from scipy.integrate import quad
 from sympy import integrate, lambdify, symarray, symbols, sympify
-from sympy.printing.numpy import NumPyPrinter
 
 from ..helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
-from ..simulations.solvers import HAS_NUMBA
 
 u = pint.get_application_registry()
 
@@ -207,7 +205,6 @@ class TemperatureParameter(Parameter):
 
     def __init__(self, unit, magnitude=0.0, name=""):
         self._functional = []
-        self._functional_backend = ""
         self._num_sub_systems = 0
         self._takes_temperature_vector = []
         self._integral = []
@@ -230,7 +227,6 @@ class TemperatureParameter(Parameter):
         ]
         # reset of dependent parameters on change
         self._functional = []
-        self._functional_backend = ""
         self._integral = []
         self._integral_expr = []
         if self._caller is not None:
@@ -244,74 +240,26 @@ class TemperatureParameter(Parameter):
 
     @property
     def functional(self):
-        return self.get_functional()
+        """list[@lambda]: one callable per expression in ``magnitude``.
 
-    def get_functional(self, backend="scipy"):
-        """get_functional
-
-        Build (or fetch cached) callables for each expression in `magnitude`,
-        using the given backend.
-
-        Args:
-            backend (str): name of the backend to use ('scipy' or 'numba').
-                Defaults to 'scipy'.
-
-        Returns:
-            funcs (list[@lambda]): one callable per expression.
+        Scalar expressions are called with the temperature of their own
+        sub-system, expressions that take the temperature vector with the
+        temperatures of all sub-systems, which are unpacked along the first
+        axis.
 
         """
-        backend = self._get_backend(backend)
-
-        if self._functional == [] or self._functional_backend != backend:
-            # remember the backend that was used
-            self._functional_backend = backend
-            # clear possible old functionals
-            self._functional = []
-
-            for expression, takes_temperature_vector in zip(
-                self._magnitude, self._takes_temperature_vector
-            ):
-                syms = sorted(expression.free_symbols, key=lambda s: s.name)
-                if len(syms) == 0:
-                    # constant value
-                    syms = ["T"]
-                elif takes_temperature_vector:
-                    syms = symarray("T", self._num_sub_systems)
-
-                if takes_temperature_vector or backend == "numba":
-                    body = NumPyPrinter().doprint(expression)
-                    if takes_temperature_vector:
-                        unpack = "".join(
-                            f"    T_{i} = T[{i}]\n" for i in range(self._num_sub_systems)
-                        )
-                        src = f"def _f(T):\n{unpack}    return {body}\n"
-                    else:
-                        src = f"def _f(T):\n    return {body}\n"
-                    ns = {"numpy": np}
-                    exec(src, ns)
-                    f = ns["_f"]
-                    if backend == "numba":
-                        f = self._njit(fastmath=True, error_model="numpy")(f)
-                    self._functional.append(f)
-                else:
-                    self._functional.append(lambdify(syms, expression, modules="numpy"))
+        if self._functional == []:
+            # vector arguments are unpacked by a nested argument list
+            T_scalar = symbols("T")
+            T_vector = [list(symarray("T", self._num_sub_systems))]
+            self._functional = [
+                lambdify(T_vector if takes_vector else T_scalar, expression, modules="numpy")
+                for expression, takes_vector in zip(
+                    self._magnitude, self._takes_temperature_vector
+                )
+            ]
 
         return self._functional
-
-    def _get_backend(self, backend):
-        if backend not in ["scipy", "numba"]:
-            raise ValueError("Backend must be either 'scipy' or 'numba'!")
-
-        if backend == "numba":
-            if HAS_NUMBA:
-                from numba import njit
-
-                self._njit = njit
-            else:
-                warnings.warn("Backend 'numba' is not installed. Fallback to default 'scipy'.")
-                backend = "scipy"
-
-        return backend
 
     @property
     def integral(self):

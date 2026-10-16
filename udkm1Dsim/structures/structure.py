@@ -28,7 +28,7 @@ __docformat__ = "restructuredtext"
 
 import itertools
 import warnings
-from functools import reduce
+from operator import attrgetter
 
 import numpy as np
 import pint
@@ -609,7 +609,7 @@ class Structure:
         else:
             return dist_interp, original_indicies
 
-    def get_layer_property_vector(self, property_name, backend=None):
+    def get_layer_property_vector(self, property_name):
         """get_layer_property_vector
 
         Returns a vector for a property of all :class:`Layer` in the
@@ -645,14 +645,8 @@ class Structure:
                 )
             property_name = f"{group_name}.{stripped_name}.magnitude"
 
-        path = property_name.split(".")
-
-        def resolve(layer):
-            # backend switching logics
-            if backend is not None and path[-1] == "functional":
-                parent = reduce(getattr, path[:-1], layer)
-                return parent.get_functional(backend=backend)
-            return reduce(getattr, path, layer)
+        # getter of the (dotted) property path of a layer
+        resolve = attrgetter(property_name)
 
         def stack(getter):
             """Build a [N] or [N, max_dim] array from getter(layer).

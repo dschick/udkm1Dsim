@@ -1114,18 +1114,13 @@ class Heat(Simulation):
         unique_indices = np.asarray(self.S.get_layer_vectors()[0], dtype=int)
         indices = unique_indices[finderb(distances, d_start)]
         # properties of the unique layers
-        therm_conds = [
-            layer.thermal.therm_cond.get_functional(self.backend) for layer in unique_layers
-        ]
+        therm_conds = [layer.thermal.therm_cond.functional for layer in unique_layers]
         therm_cond_takes_vector = [
             layer.thermal.therm_cond.takes_temperature_vector for layer in unique_layers
         ]
-        heat_capacities = [
-            layer.thermal.heat_capacity.get_functional(self.backend) for layer in unique_layers
-        ]
+        heat_capacities = [layer.thermal.heat_capacity.functional for layer in unique_layers]
         sub_system_couplings = [
-            layer.thermal.sub_system_coupling.get_functional(self.backend)
-            for layer in unique_layers
+            layer.thermal.sub_system_coupling.functional for layer in unique_layers
         ]
         densities = np.array([layer.structural.density.magnitude for layer in unique_layers])
 
