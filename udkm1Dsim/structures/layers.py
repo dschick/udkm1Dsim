@@ -410,6 +410,18 @@ class Layer:
             "'spring_const' is automatically derived from sound_vel, mass, and thickness."
         )
 
+    def set_ho_spring_constants(self, HO):
+        """set_ho_spring_constants
+
+        Set the higher orders of the spring constant for anharmonic
+        phonon simulations.
+
+        Args:
+            HO (ndarray[float]): higher order spring constants.
+
+        """
+        self.elastic.set_ho_spring_constants(HO)
+
     @property
     def phonon_damping(self):
         return self.elastic.phonon_damping.quantity

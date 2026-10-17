@@ -127,7 +127,7 @@ def test_layer_phonon_damping(layer):
 
 def test_layer_set_ho_spring_constants(layer):
     assert layer.spring_const == 0.0
-    layer.elastic.set_ho_spring_constants([1.0, 2.0, 3.0])
+    layer.set_ho_spring_constants([1.0, 2.0, 3.0])
     assert np.allclose(layer.spring_const, [0.0, 1.0, 2.0, 3.0] * u.kg / u.s**2)
 
 

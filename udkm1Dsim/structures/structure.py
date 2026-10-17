@@ -650,7 +650,9 @@ class Structure:
 
         def stack(getter):
             """Build a [N] or [N, max_dim] array from getter(layer).
-            Shape/dtype are inferred from the unique layers only."""
+            Shape/dtype are inferred from the unique layers only. Shorter
+            values are padded with zeros, e.g. the missing higher orders of
+            the spring constants."""
             _, unique_layers = self.get_unique_layers()
             set_dtype = float
             max_dim = 1
@@ -661,11 +663,12 @@ class Structure:
                 max_dim = max(max_dim, np.size(value))
 
             shape = [N, max_dim] if max_dim > 1 else [N]
-            arr = np.empty(shape, dtype=set_dtype)
+            arr = np.zeros(shape, dtype=set_dtype)
             for i, h in enumerate(handles):
                 temp = getter(h)
                 if max_dim > 1:
-                    arr[i, :] = temp
+                    temp = np.ravel(temp)
+                    arr[i, : len(temp)] = temp
                 else:
                     arr[i] = np.asarray(temp).item()
             return arr

@@ -116,6 +116,25 @@ def test_get_layer_property_vector(structure):
     structure.get_layer_property_vector("spring_const")
 
 
+def test_get_layer_property_vector_padding(structure):
+    """layers without higher order spring constants get zeros for them"""
+    _, layers = structure.get_unique_layers()
+    anharmonic = layers[2]
+    anharmonic_pos = structure.get_all_positions_per_unique_layer()[anharmonic.id]
+    harmonic_pos = np.setdiff1d(np.r_[0 : structure.get_number_of_layers()], anharmonic_pos)
+    anharmonic.set_ho_spring_constants([-7e11, 1e20])
+    try:
+        spring_consts = structure.get_layer_property_vector("_spring_const")
+    finally:
+        # reset to the harmonic spring constant for the following tests
+        anharmonic.set_ho_spring_constants([])
+
+    assert spring_consts.shape == (structure.get_number_of_layers(), 3)
+    assert np.all(spring_consts[harmonic_pos, 1:] == 0)
+    assert np.allclose(spring_consts[anharmonic_pos, 0], anharmonic.spring_const[0].magnitude)
+    assert np.allclose(spring_consts[anharmonic_pos, 1:], [-7e11, 1e20])
+
+
 def test_get_layer_handle(structure):
     structure.get_layer_handle(0)
 
