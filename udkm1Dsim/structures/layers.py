@@ -72,6 +72,8 @@ class Layer:
 
     """
 
+    _parameter_group_names = ("structural", "thermal", "elastic", "optical", "magnetic")
+
     def __init__(self, id, name, **kwargs):
         self.id = id
         self.name = name
@@ -119,24 +121,17 @@ class Layer:
 
     def __repr__(self):
         """String representation of this class"""
-        class_str = f"Layer: {self.name}\nID: {self.id}\n" + "=" * 30 + "\n"
-        class_str += self.structural.__repr__() + "\n"
-        class_str += self.thermal.__repr__() + "\n"
-        class_str += self.elastic.__repr__() + "\n"
-        class_str += self.optical.__repr__() + "\n"
-        class_str += self.magnetic.__repr__() + "\n"
+        class_str = f"{type(self).__name__}: {self.name}\nID: {self.id}\n" + "=" * 30 + "\n"
+        for group_name in self._parameter_group_names:
+            class_str += repr(getattr(self, group_name)) + "\n"
 
         return class_str
 
     def _repr_html_(self):
         """HTML representation of this class"""
-
-        class_str = f"<h2>Layer: {self.name}</h2><b>ID:</b> <i>{self.id}</i><br>"
-        class_str += self.structural._repr_html_()
-        class_str += self.thermal._repr_html_()
-        class_str += self.elastic._repr_html_()
-        class_str += self.optical._repr_html_()
-        class_str += self.magnetic._repr_html_()
+        class_str = f"<h2>{type(self).__name__}: {self.name}</h2><b>ID:</b> <i>{self.id}</i><br>"
+        for group_name in self._parameter_group_names:
+            class_str += getattr(self, group_name)._repr_html_()
 
         return class_str
 
@@ -553,9 +548,13 @@ class Vacuum(Layer):
         self.thickness = thickness
         self.density = 0.0 * u.kg / u.m**3
 
-    def __str__(self):
+    def __repr__(self):
         """String representation of this class"""
-        return f"Vacuum layer of thickness: {self.thickness:.4g~P}"
+        return f"Vacuum layer of thickness: {self.thickness.to('nm'):.4g~P}"
+
+    def _repr_html_(self):
+        """HTML representation of this class"""
+        return f"<h2>Vacuum</h2><b>Thickness:</b> {self.thickness.to('nm'):.4g~P}"
 
 
 class AmorphousLayer(Layer):
@@ -621,6 +620,15 @@ class UnitCell(Layer):
 
     """
 
+    _parameter_group_names = (
+        "structural",
+        "lattice",
+        "thermal",
+        "elastic",
+        "optical",
+        "magnetic",
+    )
+
     def __init__(self, id, name, c_axis, **kwargs):
         super().__init__(id, name, **kwargs)
 
@@ -637,30 +645,22 @@ class UnitCell(Layer):
         self.atoms = []
         self.num_atoms = 0
 
-    def __repr__(self):
-        """String representation of this class"""
-        class_str = f"UnitCell: {self.name}\nID: {self.id}\n" + "=" * 30 + "\n"
-        class_str += self.structural.__repr__() + "\n"
-        class_str += self.lattice.__repr__() + "\n"
-        class_str += self.thermal.__repr__() + "\n"
-        class_str += self.elastic.__repr__() + "\n"
-        class_str += self.optical.__repr__() + "\n"
-        class_str += self.magnetic.__repr__() + "\n"
-
+    def _atoms_table(self, style):
+        """Table of all atoms in the unit cell in the given tabulate style"""
         atoms_str = []
-        for i in range(self.num_atoms):
+        for atom, position, position_function in self.atoms:
             atoms_str.append(
                 [
-                    self.atoms[i][0].name,
-                    f"{self.atoms[i][1](0):0.2f}",
-                    self.atoms[i][2],
+                    atom.name,
+                    f"{position(0):0.2f}",
+                    position_function,
                     "",
-                    self.atoms[i][0].mag_amplitude,
-                    self.atoms[i][0].mag_phi.to("deg").magnitude,
-                    self.atoms[i][0].mag_gamma.to("deg").magnitude,
+                    atom.mag_amplitude,
+                    atom.mag_phi.to("deg").magnitude,
+                    atom.mag_gamma.to("deg").magnitude,
                 ]
             )
-        class_str += tabulate(
+        return tabulate(
             atoms_str,
             headers=[
                 "atom",
@@ -671,50 +671,16 @@ class UnitCell(Layer):
                 "phi [°]",
                 "gamma [°]",
             ],
-            tablefmt="double_grid",
+            tablefmt=style,
         )
 
-        return class_str
+    def __repr__(self):
+        """String representation of this class"""
+        return super().__repr__() + self._atoms_table("double_grid")
 
     def _repr_html_(self):
         """HTML representation of this class"""
-
-        class_str = f"<h2>UnitCell: {self.name}</h2><b>ID:</b> <i>{self.id}</i><br>"
-        class_str += self.structural._repr_html_()
-        class_str += self.lattice._repr_html_()
-        class_str += self.thermal._repr_html_()
-        class_str += self.elastic._repr_html_()
-        class_str += self.optical._repr_html_()
-        class_str += self.magnetic._repr_html_()
-
-        atoms_str = []
-        for i in range(self.num_atoms):
-            atoms_str.append(
-                [
-                    self.atoms[i][0].name,
-                    f"{self.atoms[i][1](0):0.2f}",
-                    self.atoms[i][2],
-                    "",
-                    self.atoms[i][0].mag_amplitude,
-                    self.atoms[i][0].mag_phi.to("deg").magnitude,
-                    self.atoms[i][0].mag_gamma.to("deg").magnitude,
-                ]
-            )
-        class_str += "<h3>Atoms</h3>" + tabulate(
-            atoms_str,
-            headers=[
-                "atom",
-                "position",
-                "position function",
-                "magn.",
-                "amplitude",
-                "phi [°]",
-                "gamma [°]",
-            ],
-            tablefmt="html",
-        )
-
-        return class_str
+        return super()._repr_html_() + "<h3>Atoms</h3>" + self._atoms_table("html")
 
     def visualize(self, block=True, **kwargs):
         """visualize

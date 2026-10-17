@@ -72,7 +72,12 @@ class Parameter:
         self.magnitude = value
 
     def __repr__(self):
-        return f"Parameter({self.name}={self.magnitude} {self.unit})"
+        magnitude = self.magnitude
+        if isinstance(magnitude, np.ndarray):
+            magnitude = magnitude.tolist()
+        unit = f"{self.unit:~P}"
+        unit = f" {unit}" if unit else ""
+        return f"{type(self).__name__}({self.name}={magnitude}{unit})"
 
 
 class VectorParameter(Parameter):
@@ -196,9 +201,6 @@ class VectorParameter(Parameter):
             raise ValueError(f"Parameter '{self.name}' needs (r, phi, gamma)")
         self._set_polar_rad(arr)
 
-    def __repr__(self):
-        return f"VectorParameter({self.name}={self._magnitude.tolist()} {self.unit})"
-
 
 class TemperatureParameter(Parameter):
     """Parameter with a unit and a magnitude, which depends on temperature."""
@@ -304,9 +306,6 @@ class TemperatureParameter(Parameter):
     @quantity.setter
     def quantity(self, value):
         self.magnitude = value
-
-    def __repr__(self):
-        return f"Parameter({self.name}={self.magnitude} {self.unit})"
 
     def parse_input(self, inputs):
         """parse_input

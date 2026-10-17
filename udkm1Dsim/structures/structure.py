@@ -72,8 +72,12 @@ class Structure:
         self.superstrate = [Vacuum(), 1]
         self.substrate = [Vacuum(), 1]
 
-    def __str__(self, tabs=0, recursive=False):
+    def __repr__(self):
         """String representation of this class"""
+        return self._text_representation()
+
+    def _text_representation(self, tabs=0, recursive=False):
+        """Indented text representation, recursing into sub-structures"""
         tab_str = tabs * "\t"
 
         class_str = tab_str + "Structure properties:\n\n"
@@ -96,9 +100,9 @@ class Structure:
                 )
             else:
                 # the substructure is a Structure instance by itself
-                # call the display() method recursively
+                # call the text representation recursively
                 class_str += tab_str + f"sub-structure {sub_structure[1]:d} times:\n"
-                class_str += sub_structure[0].__str__(tabs + 1, recursive=True)
+                class_str += sub_structure[0]._text_representation(tabs + 1, recursive=True)
         class_str += tab_str + "----\n"
         # do not print sub-structure superstrate or substrate
         if not recursive:
@@ -125,6 +129,45 @@ class Structure:
                 )
             else:
                 warnings.warn("There should be a substrate present!")
+        return class_str
+
+    def _html_rows(self):
+        """HTML table rows of all sub-structures, nested structures are indented"""
+        rows = ""
+        for sub_structure, repetitions in self.sub_structures:
+            if isinstance(sub_structure, Layer):
+                rows += (
+                    f"<tr><td>{repetitions:d}</td><td>{sub_structure.name}</td>"
+                    f"<td>{(repetitions * sub_structure.thickness).to('nm'):.4g~P}</td></tr>"
+                )
+            else:
+                rows += (
+                    f"<tr><td>{repetitions:d}</td><td><i>{sub_structure.name}</i></td>"
+                    f"<td>{(repetitions * sub_structure.thickness).to('nm'):.4g~P}</td></tr>"
+                    f"<tr><td></td><td colspan='2'><table>{sub_structure._html_rows()}</table>"
+                    "</td></tr>"
+                )
+        return rows
+
+    def _repr_html_(self):
+        """HTML representation of this class"""
+        class_str = f"<h2>Structure: {self.name}</h2>"
+        if len(self.sub_structures) == 0:
+            return class_str + "Structure is empty"
+
+        class_str += f"<b>Thickness:</b> {self.thickness.to('nm'):.4g~P}"
+        header = "<tr><th>times</th><th>sub-structure</th><th>thickness</th></tr>"
+        class_str += f"<table>{header}{self._html_rows()}</table>"
+
+        for label, (layer, repetitions) in [
+            ("Superstrate", self.superstrate),
+            ("Substrate", self.substrate),
+        ]:
+            if isinstance(layer, Layer):
+                class_str += (
+                    f"<b>{label} (semi-infinite):</b> {repetitions:d} times {layer.name}: "
+                    f"{(repetitions * layer.thickness).to('nm'):.4g~P}<br>"
+                )
         return class_str
 
     def visualize(

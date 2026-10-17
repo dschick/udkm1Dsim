@@ -55,9 +55,8 @@ class ParameterGroup:
         )
 
     def _pretty_class_name(self):
-        return "".join(
-            f"{word} "
-            for word in re.sub(
+        return " ".join(
+            re.sub(
                 "([A-Z][a-z]+)", r" \1", re.sub("([A-Z]+)", r" \1", self.__class__.__name__)
             ).split()
         )

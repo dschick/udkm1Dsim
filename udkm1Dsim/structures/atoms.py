@@ -106,43 +106,40 @@ class Atom:
         )
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
-    def __str__(self):
-        """String representation of this class"""
-        output = {
-            "parameter": [
-                "id",
-                "symbol",
-                "name",
-                "atomic number Z",
-                "mass number A",
-                "mass",
-                "ionicity",
-                "Cromer Mann coeff",
-                "",
-                "",
-                "magn. amplitude",
-                "magn. phi",
-                "magn. gamma",
-            ],
-            "value": [
-                self.id,
-                self.symbol,
-                self.name,
-                self.atomic_number_z,
-                self.mass_number_a,
-                "{:.4g~P}".format(self.mass.to("kg")),
-                self.ionicity,
-                np.array_str(self.cromer_mann_coeff[0:4]),
-                np.array_str(self.cromer_mann_coeff[4:8]),
-                np.array_str(self.cromer_mann_coeff[8:]),
-                self.mag_amplitude,
-                "{:.4g~P}".format(self.mag_phi.to("deg")),
-                "{:.4g~P}".format(self.mag_gamma.to("deg")),
-            ],
-        }
+    def _property_table(self):
+        """Parameter/value rows of the atom properties"""
+        return [
+            ["id", self.id],
+            ["symbol", self.symbol],
+            ["name", self.name],
+            ["atomic number Z", self.atomic_number_z],
+            ["mass number A", self.mass_number_a],
+            ["mass", "{:.4g~P}".format(self.mass.to("kg"))],
+            ["ionicity", self.ionicity],
+            *self._form_factor_rows(),
+            ["magn. amplitude", self.mag_amplitude],
+            ["magn. phi", "{:.4g~P}".format(self.mag_phi.to("deg"))],
+            ["magn. gamma", "{:.4g~P}".format(self.mag_gamma.to("deg"))],
+        ]
 
+    def _form_factor_rows(self):
+        """Cromer-Mann coefficient rows of the property table"""
+        return [
+            ["Cromer Mann coeff", np.array_str(self.cromer_mann_coeff[0:4])],
+            ["", np.array_str(self.cromer_mann_coeff[4:8])],
+            ["", np.array_str(self.cromer_mann_coeff[8:])],
+        ]
+
+    def __repr__(self):
+        """String representation of this class"""
         return "Atom with the following properties\n" + tabulate(
-            output, colalign=("right",), tablefmt="rst", floatfmt=(".2f", ".2f")
+            self._property_table(), colalign=("right",), tablefmt="rst", floatfmt=(".2f", ".2f")
+        )
+
+    def _repr_html_(self):
+        """HTML representation of this class"""
+        return f"<h3>Atom: {self.name}</h3>" + tabulate(
+            self._property_table(), colalign=("right",), tablefmt="html", floatfmt=(".2f", ".2f")
         )
 
     def read_atomic_form_factor_coeff(self, source="chantler", filename=""):
@@ -429,45 +426,45 @@ class AtomMixed(Atom):
             filename=kwargs.get("magnetic_form_factor_path", "")
         )
 
-    def __str__(self):
+    def _form_factor_rows(self):
+        """No Cromer-Mann coefficients for mixed atoms"""
+        return []
+
+    def _constituents_table(self):
+        """Name/fraction table of the constituent atoms"""
+        return [[atom.name, f"{fraction * 100:.1f} %"] for atom, fraction in self.atoms]
+
+    def __repr__(self):
         """String representation of this class"""
-
-        output = {
-            "parameter": [
-                "id",
-                "symbol",
-                "name",
-                "atomic number Z",
-                "mass number A",
-                "mass",
-                "ionicity",
-                "magn. amplitude",
-                "magn. phi",
-                "magn. gamma",
-            ],
-            "value": [
-                self.id,
-                self.symbol,
-                self.name,
-                self.atomic_number_z,
-                self.mass_number_a,
-                "{:.4g~P}".format(self.mass.to("kg")),
-                self.ionicity,
-                self.mag_amplitude,
-                "{:.4g~P}".format(self.mag_phi.to("deg")),
-                "{:.4g~P}".format(self.mag_gamma.to("deg")),
-            ],
-        }
-
-        output_atom = []
-        for i in range(self.num_atoms):
-            output_atom.append([self.atoms[i][0].name, f"{self.atoms[i][1] * 100:.1f} %"])
-
         return (
             "AtomMixed with the following properties\n"
-            + tabulate(output, colalign=("right",), tablefmt="rst", floatfmt=(".2f", ".2f"))
+            + tabulate(
+                self._property_table(),
+                colalign=("right",),
+                tablefmt="rst",
+                floatfmt=(".2f", ".2f"),
+            )
             + f"\n{self.num_atoms:d} Constituents:\n"
-            + tabulate(output_atom, colalign=("right",), floatfmt=(".2f", ".2f"))
+            + tabulate(self._constituents_table(), colalign=("right",), floatfmt=(".2f", ".2f"))
+        )
+
+    def _repr_html_(self):
+        """HTML representation of this class"""
+        return (
+            f"<h3>AtomMixed: {self.name}</h3>"
+            + tabulate(
+                self._property_table(),
+                colalign=("right",),
+                tablefmt="html",
+                floatfmt=(".2f", ".2f"),
+            )
+            + f"<h4>{self.num_atoms:d} Constituents</h4>"
+            + tabulate(
+                self._constituents_table(),
+                headers=["atom", "fraction"],
+                colalign=("right",),
+                tablefmt="html",
+            )
         )
 
     def add_atom(self, atom, fraction):
