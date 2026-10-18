@@ -97,6 +97,8 @@ class Heat(Simulation):
 
     """
 
+    _title = "Heat simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.heat_diffusion = kwargs.get("heat_diffusion", False)
@@ -128,9 +130,8 @@ class Heat(Simulation):
             "atol": 1e-6,
         }
 
-    def __str__(self, output=[]):
-        """String representation of this class"""
-
+    def _property_rows(self):
+        """[parameter, value] rows of the simulation properties"""
         output = [
             ["excitation fluence", "{:.4g~P}".format(self.excitation["fluence"].to("mJ/cm**2"))],
             ["excitation delay", "{:.4g~P}".format(self.excitation["delay_pump"].to("ps"))],
@@ -153,7 +154,7 @@ class Heat(Simulation):
                 else "a distance mesh is set for heat diffusion calculations.",
             ],
             ["top boundary type", self.boundary_conditions["top_type"]],
-        ] + output
+        ]
 
         if self._boundary_conditions["top_type"] == 1:
             output += [
@@ -187,10 +188,7 @@ class Heat(Simulation):
                 ]
             ]
 
-        class_str = "Heat simulation properties:\n\n"
-        class_str += super().__str__(output)
-
-        return class_str
+        return super()._property_rows() + output
 
     def get_hash(self, delays, init_temp, **kwargs):
         """get_hash

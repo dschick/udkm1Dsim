@@ -61,6 +61,8 @@ class Simulation:
 
     """
 
+    _title = "Simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         self.S = S
         self.force_recalc = force_recalc
@@ -69,26 +71,39 @@ class Simulation:
         self.disp_messages = kwargs.get("disp_messages", True)
         self.progress_bar = kwargs.get("progress_bar", True)
 
-    def __str__(self, output=[]):
-        """String representation of this class"""
-        output = [
+    def _property_rows(self):
+        """[parameter, value] rows of the simulation properties, which are
+        extended by the sub-classes"""
+        return [
             ["force recalc", self.force_recalc],
             ["cache directory", self.cache_dir],
             ["display messages", self.disp_messages],
             ["save data", self.save_data],
             ["progress bar", self.progress_bar],
-        ] + output
+        ]
 
-        class_str = "This is the current structure for the simulations:\n\n"
-        class_str += self.S.__str__()
-        class_str += "\n\nDisplay properties:\n\n"
-        class_str += tabulate(
-            output,
+    def _table_representation(self, style):
+        return tabulate(
+            self._property_rows(),
             headers=["parameter", "value"],
-            tablefmt="rst",
+            tablefmt=style,
             colalign=("right",),
             floatfmt=(".2f", ".2f"),
         )
+
+    def __repr__(self):
+        """String representation of this class"""
+        class_str = f"{self._title} properties:\n\n"
+        class_str += self._table_representation("rst")
+        class_str += "\n\nThis is the current structure for the simulations:\n\n"
+        class_str += repr(self.S)
+        return class_str
+
+    def _repr_html_(self):
+        """HTML representation of this class"""
+        class_str = f"<h2>{self._title}</h2>"
+        class_str += self._table_representation("html")
+        class_str += self.S._repr_html_()
         return class_str
 
     def disp_message(self, message):

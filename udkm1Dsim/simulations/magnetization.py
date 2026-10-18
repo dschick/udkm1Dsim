@@ -76,6 +76,8 @@ class Magnetization(Simulation):
 
     """
 
+    _title = "Magnetization simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.ode_options = {
@@ -85,13 +87,6 @@ class Magnetization(Simulation):
             "rtol": 1e-3,
             "atol": 1e-6,
         }
-
-    def __str__(self, output=[]):
-        """String representation of this class"""
-
-        class_str = "Magnetization simulation properties:\n\n"
-        class_str += super().__str__(output)
-        return class_str
 
     def get_hash(self, **kwargs):
         """get_hash
@@ -332,14 +327,10 @@ class LLB(Magnetization):
 
     """
 
+    _title = "Landau-Lifshitz-Bloch Magnetization Dynamics simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-
-    def __str__(self):
-        """String representation of this class"""
-        class_str = "Landau-Lifshitz-Bloch Magnetization Dynamics simulation properties:\n\n"
-        class_str += super().__str__()
-        return class_str
 
     def calc_magnetization_map(self, delays, temp_map, H_ext=np.array([0, 0, 0]), init_mag=[]):
         r"""calc_magnetization_map

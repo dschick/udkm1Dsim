@@ -16,8 +16,10 @@ u.formatter.default_format = ".4g~P"
 # tests
 
 
-def test_structure_str(structure):
-    structure.__str__()
+def test_structure_repr(structure):
+    assert repr(structure).startswith("Structure properties:")
+    assert str(structure) == repr(structure)
+    assert structure._repr_html_().startswith("<h2>Structure: structure mixed</h2>")
 
 
 def test_thickness(structure):

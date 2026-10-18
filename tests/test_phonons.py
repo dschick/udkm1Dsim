@@ -83,8 +83,10 @@ def strain_map(delays, distances):
 # Phonon
 
 
-def test_phonon_str(phonon):
-    phonon.__str__()
+def test_phonon_repr(phonon):
+    assert repr(phonon).startswith("Phonon simulation properties:")
+    assert str(phonon) == repr(phonon)
+    assert phonon._repr_html_().startswith("<h2>Phonon simulation</h2>")
 
 
 def test_get_hash(phonon, delays, distances, temp_map, delta_temp_map):
@@ -110,8 +112,10 @@ def test_calc_sticks_from_temp_map(phonon, temp_map, delta_temp_map):
 # PhononNum
 
 
-def test_phonon_num_str(phonon_num):
-    phonon_num.__str__()
+def test_phonon_num_repr(phonon_num):
+    assert repr(phonon_num).startswith("Numerical Phonon simulation properties:")
+    assert str(phonon_num) == repr(phonon_num)
+    assert phonon_num._repr_html_().startswith("<h2>Numerical Phonon simulation</h2>")
 
 
 def test_phonon_num_get_strain_map(phonon_num, delays, temp_map, delta_temp_map):
@@ -173,8 +177,10 @@ def test_phonon_num_backends_agree(phonon_num, delays, temp_map, delta_temp_map)
 # PhononAna
 
 
-def test_phonon_ana_str(phonon_ana):
-    phonon_ana.__str__()
+def test_phonon_ana_repr(phonon_ana):
+    assert repr(phonon_ana).startswith("Analytical Phonon simulation properties:")
+    assert str(phonon_ana) == repr(phonon_ana)
+    assert phonon_ana._repr_html_().startswith("<h2>Analytical Phonon simulation</h2>")
 
 
 def test_phonon_ana_get_strain_map(phonon_ana, delays, temp_map, delta_temp_map):

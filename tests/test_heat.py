@@ -25,8 +25,10 @@ def heat(structure, tmp_path_factory):
 # tests
 
 
-def test_heat_str(heat):
-    heat.__str__()
+def test_heat_repr(heat):
+    assert repr(heat).startswith("Heat simulation properties:")
+    assert str(heat) == repr(heat)
+    assert heat._repr_html_().startswith("<h2>Heat simulation</h2>")
 
 
 def test_get_hash(heat):

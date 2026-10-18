@@ -54,8 +54,10 @@ def temp_map(delays, distances):
 # Magnetization
 
 
-def test_magnetization_str(magnetization):
-    magnetization.__str__()
+def test_magnetization_repr(magnetization):
+    assert repr(magnetization).startswith("Magnetization simulation properties:")
+    assert str(magnetization) == repr(magnetization)
+    assert magnetization._repr_html_().startswith("<h2>Magnetization simulation</h2>")
 
 
 def test_magnetization_get_hash(magnetization, delays, temp_map):
@@ -71,8 +73,14 @@ def test_magnetization_check_initial_magnetization(magnetization):
 # LLB
 
 
-def test_llb_str(llb):
-    llb.__str__()
+def test_llb_repr(llb):
+    assert repr(llb).startswith(
+        "Landau-Lifshitz-Bloch Magnetization Dynamics simulation properties:"
+    )
+    assert str(llb) == repr(llb)
+    assert llb._repr_html_().startswith(
+        "<h2>Landau-Lifshitz-Bloch Magnetization Dynamics simulation</h2>"
+    )
 
 
 def test_llb_check_initial_magnetization(llb, distances):

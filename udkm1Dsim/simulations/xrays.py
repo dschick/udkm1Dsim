@@ -86,6 +86,8 @@ class Xray(Simulation):
 
     """
 
+    _title = "X-Ray simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self._energy = np.array([])
@@ -109,8 +111,8 @@ class Xray(Simulation):
         self.pol_out = None
         self.set_polarization(self.pol_in_state, self.pol_out_state)
 
-    def __str__(self, output=[]):
-        """String representation of this class"""
+    def _property_rows(self):
+        """[parameter, value] rows of the simulation properties"""
         output = [
             [
                 "energy",
@@ -144,8 +146,8 @@ class Xray(Simulation):
             ],
             ["incoming polarization", self.polarizations[self.pol_in_state]],
             ["analyzer polarization", self.polarizations[self.pol_out_state]],
-        ] + output
-        return super().__str__(output)
+        ]
+        return super()._property_rows() + output
 
     def set_incoming_polarization(self, pol_in_state):
         """set_incoming_polarization
@@ -373,14 +375,10 @@ class XrayKin(Xray):
 
     """
 
+    _title = "Kinematical X-Ray Diffraction simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-
-    def __str__(self):
-        """String representation of this class"""
-        class_str = "Kinematical X-Ray Diffraction simulation properties:\n\n"
-        class_str += super().__str__()
-        return class_str
 
     def set_incoming_polarization(self, pol_in_state):
         """set_incoming_polarization
@@ -767,15 +765,11 @@ class XrayDyn(Xray):
 
     """
 
+    _title = "Dynamical X-Ray Diffraction simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.last_atom_ref_trans_matrices = {"atom_ids": [], "hashes": [], "H": []}
-
-    def __str__(self):
-        """String representation of this class"""
-        class_str = "Dynamical X-Ray Diffraction simulation properties:\n\n"
-        class_str += super().__str__()
-        return class_str
 
     def set_incoming_polarization(self, pol_in_state):
         """set_incoming_polarization
@@ -1758,6 +1752,8 @@ class XrayDynMag(Xray):
 
     """
 
+    _title = "Dynamical Magnetic X-Ray Diffraction simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.last_atom_ref_trans_matrices = {
@@ -1771,12 +1767,6 @@ class XrayDynMag(Xray):
             "A_inv_phi": [],
             "k_z": [],
         }
-
-    def __str__(self):
-        """String representation of this class"""
-        class_str = "Dynamical Magnetic X-Ray Diffraction simulation properties:\n\n"
-        class_str += super().__str__()
-        return class_str
 
     def get_hash(self, **kwargs):
         """get_hash

@@ -68,21 +68,15 @@ class Phonon(Simulation):
 
     """
 
+    _title = "Phonon simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.only_heat = kwargs.get("only_heat", False)
 
-    def __str__(self, output=[]):
-        """String representation of this class"""
-
-        output = [
-            ["only heat", self.only_heat],
-        ] + output
-
-        class_str = "Phonon simulation properties:\n\n"
-        class_str += super().__str__(output)
-
-        return class_str
+    def _property_rows(self):
+        """[parameter, value] rows of the simulation properties"""
+        return super()._property_rows() + [["only heat", self.only_heat]]
 
     def get_hash(self, delays, temp_map, delta_temp_map, **kwargs):
         """get_hash
@@ -360,6 +354,8 @@ class PhononNum(Phonon):
 
     """
 
+    _title = "Numerical Phonon simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.backend = kwargs.get("backend", "scipy")
@@ -371,17 +367,9 @@ class PhononNum(Phonon):
             "atol": 1e-6,
         }
 
-    def __str__(self, output=[]):
-        """String representation of this class"""
-
-        output = [
-            ["backend", self.backend],
-        ] + output
-
-        class_str = "Numerical Phonon simulation properties:\n\n"
-        class_str += super().__str__(output)
-
-        return class_str
+    def _property_rows(self):
+        """[parameter, value] rows of the simulation properties"""
+        return super()._property_rows() + [["backend", self.backend]]
 
     def get_strain_map(self, delays, temp_map, delta_temp_map):
         """get_strain_map
@@ -581,16 +569,10 @@ class PhononAna(Phonon):
 
     """
 
+    _title = "Analytical Phonon simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-
-    def __str__(self, output=[]):
-        """String representation of this class"""
-
-        class_str = "Analytical Phonon simulation properties:\n\n"
-        class_str += super().__str__()
-
-        return class_str
 
     def get_strain_map(self, delays, temp_map, delta_temp_map):
         """get_strain_map

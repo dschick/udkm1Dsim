@@ -22,8 +22,10 @@ def simulation(structure):
 # tests
 
 
-def test_simulation_str(simulation):
-    simulation.__str__()
+def test_simulation_repr(simulation):
+    assert repr(simulation).startswith("Simulation properties:")
+    assert str(simulation) == repr(simulation)
+    assert simulation._repr_html_().startswith("<h2>Simulation</h2>")
 
 
 def test_disp_message(simulation, capsys):

@@ -103,8 +103,10 @@ def test_xray_kin_update_experiment(xray_kin):
     xray_kin.wl = 1 * u.nm
 
 
-def test_xray_kin_str(xray_kin):
-    xray_kin.__str__()
+def test_xray_kin_repr(xray_kin):
+    assert repr(xray_kin).startswith("Kinematical X-Ray Diffraction simulation properties:")
+    assert str(xray_kin) == repr(xray_kin)
+    assert xray_kin._repr_html_().startswith("<h2>Kinematical X-Ray Diffraction simulation</h2>")
 
 
 def test_xray_kin_set_polarization(xray_kin):
@@ -139,10 +141,12 @@ def test_xray_kin_homogeneous_reflectivity(xray_kin):
 # XrayDyn
 
 
-def test_xray_dyn_str(xray_dyn):
+def test_xray_dyn_repr(xray_dyn):
     xray_dyn.energy = 8000 * u.eV
     xray_dyn.theta = np.r_[1:10] * u.deg
-    xray_dyn.__str__()
+    assert repr(xray_dyn).startswith("Dynamical X-Ray Diffraction simulation properties:")
+    assert str(xray_dyn) == repr(xray_dyn)
+    assert xray_dyn._repr_html_().startswith("<h2>Dynamical X-Ray Diffraction simulation</h2>")
 
 
 def test_xray_dyn_set_polarization(xray_dyn):
@@ -206,10 +210,16 @@ def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map, temp_map):
 # XrayDynMag
 
 
-def test_xray_dyn_mag_str(xray_dyn_mag):
+def test_xray_dyn_mag_repr(xray_dyn_mag):
     xray_dyn_mag.energy = 800 * u.eV
     xray_dyn_mag.theta = np.r_[1:10] * u.deg
-    xray_dyn_mag.__str__()
+    assert repr(xray_dyn_mag).startswith(
+        "Dynamical Magnetic X-Ray Diffraction simulation properties:"
+    )
+    assert str(xray_dyn_mag) == repr(xray_dyn_mag)
+    assert xray_dyn_mag._repr_html_().startswith(
+        "<h2>Dynamical Magnetic X-Ray Diffraction simulation</h2>"
+    )
 
 
 def test_xray_dyn_mag_set_polarization(xray_dyn_mag):

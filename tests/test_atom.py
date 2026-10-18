@@ -195,10 +195,15 @@ def test_atom_magnetization(request, fixture_name, expected):
     assert_equal(atom.mag_gamma, expected[2])
 
 
-@pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_dysprosium", "atom_mixed"])
-def test_atom_to_string(request, fixture_name):
+@pytest.mark.parametrize(
+    "fixture_name, cls_name",
+    [("atom_iron", "Atom"), ("atom_dysprosium", "Atom"), ("atom_mixed", "AtomMixed")],
+)
+def test_atom_repr(request, fixture_name, cls_name):
     atom = request.getfixturevalue(fixture_name)
-    atom.__str__()
+    assert repr(atom).startswith(f"{cls_name} with the following properties")
+    assert str(atom) == repr(atom)
+    assert atom._repr_html_().startswith(f"<h3>{cls_name}: {atom.name}</h3>")
 
 
 @pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_dysprosium", "atom_mixed"])
