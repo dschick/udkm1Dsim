@@ -221,9 +221,13 @@ def test_layer_mag_moment_in_si(layer):
     assert np.isclose(layer.magnetic.mag_moment.magnitude, 9.274e-24, rtol=1e-3)
 
 
-# def test_layer_set_opt_pen_depth_from_ref_index(layer):
-#     layer.set_opt_pen_depth_from_ref_index(800 * u.nm)
-#     assert_approx(layer.opt_pen_depth, 21.22 * u.nm, rtol=1e-2)
+def test_layer_set_opt_pen_depth_from_ref_index(layer):
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    layer.set_opt_pen_depth_from_ref_index(800 * u.nm)
+    assert_approx(layer.opt_pen_depth, 21.22 * u.nm, rtol=1e-2)
+    layer.opt_ref_index = 2.0 + 0j
+    layer.set_opt_pen_depth_from_ref_index(800 * u.nm)
+    assert np.isinf(layer.optical.opt_pen_depth.magnitude)
 
 
 # ============================================================================

@@ -283,20 +283,23 @@ class OpticalParameters(ParameterGroup):
         for name, p in vars(self).items():
             p.name = name
 
-    # def set_opt_pen_depth_from_ref_index(self, wavelength):
-    #     """set_opt_pen_depth_from_ref_index
-    #
-    #     Set the optical penetration depth from the optical referactive index
-    #     for a given wavelength.
-    #
-    #     Args:
-    #         wavelength (Quantity): wavelength as Pint Quantitiy.
-    #
-    #     """
-    #     if np.imag(self.opt_ref_index) == 0:
-    #         self.opt_pen_depth = Q_(np.inf, u.m)
-    #     else:
-    #         self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
+    def set_opt_pen_depth_from_ref_index(self, wavelength):
+        r"""set_opt_pen_depth_from_ref_index
+
+        Set the optical penetration depth from the optical refractive index
+        for a given wavelength:
+
+        .. math:: \delta = \frac{\lambda}{4 \pi |\kappa|}
+
+        Args:
+            wavelength (Quantity): wavelength as Pint Quantity.
+
+        """
+        kappa = np.abs(np.imag(self.opt_ref_index.magnitude))
+        if kappa == 0:
+            self.opt_pen_depth.magnitude = np.inf
+        else:
+            self.opt_pen_depth.quantity = wavelength / (4 * np.pi * kappa)
 
 
 class MagneticParameters(ParameterGroup):

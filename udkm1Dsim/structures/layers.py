@@ -462,6 +462,18 @@ class Layer:
     def opt_ref_index_per_strain(self, value):
         self.optical.opt_ref_index_per_strain.quantity = value
 
+    def set_opt_pen_depth_from_ref_index(self, wavelength):
+        """set_opt_pen_depth_from_ref_index
+
+        Set the optical penetration depth from the optical refractive index
+        for a given wavelength.
+
+        Args:
+            wavelength (Quantity): wavelength as Pint Quantity.
+
+        """
+        self.optical.set_opt_pen_depth_from_ref_index(wavelength)
+
     # ============================================================================
     # Magnetic parameters
     # ============================================================================
