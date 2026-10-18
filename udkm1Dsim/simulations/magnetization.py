@@ -552,41 +552,45 @@ class LLB(Magnetization):
                 eff_spin = unique_layers[1][i].magnetic.eff_spin.magnitude
                 mf_exch_coupling = unique_layers[1][i].magnetic.mf_exch_coupling.magnitude
 
-                # simple round for down-sampling
-                unique_temps = np.unique(np.round(temp_map[:, v].flatten(), decimals=1))
-                # only temperatures below T_C are relevant
-                unique_temps = unique_temps[unique_temps <= curie_temp]
-                #  are normalized by T_C
+                temps = temp_map[:, v].flatten()
+                # only temperatures below T_C are relevant, above T_C the
+                # mean-field magnetization is zero
+                below_tc = temps < curie_temp
+                if not np.any(below_tc):
+                    raise IndexError(
+                        "No temperature in _temp_map_ was found that is below "
+                        f"the curie temperature for layer {unique_layers[0][i]:s}!"
+                    )
+                # simple round for down-sampling, but temperatures below T_C must
+                # not be rounded up to T_C, where the mean-field magnetization is
+                # zero, as they are treated as ferromagnetic in the LLB equations.
+                # The margin of 0.05 K keeps fsolve from converging to the trivial
+                # solution of zero mean-field magnetization close to T_C.
+                last_temp_below_tc = np.floor((curie_temp - 0.05) * 10) / 10
+                rounded_temps = np.minimum(
+                    np.round(temps[below_tc], decimals=1), last_temp_below_tc
+                )
+                unique_temps = np.unique(rounded_temps)
+                # normalized by T_C
                 reduced_temps = unique_temps / curie_temp
                 mf_mags = np.zeros_like(reduced_temps)
 
                 for j, T in enumerate(reduced_temps):
-                    if T == 1:
-                        mf_mags[j] = 0
-                    else:
-                        root = fsolve(
-                            lambda x: (
-                                x
-                                - LLB.calc_Brillouin(x, T, eff_spin, mf_exch_coupling, curie_temp)
-                            ),
-                            np.sqrt(1 - T),
-                        )
-                        mf_mags[j] = float(root.item())
+                    root = fsolve(
+                        lambda x: (
+                            x - LLB.calc_Brillouin(x, T, eff_spin, mf_exch_coupling, curie_temp)
+                        ),
+                        np.sqrt(1 - T),
+                    )
+                    mf_mags[j] = float(root.item())
 
                 relevant_temps[k] = np.stack((unique_temps, mf_mags))
 
-                # for every temperature in temp_map search for best match in
-                # relevant_temps and assign according mf_mag into mf_mag_map
-                try:
-                    idx = finderb(
-                        np.round(temp_map[:, v].flatten(), decimals=1), relevant_temps[k][0, :]
-                    )
-                    mf_mag_map[:, v] = np.reshape(relevant_temps[k][1, idx], (M, len(v)))
-                except Exception:
-                    raise IndexError(
-                        "No temperature in _temp_map_ was found that is below"
-                        f"the curie temperature for layer {unique_layers[0][i]:s}!"
-                    )
+                # assign the mean-field magnetization of every rounded temperature
+                # below T_C into the mf_mag_map, which is zero above T_C
+                layer_mf_mags = np.zeros_like(temps)
+                layer_mf_mags[below_tc] = mf_mags[np.searchsorted(unique_temps, rounded_temps)]
+                mf_mag_map[:, v] = np.reshape(layer_mf_mags, (M, len(v)))
             else:
                 # non-magnetic layers with Curie temperature = 0
                 mf_mag_map[:, v] = 0

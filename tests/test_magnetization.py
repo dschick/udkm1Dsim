@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import copy
+import warnings
+
 import numpy as np
 import pytest
 
@@ -94,3 +97,35 @@ def test_llb_get_magnetization(llb, temp_map, delays):
     llb.get_magnetization_map(delays, temp_map=temp_map)
     llb.force_recalc = False
     llb.get_magnetization_map(delays, temp_map=temp_map)
+
+
+@pytest.mark.parametrize(
+    "temp, below_tc",
+    [(50, True), (99.9, True), (99.97, True), (100, False), (100.02, False), (150, False)],
+)
+def test_llb_mean_field_mag_map_at_curie_temp(llb, delays, distances, temp, below_tc):
+    # all layers of the fixture have a Curie temperature of 100 K
+    temp_map = temp * np.ones([len(delays), len(distances)])
+    temp_map[0, :] = 50  # at least one temperature below T_C is required
+    mf_mag_map = llb.get_mean_field_mag_map(temp_map)
+    assert np.all(mf_mag_map[0, :] > 0)
+    if below_tc:
+        assert np.all(mf_mag_map[1:, :] > 0)
+    else:
+        assert np.all(mf_mag_map[1:, :] == 0)
+
+
+def test_llb_mean_field_mag_map_above_curie_temp_raises(llb, delays, distances):
+    with pytest.raises(IndexError):
+        llb.get_mean_field_mag_map(150 * np.ones([len(delays), len(distances)]))
+
+
+def test_llb_get_magnetization_just_below_curie_temp(llb, delays, distances):
+    llb = copy.deepcopy(llb)  # do not alter the module-scoped fixture
+    llb.force_recalc = True
+    llb.save_data = False
+    temp_map = 99.97 * np.ones([len(delays), len(distances), 1])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        magnetization_map = llb.get_magnetization_map(delays, temp_map=temp_map)
+    assert np.all(np.isfinite(magnetization_map))
