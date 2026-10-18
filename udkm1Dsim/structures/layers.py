@@ -389,7 +389,10 @@ class Layer:
 
     @num_sub_systems.setter
     def num_sub_systems(self, value):
-        self.thermal.num_sub_systems.magnitude = value
+        raise AttributeError(
+            "'num_sub_systems' is derived from the temperature-dependent thermal "
+            "parameters and cannot be set directly."
+        )
 
     # ============================================================================
     # Elastic parameters

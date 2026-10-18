@@ -899,6 +899,8 @@ class Heat(Simulation):
 
         """
         t1 = time()
+        # all thermal parameters of the heat simulation must have the same number of subsystems
+        self.S.check_num_sub_systems("heat_capacity", "therm_cond", "sub_system_coupling")
         # initialize
         L = self.S.get_number_of_layers()
         K = self.S.num_sub_systems

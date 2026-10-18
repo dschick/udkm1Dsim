@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import copy
+import warnings
 
 import numpy as np
 import pytest
@@ -104,6 +105,19 @@ def test_layer_sub_system_coupling(layer):
 
 def test_layer_num_subsystems(layer):
     assert layer.num_sub_systems == 1
+
+
+def test_layer_switch_num_sub_systems_silently(layer, capsys):
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        # the parameters are inconsistent in between, which must not be reported
+        layer.therm_cond = [0, 5 * u.W / (u.m * u.K)]
+        assert layer.num_sub_systems == 2
+        layer.heat_capacity = ["0.1*T", 500]
+        layer.sub_system_coupling = ["5e17*(T_1-T_0)", "5e17*(T_0-T_1)"]
+    assert capsys.readouterr().out == ""
+    assert layer.num_sub_systems == 2
 
 
 def test_layer_deb_wal_fac(layer):
@@ -251,7 +265,9 @@ def test_layer_spring_const_and_acoustic_impedance(amorphous_layer):
     assert_approx(amorphous_layer.elastic.acoustic_impedance.quantity, 3e7 * u.kg / u.m**2 / u.s)
 
 
-@pytest.mark.parametrize("prop", ["mass", "mass_unit_area", "area", "volume", "spring_const"])
+@pytest.mark.parametrize(
+    "prop", ["mass", "mass_unit_area", "area", "volume", "spring_const", "num_sub_systems"]
+)
 def test_layer_derived_parameters_are_read_only(layer, prop):
     with pytest.raises(AttributeError):
         setattr(layer, prop, 1)

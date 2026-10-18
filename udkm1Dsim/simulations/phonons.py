@@ -267,6 +267,8 @@ class Phonon(Simulation):
               sub-system.
 
         """
+        # the linear thermal expansion must be given for all subsystems
+        self.S.check_num_sub_systems("lin_therm_exp")
         M = np.size(temp_map, 0)  # nb of delay steps
         L = self.S.get_number_of_layers()
         K = self.S.num_sub_systems

@@ -7,7 +7,7 @@ import pint
 import pytest
 from pint.testing import assert_allclose
 
-from udkm1Dsim import Structure
+from udkm1Dsim import Layer, Structure
 
 u = pint.get_application_registry()
 u.formatter.default_format = ".4g~P"
@@ -172,3 +172,30 @@ def test_get_layer_handle(structure):
 
 def test_reverse(structure):
     structure.reverse()
+
+
+def test_structure_num_sub_systems_follows_layers():
+    layer = Layer("a", "a", thickness=1 * u.nm, heat_capacity=10, therm_cond=1)
+    S = Structure("s")
+    assert S.num_sub_systems == 1  # empty structure
+    S.add_sub_structure(layer, 2)
+    assert S.num_sub_systems == 1
+    # changes of the layers after adding them to the structure are considered
+    layer.heat_capacity = [10, 20]
+    assert S.num_sub_systems == 2
+    with pytest.raises(AttributeError):
+        S.num_sub_systems = 2
+
+
+def test_structure_check_num_sub_systems():
+    a = Layer("a", "a", thickness=1 * u.nm, heat_capacity=[10, 20], therm_cond=[1, 2])
+    b = Layer("b", "b", thickness=1 * u.nm, heat_capacity=[10, 20], therm_cond=1)
+    S = Structure("s")
+    S.add_sub_structure(a, 2)
+    D = Structure("double layer")  # nested structures are checked, too
+    D.add_sub_structure(b, 2)
+    S.add_sub_structure(D, 2)
+    assert S.num_sub_systems == 2
+    S.check_num_sub_systems("heat_capacity")
+    with pytest.raises(ValueError, match="layer 'b': 'therm_cond' has 1"):
+        S.check_num_sub_systems("heat_capacity", "therm_cond")

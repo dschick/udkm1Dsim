@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - substrates can be a single layer
 - Vacuum is default superstrate and substrate
 - `XrayDynMag` polarization setters check the consistency of the number of incoming and outgoing elliptical polarizations ([#217])
+- `Structure.num_sub_systems` and `Layer.num_sub_systems` are derived from the thermal parameters of the layers and cannot be set anymore; the consistency of the number of sub-systems is checked by `Heat` and `Phonon` for their relevant parameters when a simulation starts, instead of printing warnings on every assignment
 
 ### Deprecated
 

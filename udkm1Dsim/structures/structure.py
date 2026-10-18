@@ -61,13 +61,13 @@ class Structure:
         superstrate (Layer): Layer or its sub-classes forming the superstrate.
         substrate (Layer): Layer or its sub-classes forming the substrate.
         num_sub_systems (int): number of subsystems for heat and phonons
-            (electronic, lattice, spins, ...).
+            (electronic, lattice, spins, ...), given by the layer with the
+            most subsystems.
 
     """
 
     def __init__(self, name):
         self.name = name
-        self.num_sub_systems = 1
         self.sub_structures = []
         self.superstrate = [Vacuum(), 1]
         self.substrate = [Vacuum(), 1]
@@ -264,6 +264,47 @@ class Structure:
         param.append(IDs)
         return make_hash_md5(param)
 
+    @property
+    def num_sub_systems(self):
+        """int: number of subsystems, given by the layer with the most subsystems."""
+        _, layers = self.get_unique_layers()
+        return max((layer.num_sub_systems for layer in layers), default=1)
+
+    @num_sub_systems.setter
+    def num_sub_systems(self, value):
+        raise AttributeError(
+            "'num_sub_systems' is derived from the thermal parameters of the layers "
+            "and cannot be set directly."
+        )
+
+    def check_num_sub_systems(self, *property_names):
+        """check_num_sub_systems
+
+        Checks that the given temperature-dependent thermal parameters of all
+        layers have the same number of subsystems as the :class:`Structure`.
+
+        Args:
+            *property_names (str): names of the thermal parameters, e.g.
+                'heat_capacity'.
+
+        Raises:
+            ValueError: if any parameter has a different number of subsystems.
+
+        """
+        K = self.num_sub_systems
+        mismatches = []
+        for layer in self.get_unique_layers()[1]:
+            for name in property_names:
+                num = getattr(layer.thermal, name).num_sub_systems
+                if num != K:
+                    mismatches.append(f"layer '{layer.id}': '{name}' has {num}")
+        if mismatches:
+            raise ValueError(
+                f"All of {', '.join(repr(name) for name in property_names)} must have "
+                f"{K} subsystem(s) for all layers of the structure, but\n  "
+                + "\n  ".join(mismatches)
+            )
+
     def add_sub_structure(self, sub_structure, N=1):
         """add_sub_structure
 
@@ -294,14 +335,6 @@ class Structure:
                 warnings.warn("The superstrate of the sub_structure is ignored.")
             if not isinstance(sub_structure.substrate[0], Vacuum):
                 warnings.warn("The substrate of the sub_structure is ignored.")
-
-        # check the number of subsystems of the sub_structure
-        if (self.num_sub_systems > 1) and not (
-            sub_structure.num_sub_systems == self.num_sub_systems
-        ):
-            raise ValueError("The number of subsystems in each sub_structuremust be the same!")
-        else:
-            self.num_sub_systems = sub_structure.num_sub_systems
 
         # add a sub_structure of N repetitions to the structure with
         self.sub_structures.append([sub_structure, N])

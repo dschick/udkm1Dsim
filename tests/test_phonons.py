@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from udkm1Dsim import Phonon, PhononAna, PhononNum, u
+from udkm1Dsim import Layer, Phonon, PhononAna, PhononNum, Structure, u
 from udkm1Dsim.simulations.solvers import HAS_NUMBA
 
 # fixtures
@@ -192,3 +192,23 @@ def test_phonon_ana_get_strain_map(phonon_ana, delays, temp_map, delta_temp_map)
 def test_phonon_ana_get_energy_per_eigenmode(phonon_ana, delays, temp_map, delta_temp_map):
     _, A, B = phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
     phonon_ana.get_energy_per_eigenmode(A, B)
+
+
+@pytest.mark.parametrize("phonon_class", [PhononNum, PhononAna])
+def test_phonon_inconsistent_num_sub_systems_raises(tmp_path, phonon_class):
+    layer = Layer(
+        "a",
+        "a",
+        thickness=1 * u.nm,
+        density=1000 * u.kg / u.m**3,
+        sound_vel=5 * u.nm / u.ps,
+        heat_capacity=[10, 20],
+        lin_therm_exp=1e-5,
+    )
+    S = Structure("s")
+    S.add_sub_structure(layer, 10)
+    phonon = phonon_class(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
+    delays = np.r_[0:1:0.1] * u.ps
+    temp_map = 300 * np.ones([len(delays), S.get_number_of_layers(), 2])
+    with pytest.raises(ValueError, match="'lin_therm_exp' has 1"):
+        phonon.get_strain_map(delays, temp_map, np.zeros_like(temp_map))

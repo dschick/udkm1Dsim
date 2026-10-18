@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pint.testing import assert_allclose
 
-from udkm1Dsim import Heat, u
+from udkm1Dsim import Heat, Layer, Structure, u
 from udkm1Dsim.simulations.solvers import HAS_NUMBA
 
 # fixtures
@@ -324,3 +324,12 @@ def test_get_hash_is_backend_independent(heat):
     heat.backend = "numba"
     assert heat.get_hash(np.r_[0:10:1], 300) == hash_scipy
     heat.backend = "scipy"
+
+
+def test_heat_inconsistent_num_sub_systems_raises(tmp_path):
+    layer = Layer("a", "a", thickness=1 * u.nm, heat_capacity=[10, 20], therm_cond=1)
+    S = Structure("s")
+    S.add_sub_structure(layer, 10)
+    heat = Heat(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
+    with pytest.raises(ValueError, match="'therm_cond' has 1"):
+        heat.get_temp_map(np.r_[0:1:0.1] * u.ps, 300 * u.K)

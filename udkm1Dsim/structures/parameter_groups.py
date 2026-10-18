@@ -171,25 +171,14 @@ class ThermalParameters(ParameterGroup):
                 p._caller = self
 
     def _update_depending(self):
-        K = self.num_sub_systems.magnitude
-        current_num_sub_systems = []
-        for _, p in vars(self).items():
-            if isinstance(p, TemperatureParameter):
-                current_num_sub_systems.append(p._num_sub_systems)
-
-        max_num = max(current_num_sub_systems)
-        if max_num != K:
-            self.num_sub_systems.magnitude = max_num
-            if K > 0:
-                print(f"'num_sub_systems' has been updated from {K} to {max_num}.")
-
-        if len(set(current_num_sub_systems)) != 1:
-            print(
-                "'num_sub_systems' is not consistent for all "
-                "'ThermalParameters' for this layer including\n"
-                "'heat_capacity', 'therm_cond', 'lin_therm_exp', "
-                "'sub_system_coupling', and 'deb_wal_fac'!"
-            )
+        # The number of sub-systems is given by the temperature-dependent
+        # parameter with the most sub-systems. Their consistency is not checked
+        # here, as they are typically set one after another, but by the
+        # simulations for the parameters they actually use, see
+        # Structure.check_num_sub_systems().
+        self.num_sub_systems.magnitude = max(
+            p.num_sub_systems for p in vars(self).values() if isinstance(p, TemperatureParameter)
+        )
 
 
 class ElasticParameters(ParameterGroup):

@@ -235,6 +235,11 @@ class TemperatureParameter(Parameter):
             self._caller._update_depending()
 
     @property
+    def num_sub_systems(self):
+        """int: number of sub-systems, i.e. the number of given expressions."""
+        return self._num_sub_systems
+
+    @property
     def takes_temperature_vector(self):
         """list[bool]: true if the functional of a sub-system must be called
         with the temperatures of all sub-systems instead of a scalar."""
