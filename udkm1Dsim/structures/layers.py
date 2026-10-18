@@ -113,6 +113,11 @@ class Layer:
         )
 
         # calc depending parameters across ParameterGroups
+        self._update_elastic()
+
+    def _update_elastic(self):
+        """Recalculate the spring constant and acoustic impedance, which
+        depend on the structural and elastic parameters."""
         self.elastic.calc_spring_const(
             self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
         )
@@ -230,12 +235,7 @@ class Layer:
     @thickness.setter
     def thickness(self, value):
         self.structural.thickness.quantity = value
-        self.elastic.calc_spring_const(
-            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
-        )
-        self.elastic.calc_acoustic_impedance(
-            self.structural.mass.magnitude, self.structural.area.magnitude
-        )
+        self._update_elastic()
 
     @property
     def mass(self):
@@ -265,9 +265,7 @@ class Layer:
     @density.setter
     def density(self, value):
         self.structural.density.quantity = value
-        self.elastic.calc_spring_const(
-            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
-        )
+        self._update_elastic()
 
     @property
     def area(self):
@@ -404,12 +402,7 @@ class Layer:
     @sound_vel.setter
     def sound_vel(self, value):
         self.elastic.sound_vel.quantity = value
-        self.elastic.calc_spring_const(
-            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
-        )
-        self.elastic.calc_acoustic_impedance(
-            self.structural.mass.magnitude, self.structural.area.magnitude
-        )
+        self._update_elastic()
 
     @property
     def spring_const(self):
@@ -662,6 +655,7 @@ class UnitCell(Layer):
         self.structural.volume.quantity = self.area * self.c_axis
         self.atoms = []
         self.num_atoms = 0
+        self._update_mass_from_atoms()
 
     def _atoms_table(self, style):
         """Table of all atoms in the unit cell in the given tabulate style"""
@@ -761,6 +755,17 @@ class UnitCell(Layer):
         plt.legend()
         plt.show(block=block)
 
+    def _update_mass_from_atoms(self):
+        """The mass of a unit cell is given by its atoms. Hence, the density
+        follows from the mass and the volume, e.g. when the lattice changes.
+        Without any atoms, the density is kept and the mass follows."""
+        if self.num_atoms > 0:
+            mass = sum((atom.mass for atom, _, _ in self.atoms), 0 * u.kg)
+            # the density setter also updates mass, mass_unit_area and elastic parameters
+            self.density = mass / self.volume
+        else:
+            self._update_elastic()
+
     def add_atom(self, atom, position):
         r"""add_atom
 
@@ -818,16 +823,7 @@ class UnitCell(Layer):
         # drop automatic magnetization calculation for unitcell
         # self.magnetization.append([atom.mag_amplitude, atom.mag_phi, atom.mag_gamma])
 
-        self.structural.mass.quantity = 0 * u.kg
-        for i in range(self.num_atoms):
-            self.structural.mass.quantity = self.structural.mass.quantity + self.atoms[i][0].mass
-
-        self.density = self.mass / self.volume
-        # set mass per unit area
-        self.structural.mass_unit_area.quantity = self.mass * 1 * u.angstrom**2 / self.area
-        self.elastic.calc_spring_const(
-            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
-        )
+        self._update_mass_from_atoms()
 
     def add_multiple_atoms(self, atom, position, Nb):
         """add_multiple_atoms
@@ -893,12 +889,7 @@ class UnitCell(Layer):
     def a_axis(self, value):
         self.lattice.a_axis.quantity = value
         self.structural.area.quantity = self.a_axis * self.b_axis
-        self.elastic.calc_spring_const(
-            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
-        )
-        self.elastic.calc_acoustic_impedance(
-            self.structural.mass.magnitude, self.structural.area.magnitude
-        )
+        self._update_mass_from_atoms()
 
     @property
     def b_axis(self):
@@ -908,12 +899,7 @@ class UnitCell(Layer):
     def b_axis(self, value):
         self.lattice.b_axis.quantity = value
         self.structural.area.quantity = self.a_axis * self.b_axis
-        self.elastic.calc_spring_const(
-            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
-        )
-        self.elastic.calc_acoustic_impedance(
-            self.structural.mass.magnitude, self.structural.area.magnitude
-        )
+        self._update_mass_from_atoms()
 
     @property
     def c_axis(self):
@@ -921,8 +907,6 @@ class UnitCell(Layer):
 
     @c_axis.setter
     def c_axis(self, value):
-        self.thickness = value
         self.lattice.c_axis.quantity = value
-        self.elastic.calc_spring_const(
-            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
-        )
+        self.thickness = value
+        self._update_mass_from_atoms()

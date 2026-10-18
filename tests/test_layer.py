@@ -8,7 +8,7 @@ import sympy as sp
 from pint.testing import assert_allclose as assert_approx
 from pint.testing import assert_equal
 
-from udkm1Dsim import u
+from udkm1Dsim import AmorphousLayer, UnitCell, u
 from udkm1Dsim.structures.parameters import Parameter
 
 # tests
@@ -226,129 +226,198 @@ def test_layer_mag_moment_in_si(layer):
 #     assert_approx(layer.opt_pen_depth, 21.22 * u.nm, rtol=1e-2)
 
 
-# # Vacuum, AmorphousLayer & UnitCell (need atoms, mass, area to be set)
+# ============================================================================
+# Structural & elastic parameters and their dependencies
+# ============================================================================
 
 
-# @pytest.mark.parametrize("fixture_name", ["vacuum", "amorphous_layer", "unit_cell"])
-# def test_layer_to_str(request, fixture_name):
-#     layer = request.getfixturevalue(fixture_name)
-#     layer.__str__()
+def test_layer_structural_parameters(amorphous_layer):
+    assert_approx(amorphous_layer.thickness, 1 * u.nm)
+    assert_approx(amorphous_layer.density, 5000 * u.kg / u.m**3)
+    assert_approx(amorphous_layer.area, 1 * u.angstrom**2)
+    assert_approx(amorphous_layer.volume, 1e-29 * u.m**3)
+    assert_approx(amorphous_layer.mass, 5e-26 * u.kg)
+    assert_approx(amorphous_layer.mass_unit_area, 5e-26 * u.kg)
 
 
-# @pytest.mark.parametrize(
-#     "fixture_name, expected",
-#     [
-#         ("vacuum", 1.0 * u.nm),
-#         ("amorphous_layer", 1.0 * u.nm),
-#         ("unit_cell", 5.0 * u.angstrom),
-#     ],
-# )
-# def test_layer_thickness(request, fixture_name, expected):
-#     layer = request.getfixturevalue(fixture_name)
-#     assert_approx(layer.thickness, expected, rtol=1e-2)
+def test_layer_spring_const_and_acoustic_impedance(amorphous_layer):
+    # k = m / A * 1 Å² * (v / d)²
+    assert_approx(amorphous_layer.spring_const, [1.8] * u.kg / u.s**2)
+    # Z = rho * v
+    assert_approx(amorphous_layer.elastic.acoustic_impedance.quantity, 3e7 * u.kg / u.m**2 / u.s)
 
 
-# @pytest.mark.parametrize(
-#     "fixture_name, expected",
-#     [
-#         ("vacuum", 0.0 * u.kg),
-#         ("amorphous_layer", 5e-26 * u.kg),
-#         ("unit_cell", 2.51e-25 * u.kg),
-#     ],
-# )
-# def test_layer_mass(request, fixture_name, expected):
-#     layer = request.getfixturevalue(fixture_name)
-#     assert_approx(layer.mass, expected, rtol=1e-2)
+@pytest.mark.parametrize("prop", ["mass", "mass_unit_area", "area", "volume", "spring_const"])
+def test_layer_derived_parameters_are_read_only(layer, prop):
+    with pytest.raises(AttributeError):
+        setattr(layer, prop, 1)
 
 
-# @pytest.mark.parametrize(
-#     "fixture_name, expected",
-#     [
-#         ("vacuum", 1e-20 * u.m**2),
-#         ("amorphous_layer", 1e-20 * u.m**2),
-#         ("unit_cell", 2.5e-19 * u.m**2),
-#     ],
-# )
-# def test_layer_area(request, fixture_name, expected):
-#     layer = request.getfixturevalue(fixture_name)
-#     assert_approx(layer.area, expected, rtol=1e-2)
+@pytest.mark.parametrize(
+    "prop, value, mass, spring_const, acoustic_impedance",
+    [
+        ("thickness", 2 * u.nm, 1e-25, 0.9, 3e7),
+        ("density", 10000 * u.kg / u.m**3, 1e-25, 3.6, 6e7),
+        ("sound_vel", 3 * u.nm / u.ps, 5e-26, 0.45, 1.5e7),
+    ],
+)
+def test_layer_setters_update_depending_parameters(
+    amorphous_layer, prop, value, mass, spring_const, acoustic_impedance
+):
+    layer = copy.deepcopy(amorphous_layer)  # do not alter the module-scoped fixture
+    setattr(layer, prop, value)
+    assert_approx(layer.mass, mass * u.kg)
+    assert_approx(layer.spring_const, [spring_const] * u.kg / u.s**2)
+    assert_approx(
+        layer.elastic.acoustic_impedance.quantity, acoustic_impedance * u.kg / u.m**2 / u.s
+    )
 
 
-# @pytest.mark.parametrize(
-#     "fixture_name, expected",
-#     [
-#         ("vacuum", 1e-29 * u.m**3),
-#         ("amorphous_layer", 1e-29 * u.m**3),
-#         ("unit_cell", 1.25e-28 * u.m**3),
-#     ],
-# )
-# def test_layer_volume(request, fixture_name, expected):
-#     layer = request.getfixturevalue(fixture_name)
-#     assert_approx(layer.volume, expected, rtol=1e-2)
+def test_layer_magnetization(layer):
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    assert np.allclose(layer.magnetization.magnitude, [0, 0, 0])
+    layer.magnetization = [1, 0, 0]
+    assert np.allclose(layer.magnetic.magnetization.magnitude, [1, 0, 0])
 
 
-# @pytest.mark.parametrize(
-#     "fixture_name, expected",
-#     [
-#         ("amorphous_layer", 30000000.0 * u.kg**0.5 / u.m**2),
-#         ("unit_cell", 2414871.22 * u.kg**0.5 / u.m**2),
-#     ],
-# )
-# def test_layer_get_acoustic_impedance(request, fixture_name, expected):
-#     layer = request.getfixturevalue(fixture_name)
-#     assert_approx(layer.get_acoustic_impedance(), expected, rtol=1e-2)
+# ============================================================================
+# Representations
+# ============================================================================
 
 
-# @pytest.mark.parametrize(
-#     "fixture_name, expected",
-#     [
-#         ("amorphous_layer", 1.8),
-#         ("unit_cell", 1.45),
-#     ],
-# )
-# def test_layer_calc_spring_const(request, fixture_name, expected):
-#     layer = request.getfixturevalue(fixture_name)
-#     layer.calc_spring_const()
-#     assert_approx(layer.spring_const[0], expected, rtol=1e-2)
+@pytest.mark.parametrize(
+    "fixture_name, header",
+    [
+        ("layer", "Layer: base layer"),
+        ("vacuum", "Vacuum layer of thickness: 1 nm"),
+        ("amorphous_layer", "AmorphousLayer: amorphous layer"),
+        ("unit_cell", "UnitCell: unit_cell"),
+    ],
+)
+def test_layer_repr(request, fixture_name, header):
+    layer = request.getfixturevalue(fixture_name)
+    assert repr(layer).startswith(header)
+    assert str(layer) == repr(layer)
+    assert layer._repr_html_().startswith("<h2>")
 
 
-# # AmorphousLayer
+def test_layer_repr_contains_parameter_groups(unit_cell):
+    text = repr(unit_cell)
+    html = unit_cell._repr_html_()
+    for group in ["Structural", "Lattice", "Thermal", "Elastic", "Optical", "Magnetic"]:
+        assert f"{group} Parameters" in text
+        assert f"<h3>{group} Parameters</h3>" in html
+    assert "<h3>Atoms</h3>" in html
+    assert "Strontium" in text and "Strontium" in html
 
 
-# def test_amorphous_layer_atom(amorphous_layer, atom_iron):
-#     assert amorphous_layer.atom == atom_iron
+# ============================================================================
+# Vacuum
+# ============================================================================
 
 
-# def test_amorphous_layer_magnetization(amorphous_layer):
-#     assert amorphous_layer.magnetization["amplitude"] == 0.5
-#     assert_equal(amorphous_layer.magnetization["phi"], 0 * u.deg)
-#     assert_equal(amorphous_layer.magnetization["gamma"], 180 * u.deg)
+def test_vacuum(vacuum):
+    assert_approx(vacuum.thickness, 1 * u.nm)
+    assert_approx(vacuum.density, 0 * u.kg / u.m**3)
+    assert_approx(vacuum.mass, 0 * u.kg)
+    assert vacuum.opt_ref_index == 1
 
 
-# # UnitCell
+# ============================================================================
+# AmorphousLayer
+# ============================================================================
 
 
-# def test_unit_cell_crystal_axis(unit_cell):
-#     assert_approx(unit_cell.a_axis, 5.0 * u.angstrom, rtol=1e-2)
-#     assert_approx(unit_cell.b_axis, 5.0 * u.angstrom, rtol=1e-2)
-#     assert_approx(unit_cell.c_axis, 5.0 * u.angstrom, rtol=1e-2)
+def test_amorphous_layer_atom(amorphous_layer, atom_iron):
+    assert amorphous_layer.atom is atom_iron
 
 
-# def test_unit_cell_number_atoms(unit_cell):
-#     assert unit_cell.num_atoms == 3
+def test_amorphous_layer_magnetization_from_atom(amorphous_layer):
+    amplitude, phi, gamma = amorphous_layer.magnetic.magnetization.polar
+    assert np.isclose(amplitude, 0.5)
+    assert_approx(phi, 0 * u.deg)
+    assert_approx(gamma, 180 * u.deg)
 
 
-# # test_visualize() fails on certain virtual machine due to TCL error
+def test_amorphous_layer_without_atom():
+    layer = AmorphousLayer("a", "a", 1 * u.nm, 1000 * u.kg / u.m**3)
+    assert np.allclose(layer.magnetization.magnitude, [0, 0, 0])
 
 
-# def test_unit_cell_add_multiple_atoms(unit_cell, atom_oxygen):
-#     unit_cell.add_multiple_atoms(atom_oxygen, 0.5, 2)
+def test_amorphous_layer_invalid_atom():
+    with pytest.raises(TypeError):
+        AmorphousLayer("a", "a", 1 * u.nm, 1000 * u.kg / u.m**3, atom="Fe")
 
 
-# def test_unit_cell_get_atom_ids(unit_cell):
-#     assert unit_cell.get_atom_ids() == ["Sr", "O", "Ti"]
+# ============================================================================
+# UnitCell
+# ============================================================================
 
 
-# def test_unit_cell_get_atom_positions(unit_cell):
-#     assert np.allclose(unit_cell.get_atom_positions(), [0, 0.5, 0.5, 0.5, 1])
-#     assert np.allclose(unit_cell.get_atom_positions(0.1), [0, 0.55, 0.55, 0.55, 1.1])
+def test_unit_cell_lattice_parameters(unit_cell):
+    assert_approx(unit_cell.a_axis, 5 * u.angstrom)
+    assert_approx(unit_cell.b_axis, 5 * u.angstrom)
+    assert_approx(unit_cell.c_axis, 5 * u.angstrom)
+    assert_approx(unit_cell.thickness, 5 * u.angstrom)
+    assert_approx(unit_cell.area, 25 * u.angstrom**2)
+    assert_approx(unit_cell.volume, 125 * u.angstrom**3)
+
+
+def test_unit_cell_mass_from_atoms(unit_cell, atom_strontium, atom_oxygen, atom_titanium):
+    mass = atom_strontium.mass + atom_oxygen.mass + atom_titanium.mass
+    assert_approx(unit_cell.mass, mass)
+    assert_approx(unit_cell.density, mass / unit_cell.volume)
+    assert_approx(unit_cell.mass_unit_area, mass * u.angstrom**2 / unit_cell.area)
+
+
+def test_unit_cell_spring_const_and_acoustic_impedance(unit_cell):
+    assert_approx(unit_cell.spring_const, [1.449] * u.kg / u.s**2, rtol=1e-3)
+    assert_approx(
+        unit_cell.elastic.acoustic_impedance.quantity,
+        2.415e6 * u.kg / u.m**2 / u.s,
+        rtol=1e-3,
+    )
+
+
+@pytest.mark.parametrize(
+    "axis, density_factor, spring_const_factor",
+    [("a_axis", 0.5, 0.5), ("b_axis", 0.5, 0.5), ("c_axis", 0.5, 0.25)],
+)
+def test_unit_cell_axis_setter_keeps_mass(unit_cell, axis, density_factor, spring_const_factor):
+    uc = copy.deepcopy(unit_cell)  # do not alter the module-scoped fixture
+    setattr(uc, axis, 10 * u.angstrom)
+    assert_approx(uc.mass, unit_cell.mass)
+    assert_approx(uc.volume, 2 * unit_cell.volume)
+    assert_approx(uc.density, density_factor * unit_cell.density)
+    assert_approx(uc.spring_const, spring_const_factor * unit_cell.spring_const)
+
+
+def test_unit_cell_atoms(unit_cell):
+    assert unit_cell.num_atoms == 3
+    assert unit_cell.get_atom_ids() == ["Sr", "O", "Ti"]
+    assert np.allclose(unit_cell.get_atom_positions(), [0, 0.5, 1])
+    assert np.allclose(unit_cell.get_atom_positions(0.1), [0, 0.55, 1.1])
+
+
+def test_unit_cell_add_multiple_atoms(unit_cell, atom_oxygen):
+    uc = copy.deepcopy(unit_cell)  # do not alter the module-scoped fixture
+    uc.add_multiple_atoms(atom_oxygen, 0.5, 2)
+    assert uc.num_atoms == 5
+    assert uc.get_atom_ids() == ["Sr", "O", "Ti"]  # unique ids
+    assert np.allclose(uc.get_atom_positions(), [0, 0.5, 0.5, 0.5, 1])
+    assert_approx(uc.mass, unit_cell.mass + 2 * atom_oxygen.mass)
+
+
+def test_unit_cell_strain_dependent_position(atom_oxygen, atom_strontium):
+    uc = UnitCell("uc", "uc", 5 * u.angstrom)
+    uc.add_atom(atom_oxygen, "0.1*(s**2+1)")
+    uc.add_atom(atom_strontium, 0.5)
+    assert uc.atoms[0][2] == "0.1*(s**2+1)"
+    assert np.allclose(uc.get_atom_positions(), [0.1, 0.5])
+    assert np.allclose(uc.get_atom_positions(1), [0.2, 1.0])
+
+
+def test_unit_cell_position_as_function_raises(atom_oxygen):
+    uc = UnitCell("uc", "uc", 5 * u.angstrom)
+    with pytest.raises(ValueError):
+        uc.add_atom(atom_oxygen, lambda s: s)

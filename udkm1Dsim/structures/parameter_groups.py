@@ -199,7 +199,7 @@ class ElasticParameters(ParameterGroup):
     phonon_damping (float): damping constant of phonon propagation [kg/s].
     spring_const (ndarray[float]): spring constant of the layer [kg/s²]
         and higher orders.
-    acoustic_impedance (float): acoustic impedence of a layer [kg/m/s].
+    acoustic_impedance (float): acoustic impedance of a layer [kg/(m² s)].
 
     """
 
@@ -207,7 +207,7 @@ class ElasticParameters(ParameterGroup):
         self.sound_vel = Parameter("m/s", sound_vel)
         self.phonon_damping = Parameter("kg/s", phonon_damping)
         self.spring_const = Parameter("kg/s**2", np.array([0.0]))
-        self.acoustic_impedance = Parameter("kg/m/s", 0.0)
+        self.acoustic_impedance = Parameter("kg/(m**2*s)", 0.0)
 
         # automatically set the name of the parameters
         for name, p in vars(self).items():
