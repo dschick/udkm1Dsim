@@ -96,7 +96,7 @@ class Structure:
                 class_str += tab_str + "{:d} times {:s}: {:.4g~P}\n".format(
                     sub_structure[1],
                     sub_structure[0].name,
-                    sub_structure[1] * sub_structure[0].thickness.to("nm"),
+                    sub_structure[1] * sub_structure[0].structural.thickness.quantity.to("nm"),
                 )
             else:
                 # the substructure is a Structure instance by itself
@@ -113,7 +113,8 @@ class Structure:
                 class_str += tab_str + "{:d} times {:s}: {:.4g~P}\n".format(
                     self.superstrate[1],
                     self.superstrate[0].name,
-                    self.superstrate[1] * self.superstrate[0].thickness.to("nm"),
+                    self.superstrate[1]
+                    * self.superstrate[0].structural.thickness.quantity.to("nm"),
                 )
             else:
                 warnings.warn("There should be a superstrate present!")
@@ -125,7 +126,7 @@ class Structure:
                 class_str += tab_str + "{:d} times {:s}: {:.4g~P}\n".format(
                     self.substrate[1],
                     self.substrate[0].name,
-                    self.substrate[1] * self.substrate[0].thickness.to("nm"),
+                    self.substrate[1] * self.substrate[0].structural.thickness.quantity.to("nm"),
                 )
             else:
                 warnings.warn("There should be a substrate present!")
@@ -136,9 +137,10 @@ class Structure:
         rows = ""
         for sub_structure, repetitions in self.sub_structures:
             if isinstance(sub_structure, Layer):
+                thickness = repetitions * sub_structure.structural.thickness.quantity
                 rows += (
                     f"<tr><td>{repetitions:d}</td><td>{sub_structure.name}</td>"
-                    f"<td>{(repetitions * sub_structure.thickness).to('nm'):.4g~P}</td></tr>"
+                    f"<td>{thickness.to('nm'):.4g~P}</td></tr>"
                 )
             else:
                 rows += (
@@ -166,7 +168,7 @@ class Structure:
             if isinstance(layer, Layer):
                 class_str += (
                     f"<b>{label} (semi-infinite):</b> {repetitions:d} times {layer.name}: "
-                    f"{(repetitions * layer.thickness).to('nm'):.4g~P}<br>"
+                    f"{(repetitions * layer.structural.thickness.quantity).to('nm'):.4g~P}<br>"
                 )
         return class_str
 
@@ -563,7 +565,7 @@ class Structure:
               each Layer.
 
         """
-        thickness = self.get_layer_property_vector("_thickness")
+        thickness = self.get_layer_property_vector("structural.thickness.magnitude")
         d_end = np.cumsum(thickness)
         d_start = np.hstack([[0], d_end[0:-1]])
         d_mid = d_start + thickness / 2

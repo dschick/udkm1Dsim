@@ -491,7 +491,7 @@ class Heat(Simulation):
             # find the first layer and get properties
             index = finderb(interfaces[i], d_start)
             layer = structure.get_layer_handle(index[0])
-            opt_pen_depth = layer.opt_pen_depth.to("m").magnitude
+            opt_pen_depth = layer.optical.opt_pen_depth.magnitude
 
             # get all distances in the current layer we have to
             # calculate the absorption profile for
@@ -576,14 +576,14 @@ class Heat(Simulation):
         else:
             raise TypeError("Superstrate must be of type Layer or its sub-classes!")
 
-        opt_ref_indices[0] = superstrate_layer.opt_ref_index
-        thicknesses[0] = superstrate_layer.thickness.to_base_units().magnitude
+        opt_ref_indices[0] = superstrate_layer.optical.opt_ref_index.magnitude
+        thicknesses[0] = superstrate_layer.structural.thickness.magnitude
 
         # iterate actual sampel structure
         for i in range(N - 1):
             index = finderb(interfaces[i], d_start)
             layer = structure.get_layer_handle(index[0])
-            opt_ref_indices[i + 1] = layer.opt_ref_index
+            opt_ref_indices[i + 1] = layer.optical.opt_ref_index.magnitude
             thicknesses[i + 1] = interfaces[i + 1] - interfaces[i]
 
         # add substrate
@@ -592,8 +592,8 @@ class Heat(Simulation):
         else:
             raise TypeError("Substrate must be of type Layer or its sub-classes!")
 
-        opt_ref_indices[N] = substrate_layer.opt_ref_index
-        thicknesses[N] = substrate_layer.thickness.to_base_units().magnitude
+        opt_ref_indices[N] = substrate_layer.optical.opt_ref_index.magnitude
+        thicknesses[N] = substrate_layer.structural.thickness.magnitude
 
         # Snell laws
         alpha = np.empty(N + 1, dtype=complex)
@@ -809,9 +809,9 @@ class Heat(Simulation):
                 f"Delta excitation expects a single fluence value; got shape {np.shape(fluence)}"
             )
 
-        int_heat_capacities = self.S.get_layer_property_vector("int_heat_capacity")
-        thicknesses = self.S.get_layer_property_vector("_thickness")
-        masses = self.S.get_layer_property_vector("_mass_unit_area")
+        int_heat_capacities = self.S.get_layer_property_vector("thermal.heat_capacity.integral")
+        thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
+        masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
         # masses are normalized to 1Ang^2
         E0 = np.array(fluence) * (1 * u.angstrom**2).to_base_units().magnitude
 
@@ -1180,8 +1180,8 @@ class Heat(Simulation):
 
         energy_map = np.zeros_like(temp_map)
 
-        int_heat_capacities = self.S.get_layer_property_vector("int_heat_capacity")
-        masses = self.S.get_layer_property_vector("_mass")
+        int_heat_capacities = self.S.get_layer_property_vector("thermal.heat_capacity.integral")
+        masses = self.S.get_layer_property_vector("structural.mass.magnitude")
 
         for k in range(K):
             for i in range(M):
@@ -1235,10 +1235,12 @@ class Heat(Simulation):
 
         energy_flux_map = np.zeros((M, N, K, 3))
 
-        heat_capacities = self.S.get_layer_property_vector("heat_capacity")
-        sub_system_couplings = self.S.get_layer_property_vector("sub_system_coupling")
-        masses = self.S.get_layer_property_vector("_mass")
-        volumes = self.S.get_layer_property_vector("_volume")
+        heat_capacities = self.S.get_layer_property_vector("thermal.heat_capacity.functional")
+        sub_system_couplings = self.S.get_layer_property_vector(
+            "thermal.sub_system_coupling.functional"
+        )
+        masses = self.S.get_layer_property_vector("structural.mass.magnitude")
+        volumes = self.S.get_layer_property_vector("structural.volume.magnitude")
 
         for k in range(K):
             for i in range(M):

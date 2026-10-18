@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import copy
+
 import numpy as np
 import pytest
 import sympy as sp
@@ -7,6 +9,7 @@ from pint.testing import assert_allclose as assert_approx
 from pint.testing import assert_equal
 
 from udkm1Dsim import u
+from udkm1Dsim.structures.parameters import Parameter
 
 # tests
 
@@ -175,6 +178,17 @@ def test_layer_mag_moment(layer):
     assert_approx(layer.mag_moment, 1 * u.bohr_magneton, rtol=1e-2)
 
 
+def test_layer_set_magnetic_parameters_after_creation(layer):
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    layer.curie_temp = 200 * u.K
+    layer.eff_spin = 2
+    layer.anisotropy = 5 * u.J / u.m**3
+    layer.exch_stiffness = [1, 2, 3] * u.J / u.m
+    assert_approx(layer.mf_exch_coupling, 3 * 2 / 3 * u.boltzmann_constant * 200 * u.K)
+    assert_equal(layer.anisotropy, [5, 5, 5] * u.J / u.m**3)
+    assert_equal(layer.exch_stiffness, [1, 2, 3] * u.J / u.m)
+
+
 def test_layer_aniso_exponent(layer):
     assert layer.aniso_exponent == 1
 
@@ -193,11 +207,18 @@ def test_layer_mag_saturation(layer):
 
 def test_layer_get_property_dict(layer):
     assert layer.get_property_dict(types="all") == vars(layer)
-    layer.get_property_dict(types="heat")
-    layer.get_property_dict(types="phonon")
-    layer.get_property_dict(types="xray")
-    layer.get_property_dict(types="optical")
-    layer.get_property_dict(types="magnetic")
+    for types in ["heat", "phonon", "xray", "optical", "magnetic"]:
+        props = layer.get_property_dict(types=types)
+        assert props, f"no properties for types='{types}'"
+        assert all(isinstance(p, Parameter) for p in props.values())
+    props = layer.get_property_dict(types=["heat", "magnetic"])
+    assert props["structural.thickness"] is layer.structural.thickness
+    assert props["magnetic.curie_temp"] is layer.magnetic.curie_temp
+
+
+def test_layer_mag_moment_in_si(layer):
+    assert layer.magnetic.mag_moment.unit == u.A * u.m**2
+    assert np.isclose(layer.magnetic.mag_moment.magnitude, 9.274e-24, rtol=1e-3)
 
 
 # def test_layer_set_opt_pen_depth_from_ref_index(layer):

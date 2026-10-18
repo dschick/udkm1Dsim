@@ -116,6 +116,35 @@ def test_get_layer_property_vector(structure):
     structure.get_layer_property_vector("spring_const")
 
 
+def test_get_layer_property_vector_mag_moment_in_si(structure):
+    structure = copy.deepcopy(structure)  # do not alter the module-scoped fixtures
+    layer = structure.get_layer_handle(0)
+    layer.mag_moment = 2 * u.bohr_magneton
+    for name in ["_mag_moment", "magnetic.mag_moment.magnitude"]:
+        mag_moments = structure.get_layer_property_vector(name)
+        assert np.isclose(mag_moments[0], 1.855e-23, rtol=1e-3)
+
+
+@pytest.mark.parametrize(
+    "types, prop, value",
+    [
+        ("heat", "heat_capacity", 500 * u.J / u.kg / u.K),
+        ("heat", "thickness", 3 * u.nm),
+        ("phonon", "phonon_damping", 1e-12 * u.kg / u.s),
+        ("xray", "roughness", 1 * u.nm),
+        ("optical", "opt_ref_index", 1.5 + 0.1j),
+        ("magnetic", "curie_temp", 500 * u.K),
+        (["xray", "magnetic"], "mag_moment", 2 * u.bohr_magneton),
+    ],
+)
+def test_structure_get_hash_depends_on_properties(structure, types, prop, value):
+    structure = copy.deepcopy(structure)  # do not alter the module-scoped fixtures
+    old_hash = structure.get_hash(types=types)
+    assert structure.get_hash(types=types) == old_hash
+    setattr(structure.get_layer_handle(0), prop, value)
+    assert structure.get_hash(types=types) != old_hash
+
+
 def test_get_layer_property_vector_padding(structure):
     """layers without higher order spring constants get zeros for them"""
     _, layers = structure.get_unique_layers()

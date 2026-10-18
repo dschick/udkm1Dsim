@@ -482,7 +482,9 @@ class XrayKin(Xray):
 
         S = np.sum(
             self.get_uc_atomic_form_factors(energy, qz, uc)
-            * np.exp(1j * uc.c_axis.magnitude * np.outer(uc.get_atom_positions(strain), qz)),
+            * np.exp(
+                1j * uc.lattice.c_axis.magnitude * np.outer(uc.get_atom_positions(strain), qz)
+            ),
             0,
         )
         return S
@@ -613,7 +615,7 @@ class XrayKin(Xray):
                 # the substructure is an unit cell and we can calculate
                 # Ep directly
                 Ep = self.get_Ep(energy, qz, theta, sub_structure[0], strains[strainCounter])
-                z = sub_structure[0].c_axis.magnitude
+                z = sub_structure[0].lattice.c_axis.magnitude
                 strainCounter = strainCounter + 1
             elif isinstance(sub_structure[0], Structure):
                 # the substructure is a structure, so we do a recursive
@@ -716,7 +718,7 @@ class XrayKin(Xray):
             * (
                 self.get_polarization_factor(theta)
                 * self.get_uc_structure_factor(energy, qz, uc, strain)
-                / uc.area.magnitude
+                / uc.structural.area.magnitude
             )
             / qz
         )
@@ -1483,15 +1485,22 @@ class XrayDyn(Xray):
                 rel_dist = uc.atoms[i + 1][1](strain) - uc.atoms[i][1](strain)
 
             # sum Debye-Waller factors for all sub-systems
-            deb_wal_fac = np.sum(np.array([dbf(T) for dbf, T in zip(uc.deb_wal_fac, temp)]))
+            deb_wal_fac = np.sum(
+                np.array([dbf(T) for dbf, T in zip(uc.thermal.deb_wal_fac.functional, temp)])
+            )
 
             # get the reflection-transmission matrix and phase matrix
             # from all atoms in the unit cell and multiply them
             # together
             RTM = m_times_n(
-                RTM, self.get_atom_ref_trans_matrix(uc.atoms[i][0], uc.area.magnitude, deb_wal_fac)
+                RTM,
+                self.get_atom_ref_trans_matrix(
+                    uc.atoms[i][0], uc.structural.area.magnitude, deb_wal_fac
+                ),
             )
-            RTM = m_times_n(RTM, self.get_atom_phase_matrix(rel_dist * uc.c_axis.magnitude))
+            RTM = m_times_n(
+                RTM, self.get_atom_phase_matrix(rel_dist * uc.lattice.c_axis.magnitude)
+            )
         return RTM
 
     def get_atom_ref_trans_matrix(self, atom, area, deb_wal_fac):
@@ -2112,8 +2121,8 @@ class XrayDynMag(Xray):
         elif isinstance(self.S.superstrate[0], AmorphousLayer):
             A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
                 self.S.superstrate[0].atom,
-                self.S.superstrate[0].density.magnitude,
-                self.S.superstrate[0].thickness.magnitude,
+                self.S.superstrate[0].structural.density.magnitude,
+                self.S.superstrate[0].structural.thickness.magnitude,
             )
         else:
             raise TypeError(
@@ -2261,14 +2270,14 @@ class XrayDynMag(Xray):
                     A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = (
                         self.get_atom_boundary_phase_matrix(
                             layer.atom,
-                            layer.density.magnitude * (strains[layer_counter] + 1),
-                            layer.thickness.magnitude * (strains[layer_counter] + 1),
+                            layer.structural.density.magnitude * (strains[layer_counter] + 1),
+                            layer.structural.thickness.magnitude * (strains[layer_counter] + 1),
                             False,
                             magnetizations[layer_counter],
                         )
                     )
 
-                roughness = layer.roughness.magnitude
+                roughness = layer.structural.roughness.magnitude
                 F = m_times_n(A_inv, last_A)
                 F_phi = m_times_n(A_inv_phi, last_A_phi)
                 if roughness > 0:
@@ -2507,8 +2516,8 @@ class XrayDynMag(Xray):
             elif isinstance(self.S.superstrate[0], AmorphousLayer):
                 A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
                     self.S.superstrate[0].atom,
-                    self.S.superstrate[0].density.magnitude,
-                    self.S.superstrate[0].thickness.magnitude,
+                    self.S.superstrate[0].structural.density.magnitude,
+                    self.S.superstrate[0].structural.thickness.magnitude,
                 )
             else:
                 raise TypeError(
@@ -2592,8 +2601,8 @@ class XrayDynMag(Xray):
         elif isinstance(self.S.superstrate[0], AmorphousLayer):
             A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
                 self.S.superstrate[0].atom,
-                self.S.superstrate[0].density.magnitude,
-                self.S.superstrate[0].thickness.magnitude,
+                self.S.superstrate[0].structural.density.magnitude,
+                self.S.superstrate[0].structural.thickness.magnitude,
             )
         else:
             raise TypeError(
@@ -2748,20 +2757,20 @@ class XrayDynMag(Xray):
                 if isinstance(layer, Vacuum):
                     A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = (
                         self.get_atom_boundary_phase_matrix(
-                            [], 0, layer.thickness.magnitude * (strains[i] + 1)
+                            [], 0, layer.structural.thickness.magnitude * (strains[i] + 1)
                         )
                     )
                 else:
                     A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = (
                         self.get_atom_boundary_phase_matrix(
                             layer.atom,
-                            layer.density.magnitude / (strains[i] + 1),
-                            layer.thickness.magnitude * (strains[i] + 1),
+                            layer.structural.density.magnitude / (strains[i] + 1),
+                            layer.structural.thickness.magnitude * (strains[i] + 1),
                             force_recalc,
                             magnetizations[i],
                         )
                     )
-                roughness = layer.roughness.magnitude
+                roughness = layer.structural.roughness.magnitude
                 F = m_times_n(A_inv, last_A)
                 F_phi = m_times_n(A_inv_phi, last_A_phi)
                 if roughness > 0:
@@ -2832,14 +2841,14 @@ class XrayDynMag(Xray):
                 rel_dist = (strain + 1) - uc.atoms[j][1](strain)
             else:
                 rel_dist = uc.atoms[j + 1][1](strain) - uc.atoms[j][1](strain)
-            distance = rel_dist * uc.c_axis.magnitude
+            distance = rel_dist * uc.lattice.c_axis.magnitude
 
             try:
                 # calculate density
                 if distance == 0:
                     density = 0
                 else:
-                    density = uc.atoms[j][0]._mass / (uc.area.magnitude * distance)
+                    density = uc.atoms[j][0]._mass / (uc.structural.area.magnitude * distance)
             except AttributeError:
                 density = 0
 
@@ -2848,9 +2857,11 @@ class XrayDynMag(Xray):
             )
             F = m_times_n(A_inv, last_A)
             F_phi = m_times_n(A_inv_phi, last_A_phi)
-            if (j == 0) and (uc.roughness.magnitude > 0):
+            if (j == 0) and (uc.structural.roughness.magnitude > 0):
                 # it is the first layer so care for the roughness
-                W = XrayDynMag.calc_roughness_matrix(uc.roughness.magnitude, k_z, last_k_z)
+                W = XrayDynMag.calc_roughness_matrix(
+                    uc.structural.roughness.magnitude, k_z, last_k_z
+                )
                 F = F * W
                 F_phi = F_phi * W
             temp = m_times_n(P, F)

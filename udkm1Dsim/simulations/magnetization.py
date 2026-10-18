@@ -419,16 +419,16 @@ class LLB(Magnetization):
         # convert initial magnetization from polar to cartesian coordinates
         init_mag = convert_polar_to_cartesian(init_mag)
         # get layer properties
-        curie_temps = self.S.get_layer_property_vector("_curie_temp")
-        eff_spins = self.S.get_layer_property_vector("_eff_spin")
-        lambdas = self.S.get_layer_property_vector("_lamda")
-        mf_exch_couplings = self.S.get_layer_property_vector("_mf_exch_coupling")
-        mag_moments = self.S.get_layer_property_vector("_mag_moment")
-        aniso_exponents = self.S.get_layer_property_vector("_aniso_exponent")
-        anisotropies = self.S.get_layer_property_vector("_anisotropy")
-        mag_saturations = self.S.get_layer_property_vector("_mag_saturation")
+        curie_temps = self.S.get_layer_property_vector("magnetic.curie_temp.magnitude")
+        eff_spins = self.S.get_layer_property_vector("magnetic.eff_spin.magnitude")
+        lambdas = self.S.get_layer_property_vector("magnetic.lamda.magnitude")
+        mf_exch_couplings = self.S.get_layer_property_vector("magnetic.mf_exch_coupling.magnitude")
+        mag_moments = self.S.get_layer_property_vector("magnetic.mag_moment.magnitude")
+        aniso_exponents = self.S.get_layer_property_vector("magnetic.aniso_exponent.magnitude")
+        anisotropies = self.S.get_layer_property_vector("magnetic.anisotropy.magnitude")
+        mag_saturations = self.S.get_layer_property_vector("magnetic.mag_saturation.magnitude")
         exch_stiffnesses = self.get_directional_exchange_stiffnesses()
-        thicknesses = self.S.get_layer_property_vector("_thickness")
+        thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
         mean_mag_map = self.get_mean_field_mag_map(temp_map[:, :, 0])
@@ -554,12 +554,12 @@ class LLB(Magnetization):
         for i, (k, v) in enumerate(self.S.get_all_positions_per_unique_layer().items()):
             relevant_temps[k] = []
             # unique layer properties
-            curie_temp = unique_layers[1][i].curie_temp.magnitude
+            curie_temp = unique_layers[1][i].magnetic.curie_temp.magnitude
             # mean-field magnetization is only calculated for a non-zero Curie
             # temperature of magnetic layers
             if curie_temp > 0:
-                eff_spin = unique_layers[1][i].eff_spin
-                mf_exch_coupling = unique_layers[1][i].mf_exch_coupling
+                eff_spin = unique_layers[1][i].magnetic.eff_spin.magnitude
+                mf_exch_coupling = unique_layers[1][i].magnetic.mf_exch_coupling.magnitude
 
                 # simple round for down-sampling
                 unique_temps = np.unique(np.round(temp_map[:, v].flatten(), decimals=1))
@@ -620,7 +620,7 @@ class LLB(Magnetization):
             A (ndarray[float]): directional exchange stiffnesses.
 
         """
-        exch_stiffnesses = self.S.get_layer_property_vector("_exch_stiffness")
+        exch_stiffnesses = self.S.get_layer_property_vector("magnetic.exch_stiffness.magnitude")
 
         indices, _, _ = self.S.get_layer_vectors()
 
@@ -989,7 +989,7 @@ class LLB(Magnetization):
 
         """
 
-        eta = mf_exch_coupling.to("m**2*kg/s**2").magnitude * mag / constants.k / temp / curie_temp
+        eta = mf_exch_coupling * mag / constants.k / temp / curie_temp
         c1 = (2 * eff_spin + 1) / (2 * eff_spin)
         c2 = 1 / (2 * eff_spin)
         brillouin = c1 / np.tanh(c1 * eta) - c2 / np.tanh(c2 * eta)

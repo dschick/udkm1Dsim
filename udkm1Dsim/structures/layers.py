@@ -26,6 +26,7 @@ __all__ = ["Layer", "Vacuum", "AmorphousLayer", "UnitCell"]
 __docformat__ = "restructuredtext"
 
 from inspect import isfunction
+from operator import attrgetter
 
 import numpy as np
 import pint
@@ -138,9 +139,12 @@ class Layer:
     def get_property_dict(self, **kwargs):
         """get_property_dict
 
-        Returns a dictionary with all parameters. objects or dicts and
-        objects are converted to strings. if a type is given, only these
-        properties are returned.
+        Returns a dictionary with all parameters. If a type is given, only
+        the parameters relevant for this type of simulation are returned.
+        Their keys are the paths of the parameters, e.g.
+        `structural.thickness`, and their values are the
+        :class:`Parameter` objects, whose `repr` contains their name, value,
+        and unit, as required for :meth:`Structure.get_hash`.
 
         Args:
             **kwargs (list[str]): types of requested properties.
@@ -149,57 +153,69 @@ class Layer:
             R (dict): dictionary with requested properties.
 
         """
-        # initialize input parser and define defaults and validators
         properties_by_types = {
             "heat": [
-                "_thickness",
-                "_mass_unit_area",
-                "_density",
-                "_opt_pen_depth",
-                "opt_ref_index",
-                "therm_cond_str",
-                "heat_capacity_str",
-                "int_heat_capacity_str",
-                "sub_system_coupling_str",
-                "num_sub_systems",
+                "structural.thickness",
+                "structural.mass_unit_area",
+                "structural.density",
+                "optical.opt_pen_depth",
+                "optical.opt_ref_index",
+                "thermal.therm_cond",
+                "thermal.heat_capacity",
+                "thermal.sub_system_coupling",
+                "thermal.num_sub_systems",
             ],
             "phonon": [
-                "num_sub_systems",
-                "int_lin_therm_exp_str",
-                "_thickness",
-                "_mass_unit_area",
-                "spring_const",
-                "_phonon_damping",
+                "thermal.num_sub_systems",
+                "thermal.lin_therm_exp",
+                "structural.thickness",
+                "structural.mass_unit_area",
+                "elastic.spring_const",
+                "elastic.phonon_damping",
             ],
-            "xray": ["num_atoms", "_area", "_mass", "deb_wal_fac_str", "_thickness"],
-            "optical": ["_c_axis", "_opt_pen_depth", "opt_ref_index", "opt_ref_index_per_strain"],
+            "xray": [
+                "num_atoms",
+                "structural.area",
+                "structural.mass",
+                "structural.density",
+                "structural.roughness",
+                "structural.thickness",
+                "thermal.deb_wal_fac",
+            ],
+            "optical": [
+                "lattice.c_axis",
+                "optical.opt_pen_depth",
+                "optical.opt_ref_index",
+                "optical.opt_ref_index_per_strain",
+            ],
             "magnetic": [
-                "_thickness",
-                "magnetization",
-                "eff_spin",
-                "_curie_temp",
-                "_aniso_exponents",
-                "_anisotropy",
-                "_exch_stiffness",
-                "_mag_saturation",
-                "lamda",
+                "structural.thickness",
+                "magnetic.magnetization",
+                "magnetic.eff_spin",
+                "magnetic.curie_temp",
+                "magnetic.mag_moment",
+                "magnetic.aniso_exponent",
+                "magnetic.anisotropy",
+                "magnetic.exch_stiffness",
+                "magnetic.mag_saturation",
+                "magnetic.lamda",
             ],
         }
 
         types = kwargs.get("types", "all")
         if type(types) is not list:
             types = [types]
-        attrs = vars(self)
         R = {}
         for t in types:
             # define the property names by the given type
             if t == "all":
-                return attrs
-            else:
-                S = dict(
-                    (key, value) for key, value in attrs.items() if key in properties_by_types[t]
-                )
-                R.update(S)
+                return vars(self)
+            for path in properties_by_types[t]:
+                try:
+                    R[path] = attrgetter(path)(self)
+                except AttributeError:
+                    # e.g. num_atoms and lattice exist only for UnitCell
+                    continue
 
         return R
 
@@ -550,11 +566,13 @@ class Vacuum(Layer):
 
     def __repr__(self):
         """String representation of this class"""
-        return f"Vacuum layer of thickness: {self.thickness.to('nm'):.4g~P}"
+        return f"Vacuum layer of thickness: {self.structural.thickness.quantity.to('nm'):.4g~P}"
 
     def _repr_html_(self):
         """HTML representation of this class"""
-        return f"<h2>Vacuum</h2><b>Thickness:</b> {self.thickness.to('nm'):.4g~P}"
+        return (
+            f"<h2>Vacuum</h2><b>Thickness:</b> {self.structural.thickness.quantity.to('nm'):.4g~P}"
+        )
 
 
 class AmorphousLayer(Layer):

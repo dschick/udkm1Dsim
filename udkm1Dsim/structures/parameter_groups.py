@@ -306,7 +306,7 @@ class MagneticParameters(ParameterGroup):
     curie_temp (float): Curie temperature [K].
     mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
     lamda (float): intrinsic coupling to bath parameter.
-    mag_moment (float): atomic magnetic moment [mu_Bohr].
+    mag_moment (float): atomic magnetic moment [A m²].
     aniso_exponent(ndarray[float]): exponent of T-dependence uniaxial
         anisotropy.
     anisotropy (ndarray[float]): anisotropy at T=0 K [J/m³] as x,y,z component vector.
@@ -333,7 +333,7 @@ class MagneticParameters(ParameterGroup):
         self.curie_temp = Parameter("K", curie_temp)
         self.mf_exch_coupling = Parameter("m**2kg/s**2", 0.0)
         self.lamda = Parameter("", lamda)
-        self.mag_moment = Parameter("bohr_magneton", mag_moment)
+        self.mag_moment = Parameter("A*m**2", mag_moment)
         self.aniso_exponent = Parameter("", aniso_exponent)
         self.anisotropy = Parameter("J/m**3", anisotropy)
         self.exch_stiffness = Parameter("J/m", exch_stiffness)
@@ -374,7 +374,6 @@ class MagneticParameters(ParameterGroup):
             self.mf_exch_coupling.magnitude = 0
 
     def check_array(self, parameter, name):
-        unit = parameter.unit
         value = np.asarray(parameter.magnitude)
 
         if value.ndim == 0:
@@ -384,4 +383,5 @@ class MagneticParameters(ParameterGroup):
         elif value.shape != (3,):
             raise ValueError(f"{name} must be a scalar or a vector of length 3!")
 
-        parameter.quantity = u.Quantity(value, unit)
+        # set directly, as the setter would call _update_depending() recursively
+        parameter._magnitude = value

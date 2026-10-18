@@ -280,8 +280,8 @@ class Phonon(Simulation):
         temp_map = np.reshape(temp_map, [M, L, K])
         delta_temp_map = np.reshape(delta_temp_map, [M, L, K])
 
-        thicknesses = self.S.get_layer_property_vector("_thickness")
-        int_lin_therm_exps = self.S.get_layer_property_vector("int_lin_therm_exp")
+        thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
+        int_lin_therm_exps = self.S.get_layer_property_vector("thermal.lin_therm_exp.integral")
 
         # evaluated initial integrated linear thermal expansion from T1 to T2
         int_alpha_T0 = np.zeros([L, K])
@@ -475,7 +475,7 @@ class PhononNum(Phonon):
 
         # initialize
         L = self.S.get_number_of_layers()
-        thicknesses = self.S.get_layer_property_vector("_thickness")
+        thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
         x0 = np.zeros([2 * L])  # initial condition for the shift of the layers
 
         try:
@@ -499,10 +499,10 @@ class PhononNum(Phonon):
             self.disp_message("Calculating coherent dynamics with ODE solver ...")
 
             L = self.S.get_number_of_layers()
-            masses = self.S.get_layer_property_vector("_mass_unit_area")
-            thicknesses = self.S.get_layer_property_vector("_thickness")
-            spring_consts = self.S.get_layer_property_vector("_spring_const")
-            damping = self.S.get_layer_property_vector("_phonon_damping")
+            masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
+            thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
+            spring_consts = self.S.get_layer_property_vector("elastic.spring_const.magnitude")
+            damping = self.S.get_layer_property_vector("elastic.phonon_damping.magnitude")
             force_from_heat = phonon_scipy.force_from_heat(sticks, spring_consts)
 
             if self.backend == "numba":
@@ -750,7 +750,7 @@ class PhononAna(Phonon):
             pass
 
         delay0 = delays[0]  # initial delay
-        thicknesses = self.S.get_layer_property_vector("_thickness")
+        thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
         X = np.zeros([M, L])  # shifts of the layers
         V = np.zeros_like(X)  # velocities of the layers
         A = np.zeros_like(X)  # coefficient vector for eigenwert solution
@@ -871,8 +871,8 @@ class PhononAna(Phonon):
             # initializing a vector for eigenfrequencies
             omega = np.zeros([L, 1], dtype=np.complex128)
 
-            masses = self.S.get_layer_property_vector("_mass_unit_area")
-            spring_consts = self.S.get_layer_property_vector("_spring_const")
+            masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
+            spring_consts = self.S.get_layer_property_vector("elastic.spring_const.magnitude")
             spring_consts = np.hstack((0, spring_consts))  # set the first spring free
 
             for i in range(L):  # defining main diagonal
@@ -937,7 +937,7 @@ class PhononAna(Phonon):
         L = self.S.get_number_of_layers()
         M = A.shape[0]  # nb of delays
         E = np.zeros([M, L])
-        masses = self.S.get_layer_property_vector("_mass_unit_area")
+        masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
 
         # get the eigenVectors and eigenFrequencies
         Xi, omega = self.solve_eigenproblem()
