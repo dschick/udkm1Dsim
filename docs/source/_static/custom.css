@@ -1,0 +1,44 @@
+/* rich representations (_repr_html_) of udkm1Dsim objects in notebook outputs
+ *
+ * In dark mode, the theme renders HTML outputs in a light box, so all colors
+ * are inherited from the output or are semi-transparent to work in both modes.
+ */
+div.cell_output table {
+  border-collapse: collapse;
+  margin: 0.25em 0 1em 0;
+  font-size: 0.9em;
+  color: inherit;
+}
+
+div.cell_output th,
+div.cell_output td {
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  padding: 0.15em 0.6em;
+  line-height: 1.35;
+  white-space: pre; /* keep the alignment of tabulate's padded cells */
+}
+
+div.cell_output thead th {
+  background: rgba(128, 128, 128, 0.12);
+  font-weight: 600;
+}
+
+div.cell_output tbody tr:nth-child(odd) {
+  background: transparent; /* override myst-nb's hard-coded zebra colors */
+}
+
+div.cell_output h2,
+div.cell_output h3 {
+  color: inherit;
+}
+
+div.cell_output h2 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em 0;
+}
+
+div.cell_output h3 {
+  font-size: 1em;
+  margin: 0.75em 0 0.25em 0;
+}
