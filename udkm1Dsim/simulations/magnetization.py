@@ -21,9 +21,9 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Magnetization', 'LLB']
+__all__ = ["Magnetization", "LLB"]
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
 from os import path
 from time import time
@@ -46,6 +46,7 @@ from .simulation import Simulation
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
+
 
 class Magnetization(Simulation):
     """Magnetization
@@ -75,22 +76,17 @@ class Magnetization(Simulation):
 
     """
 
+    _title = "Magnetization simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.ode_options = {
-            'method': 'RK45',
-            'first_step': None,
-            'max_step': np.inf,
-            'rtol': 1e-3,
-            'atol': 1e-6,
-            }
-
-    def __str__(self, output=[]):
-        """String representation of this class"""
-
-        class_str = 'Magnetization simulation properties:\n\n'
-        class_str += super().__str__(output)
-        return class_str
+            "method": "RK45",
+            "first_step": None,
+            "max_step": np.inf,
+            "rtol": 1e-3,
+            "atol": 1e-6,
+        }
 
     def get_hash(self, **kwargs):
         """get_hash
@@ -111,24 +107,24 @@ class Magnetization(Simulation):
         """
         param = []
 
-        if 'strain_map' in kwargs:
-            strain_map = kwargs.get('strain_map')
+        if "strain_map" in kwargs:
+            strain_map = kwargs.get("strain_map")
             if np.size(strain_map) > 1e6:
                 strain_map = strain_map.flatten()[0:1000000]
             param.append(strain_map)
-            kwargs.pop('strain_map')
+            kwargs.pop("strain_map")
 
-        if 'temp_map' in kwargs:
-            temp_map = kwargs.get('temp_map')
+        if "temp_map" in kwargs:
+            temp_map = kwargs.get("temp_map")
             if np.size(temp_map) > 1e6:
                 temp_map = temp_map.flatten()[0:1000000]
             param.append(temp_map)
-            kwargs.pop('temp_map')
+            kwargs.pop("temp_map")
 
         for value in kwargs.values():
             param.append(value)
 
-        return self.S.get_hash(types='magnetic') + '_' + make_hash_md5(param)
+        return self.S.get_hash(types="magnetic") + "_" + make_hash_md5(param)
 
     def check_initial_magnetization(self, init_mag, distances=[]):
         """check_initial_magnetization
@@ -155,11 +151,12 @@ class Magnetization(Simulation):
         layers = self.S.get_unique_layers()
         for layer in layers[1]:
             if isinstance(layer, UnitCell):
-                raise TypeError('UnitCells are not yet supported in Magnetization '
-                                'simulations! See issue #129.')
+                raise TypeError(
+                    "UnitCells are not yet supported in Magnetization simulations! See issue #129."
+                )
 
         try:
-            distances = distances.to('m').magnitude
+            distances = distances.to("m").magnitude
         except AttributeError:
             pass
 
@@ -170,36 +167,36 @@ class Magnetization(Simulation):
             [distances, _, _] = self.S.get_distances_of_layers(False)
 
         if len(init_mag) == 0:
-            self.disp_message('No explicit initial magnetization given '
-                              '- use magnetization of layers instead.')
+            self.disp_message(
+                "No explicit initial magnetization given - use magnetization of layers instead."
+            )
             init_mag = np.zeros([N, 3])
             # use finderb search to find the corresponding indices between the
             # internal and external spatial grids
             [d_start, _, _] = self.S.get_distances_of_layers(False)
             idx = finderb(distances, d_start)
 
-            magnetizations = self.S.get_layer_property_vector('_magnetization')
-            init_mag[:, 0] = np.array([mag['amplitude'] for mag in magnetizations])[idx]
-            init_mag[:, 1] = np.array([mag['phi'] for mag in magnetizations])[idx]
-            init_mag[:, 2] = np.array([mag['gamma'] for mag in magnetizations])[idx]
+            init_mag = self.S.get_layer_property_vector("magnetic.magnetization.polar")[idx, :]
         else:
             if np.size(init_mag) == 3:
                 # it is the same initial magnetization for all layers
                 init_mag = np.tile(init_mag, (N, 1))
             elif np.shape(init_mag) != (N, 3):
                 # init_temp is a vector but has not as many elements as layers
-                raise ValueError('The initial magnetization array must have 3 or '
-                                 'Nx3 elements, where N is the number of layers '
-                                 'in the structure or the length of the spatial '
-                                 'grid provided as distances vector!')
+                raise ValueError(
+                    "The initial magnetization array must have 3 or "
+                    "Nx3 elements, where N is the number of layers "
+                    "in the structure or the length of the spatial "
+                    "grid provided as distances vector!"
+                )
 
             # convert phi and gamma to rad and store only magnitudes
             try:
-                init_mag[:, 1] = init_mag[:, 1].to('rad').magnitude
+                init_mag[:, 1] = init_mag[:, 1].to("rad").magnitude
             except AttributeError:
                 pass
             try:
-                init_mag[:, 2] = init_mag[:, 2].to('rad').magnitude
+                init_mag[:, 2] = init_mag[:, 2].to("rad").magnitude
             except AttributeError:
                 pass
         return init_mag
@@ -231,47 +228,46 @@ class Magnetization(Simulation):
 
         """
         # create a hash of all simulation parameters
-        filename = 'magnetization_map_' \
-                   + self.get_hash(delays=delays, **kwargs) \
-                   + '.npz'
+        filename = "magnetization_map_" + self.get_hash(delays=delays, **kwargs) + ".npz"
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
             tmp = np.load(full_filename)
-            magnetization_map = tmp['magnetization_map']
-            self.disp_message('_magnetization_map_ loaded from file:\n\t' + filename)
+            magnetization_map = tmp["magnetization_map"]
+            self.disp_message("_magnetization_map_ loaded from file:\n\t" + filename)
         else:
             t1 = time()
-            self.disp_message('Calculating _magnetization_map_ ...')
+            self.disp_message("Calculating _magnetization_map_ ...")
             # parse the input arguments
 
-            if ('strain_map' in kwargs):
-                if not isinstance(kwargs['strain_map'], np.ndarray):
-                    raise TypeError('strain_map must be a numpy ndarray!')
-            if ('temp_map' in kwargs):
-                if not isinstance(kwargs['temp_map'], np.ndarray):
-                    raise TypeError('temp_map must be a numpy ndarray!')
-            if ('H_ext' in kwargs):
-                if not isinstance(kwargs['H_ext'], np.ndarray):
-                    raise TypeError('H_ext must be a numpy ndarray!')
-                elif kwargs['H_ext'].shape != (3,):
-                    raise ValueError('H_ext must be a vector with 3 components '
-                                     '(H_x, H_y, H_z)!')
-            if ('init_mag' in kwargs):
-                if not isinstance(kwargs['init_mag'], np.ndarray):
-                    raise TypeError('init_mag must be a numpy ndarray with '
-                                    'all in radians without units!')
-                elif kwargs['init_mag'].shape != (3,):
-                    raise ValueError('init_mag must be a vector with Nx3 '
-                                     'with N being the number of layers.')
+            if "strain_map" in kwargs:
+                if not isinstance(kwargs["strain_map"], np.ndarray):
+                    raise TypeError("strain_map must be a numpy ndarray!")
+            if "temp_map" in kwargs:
+                if not isinstance(kwargs["temp_map"], np.ndarray):
+                    raise TypeError("temp_map must be a numpy ndarray!")
+            if "H_ext" in kwargs:
+                if not isinstance(kwargs["H_ext"], np.ndarray):
+                    raise TypeError("H_ext must be a numpy ndarray!")
+                elif kwargs["H_ext"].shape != (3,):
+                    raise ValueError("H_ext must be a vector with 3 components (H_x, H_y, H_z)!")
+            if "init_mag" in kwargs:
+                if not isinstance(kwargs["init_mag"], np.ndarray):
+                    raise TypeError(
+                        "init_mag must be a numpy ndarray with all in radians without units!"
+                    )
+                elif kwargs["init_mag"].shape != (3,):
+                    raise ValueError(
+                        "init_mag must be a vector with Nx3 with N being the number of layers."
+                    )
 
             magnetization_map = self.calc_magnetization_map(delays, **kwargs)
 
-            self.disp_message('Elapsed time for _magnetization_map_:'
-                              f' {time()-t1:f} s')
-            self.save(full_filename, {'magnetization_map': magnetization_map},
-                      '_magnetization_map_')
+            self.disp_message(f"Elapsed time for _magnetization_map_: {time() - t1:f} s")
+            self.save(
+                full_filename, {"magnetization_map": magnetization_map}, "_magnetization_map_"
+            )
         return magnetization_map
 
     def calc_magnetization_map(self, delays, **kwargs):
@@ -331,15 +327,10 @@ class LLB(Magnetization):
 
     """
 
+    _title = "Landau-Lifshitz-Bloch Magnetization Dynamics simulation"
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
-
-    def __str__(self):
-        """String representation of this class"""
-        class_str = 'Landau-Lifshitz-Bloch Magnetization Dynamics simulation ' \
-                    'properties:\n\n'
-        class_str += super().__str__()
-        return class_str
 
     def calc_magnetization_map(self, delays, temp_map, H_ext=np.array([0, 0, 0]), init_mag=[]):
         r"""calc_magnetization_map
@@ -404,7 +395,7 @@ class LLB(Magnetization):
         """
         t1 = time()
         try:
-            delays = delays.to('s').magnitude
+            delays = delays.to("s").magnitude
         except AttributeError:
             pass
         M = len(delays)  # nb of delay steps
@@ -419,16 +410,16 @@ class LLB(Magnetization):
         # convert initial magnetization from polar to cartesian coordinates
         init_mag = convert_polar_to_cartesian(init_mag)
         # get layer properties
-        curie_temps = self.S.get_layer_property_vector('_curie_temp')
-        eff_spins = self.S.get_layer_property_vector('eff_spin')
-        lambdas = self.S.get_layer_property_vector('lamda')
-        mf_exch_couplings = self.S.get_layer_property_vector('mf_exch_coupling')
-        mag_moments = self.S.get_layer_property_vector('_mag_moment')
-        aniso_exponents = self.S.get_layer_property_vector('aniso_exponent')
-        anisotropies = self.S.get_layer_property_vector('_anisotropy')
-        mag_saturations = self.S.get_layer_property_vector('_mag_saturation')
+        curie_temps = self.S.get_layer_property_vector("magnetic.curie_temp.magnitude")
+        eff_spins = self.S.get_layer_property_vector("magnetic.eff_spin.magnitude")
+        lambdas = self.S.get_layer_property_vector("magnetic.lamda.magnitude")
+        mf_exch_couplings = self.S.get_layer_property_vector("magnetic.mf_exch_coupling.magnitude")
+        mag_moments = self.S.get_layer_property_vector("magnetic.mag_moment.magnitude")
+        aniso_exponents = self.S.get_layer_property_vector("magnetic.aniso_exponent.magnitude")
+        anisotropies = self.S.get_layer_property_vector("magnetic.anisotropy.magnitude")
+        mag_saturations = self.S.get_layer_property_vector("magnetic.mag_saturation.magnitude")
         exch_stiffnesses = self.get_directional_exchange_stiffnesses()
-        thicknesses = self.S.get_layer_property_vector('_thickness')
+        thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
         # calculate the mean magnetization maps for each unique layer
         # and all relevant parameters
         mean_mag_map = self.get_mean_field_mag_map(temp_map[:, :, 0])
@@ -438,8 +429,8 @@ class LLB(Magnetization):
 
         if self.progress_bar:  # with tqdm progressbar
             pbar = tqdm()
-            pbar.set_description(f'Delay = {delays[0]*1e12:.3f} ps')
-            state = [delays[0], abs(delays[-1]-delays[0])/100]
+            pbar.set_description(f"Delay = {delays[0] * 1e12:.3f} ps")
+            state = [delays[0], abs(delays[-1] - delays[0]) / 100]
         else:  # without progressbar
             pbar = None
             state = None
@@ -447,25 +438,29 @@ class LLB(Magnetization):
         sol = solve_ivp(
             LLB.odefunc,
             [delays[0], delays[-1]],
-            np.reshape(init_mag[is_magnetic, :], N*3, order='F'),
-            args=(delays,
-                  N,
-                  H_ext,
-                  temp_map[:, is_magnetic, 0],  # provide only the electron temperature
-                  mean_mag_map[:, is_magnetic],
-                  curie_temps[is_magnetic],
-                  eff_spins[is_magnetic],
-                  lambdas[is_magnetic],
-                  mf_exch_couplings[is_magnetic],
-                  mag_moments[is_magnetic],
-                  aniso_exponents[is_magnetic],
-                  anisotropies[is_magnetic],
-                  mag_saturations[is_magnetic],
-                  exch_stiffnesses[is_magnetic],
-                  thicknesses[is_magnetic],
-                  pbar, state),
+            np.reshape(init_mag[is_magnetic, :], N * 3, order="F"),
+            args=(
+                delays,
+                N,
+                H_ext,
+                temp_map[:, is_magnetic, 0],  # provide only the electron temperature
+                mean_mag_map[:, is_magnetic],
+                curie_temps[is_magnetic],
+                eff_spins[is_magnetic],
+                lambdas[is_magnetic],
+                mf_exch_couplings[is_magnetic],
+                mag_moments[is_magnetic],
+                aniso_exponents[is_magnetic],
+                anisotropies[is_magnetic],
+                mag_saturations[is_magnetic],
+                exch_stiffnesses[is_magnetic],
+                thicknesses[is_magnetic],
+                pbar,
+                state,
+            ),
             t_eval=delays,
-            **self.ode_options)
+            **self.ode_options,
+        )
 
         if pbar is not None:  # close tqdm progressbar if used
             pbar.close()
@@ -473,10 +468,10 @@ class LLB(Magnetization):
         # final magnetization map is zero for all non-magnetic layers
         magnetization_map = np.zeros([M, len(distances), 3])
         # reshape results and set only for magnetic layers
-        magnetization_map[:, is_magnetic, :] = np.array(temp).reshape([M, N, 3], order='F')
+        magnetization_map[:, is_magnetic, :] = np.array(temp).reshape([M, N, 3], order="F")
         # convert to polar coordinates
         magnetization_map = convert_cartesian_to_polar(magnetization_map)
-        self.disp_message(f'Elapsed time for _LLB_: {time()-t1:f} s')
+        self.disp_message(f"Elapsed time for _LLB_: {time() - t1:f} s")
 
         return magnetization_map
 
@@ -497,29 +492,27 @@ class LLB(Magnetization):
 
         """
         # create a hash of all simulation parameters
-        filename = 'mf_magnetization_map_' \
-                   + self.get_hash(temp_map=temp_map) \
-                   + '.npz'
+        filename = "mf_magnetization_map_" + self.get_hash(temp_map=temp_map) + ".npz"
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         if path.exists(full_filename) and not self.force_recalc:
             # found something so load it
             tmp = np.load(full_filename)
-            mf_mag_map = tmp['mf_mag_map']
-            self.disp_message('_mean_field_magnetization_map_ loaded from file:\n\t' + filename)
+            mf_mag_map = tmp["mf_mag_map"]
+            self.disp_message("_mean_field_magnetization_map_ loaded from file:\n\t" + filename)
         else:
             t1 = time()
-            self.disp_message('Calculating _mean_field_magnetization_map_ ...')
+            self.disp_message("Calculating _mean_field_magnetization_map_ ...")
             # parse the input arguments
             if not isinstance(temp_map, np.ndarray):
-                raise TypeError('temp_map must be a numpy ndarray!')
+                raise TypeError("temp_map must be a numpy ndarray!")
 
             mf_mag_map = self.calc_mean_field_mag_map(temp_map)
 
-            self.disp_message('Elapsed time for _mean_field_magnetization_map_:'
-                              f' {time()-t1:f} s')
-            self.save(full_filename, {'mf_mag_map': mf_mag_map},
-                      '_mean_field_magnetization_map_')
+            self.disp_message(
+                f"Elapsed time for _mean_field_magnetization_map_: {time() - t1:f} s"
+            )
+            self.save(full_filename, {"mf_mag_map": mf_mag_map}, "_mean_field_magnetization_map_")
         return mf_mag_map
 
     def calc_mean_field_mag_map(self, temp_map):
@@ -552,41 +545,52 @@ class LLB(Magnetization):
         for i, (k, v) in enumerate(self.S.get_all_positions_per_unique_layer().items()):
             relevant_temps[k] = []
             # unique layer properties
-            curie_temp = unique_layers[1][i]._curie_temp
+            curie_temp = unique_layers[1][i].magnetic.curie_temp.magnitude
             # mean-field magnetization is only calculated for a non-zero Curie
             # temperature of magnetic layers
             if curie_temp > 0:
-                eff_spin = unique_layers[1][i].eff_spin
-                mf_exch_coupling = unique_layers[1][i].mf_exch_coupling
+                eff_spin = unique_layers[1][i].magnetic.eff_spin.magnitude
+                mf_exch_coupling = unique_layers[1][i].magnetic.mf_exch_coupling.magnitude
 
-                # simple round for down-sampling
-                unique_temps = np.unique(np.round(temp_map[:, v].flatten(), decimals=1))
-                # only temperatures below T_C are relevant
-                unique_temps = unique_temps[unique_temps <= curie_temp]
-                #  are normalized by T_C
-                reduced_temps = unique_temps/curie_temp
+                temps = temp_map[:, v].flatten()
+                # only temperatures below T_C are relevant, above T_C the
+                # mean-field magnetization is zero
+                below_tc = temps < curie_temp
+                if not np.any(below_tc):
+                    raise IndexError(
+                        "No temperature in _temp_map_ was found that is below "
+                        f"the curie temperature for layer {unique_layers[0][i]:s}!"
+                    )
+                # simple round for down-sampling, but temperatures below T_C must
+                # not be rounded up to T_C, where the mean-field magnetization is
+                # zero, as they are treated as ferromagnetic in the LLB equations.
+                # The margin of 0.05 K keeps fsolve from converging to the trivial
+                # solution of zero mean-field magnetization close to T_C.
+                last_temp_below_tc = np.floor((curie_temp - 0.05) * 10) / 10
+                rounded_temps = np.minimum(
+                    np.round(temps[below_tc], decimals=1), last_temp_below_tc
+                )
+                unique_temps = np.unique(rounded_temps)
+                # normalized by T_C
+                reduced_temps = unique_temps / curie_temp
                 mf_mags = np.zeros_like(reduced_temps)
 
                 for j, T in enumerate(reduced_temps):
-                    if T == 1:
-                        mf_mags[j] = 0
-                    else:
-                        root = fsolve(
-                            lambda x: x - LLB.calc_Brillouin(x, T, eff_spin, mf_exch_coupling,
-                                                             curie_temp), np.sqrt(1-T))
-                        mf_mags[j] = float(root.item())
+                    root = fsolve(
+                        lambda x: (
+                            x - LLB.calc_Brillouin(x, T, eff_spin, mf_exch_coupling, curie_temp)
+                        ),
+                        np.sqrt(1 - T),
+                    )
+                    mf_mags[j] = float(root.item())
 
                 relevant_temps[k] = np.stack((unique_temps, mf_mags))
 
-                # for every temperature in temp_map search for best match in
-                # relevant_temps and assign according mf_mag into mf_mag_map
-                try:
-                    idx = finderb(np.round(temp_map[:, v].flatten(), decimals=1),
-                                  relevant_temps[k][0, :])
-                    mf_mag_map[:, v] = np.reshape(relevant_temps[k][1, idx], (M, len(v)))
-                except Exception:
-                    raise IndexError('No temperature in _temp_map_ was found that is below'
-                                     f'the curie temperature for layer {unique_layers[0][i]:s}!')
+                # assign the mean-field magnetization of every rounded temperature
+                # below T_C into the mf_mag_map, which is zero above T_C
+                layer_mf_mags = np.zeros_like(temps)
+                layer_mf_mags[below_tc] = mf_mags[np.searchsorted(unique_temps, rounded_temps)]
+                mf_mag_map[:, v] = np.reshape(layer_mf_mags, (M, len(v)))
             else:
                 # non-magnetic layers with Curie temperature = 0
                 mf_mag_map[:, v] = 0
@@ -611,28 +615,45 @@ class LLB(Magnetization):
             A (ndarray[float]): directional exchange stiffnesses.
 
         """
-        exch_stiffnesses = self.S.get_layer_property_vector('_exch_stiffness')
+        exch_stiffnesses = self.S.get_layer_property_vector("magnetic.exch_stiffness.magnitude")
 
         indices, _, _ = self.S.get_layer_vectors()
 
         A = np.zeros([len(indices), 2])
-        interfaces = (np.r_[1, np.diff(indices), 1])
+        interfaces = np.r_[1, np.diff(indices), 1]
         interfaces[interfaces != 0] = -1
-        select = (interfaces+1).astype(np.int16)
+        select = (interfaces + 1).astype(np.int16)
 
         A[:, 0] = exch_stiffnesses[np.arange(len(select[0:-1])), select[0:-1]]
 
         interfaces[interfaces != 0] = 1
-        select = (interfaces+1).astype(np.int16)
+        select = (interfaces + 1).astype(np.int16)
         A[:, 1] = exch_stiffnesses[np.arange(len(select[1:])), select[1:]]
 
         return A
 
     @staticmethod
-    def odefunc(t, m,
-                delays, N, H_ext, temp_map, mean_mag_map, curie_temps, eff_spins, lambdas,
-                mf_exch_couplings, mag_moments, aniso_exponents, anisotropies, mag_saturations,
-                exch_stiffnesses, thicknesses, pbar, state):
+    def odefunc(
+        t,
+        m,
+        delays,
+        N,
+        H_ext,
+        temp_map,
+        mean_mag_map,
+        curie_temps,
+        eff_spins,
+        lambdas,
+        mf_exch_couplings,
+        mag_moments,
+        aniso_exponents,
+        anisotropies,
+        mag_saturations,
+        exch_stiffnesses,
+        thicknesses,
+        pbar,
+        state,
+    ):
         """odefunc
 
         Ordinary differential equation that is solved for 1D LLB.
@@ -674,26 +695,26 @@ class LLB(Magnetization):
         # calls throughout the ODE integration
         last_t, dt = state
         try:
-            n = int((t - last_t)/dt)
+            n = int((t - last_t) / dt)
         except ValueError:
             n = 0
 
         if n >= 1:
             pbar.update(n)
-            pbar.set_description(f'Delay = {t*1e12:.3f} ps')
+            pbar.set_description(f"Delay = {t * 1e12:.3f} ps")
             state[0] = t
         elif n < 0:
             state[0] = t
 
         # initialize arrays
         # reshape input temperature
-        m = np.array(m).reshape([N, 3], order='F')
+        m = np.array(m).reshape([N, 3], order="F")
 
         # nearest delay index for current time t
         idt = finderb(t, delays)[0]
         temps = temp_map[idt, :].flatten()
         # binary masks for layers being under or over its Curie temperature
-        under_tc = (temps < curie_temps)
+        under_tc = temps < curie_temps
         over_tc = ~under_tc
         # get the current mean-field magnetization
         mf_magnetizations = mean_mag_map[idt, :]
@@ -704,14 +725,24 @@ class LLB(Magnetization):
 
         # external field H_ext is given as input
         # calculate uniaxial anisotropy field
-        H_A = LLB.calc_uniaxial_anisotropy_field(m, mf_magnetizations, aniso_exponents,
-                                                 anisotropies, mag_saturations)
+        H_A = LLB.calc_uniaxial_anisotropy_field(
+            m, mf_magnetizations, aniso_exponents, anisotropies, mag_saturations
+        )
         # calculate exchange field
         H_ex = LLB.calc_exchange_field(m, exch_stiffnesses, mag_saturations, thicknesses)
         # calculate thermal field
-        H_th = LLB.calc_thermal_field(m, m_squared, temps, mf_magnetizations, eff_spins,
-                                      curie_temps, mf_exch_couplings, mag_moments, under_tc,
-                                      over_tc)
+        H_th = LLB.calc_thermal_field(
+            m,
+            m_squared,
+            temps,
+            mf_magnetizations,
+            eff_spins,
+            curie_temps,
+            mf_exch_couplings,
+            mag_moments,
+            under_tc,
+            over_tc,
+        )
 
         # calculate the effective field
         H_eff = H_ext + H_A + H_ex + H_th
@@ -721,32 +752,31 @@ class LLB(Magnetization):
         m_rot = np.cross(m, H_eff)
 
         # damping
-        qs = LLB.calc_qs(temps, curie_temps, eff_spins, mf_magnetizations,
-                         under_tc)
+        qs = LLB.calc_qs(temps, curie_temps, eff_spins, mf_magnetizations, under_tc)
         # transversal damping
-        alpha_trans = LLB.calc_transverse_damping(temps, curie_temps, lambdas,
-                                                  qs, mf_magnetizations,
-                                                  under_tc, over_tc)
+        alpha_trans = LLB.calc_transverse_damping(
+            temps, curie_temps, lambdas, qs, mf_magnetizations, under_tc, over_tc
+        )
         trans_damping = np.multiply(
-            np.divide(alpha_trans, m_squared)[:, np.newaxis],
-            np.cross(m, m_rot)
-            )
+            np.divide(alpha_trans, m_squared)[:, np.newaxis], np.cross(m, m_rot)
+        )
         # longitudinal damping
-        alpha_long = LLB.calc_longitudinal_damping(temps, curie_temps,
-                                                   eff_spins, lambdas, qs,
-                                                   under_tc, over_tc)
+        alpha_long = LLB.calc_longitudinal_damping(
+            temps, curie_temps, eff_spins, lambdas, qs, under_tc, over_tc
+        )
         long_damping = np.multiply(
             np.divide(alpha_long, m_squared)[:, np.newaxis],
-            np.multiply(np.einsum('ij,ij->i', m, H_eff)[:, np.newaxis], m)
-            )
+            np.multiply(np.einsum("ij,ij->i", m, H_eff)[:, np.newaxis], m),
+        )
 
         dmdt = gamma_e * (m_rot + trans_damping - long_damping)
 
-        return np.reshape(dmdt, N*3, order='F')
+        return np.reshape(dmdt, N * 3, order="F")
 
     @staticmethod
-    def calc_uniaxial_anisotropy_field(mag_map, mf_magnetizations, aniso_exponents, anisotropies,
-                                       mag_saturations):
+    def calc_uniaxial_anisotropy_field(
+        mag_map, mf_magnetizations, aniso_exponents, anisotropies, mag_saturations
+    ):
         r"""calc_uniaxial_anisotropy_field
 
         Calculate the uniaxial anisotropy component of the effective field.
@@ -784,13 +814,16 @@ class LLB(Magnetization):
         """
         H_A = np.zeros_like(mag_map)
 
-        factor = -2/mag_saturations
+        factor = -2 / mag_saturations
         unit_vector = np.array([0, 1, 1])[np.newaxis, :]
         for i in range(3):
-            H_A += factor[:, np.newaxis] * anisotropies[:, i, np.newaxis]\
-                * np.power(mf_magnetizations,
-                           aniso_exponents-2)[:, np.newaxis] \
-                * mag_map*np.roll(unit_vector, i, axis=1)
+            H_A += (
+                factor[:, np.newaxis]
+                * anisotropies[:, i, np.newaxis]
+                * np.power(mf_magnetizations, aniso_exponents - 2)[:, np.newaxis]
+                * mag_map
+                * np.roll(unit_vector, i, axis=1)
+            )
 
         return H_A
 
@@ -832,14 +865,26 @@ class LLB(Magnetization):
 
         es = np.divide(2, np.multiply(mag_saturations, thicknesses**2))
 
-        H_ex = es[:, np.newaxis]*exch_stiffnesses[:, 0, np.newaxis]*m_diff_up \
-            + es[:, np.newaxis]*exch_stiffnesses[:, 1, np.newaxis]*m_diff_down
+        H_ex = (
+            es[:, np.newaxis] * exch_stiffnesses[:, 0, np.newaxis] * m_diff_up
+            + es[:, np.newaxis] * exch_stiffnesses[:, 1, np.newaxis] * m_diff_down
+        )
 
         return -H_ex
 
     @staticmethod
-    def calc_thermal_field(mag_map, mag_map_squared, temp_map, mf_magnetizations, eff_spins,
-                           curie_temps, mf_exch_couplings, mag_moments, under_tc, over_tc):
+    def calc_thermal_field(
+        mag_map,
+        mag_map_squared,
+        temp_map,
+        mf_magnetizations,
+        eff_spins,
+        curie_temps,
+        mf_exch_couplings,
+        mag_moments,
+        under_tc,
+        over_tc,
+    ):
         r"""calc_thermal_field
 
         Calculate the thermal component of the effective field.
@@ -880,17 +925,29 @@ class LLB(Magnetization):
             H_th (ndarray[float]): thermal field.
 
         """
-        chi_long = LLB.calc_long_susceptibility(temp_map, mf_magnetizations, curie_temps,
-                                                eff_spins, mf_exch_couplings, mag_moments,
-                                                under_tc, over_tc)
+        chi_long = LLB.calc_long_susceptibility(
+            temp_map,
+            mf_magnetizations,
+            curie_temps,
+            eff_spins,
+            mf_exch_couplings,
+            mag_moments,
+            under_tc,
+            over_tc,
+        )
 
         H_th = np.zeros_like(temp_map)
-        H_th[under_tc] = 1/(2 * chi_long[under_tc]) * (
-            1 - mag_map_squared[under_tc]/mf_magnetizations[under_tc]**2
-            )
-        H_th[over_tc] = -1/chi_long[over_tc] * (
-            1 + 3/5 * curie_temps[over_tc]/(temp_map[over_tc]-curie_temps[over_tc])
-            ) * mag_map_squared[over_tc]
+        H_th[under_tc] = (
+            1
+            / (2 * chi_long[under_tc])
+            * (1 - mag_map_squared[under_tc] / mf_magnetizations[under_tc] ** 2)
+        )
+        H_th[over_tc] = (
+            -1
+            / chi_long[over_tc]
+            * (1 + 3 / 5 * curie_temps[over_tc] / (temp_map[over_tc] - curie_temps[over_tc]))
+            * mag_map_squared[over_tc]
+        )
 
         return np.multiply(H_th[:, np.newaxis], mag_map)
 
@@ -927,7 +984,7 @@ class LLB(Magnetization):
 
         """
 
-        eta = mf_exch_coupling.to('m**2*kg/s**2').magnitude * mag / constants.k / temp / curie_temp
+        eta = mf_exch_coupling * mag / constants.k / temp / curie_temp
         c1 = (2 * eff_spin + 1) / (2 * eff_spin)
         c2 = 1 / (2 * eff_spin)
         brillouin = c1 / np.tanh(c1 * eta) - c2 / np.tanh(c2 * eta)
@@ -960,19 +1017,22 @@ class LLB(Magnetization):
             dBdx (ndarray[float]): derivative of Brillouin function.
 
         """
-        x = np.divide(mf_exch_couplings.to('m**2*kg/s**2').magnitude*mf_magnetizations,
-                      constants.k*temp_map)
+        x = np.divide(
+            mf_exch_couplings * mf_magnetizations,
+            constants.k * temp_map,
+        )
 
-        two_eff_spins = 2*eff_spins
-        dBdx = 1 / (two_eff_spins**2 * np.sinh(x / (two_eff_spins))**2) \
-            - (two_eff_spins + 1)**2 / \
-            (two_eff_spins**2 * np.sinh(((two_eff_spins + 1) * x) / (two_eff_spins))**2)
+        two_eff_spins = 2 * eff_spins
+        dBdx = 1 / (two_eff_spins**2 * np.sinh(x / (two_eff_spins)) ** 2) - (
+            two_eff_spins + 1
+        ) ** 2 / (two_eff_spins**2 * np.sinh(((two_eff_spins + 1) * x) / (two_eff_spins)) ** 2)
 
         return dBdx
 
     @staticmethod
-    def calc_transverse_damping(temp_map, curie_temps, lambdas, qs,
-                                mf_magnetizations, under_tc, over_tc):
+    def calc_transverse_damping(
+        temp_map, curie_temps, lambdas, qs, mf_magnetizations, under_tc, over_tc
+    ):
         r"""calc_transverse_damping
 
         Calculate the transverse damping parameter:
@@ -1006,19 +1066,21 @@ class LLB(Magnetization):
         """
         alpha_trans = np.zeros_like(temp_map)
         alpha_trans[under_tc] = np.multiply(
-            np.divide(lambdas[under_tc], mf_magnetizations[under_tc]), (
+            np.divide(lambdas[under_tc], mf_magnetizations[under_tc]),
+            (
                 np.divide(np.tanh(qs), qs)
-                - np.divide(temp_map[under_tc], 3*curie_temps[under_tc])
-                )
-            )
-        alpha_trans[over_tc] = lambdas[over_tc]*2/3*np.divide(
-            temp_map[over_tc], curie_temps[over_tc]
-            )
+                - np.divide(temp_map[under_tc], 3 * curie_temps[under_tc])
+            ),
+        )
+        alpha_trans[over_tc] = (
+            lambdas[over_tc] * 2 / 3 * np.divide(temp_map[over_tc], curie_temps[over_tc])
+        )
         return alpha_trans
 
     @staticmethod
-    def calc_longitudinal_damping(temp_map, curie_temps, eff_spins, lambdas, qs,
-                                  under_tc, over_tc):
+    def calc_longitudinal_damping(
+        temp_map, curie_temps, eff_spins, lambdas, qs, under_tc, over_tc
+    ):
         r"""calc_transverse_damping
 
         Calculate the transverse damping parameter:
@@ -1049,13 +1111,12 @@ class LLB(Magnetization):
 
         """
         alpha_long = np.zeros_like(temp_map)
-        alpha_long[under_tc] = np.divide(2*np.divide(lambdas[under_tc],
-                                                     (eff_spins[under_tc]+1)),
-                                         np.sinh(2*qs)
-                                         )
-        alpha_long[over_tc] = lambdas[over_tc]*2/3*np.divide(
-            temp_map[over_tc], curie_temps[over_tc]
-            )
+        alpha_long[under_tc] = np.divide(
+            2 * np.divide(lambdas[under_tc], (eff_spins[under_tc] + 1)), np.sinh(2 * qs)
+        )
+        alpha_long[over_tc] = (
+            lambdas[over_tc] * 2 / 3 * np.divide(temp_map[over_tc], curie_temps[over_tc])
+        )
 
         return alpha_long
 
@@ -1084,13 +1145,21 @@ class LLB(Magnetization):
 
         """
         return np.divide(
-            3*curie_temps[under_tc] * mf_magnetizations[under_tc],
-            (2*eff_spins[under_tc] + 1)*temp_map[under_tc]
-            )
+            3 * curie_temps[under_tc] * mf_magnetizations[under_tc],
+            (2 * eff_spins[under_tc] + 1) * temp_map[under_tc],
+        )
 
     @staticmethod
-    def calc_long_susceptibility(temp_map, mf_magnetizations, curie_temps, eff_spins,
-                                 mf_exch_couplings, mag_moments, under_tc, over_tc):
+    def calc_long_susceptibility(
+        temp_map,
+        mf_magnetizations,
+        curie_temps,
+        eff_spins,
+        mf_exch_couplings,
+        mag_moments,
+        under_tc,
+        over_tc,
+    ):
         r"""calc_long_susceptibility
 
         Calculate the the longitudinal susceptibility
@@ -1128,28 +1197,28 @@ class LLB(Magnetization):
 
         """
 
-        dBdx = LLB.calc_dBrillouin_dx(temp_map[under_tc],
-                                      mf_magnetizations[under_tc],
-                                      eff_spins[under_tc],
-                                      mf_exch_couplings[under_tc])
+        dBdx = LLB.calc_dBrillouin_dx(
+            temp_map[under_tc],
+            mf_magnetizations[under_tc],
+            eff_spins[under_tc],
+            mf_exch_couplings[under_tc],
+        )
 
         chi_long = np.zeros_like(temp_map)
         chi_long[under_tc] = np.divide(
-            mag_moments[under_tc]*dBdx,
-            temp_map[under_tc]*constants.k
-            - (mf_exch_couplings.to('m**2*kg/s**2').magnitude)[under_tc]*dBdx
-            )
+            mag_moments[under_tc] * dBdx,
+            temp_map[under_tc] * constants.k - (mf_exch_couplings)[under_tc] * dBdx,
+        )
         chi_long[over_tc] = np.divide(
-            mag_moments[over_tc]*curie_temps[over_tc],
-            (mf_exch_couplings.to('m**2*kg/s**2').magnitude)[over_tc]
-            * (temp_map[over_tc]-curie_temps[over_tc])
-            )
+            mag_moments[over_tc] * curie_temps[over_tc],
+            (mf_exch_couplings)[over_tc] * (temp_map[over_tc] - curie_temps[over_tc]),
+        )
 
         return chi_long
 
     @property
     def distances(self):
-        return Q_(self._distances, u.meter).to('nm')
+        return Q_(self._distances, u.meter).to("nm")
 
     @distances.setter
     def distances(self, distances):

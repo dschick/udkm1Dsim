@@ -21,11 +21,18 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['make_hash_md5', 'make_hashable', 'm_power_x',
-           'm_times_n', 'finderb', 'multi_gauss', 'convert_cartesian_to_polar',
-           'convert_polar_to_cartesian']
+__all__ = [
+    "make_hash_md5",
+    "make_hashable",
+    "m_power_x",
+    "m_times_n",
+    "finderb",
+    "multi_gauss",
+    "convert_cartesian_to_polar",
+    "convert_polar_to_cartesian",
+]
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
 import hashlib
 
@@ -107,7 +114,7 @@ def m_times_n(m, n):
         res (ndarray[float, complex]): 4-dimensional multiplication result.
 
     """
-    return np.einsum('lmij,lmjk->lmik', m, n)
+    return np.einsum("lmij,lmjk->lmik", m, n)
 
 
 def finderb(key, array):
@@ -161,8 +168,8 @@ def finderb_nest(key, array):
     if key < array[0]:
         return 0
 
-    while (b-a) > 1:  # loop until the intervall is larger than 1
-        c = int(np.floor((a+b)/2))  # center of intervall
+    while (b - a) > 1:  # loop until the intervall is larger than 1
+        c = int(np.floor((a + b) / 2))  # center of intervall
         if key < array[c]:
             # the key is in the left half-intervall
             b = c
@@ -189,13 +196,13 @@ def multi_gauss(x, s=[1], x0=[0], A=[1]):
         y (ndarray[float]): multiple Gaussians.
 
     """
-    s = np.asarray(s)/(2*np.sqrt(2*np.log(2)))
-    a = np.asarray(A)/np.sqrt(2*np.pi*s**2)  # normalize area to 1
+    s = np.asarray(s) / (2 * np.sqrt(2 * np.log(2)))
+    a = np.asarray(A) / np.sqrt(2 * np.pi * s**2)  # normalize area to 1
     x0 = np.asarray(x0)
 
     y = np.zeros_like(x)
     for i in range(len(s)):
-        y = y + a[i] * np.exp(-((x-x0[i])**2)/(2*s[i]**2))
+        y = y + a[i] * np.exp(-((x - x0[i]) ** 2) / (2 * s[i] ** 2))
     return y
 
 
@@ -230,9 +237,9 @@ def convert_polar_to_cartesian(polar):
     amplitudes = polar[..., 0]
     phis = polar[..., 1]
     gammas = polar[..., 2]
-    cartesian[..., 0] = amplitudes*np.sin(phis)*np.cos(gammas)
-    cartesian[..., 1] = amplitudes*np.sin(phis)*np.sin(gammas)
-    cartesian[..., 2] = amplitudes*np.cos(phis)
+    cartesian[..., 0] = amplitudes * np.sin(phis) * np.cos(gammas)
+    cartesian[..., 1] = amplitudes * np.sin(phis) * np.sin(gammas)
+    cartesian[..., 2] = amplitudes * np.cos(phis)
 
     return cartesian
 
@@ -275,7 +282,7 @@ def convert_cartesian_to_polar(cartesian):
     ys = cartesian[..., 1]
     zs = cartesian[..., 2]
     amplitudes = np.sqrt(xs**2 + ys**2 + zs**2)
-    mask = amplitudes != 0.  # mask for non-zero amplitudes
+    mask = amplitudes != 0.0  # mask for non-zero amplitudes
     polar[..., 0] = amplitudes
     polar[mask, 1] = np.arccos(np.divide(zs[mask], amplitudes[mask]))
     polar[..., 2] = np.arctan2(ys, xs)

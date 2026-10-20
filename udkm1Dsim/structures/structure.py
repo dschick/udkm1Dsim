@@ -21,16 +21,19 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Structure']
+__all__ = ["Structure"]
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
 
 import itertools
 import warnings
+from operator import attrgetter
 
 import numpy as np
 import pint
+
+from udkm1Dsim.structures.parameter_groups import ParameterGroup
 
 from ..helpers import finderb, make_hash_md5
 from .layers import Layer, Vacuum
@@ -58,73 +61,120 @@ class Structure:
         superstrate (Layer): Layer or its sub-classes forming the superstrate.
         substrate (Layer): Layer or its sub-classes forming the substrate.
         num_sub_systems (int): number of subsystems for heat and phonons
-            (electronic, lattice, spins, ...).
+            (electronic, lattice, spins, ...), given by the layer with the
+            most subsystems.
 
     """
 
     def __init__(self, name):
         self.name = name
-        self.num_sub_systems = 1
         self.sub_structures = []
         self.superstrate = [Vacuum(), 1]
         self.substrate = [Vacuum(), 1]
 
-    def __str__(self, tabs=0, recursive=False):
+    def __repr__(self):
         """String representation of this class"""
-        tab_str = tabs*'\t'
+        return self._text_representation()
 
-        class_str = tab_str + 'Structure properties:\n\n'
-        class_str += tab_str + f'Name   : {self.name:s}\n'
+    def _text_representation(self, tabs=0, recursive=False):
+        """Indented text representation, recursing into sub-structures"""
+        tab_str = tabs * "\t"
+
+        class_str = tab_str + "Structure properties:\n\n"
+        class_str += tab_str + f"Name   : {self.name:s}\n"
 
         if len(self.sub_structures) == 0:
-            class_str += tab_str + 'Structure is empty\n----\n'
+            class_str += tab_str + "Structure is empty\n----\n"
             return class_str
 
-        class_str += tab_str + 'Thickness : {:.4g~P}\n'.format(self.thickness.to('nm'))
-        class_str += tab_str + '----\n'
+        class_str += tab_str + "Thickness : {:.4g~P}\n".format(self.thickness.to("nm"))
+        class_str += tab_str + "----\n"
         # traverse all substructures
         for sub_structure in self.sub_structures:
             if isinstance(sub_structure[0], Layer):
                 # the substructure is a Layer or sub-class
-                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                        sub_structure[1],
-                        sub_structure[0].name,
-                        sub_structure[1]*sub_structure[0].thickness.to('nm'))
+                class_str += tab_str + "{:d} times {:s}: {:.4g~P}\n".format(
+                    sub_structure[1],
+                    sub_structure[0].name,
+                    sub_structure[1] * sub_structure[0].structural.thickness.quantity.to("nm"),
+                )
             else:
                 # the substructure is a Structure instance by itself
-                # call the display() method recursively
-                class_str += tab_str + f'sub-structure {sub_structure[1]:d} times:\n'
-                class_str += sub_structure[0].__str__(tabs+1, recursive=True)
-        class_str += tab_str + '----\n'
+                # call the text representation recursively
+                class_str += tab_str + f"sub-structure {sub_structure[1]:d} times:\n"
+                class_str += sub_structure[0]._text_representation(tabs + 1, recursive=True)
+        class_str += tab_str + "----\n"
         # do not print sub-structure superstrate or substrate
         if not recursive:
-            class_str += tab_str + 'Superstrate (semi-infinite):\n'
-            class_str += tab_str + '----\n'
+            class_str += tab_str + "Superstrate (semi-infinite):\n"
+            class_str += tab_str + "----\n"
             # check for a superstrate
             if isinstance(self.superstrate[0], Layer):
-                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                        self.superstrate[1],
-                        self.superstrate[0].name,
-                        self.superstrate[1]
-                        * self.superstrate[0].thickness.to('nm'))
+                class_str += tab_str + "{:d} times {:s}: {:.4g~P}\n".format(
+                    self.superstrate[1],
+                    self.superstrate[0].name,
+                    self.superstrate[1]
+                    * self.superstrate[0].structural.thickness.quantity.to("nm"),
+                )
             else:
-                warnings.warn('There should be a superstrate present!')
-            class_str += tab_str + '----\n'
-            class_str += tab_str + 'Substrate (semi-infinite):\n'
-            class_str += tab_str + '----\n'
+                warnings.warn("There should be a superstrate present!")
+            class_str += tab_str + "----\n"
+            class_str += tab_str + "Substrate (semi-infinite):\n"
+            class_str += tab_str + "----\n"
             # check for a substrate
             if isinstance(self.substrate[0], Layer):
-                class_str += tab_str + '{:d} times {:s}: {:.4g~P}\n'.format(
-                        self.substrate[1],
-                        self.substrate[0].name,
-                        self.substrate[1]
-                        * self.substrate[0].thickness.to('nm'))
+                class_str += tab_str + "{:d} times {:s}: {:.4g~P}\n".format(
+                    self.substrate[1],
+                    self.substrate[0].name,
+                    self.substrate[1] * self.substrate[0].structural.thickness.quantity.to("nm"),
+                )
             else:
-                warnings.warn('There should be a substrate present!')
+                warnings.warn("There should be a substrate present!")
         return class_str
 
-    def visualize(self, block=True, unit='nm', fig_size=[20, 1], cmap='Set3', linewidth=0.1,
-                  show=True):
+    def _html_rows(self):
+        """HTML table rows of all sub-structures, nested structures are indented"""
+        rows = ""
+        for sub_structure, repetitions in self.sub_structures:
+            if isinstance(sub_structure, Layer):
+                thickness = repetitions * sub_structure.structural.thickness.quantity
+                rows += (
+                    f"<tr><td>{repetitions:d}</td><td>{sub_structure.name}</td>"
+                    f"<td>{thickness.to('nm'):.4g~P}</td></tr>"
+                )
+            else:
+                rows += (
+                    f"<tr><td>{repetitions:d}</td><td><i>{sub_structure.name}</i></td>"
+                    f"<td>{(repetitions * sub_structure.thickness).to('nm'):.4g~P}</td></tr>"
+                    f"<tr><td></td><td colspan='2'><table>{sub_structure._html_rows()}</table>"
+                    "</td></tr>"
+                )
+        return rows
+
+    def _repr_html_(self):
+        """HTML representation of this class"""
+        class_str = f"<h2>Structure: {self.name}</h2>"
+        if len(self.sub_structures) == 0:
+            return class_str + "Structure is empty"
+
+        class_str += f"<b>Thickness:</b> {self.thickness.to('nm'):.4g~P}"
+        header = "<tr><th>times</th><th>sub-structure</th><th>thickness</th></tr>"
+        class_str += f"<table>{header}{self._html_rows()}</table>"
+
+        for label, (layer, repetitions) in [
+            ("Superstrate", self.superstrate),
+            ("Substrate", self.substrate),
+        ]:
+            if isinstance(layer, Layer):
+                class_str += (
+                    f"<b>{label} (semi-infinite):</b> {repetitions:d} times {layer.name}: "
+                    f"{(repetitions * layer.structural.thickness.quantity).to('nm'):.4g~P}<br>"
+                )
+        return class_str
+
+    def visualize(
+        self, block=True, unit="nm", fig_size=[20, 1], cmap="Set3", linewidth=0.1, show=True
+    ):
         """visualize
 
         Simple visualization of the :class:`Structure`.
@@ -152,27 +202,33 @@ class Structure:
         cm = colormaps[cmap]
         colortable = {}
         for i in range(N):
-            colortable[layer_ids[i]] = cm(i/(N-1))
+            colortable[layer_ids[i]] = cm(i / (N - 1))
 
         plt.figure(figsize=fig_size)
         ax = plt.axes()
 
         for i, name in enumerate(self.get_layer_vectors()[1]):
-            col = colortable.get(name, 'k')
-            rect = patches.Rectangle((layer_interfaces[i], 0), np.diff(layer_interfaces)[i], 1,
-                                     linewidth=linewidth, facecolor=col, edgecolor='k')
+            col = colortable.get(name, "k")
+            rect = patches.Rectangle(
+                (layer_interfaces[i], 0),
+                np.diff(layer_interfaces)[i],
+                1,
+                linewidth=linewidth,
+                facecolor=col,
+                edgecolor="k",
+            )
             ax.add_patch(rect)
 
         plt.xlim(0, thickness)
         plt.ylim(0, 1)
-        plt.xlabel(f'Distance ({unit:s})')
+        plt.xlabel(f"Distance ({unit:s})")
         plt.yticks([], [])
 
         # add labels for legend
         for layer_id, col in colortable.items():
             plt.plot(0, 0, color=col, label=layer_id)
 
-        leg = plt.legend(bbox_to_anchor=(0., 1.08, 1, .102), frameon=False, ncol=8)
+        leg = plt.legend(bbox_to_anchor=(0.0, 1.08, 1, 0.102), frameon=False, ncol=8)
 
         for line in leg.get_lines():
             line.set_linewidth(8.0)
@@ -208,6 +264,47 @@ class Structure:
         param.append(IDs)
         return make_hash_md5(param)
 
+    @property
+    def num_sub_systems(self):
+        """int: number of subsystems, given by the layer with the most subsystems."""
+        _, layers = self.get_unique_layers()
+        return max((layer.num_sub_systems for layer in layers), default=1)
+
+    @num_sub_systems.setter
+    def num_sub_systems(self, value):
+        raise AttributeError(
+            "'num_sub_systems' is derived from the thermal parameters of the layers "
+            "and cannot be set directly."
+        )
+
+    def check_num_sub_systems(self, *property_names):
+        """check_num_sub_systems
+
+        Checks that the given temperature-dependent thermal parameters of all
+        layers have the same number of subsystems as the :class:`Structure`.
+
+        Args:
+            *property_names (str): names of the thermal parameters, e.g.
+                'heat_capacity'.
+
+        Raises:
+            ValueError: if any parameter has a different number of subsystems.
+
+        """
+        K = self.num_sub_systems
+        mismatches = []
+        for layer in self.get_unique_layers()[1]:
+            for name in property_names:
+                num = getattr(layer.thermal, name).num_sub_systems
+                if num != K:
+                    mismatches.append(f"layer '{layer.id}': '{name}' has {num}")
+        if mismatches:
+            raise ValueError(
+                f"All of {', '.join(repr(name) for name in property_names)} must have "
+                f"{K} subsystem(s) for all layers of the structure, but\n  "
+                + "\n  ".join(mismatches)
+            )
+
     def add_sub_structure(self, sub_structure, N=1):
         """add_sub_structure
 
@@ -223,28 +320,21 @@ class Structure:
         # check of the sub_structure is of type Layer
         # or its sub-classes, or Structure
         if not isinstance(sub_structure, (Layer, Structure)):
-            raise TypeError('Class '
-                            + type(sub_structure).__name__
-                            + ' is no possible sub structure. '
-                            + 'Only Layer, its sub-classes, and '
-                            + 'Structure classes are allowed!')
+            raise TypeError(
+                "Class "
+                + type(sub_structure).__name__
+                + " is no possible sub structure. "
+                + "Only Layer, its sub-classes, and "
+                + "Structure classes are allowed!"
+            )
 
         # if a Structure is added as a sub_structure, the sub_structure's
         # superstrate and substrate are ignored (Vacuum default is ignored)
         if isinstance(sub_structure, Structure):
             if not isinstance(sub_structure.superstrate[0], Vacuum):
-                warnings.warn('The superstrate of the sub_structure is ignored.')
+                warnings.warn("The superstrate of the sub_structure is ignored.")
             if not isinstance(sub_structure.substrate[0], Vacuum):
-                warnings.warn('The substrate of the sub_structure is ignored.')
-
-        # check the number of subsystems of the sub_structure
-        if ((self.num_sub_systems > 1)
-           and not (sub_structure.num_sub_systems == self.num_sub_systems)):
-
-            raise ValueError('The number of subsystems in each sub_structure'
-                             'must be the same!')
-        else:
-            self.num_sub_systems = sub_structure.num_sub_systems
+                warnings.warn("The substrate of the sub_structure is ignored.")
 
         # add a sub_structure of N repetitions to the structure with
         self.sub_structures.append([sub_structure, N])
@@ -259,10 +349,12 @@ class Structure:
 
         """
         if not isinstance(layer, Layer):
-            raise TypeError('Class '
-                            + type(layer).__name__
-                            + ' is no possible superstrate. '
-                            + 'Only Layer or its sub-classes is allowed!')
+            raise TypeError(
+                "Class "
+                + type(layer).__name__
+                + " is no possible superstrate. "
+                + "Only Layer or its sub-classes is allowed!"
+            )
 
         # there is only one repetition of the superstrate layer
         self.superstrate = [layer, 1]
@@ -278,10 +370,12 @@ class Structure:
 
         """
         if not isinstance(layer, Layer):
-            raise TypeError('Class '
-                            + type(layer).__name__
-                            + ' is no possible substrate. '
-                            + 'Only Layer or its sub-classes is allowed!')
+            raise TypeError(
+                "Class "
+                + type(layer).__name__
+                + " is no possible substrate. "
+                + "Only Layer or its sub-classes is allowed!"
+            )
 
         self.substrate = [layer, N]
 
@@ -319,8 +413,10 @@ class Structure:
                 L = L + self.sub_structures[i][1]
             else:
                 # its a structure, so call the method recursively
-                L = L + self.sub_structures[i][0].get_number_of_layers() \
-                    * self.sub_structures[i][1]
+                L = (
+                    L
+                    + self.sub_structures[i][0].get_number_of_layers() * self.sub_structures[i][1]
+                )
 
         return L
 
@@ -431,16 +527,18 @@ class Structure:
                 # layer list
                 Index = layers[0].index(self.sub_structures[i][0].id)
                 # add the index N times to the indices vector
-                indices = np.append(indices, Index*np.ones(self.sub_structures[i][1]))
+                indices = np.append(indices, Index * np.ones(self.sub_structures[i][1]))
                 # create a list of N layer ids and add them to
                 # the ids list
-                temp1 = list(itertools.repeat(self.sub_structures[i][0].id,
-                                              self.sub_structures[i][1]))
+                temp1 = list(
+                    itertools.repeat(self.sub_structures[i][0].id, self.sub_structures[i][1])
+                )
                 layer_ids = layer_ids + list(temp1)
                 # create a list of N layer handles and add them to
                 # the Handles list
-                temp2 = list(itertools.repeat(self.sub_structures[i][0],
-                                              self.sub_structures[i][1]))
+                temp2 = list(
+                    itertools.repeat(self.sub_structures[i][0], self.sub_structures[i][1])
+                )
                 layer_handles = layer_handles + list(temp2)
             else:
                 # its a structure
@@ -500,10 +598,10 @@ class Structure:
               each Layer.
 
         """
-        thickness = self.get_layer_property_vector('_thickness')
+        thickness = self.get_layer_property_vector("structural.thickness.magnitude")
         d_end = np.cumsum(thickness)
         d_start = np.hstack([[0], d_end[0:-1]])
-        d_mid = (d_start + thickness/2)
+        d_mid = d_start + thickness / 2
         if units:
             return Q_(d_start, u.m), Q_(d_end, u.m), Q_(d_mid, u.m)
         else:
@@ -533,7 +631,7 @@ class Structure:
             return res
 
     def interp_distance_at_interfaces(self, N, units=True):
-        """ interp_distance_at_interfaces
+        """interp_distance_at_interfaces
 
         Interpolates the distances at the :class:`Layer` interfaces by an odd number
         :math:`N`.
@@ -567,16 +665,19 @@ class Structure:
         # traverse all distances
         for z in dist_intf:
             inda = finderb(z, d_start)  # this is the index of a layer after the interface
-            indb = inda-1  # this is the index of a layer before the interface
+            indb = inda - 1  # this is the index of a layer before the interface
 
             # interpolate linearly N new distances at the interface
             if indb == -1:  # this is the surface interface
-                dist_interp = np.append(dist_interp, np.linspace(0, d_mid[inda], int(2+(N-1)/2)))
-            elif inda >= (len(d_mid)-1):  # this is the bottom interface
-                dist_interp = np.append(dist_interp,
-                                        np.linspace(d_mid[inda], d_end[-1], int(2+(N-1)/2)))
+                dist_interp = np.append(
+                    dist_interp, np.linspace(0, d_mid[inda], int(2 + (N - 1) / 2))
+                )
+            elif inda >= (len(d_mid) - 1):  # this is the bottom interface
+                dist_interp = np.append(
+                    dist_interp, np.linspace(d_mid[inda], d_end[-1], int(2 + (N - 1) / 2))
+                )
             else:  # this is a surface inside the structure
-                dist_interp = np.append(dist_interp, np.linspace(d_mid[indb], d_mid[inda], 2+N))
+                dist_interp = np.append(dist_interp, np.linspace(d_mid[indb], d_mid[inda], 2 + N))
 
         dist_interp = np.unique(np.sort(dist_interp))  # sort and unify the distances
         # these are the indicies of the original distances in the interpolated new array
@@ -601,57 +702,71 @@ class Structure:
             in the Structure.
 
         """
-        # get the Handle to all Layer in the Structure
         handles = self.get_layer_vectors()[2]
+        N = self.get_number_of_layers()
 
-        if callable(getattr(handles[0], property_name)):
-            # it's a function
-            prop = np.zeros([self.get_number_of_layers()])
-            for i in range(self.get_number_of_layers()):
-                prop[i] = getattr(handles[i], property_name)
-        elif ((type(getattr(handles[0], property_name)) is list) or
-                (type(getattr(handles[0], property_name)) is str) or
-                (type(getattr(handles[0], property_name)) is dict)):
-            # it's a list of functions or str
-            prop = []
-            for i in range(self.get_number_of_layers()):
-                # Prop = Prop + getattr(Handles[i],types)
-                prop.append(getattr(handles[i], property_name))
-        elif type(getattr(handles[0], property_name)) is Q_:
-            # its a pint quantity
-            unit = getattr(handles[0], property_name).units
-            prop = np.empty([self.get_number_of_layers()])
-            for i in range(self.get_number_of_layers()):
-                prop[i] = getattr(handles[i], property_name).magnitude
-            prop *= unit
-        else:
-            # its a number or array
-            layers = self.get_unique_layers()
-            temp = np.zeros([len(layers[0]), 1])
+        # a leading underscore means "find this parameter inside whichever
+        # ParameterGroup owns it" and read its magnitude in base units
+        if property_name.startswith("_"):
+            stripped_name = property_name[1:]
+            group_name = next(
+                (
+                    name
+                    for name, group in vars(handles[0]).items()
+                    if isinstance(group, ParameterGroup) and stripped_name in vars(group)
+                ),
+                None,
+            )
+            if group_name is None:
+                raise AttributeError(
+                    f"No ParameterGroup field named '{stripped_name}' found on Layer"
+                )
+            property_name = f"{group_name}.{stripped_name}.magnitude"
+
+        # getter of the (dotted) property path of a layer
+        resolve = attrgetter(property_name)
+
+        def stack(getter):
+            """Build a [N] or [N, max_dim] array from getter(layer).
+            Shape/dtype are inferred from the unique layers only. Shorter
+            values are padded with zeros, e.g. the missing higher orders of
+            the spring constants."""
+            _, unique_layers = self.get_unique_layers()
             set_dtype = float
-            for i, layer in enumerate(layers[1]):
-                value = getattr(layer, property_name)
+            max_dim = 1
+            for layer in unique_layers:
+                value = getter(layer)
                 if np.iscomplexobj(value):
                     set_dtype = np.complex128
-                try:
-                    temp[i] = len(value)
-                except TypeError:
-                    temp[i] = 1
-            max_dim = int(np.max(temp))
-            if max_dim > 1:
-                prop = np.empty([self.get_number_of_layers(), max_dim], dtype=set_dtype)
-            else:
-                prop = np.empty([self.get_number_of_layers()], dtype=set_dtype)
-            del temp
-            # traverse all layers
-            for i in range(self.get_number_of_layers()):
-                temp = getattr(handles[i], property_name)
-                if np.iscomplexobj(temp):
-                    prop.dtype = np.complex128
+                max_dim = max(max_dim, np.size(value))
+
+            shape = [N, max_dim] if max_dim > 1 else [N]
+            arr = np.zeros(shape, dtype=set_dtype)
+            for i, h in enumerate(handles):
+                temp = getter(h)
                 if max_dim > 1:
-                    prop[i, :] = temp
+                    temp = np.ravel(temp)
+                    arr[i, : len(temp)] = temp
                 else:
-                    prop[i] = np.asarray(temp).item()
+                    arr[i] = np.asarray(temp).item()
+            return arr
+
+        # the first layer to determine the data type of the property from
+        first = resolve(handles[0])
+
+        if callable(first):
+            # it's a function
+            prop = np.fromiter((resolve(h) for h in handles), dtype=float, count=N)
+        elif isinstance(first, (list, str, dict)):
+            # it's a list of functions or str
+            prop = [resolve(h) for h in handles]
+        elif isinstance(first, Q_):
+            # it's a pint quantity (scalar or array-like)
+            unit = first.units
+            prop = Q_(stack(lambda l: resolve(l).to(unit).magnitude), unit)
+        else:
+            # it's a number or array
+            prop = stack(resolve)
 
         return prop
 
@@ -677,9 +792,11 @@ class Structure:
         if np.all(numel == numel[0]):
             numel = numel[0]
         else:
-            raise IndexError(f'Property {property_name:s} has not the same number of elements '
-                             '(num_sub_systems) across the whole sample '
-                             'Structure.')
+            raise IndexError(
+                f"Property {property_name:s} has not the same number of elements "
+                "(num_sub_systems) across the whole sample "
+                "Structure."
+            )
         return numel
 
     def get_layer_handle(self, i):
@@ -730,7 +847,7 @@ class Structure:
         """
         # reverse the list of sub_structures
         structure.sub_structures.reverse()
-        for (sub_structure, N) in structure.sub_structures:
+        for sub_structure, N in structure.sub_structures:
             if isinstance(sub_structure, Structure):
                 # recursive call
                 self.reverse_sub_structures(sub_structure)

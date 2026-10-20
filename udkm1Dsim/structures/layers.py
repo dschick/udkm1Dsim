@@ -21,19 +21,26 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ['Layer', 'Vacuum', 'AmorphousLayer', 'UnitCell']
+__all__ = ["Layer", "Vacuum", "AmorphousLayer", "UnitCell"]
 
-__docformat__ = 'restructuredtext'
+__docformat__ = "restructuredtext"
 
-import warnings
 from inspect import isfunction
+from operator import attrgetter
 
 import numpy as np
 import pint
-import scipy.constants as constants
-from scipy.integrate import quad
-from sympy import integrate, lambdify, symarray, symbols
+from sympy import lambdify, symbols
 from tabulate import tabulate
+
+from udkm1Dsim.structures.parameter_groups import (
+    ElasticParameters,
+    LatticeParameters,
+    MagneticParameters,
+    OpticalParameters,
+    StructuralParameters,
+    ThermalParameters,
+)
 
 from .atoms import Atom, AtomMixed
 
@@ -44,227 +51,105 @@ Q_ = u.Quantity
 class Layer:
     r"""Layer
 
-    Base class of real physical layers, such as amorphous layers and unit cells.
+    A layer consists of structural, thermal, elastic, optical, and magnetic properties.
+    These properties are organized into dedicated parameter groups:
 
-    It holds different structural, thermal, and elastic properties that are
-    relevant for simulations.
+    * :class:`StructuralParameters`
+    * :class:`ThermalParameters`
+    * :class:`ElasticParameters`
+    * :class:`OpticalParameters`
+    * :class:`MagneticParameters`
+
+    The parameter groups are accessible through the corresponding
+    attributes of the layer.
 
     Args:
         id (str): id of the layer.
         name (str): name of the layer.
 
-    Keyword Args:
-        roughness (float): gaussian width of the top roughness of a layer.
-        deb_wal_fac (float): Debye Waller factor.
-        sound_vel (float): sound velocity.
-        phonon_damping (float): phonon damping.
-        opt_pen_depth (float): optical penetration depth.
-        opt_ref_index (float): refractive index.
-        opt_ref_index_per_strain (float): change of refractive index per strain.
-        heat_capacity (float): heat capacity.
-        therm_cond (float): thermal conductivity.
-        lin_therm_exp (float): linear thermal expansion.
-        sub_system_coupling (float): sub-system coupling.
-
     Attributes:
         id (str): id of the layer.
         name (str): name of the layer.
-        thickness (float): thickness of the layer [m].
-        mass (float): mass of the layer [kg].
-        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² [kg].
-        density (float): density of the layer [kg/m³].
-        area (float): area of layer [m²].
-        volume (float): volume of layer [m³].
-        roughness (float): gaussian width of the top roughness of a layer [m].
-        deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
-            `\langle u^2\rangle` [m²].
-        sound_vel (float): longitudinal sound velocity in the layer [m/s].
-        spring_const (ndarray[float]): spring constant of the layer [kg/s²]
-            and higher orders.
-        phonon_damping (float): damping constant of phonon propagation [kg/s].
-        opt_pen_depth (float): optical penetration depth of the layer [m].
-        opt_ref_index (ndarray[float]): optical refractive index - real
-           and imagenary part :math:`n + i\kappa`.
-        opt_ref_index_per_strain (ndarray[float]): optical refractive
-           index change per strain - real and imagenary part
-           :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
-        therm_cond (list[@lambda]): list of T-dependent thermal conductivity
-            [W/(m K)].
-        lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
-           expansion coefficient (relative).
-        int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
-           linear thermal expansion coefficient.
-        heat_capacity (list[@lambda]): list of T-dependent heat capacity
-           function [J/(kg K)].
-        int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
-           capacity function.
-        sub_system_coupling (list[@lambda]): list of coupling functions of
-           different subsystems [W/m³].
-        num_sub_systems (int): number of subsystems for heat and phonons
-           (electrons, lattice, spins, ...).
-        eff_spin (float): effective spin.
-        curie_temp (float): Curie temperature [K].
-        mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
-        lamda (float): intrinsic coupling to bath parameter.
-        mag_moment (float): atomic magnetic moment [mu_Bohr].
-        aniso_exponent(ndarray[float]): exponent of T-dependence uniaxial
-            anisotropy.
-        anisotropy (ndarray[float]): anisotropy at T=0 K [J/m³] as x,y,z component vector.
-        exch_stiffness (float): exchange stiffness at T=0 K [J/m].
-        mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
 
     """
+
+    _parameter_group_names = ("structural", "thermal", "elastic", "optical", "magnetic")
 
     def __init__(self, id, name, **kwargs):
         self.id = id
         self.name = name
-        self.num_sub_systems = 1
-        self.roughness = kwargs.get('roughness', 0.0*u.nm)
-        self.spring_const = np.array([0.0])
-        self.deb_wal_fac = kwargs.get('deb_wal_fac', 0.0)
-        self.sound_vel = kwargs.get('sound_vel', 0.0*u.m/u.s)
-        self.phonon_damping = kwargs.get('phonon_damping', 0.0*u.kg/u.s)
-        self.opt_pen_depth = kwargs.get('opt_pen_depth', 0.0*u.nm)
-        self.opt_ref_index = kwargs.get('opt_ref_index', 0.0+0.0j)
-        self.opt_ref_index_per_strain = kwargs.get('opt_ref_index_per_strain', 0.0+0.0j)
-        self.heat_capacity = kwargs.get('heat_capacity', 0.0)
-        self.therm_cond = kwargs.get('therm_cond', 0.0)
-        self.lin_therm_exp = kwargs.get('lin_therm_exp', 0.0)
-        self.sub_system_coupling = kwargs.get('sub_system_coupling', 0.0)
 
-        if len(self.heat_capacity) == len(self.therm_cond) \
-                == len(self.lin_therm_exp) == len(self.sub_system_coupling):
-            self.num_sub_systems = len(self.heat_capacity)
-        else:
-            raise ValueError('Heat capacity, thermal conductivity, linear '
-                             'thermal expansion, and subsystem coupling have not '
-                             'the same number of elements!')
+        self.structural = StructuralParameters(
+            thickness=kwargs.get("thickness", 0.0 * u.nm),
+            roughness=kwargs.get("roughness", 0.0 * u.nm),
+            density=kwargs.get("density", 0.0 * u.kg / u.m**3),
+        )
+        self.thermal = ThermalParameters(
+            heat_capacity=kwargs.get("heat_capacity", 0.0 * u.J / u.kg / u.K),
+            therm_cond=kwargs.get("therm_cond", 0.0 * u.W / u.m / u.K),
+            lin_therm_exp=kwargs.get("lin_therm_exp", 0.0),
+            sub_system_coupling=kwargs.get("sub_system_coupling", 0.0 * u.W / u.m**3),
+            deb_wal_fac=kwargs.get("deb_wal_fac", 0.0 * u.angstrom**2),
+        )
+        self.elastic = ElasticParameters(
+            sound_vel=kwargs.get("sound_vel", 0.0 * u.m / u.s),
+            phonon_damping=kwargs.get("phonon_damping", 0.0 * u.kg / u.s),
+        )
+        self.optical = OpticalParameters(
+            opt_pen_depth=kwargs.get("opt_pen_depth", 0.0 * u.nm),
+            opt_ref_index=kwargs.get("opt_ref_index", 0.0 + 0.0j),
+            opt_ref_index_per_strain=kwargs.get("opt_ref_index_per_strain", 0.0 + 0.0j),
+        )
+        self.magnetic = MagneticParameters(
+            eff_spin=kwargs.get("eff_spin", 0.0),
+            curie_temp=kwargs.get("curie_temp", 0.0 * u.K),
+            lamda=kwargs.get("lamda", 0.0),
+            mag_moment=kwargs.get("mag_moment", 0.0 * u.bohr_magneton),
+            aniso_exponent=kwargs.get("aniso_exponent", 0.0),
+            anisotropy=kwargs.get("anisotropy", np.array([0.0, 0.0, 0.0]) * u.J / u.m**3),
+            exch_stiffness=kwargs.get("exch_stiffness", np.array([0.0, 0.0, 0.0]) * u.J / u.m),
+            mag_saturation=kwargs.get("mag_saturation", 0.0 * u.J / u.T / u.m**3),
+            magnetization=kwargs.get("magnetization", np.array([0.0, 0.0, 0.0])),
+        )
 
-        self.eff_spin = kwargs.get('eff_spin', 0.0)
-        self.curie_temp = kwargs.get('curie_temp', 0.0*u.K)
-        self.lamda = kwargs.get('lamda', 0.0)
-        self.mag_moment = kwargs.get('mag_moment', 0.0*u.bohr_magneton)
-        self.aniso_exponent = kwargs.get('aniso_exponent', 0.0)
-        self.anisotropy = kwargs.get('anisotropy', [0.0, 0.0, 0.0]*u.J/u.m**3)
-        self.exch_stiffness = kwargs.get('exch_stiffness', 0.0*u.J/u.m)
-        self.mag_saturation = kwargs.get('mag_saturation', 0.0*u.J/u.T/u.m**3)
+        # calc depending parameters across ParameterGroups
+        self._update_elastic()
 
-    def __str__(self):
+    def _update_elastic(self):
+        """Recalculate the spring constant and acoustic impedance, which
+        depend on the structural and elastic parameters."""
+        self.elastic.calc_spring_const(
+            self.structural.mass_unit_area.magnitude, self.structural.thickness.magnitude
+        )
+        self.elastic.calc_acoustic_impedance(
+            self.structural.mass.magnitude, self.structural.area.magnitude
+        )
+
+    def __repr__(self):
         """String representation of this class"""
-        output = []
-        try:
-            output += [['area', '{:.4g~P}'.format(self.area.to('nm**2'))],
-                       ['volume', '{:.4g~P}'.format(self.volume.to('nm**3'))]]
-        except AttributeError:
-            output += [['no area or volume set', '']]
-        try:
-            output += [['mass', '{:.4g~P}'.format(self.mass.to('kg'))],
-                       ['mass per unit area', f'{self.mass_unit_area:.4g~P}'],
-                       ['density', '{:.4g~P}'.format(self.density.to('kg/meter**3'))]]
-        except AttributeError:
-            output += [['no mass set', '']]
-        output += [['roughness', '{:.4g~P}'.format(self.roughness.to('nm'))],
-                   ['Debye Waller factor', ' m²\n'.join(self.deb_wal_fac_str) + ' m²'],
-                   ['sound velocity', '{:.4g~P}'.format(self.sound_vel.to('meter/s'))],
-                   ['spring constant', f'{self.spring_const * u.kg/u.s**2:.4g~P}'],
-                   ['phonon damping', '{:.4g~P}'.format(self.phonon_damping.to('kg/s'))],
-                   ['opt. pen. depth', '{:.4g~P}'.format(self.opt_pen_depth.to('nm'))],
-                   ['opt. refractive index', f'{self.opt_ref_index.real:.4f} \
-                    + {self.opt_ref_index.imag:.4f}i'],
-                   ['opt. ref. index/strain', f'{self.opt_ref_index_per_strain.real:.4f} \
-                    + {self.opt_ref_index_per_strain.imag:.4f}i'],
-                   ['thermal conduct.', ' W/(m K)\n'.join(self.therm_cond_str) + ' W/(m K)'],
-                   ['linear thermal expansion', '\n'.join(self.lin_therm_exp_str)],
-                   ['heat capacity', ' J/(kg K)\n'.join(self.heat_capacity_str) + ' J/(kg K)'],
-                   ['subsystem coupling', ' W/m³\n'.join(self.sub_system_coupling_str) + ' W/m³'],
-                   ['effective spin', self.eff_spin],
-                   ['Curie temperature', '{:.4g~P}'.format(self.curie_temp.to('K'))],
-                   ['mean-field exch. coupling', '{:.4g~P}'.format(
-                       self.mf_exch_coupling.to('m**2*kg/s**2'))],
-                   ['coupling to bath parameter', self.lamda],
-                   ['atomic magnetic moment', '{:.4g~P}'.format(self.mag_moment.to(
-                       'bohr_magneton'))],
-                   ['uniaxial anisotropy exponent', self.aniso_exponent],
-                   ['anisotropy', '{:.4g~P}'.format(self.anisotropy.to('J/m**3'))],
-                   ['exchange stiffness', '{:.4g~P}'.format(self.exch_stiffness.to('J/m'))],
-                   ['saturation magnetization', '{:.4g~P}'.format(
-                       self.mag_saturation.to('J/T/m**3'))]]
+        class_str = f"{type(self).__name__}: {self.name}\nID: {self.id}\n" + "=" * 30 + "\n"
+        for group_name in self._parameter_group_names:
+            class_str += repr(getattr(self, group_name)) + "\n"
 
-        return output
+        return class_str
 
-    def check_input(self, inputs, change_num_sub_systems=True):
-        """check_input
+    def _repr_html_(self):
+        """HTML representation of this class"""
+        class_str = f"<h2>{type(self).__name__}: {self.name}</h2><b>ID:</b> <i>{self.id}</i><br>"
+        for group_name in self._parameter_group_names:
+            class_str += getattr(self, group_name)._repr_html_()
 
-        Checks the input and create a list of function handle strings with T as
-        argument. Inputs can be strings, floats, ints, or pint quantities.
-
-        Args:
-            inputs (list[str, int, float, Quantity]): list of strings, int, floats,
-                or Pint quantities.
-            change_num_sub_systems (boolean, optional): wheather the number of
-                sub-systems should be changed. Defaults to True.
-
-        Returns:
-            (tuple):
-            - *output (list[@lambda])* - list of lambda functions.
-            - *output_strs (list[str])* - list of string-representations.
-
-        """
-        output = []
-        output_strs = []
-        # if the input is not a list, we convert it to one
-        if not isinstance(inputs, list):
-            inputs = [inputs]
-        # update number of subsystems
-        K = self.num_sub_systems
-        k = len(inputs)
-        if k != K and change_num_sub_systems:
-            print(f'Number of subsystems changed from {K:d} to {k:d}.')
-            self.num_sub_systems = k
-
-        # traverse each list element and convert it to a function handle
-        for input in inputs:
-            T = symbols('T')
-            if isfunction(input):
-                raise ValueError('Please use string representation of function!')
-            elif isinstance(input, str):
-                try:
-                    # backwards compatibility for direct lambda definition
-                    if ':' in input:
-                        # strip lambda prefix
-                        input = input.split(':')[1]
-                    # backwards compatibility for []-indexing
-                    input = input.replace('[', '_').replace(']', '')
-                    # check for presence of indexing and use symarray as argument
-                    if '_' in input:
-                        T = symarray('T', k)
-                        output.append(lambdify([T], input, modules='numpy'))
-                    else:
-                        output.append(lambdify(T, input, modules='numpy'))
-                    output_strs.append(input.strip())
-                except Exception as e:
-                    print('String input for layer property ' + input + ' \
-                        cannot be converted to function handle!')
-                    print(e)
-            elif isinstance(input, (int, float)):
-                output.append(lambdify(T, input, modules='numpy'))
-                output_strs.append(str(float(input)))
-            elif isinstance(input, object):
-                output.append(lambdify(T, input.to_base_units().magnitude, modules='numpy'))
-                output_strs.append(str(float(input.to_base_units().magnitude)))
-            else:
-                raise ValueError('Layer property input has to be a single or '
-                                 'list of numerics, Quantities, or function handle strings '
-                                 'which can be converted into a lambda function!')
-
-        return output, output_strs
+        return class_str
 
     def get_property_dict(self, **kwargs):
         """get_property_dict
 
-        Returns a dictionary with all parameters. objects or dicts and
-        objects are converted to strings. if a type is given, only these
-        properties are returned.
+        Returns a dictionary with all parameters. If a type is given, only
+        the parameters relevant for this type of simulation are returned.
+        Their keys are the paths of the parameters, e.g.
+        `structural.thickness`, and their values are the
+        :class:`Parameter` objects, whose `repr` contains their name, value,
+        and unit, as required for :meth:`Structure.get_hash`.
 
         Args:
             **kwargs (list[str]): types of requested properties.
@@ -273,50 +158,264 @@ class Layer:
             R (dict): dictionary with requested properties.
 
         """
-        # initialize input parser and define defaults and validators
-        properties_by_types = {'heat': ['_thickness', '_mass_unit_area', '_density',
-                                        '_opt_pen_depth', 'opt_ref_index',
-                                        'therm_cond_str', 'heat_capacity_str',
-                                        'int_heat_capacity_str', 'sub_system_coupling_str',
-                                        'num_sub_systems'],
-                               'phonon': ['num_sub_systems', 'int_lin_therm_exp_str', '_thickness',
-                                          '_mass_unit_area', 'spring_const', '_phonon_damping'],
-                               'xray': ['num_atoms', '_area', '_mass', 'deb_wal_fac_str',
-                                        '_thickness'],
-                               'optical': ['_c_axis', '_opt_pen_depth', 'opt_ref_index',
-                                           'opt_ref_index_per_strain'],
-                               'magnetic': ['_thickness', 'magnetization', 'eff_spin',
-                                            '_curie_temp', '_aniso_exponents', '_anisotropy',
-                                            '_exch_stiffness', '_mag_saturation', 'lamda'],
-                               }
+        properties_by_types = {
+            "heat": [
+                "structural.thickness",
+                "structural.mass_unit_area",
+                "structural.density",
+                "optical.opt_pen_depth",
+                "optical.opt_ref_index",
+                "thermal.therm_cond",
+                "thermal.heat_capacity",
+                "thermal.sub_system_coupling",
+                "thermal.num_sub_systems",
+            ],
+            "phonon": [
+                "thermal.num_sub_systems",
+                "thermal.lin_therm_exp",
+                "structural.thickness",
+                "structural.mass_unit_area",
+                "elastic.spring_const",
+                "elastic.phonon_damping",
+            ],
+            "xray": [
+                "num_atoms",
+                "structural.area",
+                "structural.mass",
+                "structural.density",
+                "structural.roughness",
+                "structural.thickness",
+                "thermal.deb_wal_fac",
+            ],
+            "optical": [
+                "lattice.c_axis",
+                "optical.opt_pen_depth",
+                "optical.opt_ref_index",
+                "optical.opt_ref_index_per_strain",
+            ],
+            "magnetic": [
+                "structural.thickness",
+                "magnetic.magnetization",
+                "magnetic.eff_spin",
+                "magnetic.curie_temp",
+                "magnetic.mag_moment",
+                "magnetic.aniso_exponent",
+                "magnetic.anisotropy",
+                "magnetic.exch_stiffness",
+                "magnetic.mag_saturation",
+                "magnetic.lamda",
+            ],
+        }
 
-        types = (kwargs.get('types', 'all'))
+        types = kwargs.get("types", "all")
         if type(types) is not list:
             types = [types]
-        attrs = vars(self)
         R = {}
         for t in types:
             # define the property names by the given type
-            if t == 'all':
-                return attrs
-            else:
-                S = dict((key, value) for key, value in attrs.items()
-                         if key in properties_by_types[t])
-                R.update(S)
+            if t == "all":
+                return vars(self)
+            for path in properties_by_types[t]:
+                try:
+                    R[path] = attrgetter(path)(self)
+                except AttributeError:
+                    # e.g. num_atoms and lattice exist only for UnitCell
+                    continue
 
         return R
 
-    def get_acoustic_impedance(self):
-        """get_acoustic_impedance
+    # ============================================================================
+    # Structural parameters
+    # ============================================================================
 
-        Calculates the acoustic impedance.
+    @property
+    def thickness(self):
+        return self.structural.thickness.quantity
 
-        Returns:
-            Z (float): acoustic impedance.
+    @thickness.setter
+    def thickness(self, value):
+        self.structural.thickness.quantity = value
+        self._update_elastic()
 
-        """
-        Z = np.sqrt(self.spring_const[0] * self.mass/self.area**2)
-        return Z
+    @property
+    def mass(self):
+        return self.structural.mass.quantity
+
+    @mass.setter
+    def mass(self, value):
+        raise AttributeError(
+            "'mass' is derived from density and volume and cannot be set directly."
+        )
+
+    @property
+    def mass_unit_area(self):
+        return self.structural.mass_unit_area.quantity
+
+    @mass_unit_area.setter
+    def mass_unit_area(self, value):
+        raise AttributeError(
+            "'mass_unit_area' is derived from 'density and volume normalized to area "
+            "and cannot be set directly. 'area' is fixed to 1.0 angstrom² for Layer"
+        )
+
+    @property
+    def density(self):
+        return self.structural.density.quantity
+
+    @density.setter
+    def density(self, value):
+        self.structural.density.quantity = value
+        self._update_elastic()
+
+    @property
+    def area(self):
+        return self.structural.area.quantity
+
+    @area.setter
+    def area(self, value):
+        raise AttributeError("'area' is fixed to 1.0 angstrom² for Layer")
+
+    @property
+    def volume(self):
+        return self.structural.volume.quantity
+
+    @volume.setter
+    def volume(self, value):
+        raise AttributeError(
+            "'volume' is derived from 'thickness' and 'area' and cannot be set directly."
+        )
+
+    @property
+    def roughness(self):
+        return self.structural.roughness.quantity
+
+    @roughness.setter
+    def roughness(self, value):
+        self.structural.roughness.quantity = value
+
+    # ============================================================================
+    # Thermal parameters
+    # ============================================================================
+
+    @property
+    def therm_cond(self):
+        return self.thermal.therm_cond.functional
+
+    @therm_cond.setter
+    def therm_cond(self, value):
+        self.thermal.therm_cond.quantity = value
+
+    @property
+    def therm_cond_expr(self):
+        return self.thermal.therm_cond.quantity
+
+    @property
+    def heat_capacity(self):
+        return self.thermal.heat_capacity.functional
+
+    @heat_capacity.setter
+    def heat_capacity(self, value):
+        self.thermal.heat_capacity.quantity = value
+
+    @property
+    def heat_capacity_expr(self):
+        return self.thermal.heat_capacity.quantity
+
+    @property
+    def lin_therm_exp(self):
+        return self.thermal.lin_therm_exp.functional
+
+    @lin_therm_exp.setter
+    def lin_therm_exp(self, value):
+        self.thermal.lin_therm_exp.quantity = value
+
+    @property
+    def lin_therm_exp_expr(self):
+        return self.thermal.lin_therm_exp.quantity
+
+    @property
+    def int_lin_therm_exp(self):
+        return self.thermal.lin_therm_exp.integral
+
+    @int_lin_therm_exp.setter
+    def int_lin_therm_exp(self, value):
+        raise AttributeError(
+            "'int_lin_therm_exp' is automatically derived from lin_therm_exp. "
+            "To set explicitly, modify 'Layer.thermal.int_lin_therm_exp' instead."
+        )
+
+    @property
+    def int_lin_therm_exp_expr(self):
+        return self.thermal.lin_therm_exp.integral_expr
+
+    @property
+    def int_heat_capacity(self):
+        return self.thermal.heat_capacity.integral
+
+    @int_heat_capacity.setter
+    def int_heat_capacity(self, value):
+        raise AttributeError(
+            "'int_heat_capacity' is automatically derived from heat_capacity. "
+            "To set explicitly, modify 'Layer.thermal.int_heat_capacity' instead."
+        )
+
+    @property
+    def int_heat_capacity_expr(self):
+        return self.thermal.heat_capacity.integral_expr
+
+    @property
+    def sub_system_coupling(self):
+        return self.thermal.sub_system_coupling.functional
+
+    @sub_system_coupling.setter
+    def sub_system_coupling(self, value):
+        self.thermal.sub_system_coupling.quantity = value
+
+    @property
+    def deb_wal_fac(self):
+        return self.thermal.deb_wal_fac.functional
+
+    @deb_wal_fac.setter
+    def deb_wal_fac(self, value):
+        self.thermal.deb_wal_fac.quantity = value
+
+    @property
+    def deb_wal_fac_expr(self):
+        return self.thermal.deb_wal_fac.quantity
+
+    @property
+    def num_sub_systems(self):
+        return self.thermal.num_sub_systems.magnitude
+
+    @num_sub_systems.setter
+    def num_sub_systems(self, value):
+        raise AttributeError(
+            "'num_sub_systems' is derived from the temperature-dependent thermal "
+            "parameters and cannot be set directly."
+        )
+
+    # ============================================================================
+    # Elastic parameters
+    # ============================================================================
+
+    @property
+    def sound_vel(self):
+        return self.elastic.sound_vel.quantity
+
+    @sound_vel.setter
+    def sound_vel(self, value):
+        self.elastic.sound_vel.quantity = value
+        self._update_elastic()
+
+    @property
+    def spring_const(self):
+        return self.elastic.spring_const.quantity
+
+    @spring_const.setter
+    def spring_const(self, value):
+        raise AttributeError(
+            "'spring_const' is automatically derived from sound_vel, mass, and thickness."
+        )
 
     def set_ho_spring_constants(self, HO):
         """set_ho_spring_constants
@@ -328,435 +427,174 @@ class Layer:
             HO (ndarray[float]): higher order spring constants.
 
         """
-        # reset old higher order spring constants
-        self.spring_const = np.delete(self.spring_const, np.r_[1:len(self.spring_const)])
-        self.spring_const = np.hstack((self.spring_const, HO))
+        self.elastic.set_ho_spring_constants(HO)
+
+    @property
+    def phonon_damping(self):
+        return self.elastic.phonon_damping.quantity
+
+    @phonon_damping.setter
+    def phonon_damping(self, value):
+        self.elastic.phonon_damping.quantity = value
+
+    # ============================================================================
+    # Optical parameters
+    # ============================================================================
+
+    @property
+    def opt_pen_depth(self):
+        return self.optical.opt_pen_depth.quantity
+
+    @opt_pen_depth.setter
+    def opt_pen_depth(self, value):
+        self.optical.opt_pen_depth.quantity = value
+
+    @property
+    def opt_ref_index(self):
+        return self.optical.opt_ref_index.quantity
+
+    @opt_ref_index.setter
+    def opt_ref_index(self, value):
+        self.optical.opt_ref_index.quantity = value
+
+    @property
+    def opt_ref_index_per_strain(self):
+        return self.optical.opt_ref_index_per_strain.quantity
+
+    @opt_ref_index_per_strain.setter
+    def opt_ref_index_per_strain(self, value):
+        self.optical.opt_ref_index_per_strain.quantity = value
 
     def set_opt_pen_depth_from_ref_index(self, wavelength):
         """set_opt_pen_depth_from_ref_index
 
-        Set the optical penetration depth from the optical referactive index
+        Set the optical penetration depth from the optical refractive index
         for a given wavelength.
 
         Args:
-            wavelength (Quantity): wavelength as Pint Quantitiy.
+            wavelength (Quantity): wavelength as Pint Quantity.
 
         """
-        if np.imag(self.opt_ref_index) == 0:
-            self.opt_pen_depth = Q_(np.inf, u.m)
-        else:
-            self.opt_pen_depth = wavelength/(4*np.pi*np.abs(np.imag(self.opt_ref_index)))
+        self.optical.set_opt_pen_depth_from_ref_index(wavelength)
 
-    def calc_spring_const(self):
-        r"""calc_spring_const
-
-        Calculates the spring constant of the layer from the mass per unit area,
-        sound velocity and thickness
-
-        .. math:: k = m \, \left(\frac{v}{c}\right)^2
-
-        """
-        try:
-            self.spring_const[0] = (self._mass_unit_area * (self._sound_vel/self._thickness)**2)
-        except AttributeError:
-            # no mass set, yet
-            self.spring_const[0] = 0
-
-    def calc_mf_exchange_coupling(self):
-        r"""calc_mf_exchange_coupling
-
-        Calculate the mean-field exchange coupling constant
-
-        .. math:: J = \frac{3}{S_{eff}+1} k_B T_C
-
-        """
-        try:
-            self._mf_exch_coupling = 3*self.eff_spin/(self.eff_spin+1)*constants.k*self._curie_temp
-        except AttributeError:
-            # on initialization self._curie_temp
-            self._mf_exch_coupling = 0
-
-    @property
-    def thickness(self):
-        return Q_(self._thickness, u.meter).to('nm')
-
-    @thickness.setter
-    def thickness(self, thickness):
-        self._thickness = thickness.to_base_units().magnitude
-
-    @property
-    def mass(self):
-        return Q_(self._mass, u.kg)
-
-    @mass.setter
-    def mass(self, mass):
-        self._mass = mass.to_base_units().magnitude
-
-    @property
-    def mass_unit_area(self):
-        return Q_(self._mass_unit_area, u.kg)
-
-    @mass_unit_area.setter
-    def mass_unit_area(self, mass_unit_area):
-        self._mass_unit_area = mass_unit_area.to_base_units().magnitude
-
-    @property
-    def density(self):
-        return Q_(self._density, u.kg/u.m**3)
-
-    @density.setter
-    def density(self, density):
-        self._density = density.to_base_units().magnitude
-
-    @property
-    def area(self):
-        return Q_(self._area, u.m**2)
-
-    @area.setter
-    def area(self, area):
-        self._area = area.to_base_units().magnitude
-
-    @property
-    def volume(self):
-        return Q_(self._volume, u.m**3)
-
-    @volume.setter
-    def volume(self, volume):
-        self._volume = volume.to_base_units().magnitude
-
-    @property
-    def deb_wal_fac(self):
-        return self._deb_wal_fac
-
-    @deb_wal_fac.setter
-    def deb_wal_fac(self, deb_wal_fac):
-        self._deb_wal_fac, self.deb_wal_fac_str = self.check_input(deb_wal_fac, False)
-
-    @property
-    def sound_vel(self):
-        return Q_(self._sound_vel, u.m/u.s)
-
-    @sound_vel.setter
-    def sound_vel(self, sound_vel):
-        # spring constants are (re)calculated on setting the sound velocity
-        self._sound_vel = sound_vel.to_base_units().magnitude
-        self.calc_spring_const()
-
-    @property
-    def phonon_damping(self):
-        return Q_(self._phonon_damping, u.kg/u.s)
-
-    @phonon_damping.setter
-    def phonon_damping(self, phonon_damping):
-        self._phonon_damping = phonon_damping.to_base_units().magnitude
-
-    @property
-    def opt_pen_depth(self):
-        return Q_(self._opt_pen_depth, u.meter).to('nanometer')
-
-    @opt_pen_depth.setter
-    def opt_pen_depth(self, opt_pen_depth):
-        self._opt_pen_depth = opt_pen_depth.to_base_units().magnitude
-
-    @property
-    def roughness(self):
-        return Q_(self._roughness, u.meter).to('nm')
-
-    @roughness.setter
-    def roughness(self, roughness):
-        self._roughness = roughness.to_base_units().magnitude
-
-    @property
-    def heat_capacity(self):
-        return self._heat_capacity
-
-    @heat_capacity.setter
-    def heat_capacity(self, heat_capacity):
-        # (re)calculate the integrated heat capacity
-        self._heat_capacity, self.heat_capacity_str = self.check_input(heat_capacity)
-        # delete last anti-derivative
-        self._int_heat_capacity = None
-        # recalculate the anti-derivative
-        self.int_heat_capacity
-
-    @property
-    def therm_cond(self):
-        return self._therm_cond
-
-    @therm_cond.setter
-    def therm_cond(self, therm_cond):
-        self._therm_cond, self.therm_cond_str = self.check_input(therm_cond)
-
-    @property
-    def int_heat_capacity(self):
-        if hasattr(self, '_int_heat_capacity') and isinstance(self._int_heat_capacity, list):
-            return self._int_heat_capacity
-        else:
-            self._int_heat_capacity = []
-            self.int_heat_capacity_str = []
-            T = symbols('T')
-            for hc, hcs in zip(self.heat_capacity, self.heat_capacity_str):
-                try:
-                    integral = integrate(hcs, T)
-                    self._int_heat_capacity.append(lambdify(T, integral, modules='numpy'))
-                    self.int_heat_capacity_str.append(str(integral))
-                except Exception:
-                    warnings.warn('\nSympy\'s analytical integration of the heat capacity '
-                                  'did not work.\n'
-                                  'Just do it numerically with scipy.integrate.quad')
-                    self._int_heat_capacity.append(lambda T: quad(hc, 0, T, limit=10000)[0])
-                    self.int_heat_capacity_str.append(f'scipy.integrate.quad({hcs:s}, 0, T)[0]')
-
-        return self._int_heat_capacity
-
-    @int_heat_capacity.setter
-    def int_heat_capacity(self, int_heat_capacity):
-        self._int_heat_capacity, self.int_heat_capacity_str = self.check_input(
-                int_heat_capacity)
-
-    @property
-    def lin_therm_exp(self):
-        return self._lin_therm_exp
-
-    @lin_therm_exp.setter
-    def lin_therm_exp(self, lin_therm_exp):
-        # (re)calculate the integrated linear thermal expansion coefficient
-        self._lin_therm_exp, self.lin_therm_exp_str = self.check_input(lin_therm_exp)
-        # delete last anti-derivative
-        self._int_lin_therm_exp = None
-        # recalculate the anti-derivative
-        self.int_lin_therm_exp
-
-    @property
-    def int_lin_therm_exp(self):
-        if hasattr(self, '_int_lin_therm_exp') and isinstance(self._int_lin_therm_exp, list):
-            return self._int_lin_therm_exp
-        else:
-            self._int_lin_therm_exp = []
-            self.int_lin_therm_exp_str = []
-            T = symbols('T')
-            for lte, ltes in zip(self.lin_therm_exp, self.lin_therm_exp_str):
-                try:
-                    integral = integrate(ltes, T)
-                    self._int_lin_therm_exp.append(lambdify(T, integral, modules='numpy'))
-                    self.int_lin_therm_exp_str.append(str(integral))
-                except Exception:
-                    warnings.warn('\nSympy\'s analytical integration of the linear thermal '
-                                  'expansion did not work.\n'
-                                  'Just do it numerically with scipy.integrate.quad')
-                    self._int_lin_therm_exp.append(lambda T: quad(lte, 0, T, limit=10000)[0])
-                    self.int_lin_therm_exp_str.append(f'scipy.integrate.quad({ltes:s}, 0, T)[0]')
-
-        return self._int_lin_therm_exp
-
-    @int_lin_therm_exp.setter
-    def int_lin_therm_exp(self, int_lin_therm_exp):
-        self._int_lin_therm_exp, self.int_lin_therm_exp_str = self.check_input(
-                int_lin_therm_exp)
-
-    @property
-    def sub_system_coupling(self):
-        return self._sub_system_coupling
-
-    @sub_system_coupling.setter
-    def sub_system_coupling(self, sub_system_coupling):
-        self._sub_system_coupling, self.sub_system_coupling_str = \
-            self.check_input(sub_system_coupling)
+    # ============================================================================
+    # Magnetic parameters
+    # ============================================================================
 
     @property
     def eff_spin(self):
-        return self._eff_spin
+        return self.magnetic.eff_spin.quantity
 
     @eff_spin.setter
-    def eff_spin(self, eff_spin):
-        self._eff_spin = float(eff_spin)
-        self.calc_mf_exchange_coupling()
+    def eff_spin(self, value):
+        self.magnetic.eff_spin.quantity = value
 
     @property
     def curie_temp(self):
-        return Q_(self._curie_temp, u.K)
+        return self.magnetic.curie_temp.quantity
+
+    @curie_temp.setter
+    def curie_temp(self, value):
+        self.magnetic.curie_temp.quantity = value
 
     @property
     def mf_exch_coupling(self):
-        return Q_(self._mf_exch_coupling, u.m**2*u.kg/(u.s**2))
+        return self.magnetic.mf_exch_coupling.quantity
 
-    @curie_temp.setter
-    def curie_temp(self, curie_temp):
-        self._curie_temp = float(curie_temp.to_base_units().magnitude)
-        self.calc_mf_exchange_coupling()
+    @mf_exch_coupling.setter
+    def mf_exch_coupling(self, value):
+        raise AttributeError(
+            "'mf_exch_coupling' is derived from other 'eff_spin' and 'curie_temp' "
+            " and cannot be set directly."
+        )
+
+    @property
+    def lamda(self):
+        return self.magnetic.lamda.quantity
+
+    @lamda.setter
+    def lamda(self, value):
+        self.magnetic.lamda.quantity = value
 
     @property
     def mag_moment(self):
-        return Q_(self._mag_moment, u.A*u.m**2).to('bohr_magneton')
+        return self.magnetic.mag_moment.quantity
 
     @mag_moment.setter
-    def mag_moment(self, mag_moment):
-        self._mag_moment = float(mag_moment.to_base_units().magnitude)
+    def mag_moment(self, value):
+        self.magnetic.mag_moment.quantity = value
+
+    @property
+    def aniso_exponent(self):
+        return self.magnetic.aniso_exponent.quantity
+
+    @aniso_exponent.setter
+    def aniso_exponent(self, value):
+        self.magnetic.aniso_exponent.quantity = value
 
     @property
     def anisotropy(self):
-        return Q_(self._anisotropy, u.J/u.m**3)
+        return self.magnetic.anisotropy.quantity
 
     @anisotropy.setter
-    def anisotropy(self, anisotropy):
-        self._anisotropy = np.zeros(3)
-        try:
-            if len(anisotropy) == 3:
-                self._anisotropy = anisotropy.to_base_units().magnitude
-            else:
-                warnings.warn('Anisotropy must be a scalar or vector of length 3!')
-        except TypeError:
-            self._anisotropy[0] = anisotropy.to_base_units().magnitude
+    def anisotropy(self, value):
+        self.magnetic.anisotropy.quantity = value
 
     @property
     def exch_stiffness(self):
-        return Q_(self._exch_stiffness, u.J/u.m)
+        return self.magnetic.exch_stiffness.quantity
 
     @exch_stiffness.setter
-    def exch_stiffness(self, exch_stiffness):
-        self._exch_stiffness = np.zeros(3)
-        try:
-            if len(exch_stiffness) == 3:
-                self._exch_stiffness = exch_stiffness.to_base_units().magnitude
-            else:
-                warnings.warn('Exchange stiffness must be a scalar or vector of length 3!')
-        except TypeError:
-            self._exch_stiffness[:] = exch_stiffness.to_base_units().magnitude
+    def exch_stiffness(self, value):
+        self.magnetic.exch_stiffness.quantity = value
 
     @property
     def mag_saturation(self):
-        return Q_(self._mag_saturation, u.J/u.T/u.m**3)
+        return self.magnetic.mag_saturation.quantity
 
     @mag_saturation.setter
-    def mag_saturation(self, mag_saturation):
-        self._mag_saturation = float(mag_saturation.to_base_units().magnitude)
+    def mag_saturation(self, value):
+        self.magnetic.mag_saturation.quantity = value
+
+    @property
+    def magnetization(self):
+        return self.magnetic.magnetization.quantity
+
+    @magnetization.setter
+    def magnetization(self, value):
+        self.magnetic.magnetization.quantity = value
 
 
 class Vacuum(Layer):
-    def __init__(self, thickness=1*u.nm, **kwargs):
-        self.thickness = thickness
-        self.density = 0.0*u.kg/u.m**3
-        self.area = 1.0*u.angstrom**2  # set as unit area
-        self.volume = self.area*self.thickness
-        self.mass = 0*u.kg
-        self.mass_unit_area = self.mass
-        super().__init__('vacuum', 'vacuum', opt_ref_index=1+0.0j)
+    def __init__(self, thickness=1 * u.nm, **kwargs):
 
-    def __str__(self):
+        super().__init__("vacuum", "vacuum", opt_ref_index=1 + 0.0j)
+        self.thickness = thickness
+        self.density = 0.0 * u.kg / u.m**3
+
+    def __repr__(self):
         """String representation of this class"""
-        return f'Vacuum layer of thickness: {self.thickness:.4g~P}'
+        return f"Vacuum layer of thickness: {self.structural.thickness.quantity.to('nm'):.4g~P}"
+
+    def _repr_html_(self):
+        """HTML representation of this class"""
+        return (
+            f"<h2>Vacuum</h2><b>Thickness:</b> {self.structural.thickness.quantity.to('nm'):.4g~P}"
+        )
 
 
 class AmorphousLayer(Layer):
     r"""AmorphousLayer
 
-    Representation of amorphous layers containing an Atom or AtomMixed.
+    Representation of amorphous layers but kept for backwards compatibility.
 
-    Args:
-        id (str): id of the layer.
-        name (str): name of layer.
-        thickness (float): thickness of the layer.
-        density (float): density of the layer.
-
-    Keyword Args:
-        atom (object): Atom or AtomMixed in the layer.
-        roughness (float): gaussian width of the top roughness of a layer.
-        deb_wal_fac (float): Debye Waller factor.
-        sound_vel (float): sound velocity.
-        phonon_damping (float): phonon damping.
-        roughness (float): gaussian width of the top roughness of a layer.
-        opt_pen_depth (float): optical penetration depth.
-        opt_ref_index (float): refractive index.
-        opt_ref_index_per_strain (float): change of refractive index per
-           strain.
-        heat_capacity (float): heat capacity.
-        therm_cond (float): thermal conductivity.
-        lin_therm_exp (float): linear thermal expansion.
-        sub_system_coupling (float): sub-system coupling.
-
-    Attributes:
-        id (str): id of the layer.
-        name (str): name of the layer.
-        thickness (float): thickness of the layer [m].
-        mass (float): mass of the layer [kg].
-        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² [kg].
-        density (float): density of the layer [kg/m³].
-        area (float): area of layer [m²].
-        volume (float): volume of layer [m³].
-        roughness (float): gaussian width of the top roughness of a layer [m].
-        deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
-            `\langle u^2\rangle` [m²].
-        sound_vel (float): longitudinal sound velocity in the layer [m/s].
-        spring_const (ndarray[float]): spring constant of the layer [kg/s²]
-            and higher orders.
-        phonon_damping (float): damping constant of phonon propagation [kg/s].
-        opt_pen_depth (float): optical penetration depth of the layer [m].
-        opt_ref_index (ndarray[float]): optical refractive index - real
-           and imagenary part :math:`n + i\kappa`.
-        opt_ref_index_per_strain (ndarray[float]): optical refractive
-           index change per strain - real and imagenary part
-           :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
-        therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
-           conductivity [W/(m K)].
-        lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
-           expansion coefficient (relative).
-        int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
-           linear thermal expansion coefficient.
-        heat_capacity (list[@lambda]): list of T-dependent heat capacity
-           function [J/(kg K)].
-        int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
-           capacity function.
-        sub_system_coupling (list[@lambda]): list of of coupling functions of
-           different subsystems [W/m³].
-        num_sub_systems (int): number of subsystems for heat and phonons
-           (electrons, lattice, spins, ...).
-        eff_spin (float): effective spin.
-        curie_temp (float): Curie temperature [K].
-        mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
-        lamda (float): intrinsic coupling to bath parameter.
-        mag_moment (float): atomic magnetic moment [mu_Bohr].
-        aniso_exponent(ndarray[float]): exponent of T-dependence uniaxial
-            anisotropy.
-        anisotropy (float): anisotropy at T=0 K [J/m³] as x,y,z component vector.
-        exch_stiffness (float): exchange stiffness at T=0 K [J/m].
-        mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
-        magnetization (dict[float]): magnetization amplitude, phi and
-           gamma angle inherited from the atom.
-        atom (object): Atom or AtomMixed in the layer.
+    Use :class:`Layer` instead.
 
     """
 
     def __init__(self, id, name, thickness, density, **kwargs):
-        self.thickness = thickness
-        self.density = density
-        self.area = 1.0*u.angstrom**2  # set as unit area
-        self.volume = self.area*self.thickness
-        self.mass = self.density*self.volume
-        self.mass_unit_area = self.mass
-        self.atom = kwargs.get('atom', [])
-        super().__init__(id, name, **kwargs)
-
-    def __str__(self):
-        """String representation of this class"""
-        output = [['id', self.id],
-                  ['name', self.name],
-                  ['thickness', f'{self.thickness:.4g~P}'],
-                  ]
-        output += super().__str__()
-
-        try:
-            output += [['atom', self.atom.name],
-                       ['magnetization', ''],
-                       ['amplitude', self.magnetization['amplitude']],
-                       ['phi [°]', '{:.4g~P}'.format(self.magnetization['phi'].to('deg'))],
-                       ['gamma [°]', '{:.4g~P}'.format(self.magnetization['gamma'].to('deg'))], ]
-        except AttributeError:
-            output += [['no atom set', '']]
-
-        class_str = 'Amorphous layer with the following properties\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt='rst',
-                              colalign=('right',), floatfmt=('.2f', '.2f'))
-        return class_str
+        super().__init__(id, name, thickness=thickness, density=density, **kwargs)
+        self.atom = kwargs.get("atom", [])
 
     @property
     def atom(self):
@@ -765,172 +603,111 @@ class AmorphousLayer(Layer):
     @atom.setter
     def atom(self, atom):
         if atom == []:  # no atom is set
-            self.magnetization = {'amplitude': 0,
-                                  'phi': 0*u.deg,
-                                  'gamma': 0*u.deg,
-                                  }
+            self.magnetic.magnetization.polar = (0, 0 * u.deg, 0 * u.deg)
             return
 
         if not isinstance(atom, (Atom, AtomMixed)):
-            raise TypeError('Class '
-                            + type(atom).__name__
-                            + ' is no possible atom of an amorphous layer. '
-                            + 'Only Atom and AtomMixed are allowed!')
+            raise TypeError(
+                "Class "
+                + type(atom).__name__
+                + " is no possible atom of an amorphous layer. "
+                + "Only Atom and AtomMixed are allowed!"
+            )
         self._atom = atom
-        self.magnetization = {'amplitude': atom.mag_amplitude,
-                              'phi': atom.mag_phi,
-                              'gamma': atom.mag_gamma,
-                              }
-
-    @property
-    def magnetization(self):
-        return {'amplitude': self._magnetization['amplitude'],
-                'phi': Q_(self._magnetization['phi'], u.rad).to('deg'),
-                'gamma': Q_(self._magnetization['gamma'], u.rad).to('deg')
-                }
-
-    @magnetization.setter
-    def magnetization(self, magnetization):
-        self._magnetization = {'amplitude': magnetization['amplitude'],
-                               'phi': magnetization['phi'].to_base_units().magnitude,
-                               'gamma': magnetization['gamma'].to_base_units().magnitude
-                               }
+        self.magnetic.magnetization.polar = (atom.mag_amplitude, atom.mag_phi, atom.mag_gamma)
 
 
 class UnitCell(Layer):
-    r"""UnitCell
+    r"""Layer
 
     Representation of unit cells made of one or multiple Atom or AtomMixed
     instances at defined positions.
+    A unit cell consists of structural, lattice, thermal, elastic, optical,
+    and magnetic properties. These properties are organized into dedicated
+    parameter groups:
+
+    * :class:`StructuralParameters`
+    * :class:`LatticeParameters`
+    * :class:`ThermalParameters`
+    * :class:`ElasticParameters`
+    * :class:`OpticalParameters`
+    * :class:`MagneticParameters`
+
+    The parameter groups are accessible through the corresponding
+    attributes of the layer.
 
     Args:
-        id (str): id of the UnitCell.
-        name (str): name of the UnitCell.
-        c_axis (float): c-axis of the UnitCell.
-
-    Keyword Args:
-        a_axis (float): a-axis of the UnitCell.
-        b_axis (float): b-axis of the UnitCell.
-        deb_wal_fac (float): Debye Waller factor.
-        sound_vel (float): sound velocity.
-        phonon_damping (float): phonon damping.
-        roughness (float): gaussian width of the top roughness of a layer.
-        opt_pen_depth (float): optical penetration depth.
-        opt_ref_index (float): refractive index.
-        opt_ref_index_per_strain (float): change of refractive index per
-           strain.
-        heat_capacity (float): heat capacity.
-        therm_cond (float): thermal conductivity.
-        lin_therm_exp (float): linear thermal expansion.
-        sub_system_coupling (float): sub-system coupling.
+        id (str): id of the layer.
+        name (str): name of the layer.
 
     Attributes:
         id (str): id of the layer.
         name (str): name of the layer.
-        c_axis (float): out-of-plane c-axis [m].
-        a_axis (float): in-plane a-axis [m].
-        b_axis (float): in-plane b-axis [m].
-        thickness (float): thickness of the layer [m].
-        mass (float): mass of the layer [kg].
-        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² [kg].
-        density (float): density of the layer [kg/m³].
-        area (float): area of layer [m²].
-        volume (float): volume of layer [m³].
-        roughness (float): gaussian width of the top roughness of a layer [m].
-        deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
-            `\langle u^2\rangle` [m²].
-        sound_vel (float): longitudinal sound velocity in the layer [m/s].
-        spring_const (ndarray[float]): spring constant of the layer [kg/s²]
-            and higher orders.
-        phonon_damping (float): damping constant of phonon propagation [kg/s].
-        opt_pen_depth (float): optical penetration depth of the layer [m].
-        opt_ref_index (ndarray[float]): optical refractive index - real
-           and imagenary part :math:`n + i\kappa`.
-        opt_ref_index_per_strain (ndarray[float]): optical refractive
-           index change per strain - real and imagenary part
-           :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
-        therm_cond (list[@lambda]): list of HANDLES T-dependent thermal
-           conductivity [W/(m K)].
-        lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
-           expansion coefficient (relative).
-        int_lin_therm_exp (list[@lambda]): list of T-dependent integrated
-           linear thermal expansion coefficient.
-        heat_capacity (list[@lambda]): list of T-dependent heat capacity
-           function [J/(kg K)].
-        int_heat_capacity (list[@lambda]): list of T-dependent integrated heat
-           capacity function.
-        sub_system_coupling (list[@lambda]): list of of coupling functions of
-           different subsystems [W/m³].
-        num_sub_systems (int): number of subsystems for heat and phonons
-           (electrons, lattice, spins, ...).
-        atoms (list[atom, @lambda]): list of atoms and function handle
-           for strain dependent displacement.
-        num_atoms (int): number of atoms in unit cell.
-        eff_spin (float): effective spin.
-        curie_temp (float): Curie temperature [K].
-        mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
-        lamda (float): intrinsic coupling to bath parameter.
-        mag_moment (float): atomic magnetic moment [mu_Bohr].
-        aniso_exponent(ndarray[float]): exponent of T-dependence uniaxial
-            anisotropy.
-        anisotropy (float): anisotropy at T=0 K [J/m³] as x,y,z component vector.
-        exch_stiffness (float): exchange stiffness at T=0 K [J/m].
-        mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
-        magnetization (list[float]): magnetization amplitudes, phi, and
-           gamma angle of each atom in the unit cell.
 
     """
 
-    def __init__(self, id, name, c_axis, **kwargs):
-        self.c_axis = c_axis
-        self.thickness = c_axis
-        self.a_axis = kwargs.get('a_axis', self.c_axis)
-        self.b_axis = kwargs.get('b_axis', self.a_axis)
-        self.mass = 0.0*u.kg
-        self.mass_unit_area = 0.0*u.kg
-        self.density = 0.0*u.kg/u.m**2
+    _parameter_group_names = (
+        "structural",
+        "lattice",
+        "thermal",
+        "elastic",
+        "optical",
+        "magnetic",
+    )
 
+    def __init__(self, id, name, c_axis, **kwargs):
         super().__init__(id, name, **kwargs)
 
-        self.area = self.a_axis * self.b_axis
-        self.volume = self.area * self.c_axis
+        self.lattice = LatticeParameters(
+            c_axis=c_axis,
+            a_axis=kwargs.get("a_axis", c_axis),
+            b_axis=kwargs.get("b_axis", c_axis),
+        )
+
+        self.thickness = c_axis
+
+        self.structural.area.quantity = self.a_axis * self.b_axis
+        self.structural.volume.quantity = self.area * self.c_axis
         self.atoms = []
         self.num_atoms = 0
-        self.magnetization = []
+        self._update_mass_from_atoms()
 
-    def __str__(self):
-        """String representation of this class"""
-        output = [['id', self.id],
-                  ['name', self.name],
-                  ['a-axis', '{:.4g~P}'.format(self.a_axis.to('nm'))],
-                  ['b-axis', '{:.4g~P}'.format(self.b_axis.to('nm'))],
-                  ['c-axis', '{:.4g~P}'.format(self.c_axis.to('nm'))],
-                  ['area', '{:.4g~P}'.format(self.area.to('nm**2'))],
-                  ['volume', '{:.4g~P}'.format(self.volume.to('nm**3'))],
-                  ['mass', '{:.4g~P}'.format(self.mass.to('kg'))],
-                  ['mass per unit area', f'{self.mass_unit_area:.4g~P}'],
-                  ]
-        output += super().__str__()
-
-        class_str = 'Unit Cell with the following properties\n\n'
-        class_str += tabulate(output, headers=['parameter', 'value'], tablefmt='rst',
-                              colalign=('right',), floatfmt=('.2f', '.2f'))
-        class_str += '\n\n' + str(self.num_atoms) + ' Constituents:\n'
-
+    def _atoms_table(self, style):
+        """Table of all atoms in the unit cell in the given tabulate style"""
         atoms_str = []
-        for i in range(self.num_atoms):
-            atoms_str.append([self.atoms[i][0].name,
-                              f'{self.atoms[i][1](0):0.2f}',
-                              self.atoms[i][2],
-                              '',
-                              self.atoms[i][0].mag_amplitude,
-                              self.atoms[i][0].mag_phi.to('deg').magnitude,
-                              self.atoms[i][0].mag_gamma.to('deg').magnitude,
-                              ])
-        class_str += tabulate(atoms_str, headers=['atom', 'position', 'position function',
-                                                  'magn.', 'amplitude', 'phi [°]', 'gamma [°]'],
-                              tablefmt='rst')
-        return class_str
+        for atom, position, position_function in self.atoms:
+            atoms_str.append(
+                [
+                    atom.name,
+                    f"{position(0):0.2f}",
+                    position_function,
+                    "",
+                    atom.mag_amplitude,
+                    atom.mag_phi.to("deg").magnitude,
+                    atom.mag_gamma.to("deg").magnitude,
+                ]
+            )
+        return tabulate(
+            atoms_str,
+            headers=[
+                "atom",
+                "position",
+                "position function",
+                "magn.",
+                "amplitude",
+                "phi [°]",
+                "gamma [°]",
+            ],
+            tablefmt=style,
+        )
+
+    def __repr__(self):
+        """String representation of this class"""
+        return super().__repr__() + self._atoms_table("double_grid")
+
+    def _repr_html_(self):
+        """HTML representation of this class"""
+        return super()._repr_html_() + "<h3>Atoms</h3>" + self._atoms_table("html")
 
     def visualize(self, block=True, **kwargs):
         """visualize
@@ -952,9 +729,9 @@ class UnitCell(Layer):
         import matplotlib.pyplot as plt
         from matplotlib import colormaps
 
-        strain = kwargs.get('strain', 0)
+        strain = kwargs.get("strain", 0)
 
-        colors = [colormaps['Set3'](x) for x in np.linspace(0, 1, self.num_atoms)]
+        colors = [colormaps["Set3"](x) for x in np.linspace(0, 1, self.num_atoms)]
         atom_ids = self.get_atom_ids()
 
         plt.figure()
@@ -963,27 +740,46 @@ class UnitCell(Layer):
             if not atoms_plotted[atom_ids.index(self.atoms[j][0].id)]:
                 label = self.atoms[j][0].id
                 atoms_plotted[atom_ids.index(self.atoms[j][0].id)] = True
-                plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                         markersize=10,
-                         markeredgecolor=[0, 0, 0],
-                         markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
-                         label=label)
+                plt.plot(
+                    1 + j,
+                    self.atoms[j][1](strain),
+                    "o",
+                    markersize=10,
+                    markeredgecolor=[0, 0, 0],
+                    markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
+                    label=label,
+                )
             else:
-                label = '_nolegend_'
-                plt.plot(1+j, self.atoms[j][1](strain), 'o',
-                         markersize=10,
-                         markeredgecolor=[0, 0, 0],
-                         markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
-                         label=label)
+                label = "_nolegend_"
+                plt.plot(
+                    1 + j,
+                    self.atoms[j][1](strain),
+                    "o",
+                    markersize=10,
+                    markeredgecolor=[0, 0, 0],
+                    markerfacecolor=colors[atom_ids.index(self.atoms[j][0].id)],
+                    label=label,
+                )
 
-        plt.axis([0.1, self.num_atoms+0.9, -0.1, (1.1+strain)])
+        plt.axis([0.1, self.num_atoms + 0.9, -0.1, (1.1 + strain)])
         plt.grid(True)
 
-        plt.title(f'Strain: {strain:0.2f}%')
-        plt.ylabel('relative Position')
-        plt.xlabel('# Atoms')
+        plt.title(f"Strain: {strain:0.2f}%")
+        plt.ylabel("relative Position")
+        plt.xlabel("# Atoms")
         plt.legend()
         plt.show(block=block)
+
+    def _update_mass_from_atoms(self):
+        """The mass of a unit cell is given by its atoms. Hence, the density
+        follows from the mass and the volume, e.g. when the lattice changes.
+        Without any atoms, the density is kept and the mass follows."""
+        if self.num_atoms > 0:
+            mass = sum((atom.mass for atom, _, _ in self.atoms), 0 * u.kg)
+            # the density setter also updates mass, mass_unit_area and elastic parameters
+            self.density = mass / self.volume
+        else:
+            self._update_elastic()
 
     def add_atom(self, atom, position):
         r"""add_atom
@@ -1002,29 +798,35 @@ class UnitCell(Layer):
             position (float): relative position within unit cel [0 .. 1].
 
         """
-        s = symbols('s')
-        position_str = ''
+        s = symbols("s")
+        position_str = ""
         # test the input type of the position
         if isfunction(position):
-            raise ValueError('Please use string representation of function!')
+            raise ValueError("Please use string representation of function!")
         elif isinstance(position, str):
             try:
                 # backwards compatibility for direct lambda definition
-                if ':' in position:
+                if ":" in position:
                     # strip lambda prefix
-                    position = position.split(':')[1]
+                    position = position.split(":")[1]
                 position_str = position.strip()
-                position = lambdify(s, position, modules='numpy')
+                position = lambdify(s, position, modules="numpy")
             except Exception as e:
-                print('String input for unit cell property ' + position + ' \
-                    cannot be converted to function handle!')
+                print(
+                    "String input for unit cell property "
+                    + position
+                    + " \
+                    cannot be converted to function handle!"
+                )
                 print(e)
         elif isinstance(position, (int, float)):
-            position_str = str(position) + '*(1+s)'
-            position = lambdify(s, position_str, modules='numpy')
+            position_str = str(position) + "*(1+s)"
+            position = lambdify(s, position_str, modules="numpy")
         else:
-            raise ValueError('Atom position input has to be a scalar, or string'
-                             'which can be converted into a lambda function!')
+            raise ValueError(
+                "Atom position input has to be a scalar, or string"
+                "which can be converted into a lambda function!"
+            )
 
         # add the atom at the end of the array
         self.atoms.append([atom, position, position_str])
@@ -1033,16 +835,10 @@ class UnitCell(Layer):
         # increase the number of atoms
         self.num_atoms = self.num_atoms + 1
 
-        self.magnetization.append([atom.mag_amplitude, atom.mag_phi, atom.mag_gamma])
+        # drop automatic magnetization calculation for unitcell
+        # self.magnetization.append([atom.mag_amplitude, atom.mag_phi, atom.mag_gamma])
 
-        self.mass = 0*u.kg
-        for i in range(self.num_atoms):
-            self.mass = self.mass + self.atoms[i][0].mass
-
-        self.density = self.mass / self.volume
-        # set mass per unit area
-        self.mass_unit_area = self.mass * 1*u.angstrom**2 / self.area
-        self.calc_spring_const()
+        self._update_mass_from_atoms()
 
     def add_multiple_atoms(self, atom, position, Nb):
         """add_multiple_atoms
@@ -1088,7 +884,7 @@ class UnitCell(Layer):
         if args:
             strain = float(np.asarray(args[0]).item())
         else:
-            strain = 0.
+            strain = 0.0
 
         res = np.zeros([self.num_atoms])
         for i, atom in enumerate(self.atoms):
@@ -1096,26 +892,36 @@ class UnitCell(Layer):
 
         return res
 
+    # ============================================================================
+    # Lattice parameters
+    # ============================================================================
+
     @property
     def a_axis(self):
-        return Q_(self._a_axis, u.meter).to('nm')
+        return self.lattice.a_axis.quantity
 
     @a_axis.setter
-    def a_axis(self, a_axis):
-        self._a_axis = a_axis.to_base_units().magnitude
+    def a_axis(self, value):
+        self.lattice.a_axis.quantity = value
+        self.structural.area.quantity = self.a_axis * self.b_axis
+        self._update_mass_from_atoms()
 
     @property
     def b_axis(self):
-        return Q_(self._b_axis, u.meter).to('nm')
+        return self.lattice.b_axis.quantity
 
     @b_axis.setter
-    def b_axis(self, b_axis):
-        self._b_axis = b_axis.to_base_units().magnitude
+    def b_axis(self, value):
+        self.lattice.b_axis.quantity = value
+        self.structural.area.quantity = self.a_axis * self.b_axis
+        self._update_mass_from_atoms()
 
     @property
     def c_axis(self):
-        return Q_(self._c_axis, u.meter).to('nm')
+        return self.lattice.c_axis.quantity
 
     @c_axis.setter
-    def c_axis(self, c_axis):
-        self._c_axis = c_axis.to_base_units().magnitude
+    def c_axis(self, value):
+        self.lattice.c_axis.quantity = value
+        self.thickness = value
+        self._update_mass_from_atoms()

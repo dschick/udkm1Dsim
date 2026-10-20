@@ -33,11 +33,12 @@ dependencies = [
     "matplotlib>=2.0.0",
 ]
 [dependency-groups]
-test = ["pytest", "pytest-cov", "pytest-codspeed"]
+test = ["pytest", "pytest-cov", "pytest-codspeed", "numba"]
 lint = ["ruff"]
 
 [project.optional-dependencies]
 parallel = ["dask[distributed]>=2.6.0"]
+numba = ["numba"]
 docs = [
     "sphinx>=5.0",
     "ipykernel",
