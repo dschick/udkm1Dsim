@@ -9,45 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Vacuum added by [#204] closing [#202]
-- example for XrayKin added by [#204]
-- superstrate introduced by [#204] closing [#134]
-- enable automatic numerical integration of layer properties if sympy fails ([#198]) replacing [#110] and closing issue [#109] and [#108]
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+
+## [2.5.0] 2026-10-20
+
+### Added
+
 - Parameter and ParamterGroup classes organizing paramters closing [#162] by [#215]
 - temperature-dependent parameter functionals are calculated on demand and are cached by [#215]; the Numba solvers work on the sympy expressions instead of compiled material functions, closing [#206] and [#208]
 - VectorParameter enabling input and output in cartesian or polar coordinates closing [#138] by [#215]
-- `XrayDynMag.set_polarization` accepts elliptical incoming and outgoing polarizations to set both at the same time ([#217])
 - `simulations.solvers` sub-module for the ODE/PDE solvers of `Heat` and `Phonon` with selectable `backend` by [#216] closing [#205]
 - Numba backend for numerical phonons `PhononNum(backend='numba')` by [#220]
 - `__repr__` and `_repr_html_` for all structures and simulations rendering their properties as tables in Jupyter and in the documentation
 - `Structure.check_num_sub_systems()` to check the number of sub-systems of the relevant thermal parameters of all layers
 - optional dependency `numba` for the Numba solver backends (`pip install udkm1Dsim[numba]`)
 
-[#185]: https://github.com/dschick/udkm1Dsim/pull/185
-[#188]: https://github.com/dschick/udkm1Dsim/pull/188
-[#197]: https://github.com/dschick/udkm1Dsim/pull/197
-[#198]: https://github.com/dschick/udkm1Dsim/pull/198
-[#110]: https://github.com/dschick/udkm1Dsim/pull/110
-[#109]: https://github.com/dschick/udkm1Dsim/issue/109
-[#108]: https://github.com/dschick/udkm1Dsim/issue/108
-[#204]: https://github.com/dschick/udkm1Dsim/pull/204
-[#202]: https://github.com/dschick/udkm1Dsim/issue/202
-[#134]: https://github.com/dschick/udkm1Dsim/issue/134
 [#162]: https://github.com/dschick/udkm1Dsim/discussions/162
 [#138]: https://github.com/dschick/udkm1Dsim/issue/138
 [#206]: https://github.com/dschick/udkm1Dsim/issue/206
 [#208]: https://github.com/dschick/udkm1Dsim/issue/208
 [#215]: https://github.com/dschick/udkm1Dsim/pull/215
-[#217]: https://github.com/dschick/udkm1Dsim/pull/217
 [#205]: https://github.com/dschick/udkm1Dsim/issue/205
 [#216]: https://github.com/dschick/udkm1Dsim/pull/216
 [#220]: https://github.com/dschick/udkm1Dsim/pull/220
 
 ### Changed
 
-- substrates can be a single layer
-- Vacuum is default superstrate and substrate
-- `XrayDynMag` polarization setters check the consistency of the number of incoming and outgoing elliptical polarizations ([#217])
 - layer properties are organized in ParameterGroups (`structural`, `thermal`, `elastic`, `optical`, `magnetic`, and `lattice` for `UnitCell`), the layer shortcuts such as `layer.heat_capacity` remain ([#215])
 - the magnetization of a layer is a `VectorParameter`, e.g. `layer.magnetic.magnetization.polar` replaces `layer.magnetization['phi']` ([#215])
 - all internal calls of `Structure.get_layer_property_vector()` use explicit ParameterGroup paths, e.g. `'thermal.heat_capacity.integral'`, closing [#214]
@@ -58,24 +54,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - examples display objects via their HTML representation instead of `print()`
 - `Structure.num_sub_systems` and `Layer.num_sub_systems` are derived from the thermal parameters of the layers and cannot be set anymore; the consistency of the number of sub-systems is checked by `Heat` and `Phonon` for their relevant parameters when a simulation starts, instead of printing warnings on every assignment
 
-### Deprecated
+### Fixed
 
-### Removed
+- changing a lattice axis of a `UnitCell` updates its area, volume, density, and elastic parameters, while its mass is given by its atoms
+- mean-field magnetization of temperatures just below the Curie temperature was zero, causing divisions by zero in the LLB equations, and could be non-zero above it
+
+[#214]: https://github.com/dschick/udkm1Dsim/issue/214
+
+## [2.4.2] 2026-10-07
+
+### Added
+
+- Vacuum added by [#204] closing [#202]
+- example for XrayKin added by [#204]
+- superstrate introduced by [#204] closing [#134]
+- enable automatic numerical integration of layer properties if sympy fails ([#198]) replacing [#110] and closing issue [#109] and [#108]
+- `XrayDynMag.set_polarization` accepts elliptical incoming and outgoing polarizations to set both at the same time ([#217])
+
+[#198]: https://github.com/dschick/udkm1Dsim/pull/198
+[#110]: https://github.com/dschick/udkm1Dsim/pull/110
+[#109]: https://github.com/dschick/udkm1Dsim/issue/109
+[#108]: https://github.com/dschick/udkm1Dsim/issue/108
+[#204]: https://github.com/dschick/udkm1Dsim/pull/204
+[#202]: https://github.com/dschick/udkm1Dsim/issue/202
+[#134]: https://github.com/dschick/udkm1Dsim/issue/134
+[#217]: https://github.com/dschick/udkm1Dsim/pull/217
+
+### Changed
+
+- substrates can be a single layer
+- Vacuum is default superstrate and substrate
+- `XrayDynMag` polarization setters check the consistency of the number of incoming and outgoing elliptical polarizations ([#217])
 
 ### Fixed
 
 - bug in energy spectrum calculation of analytical phonons ([#212]) closing issue [#84]
 - bug for multiple elliptical polarizations in `XrayDynMag.inhomogeneous_reflectivity` ([#217]) closing issue [#196]
 - `XrayDynMag.get_hash` includes the elliptical polarization vectors ([#217])
-- changing a lattice axis of a `UnitCell` updates its area, volume, density, and elastic parameters, while its mass is given by its atoms
-- mean-field magnetization of temperatures just below the Curie temperature was zero, causing divisions by zero in the LLB equations, and could be non-zero above it
 
 [#212]: https://github.com/dschick/udkm1Dsim/pull/212
 [#84]: https://github.com/dschick/udkm1Dsim/issue/84
 [#196]: https://github.com/dschick/udkm1Dsim/issue/196
-[#214]: https://github.com/dschick/udkm1Dsim/issue/214
-
-### Security
 
 ## [2.4.1] 2026-09-10
 
