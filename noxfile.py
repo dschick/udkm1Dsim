@@ -44,6 +44,8 @@ def coverage(session):
         "--cov-report=term-missing:skip-covered",
         "--ignore=tests/benchmarks",
         "tests/",
+        # coverage cannot trace numba-compiled functions
+        env={"NUMBA_DISABLE_JIT": "1"},
     )
 
 

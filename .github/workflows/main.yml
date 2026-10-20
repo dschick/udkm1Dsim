@@ -39,6 +39,10 @@ jobs:
           uv run ruff check udkm1Dsim/ tests/ examples/
   
       - name: Generate coverage report
+        # coverage cannot trace numba-compiled functions, so the JIT is disabled
+        # for the job uploading to Codecov, while all other jobs test the JIT
+        env:
+          NUMBA_DISABLE_JIT: ${{ (matrix.python-version == '3.13' && matrix.os == 'ubuntu-latest') && '1' || '0' }}
         run: |
           uv run pytest --cov=./udkm1Dsim --cov-report=xml --ignore=tests/benchmarks tests/
 

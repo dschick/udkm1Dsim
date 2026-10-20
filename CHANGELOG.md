@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Numba backend for numerical phonons `PhononNum(backend='numba')` by [#220]
 - `__repr__` and `_repr_html_` for all structures and simulations rendering their properties as tables in Jupyter and in the documentation
 - `Structure.check_num_sub_systems()` to check the number of sub-systems of the relevant thermal parameters of all layers
+- optional dependency `numba` for the Numba solver backends (`pip install udkm1Dsim[numba]`)
 
 [#185]: https://github.com/dschick/udkm1Dsim/pull/185
 [#188]: https://github.com/dschick/udkm1Dsim/pull/188
