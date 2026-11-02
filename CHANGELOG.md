@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Layer`, `AmorphousLayer`, and `UnitCell` accept their properties as parameter groups or dicts, e.g. `thermal=ThermalParameters(...)` or `lattice={"c_axis": ...}`; groups are copied on assignment and can be reused, mistyped parameter names raise an error, and parameters given twice raise an error
 - parameter groups of a layer can be replaced after its creation, e.g. `layer.elastic = {"sound_vel": ...}`
+- read-only `acoustic_impedance` property of `Layer`
 
 ### Changed
 

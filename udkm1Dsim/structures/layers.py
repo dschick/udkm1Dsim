@@ -486,6 +486,16 @@ class Layer:
             "'spring_const' is automatically derived from sound_vel, mass, and thickness."
         )
 
+    @property
+    def acoustic_impedance(self):
+        return self.elastic.acoustic_impedance.quantity
+
+    @acoustic_impedance.setter
+    def acoustic_impedance(self, value):
+        raise AttributeError(
+            "'acoustic_impedance' is automatically derived from spring_const, mass, and area."
+        )
+
     def set_ho_spring_constants(self, HO):
         """set_ho_spring_constants
 

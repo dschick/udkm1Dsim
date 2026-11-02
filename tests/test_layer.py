@@ -269,11 +269,23 @@ def test_layer_spring_const_and_acoustic_impedance(amorphous_layer):
     # k = m / A * 1 Å² * (v / d)²
     assert_approx(amorphous_layer.spring_const, [1.8] * u.kg / u.s**2)
     # Z = rho * v
-    assert_approx(amorphous_layer.elastic.acoustic_impedance.quantity, 3e7 * u.kg / u.m**2 / u.s)
+    assert_approx(amorphous_layer.acoustic_impedance, 3e7 * u.kg / u.m**2 / u.s)
+    assert (
+        amorphous_layer.acoustic_impedance == amorphous_layer.elastic.acoustic_impedance.quantity
+    )
 
 
 @pytest.mark.parametrize(
-    "prop", ["mass", "mass_unit_area", "area", "volume", "spring_const", "num_sub_systems"]
+    "prop",
+    [
+        "mass",
+        "mass_unit_area",
+        "area",
+        "volume",
+        "spring_const",
+        "acoustic_impedance",
+        "num_sub_systems",
+    ],
 )
 def test_layer_derived_parameters_are_read_only(layer, prop):
     with pytest.raises(AttributeError):
@@ -295,9 +307,7 @@ def test_layer_setters_update_depending_parameters(
     setattr(layer, prop, value)
     assert_approx(layer.mass, mass * u.kg)
     assert_approx(layer.spring_const, [spring_const] * u.kg / u.s**2)
-    assert_approx(
-        layer.elastic.acoustic_impedance.quantity, acoustic_impedance * u.kg / u.m**2 / u.s
-    )
+    assert_approx(layer.acoustic_impedance, acoustic_impedance * u.kg / u.m**2 / u.s)
 
 
 def test_layer_magnetization(layer):
