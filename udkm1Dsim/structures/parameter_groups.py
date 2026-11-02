@@ -23,6 +23,8 @@
 
 __all__ = [
     "ParameterGroup",
+    "AtomParameters",
+    "AtomMixedParameters",
     "StructuralParameters",
     "LatticeParameters",
     "ThermalParameters",
@@ -181,6 +183,99 @@ class ParameterGroup:
 
     def _repr_html_(self):
         return f"<h3>{self._pretty_class_name()}</h3>" + self._html_table()
+
+
+class _AtomParametersBase(ParameterGroup):
+    """Parameters common to :class:`AtomParameters` and :class:`AtomMixedParameters`."""
+
+    _derived = ("mass",)
+
+    def __init__(
+        self,
+        atomic_number=0,
+        mass_number=0.0,
+        ionicity=0,
+        magnetization=(0.0, 0.0, 0.0),
+    ):
+        self.atomic_number = Parameter("", atomic_number, symbol="Z")
+        self.mass_number = Parameter("", mass_number, symbol="A")
+        self.mass = Parameter("kg", 0.0, symbol="m")
+        self.ionicity = Parameter("", ionicity, symbol="I")
+        self.magnetization = VectorParameter("", magnetization, symbol=r"\mathbf{m}")
+
+        self._connect_parameters()
+        self._update_group()
+
+    def _update_group(self):
+        self.mass.magnitude = self.mass_number.magnitude * constants.atomic_mass
+
+
+class AtomParameters(_AtomParametersBase):
+    r"""Parameters of an atom.
+
+    The parameters of an atom are read by a layer when the atom is added to
+    it, e.g. its mass for the density of a unit cell. Hence, changing the
+    parameters of an atom afterwards does not update the layers it was
+    already added to.
+
+    Attributes:
+        atomic_number (int): atomic number :math:`Z`.
+        mass_number (float): mass number :math:`A`.
+        mass (float): mass of the atom :math:`m` [kg], derived from the mass number.
+        ionicity (int): ionicity :math:`I`.
+        magnetization (VectorParameter): magnetization :math:`\mathbf{m}` as
+            for the :class:`.MagneticParameters` of a layer, given by its
+            amplitude :math:`r` 0 .. 1 and the angles :math:`\phi` from the
+            z-axis and :math:`\gamma` in the xy-plane from the x-axis.
+        cromer_mann_a (ndarray[float]): Cromer-Mann coefficients :math:`a_1 .. a_4`.
+        cromer_mann_b (ndarray[float]): Cromer-Mann coefficients :math:`b_1 .. b_4`
+            [Å²].
+        cromer_mann_c (float): Cromer-Mann coefficient :math:`c`.
+
+    """
+
+    def __init__(
+        self,
+        atomic_number=0,
+        mass_number=0.0,
+        ionicity=0,
+        magnetization=(0.0, 0.0, 0.0),
+        cromer_mann_a=(0.0, 0.0, 0.0, 0.0),
+        cromer_mann_b=(0.0, 0.0, 0.0, 0.0),
+        cromer_mann_c=0.0,
+    ):
+        super().__init__(atomic_number, mass_number, ionicity, magnetization)
+        self.cromer_mann_a = Parameter("", np.asarray(cromer_mann_a, dtype=float), symbol="a")
+        self.cromer_mann_b = Parameter(
+            "angstrom**2", np.asarray(cromer_mann_b, dtype=float), symbol="b"
+        )
+        self.cromer_mann_c = Parameter("", float(cromer_mann_c), symbol="c")
+
+        self._connect_parameters()
+
+
+class AtomMixedParameters(_AtomParametersBase):
+    r"""Parameters of a mixed atom.
+
+    The atomic number, mass number, mass, and ionicity are the averages of
+    the constituent atoms weighted by their fractions, see
+    :meth:`.AtomMixed.add_atom`. A mixed atom has no Cromer-Mann
+    coefficients, as its form factors are averaged from its constituents.
+
+    Attributes:
+        atomic_number (float): averaged atomic number :math:`Z`.
+        mass_number (float): averaged mass number :math:`A`.
+        mass (float): averaged mass of the atom :math:`m` [kg].
+        ionicity (float): averaged ionicity :math:`I`.
+        magnetization (VectorParameter): magnetization :math:`\mathbf{m}`, see
+            :class:`AtomParameters`.
+
+    """
+
+    _derived = ("atomic_number", "mass_number", "mass", "ionicity")
+
+    def _update_group(self):
+        """The derived parameters are given by the constituents."""
 
 
 class StructuralParameters(ParameterGroup):

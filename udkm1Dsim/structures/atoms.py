@@ -30,8 +30,9 @@ import warnings
 
 import numpy as np
 import pint
-import scipy.constants as constants
 from tabulate import tabulate
+
+from .parameter_groups import AtomMixedParameters, AtomParameters
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -42,7 +43,17 @@ class Atom:
 
     Smallest structural unit of which larger structures can be build.
 
-    It holds real physical properties of on the atomic level.
+    It holds real physical properties of on the atomic level. Its numeric
+    properties are organized as :class:`.AtomParameters` in the `atomic`
+    parameter group, whose attributes are the :class:`.Parameter` objects
+    with their name, symbol, value, and unit, e.g. `atom.atomic.mass`. In
+    contrast, the shortcuts of the atom, e.g. `atom.mass`, return only their
+    values for calculations, i.e. a pint Quantity or a number.
+
+    Note:
+        The properties of an atom are read by a layer when the atom is added
+        to it, e.g. its mass for the density of a unit cell. Hence, changing
+        an atom afterwards does not update the layers it was already added to.
 
     Args:
         symbol (str): symbol of the atom.
@@ -53,11 +64,16 @@ class Atom:
         atomic_form_factor_path (str): path to atomic form factor coeffs.
         atomic_form_factor_source (str): either _henke_ or default _chantler_
         magnetic_form_factor_path (str): path to magnetic form factor coeffs.
+        mag_amplitude (float): magnetization amplitude 0 .. 1.
+        mag_phi (Quantity): phi angle of magnetization.
+        mag_gamma (Quantity): gamma angle of magnetization.
 
     Attributes:
         symbol (str): symbol of the element.
         id (str): id of the atom, may differ from symbol and/or name.
         name (str): name of the element (generic).
+        atomic (AtomParameters): parameters of the atom.
+        magnetization (Quantity): cartesian magnetization as for a layer.
         atomic_number_z (int): Z atomic number.
         mass_number_a (float): A atomic mass number.
         ionicity (int): ionicity of the atom.
@@ -68,19 +84,15 @@ class Atom:
            angular-dependent atomic form factor.
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
-        mag_amplitude (float): magnetization amplitude -1 .. 1.
-        mag_phi (float): phi angle of magnetization [rad].
-        mag_gamma (float): gamma angle of magnetization [rad].
+        mag_amplitude (float): magnetization amplitude 0 .. 1.
+        mag_phi (Quantity): phi angle of magnetization from the z-axis.
+        mag_gamma (Quantity): gamma angle of magnetization in the xy-plane from the x-axis.
 
     """
 
     def __init__(self, symbol, **kwargs):
         self.symbol = symbol
         self.id = kwargs.get("id", symbol)
-        self.ionicity = kwargs.get("ionicity", 0)
-        self.mag_amplitude = kwargs.get("mag_amplitude", 0.0)
-        self.mag_phi = kwargs.get("mag_phi", 0.0 * u.deg)
-        self.mag_gamma = kwargs.get("mag_gamma", 0.0 * u.deg)
 
         try:
             filename = os.path.join(os.path.dirname(__file__), "../parameters/elements.dat")
@@ -93,10 +105,16 @@ class Atom:
             print(e)
 
         self.name = element[0]
-        self.atomic_number_z = element[1]
-        self.mass_number_a = element[2]
-        self._mass = self.mass_number_a * constants.atomic_mass
-        self.mass = self._mass * u.kg
+        self.atomic = AtomParameters(
+            atomic_number=int(element[1]),
+            mass_number=element[2],
+            ionicity=kwargs.get("ionicity", 0),
+        )
+        self.atomic.magnetization.polar = (
+            kwargs.get("mag_amplitude", 0.0),
+            kwargs.get("mag_phi", 0.0 * u.deg),
+            kwargs.get("mag_gamma", 0.0 * u.deg),
+        )
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
             filename=kwargs.get("atomic_form_factor_path", ""),
             source=kwargs.get("atomic_form_factor_source", "chantler"),
@@ -106,40 +124,48 @@ class Atom:
         )
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
-    def _property_table(self):
-        """Parameter/value rows of the atom properties"""
-        return [
-            ["id", self.id],
-            ["symbol", self.symbol],
-            ["name", self.name],
-            ["atomic number Z", self.atomic_number_z],
-            ["mass number A", self.mass_number_a],
-            ["mass", "{:.4g~P}".format(self.mass.to("kg"))],
-            ["ionicity", self.ionicity],
-            *self._form_factor_rows(),
-            ["magn. amplitude", self.mag_amplitude],
-            ["magn. phi", "{:.4g~P}".format(self.mag_phi.to("deg"))],
-            ["magn. gamma", "{:.4g~P}".format(self.mag_gamma.to("deg"))],
-        ]
+    @property
+    def cromer_mann_coeff(self):
+        """ndarray[float]: Cromer-Mann coefficients as read from the parameter
+        file, including the atomic number and ionicity, see
+        :meth:`read_cromer_mann_coeff`."""
+        p = self.atomic
+        return np.concatenate(
+            [
+                self._cromer_mann_keys,
+                p.cromer_mann_a.magnitude,
+                p.cromer_mann_b.magnitude,
+                [p.cromer_mann_c.magnitude],
+            ]
+        )
 
-    def _form_factor_rows(self):
-        """Cromer-Mann coefficient rows of the property table"""
-        return [
-            ["Cromer Mann coeff", np.array_str(self.cromer_mann_coeff[0:4])],
-            ["", np.array_str(self.cromer_mann_coeff[4:8])],
-            ["", np.array_str(self.cromer_mann_coeff[8:])],
-        ]
+    @cromer_mann_coeff.setter
+    def cromer_mann_coeff(self, cm):
+        cm = np.asarray(cm, dtype=float)
+        # the atomic number and ionicity, for which the coefficients were read
+        self._cromer_mann_keys = cm[0:2]
+        self.atomic.cromer_mann_a.magnitude = cm[2:6]
+        self.atomic.cromer_mann_b.magnitude = cm[6:10]
+        self.atomic.cromer_mann_c.magnitude = float(cm[10])
+
+    def _header(self):
+        """Header with the class, name, id, and symbol of the atom"""
+        return (
+            f"{type(self).__name__}: {self.name}\nID: {self.id}\nSymbol: {self.symbol}\n"
+            + "=" * 30
+            + "\n"
+        )
 
     def __repr__(self):
         """String representation of this class"""
-        return "Atom with the following properties\n" + tabulate(
-            self._property_table(), colalign=("right",), tablefmt="rst", floatfmt=(".2f", ".2f")
-        )
+        return self._header() + self.atomic._table_representation()
 
     def _repr_html_(self):
         """HTML representation of this class"""
-        return f"<h3>Atom: {self.name}</h3>" + tabulate(
-            self._property_table(), colalign=("right",), tablefmt="html", floatfmt=(".2f", ".2f")
+        return (
+            f"<h3>{type(self).__name__}: {self.name}</h3>"
+            f"<b>ID:</b> <i>{self.id}</i>, <b>Symbol:</b> <i>{self.symbol}</i><br>"
+            + self.atomic._html_table()
         )
 
     def read_atomic_form_factor_coeff(self, source="chantler", filename=""):
@@ -352,13 +378,73 @@ class Atom:
 
         return m1 - m2 * 1j
 
+    # ============================================================================
+    # properties of the atomic parameters
+    # ============================================================================
+
+    @property
+    def atomic_number_z(self):
+        return self.atomic.atomic_number.magnitude
+
+    @atomic_number_z.setter
+    def atomic_number_z(self, value):
+        self.atomic.atomic_number.magnitude = value
+
+    @property
+    def mass_number_a(self):
+        return self.atomic.mass_number.magnitude
+
+    @mass_number_a.setter
+    def mass_number_a(self, value):
+        self.atomic.mass_number.magnitude = value
+
+    @property
+    def mass(self):
+        return self.atomic.mass.quantity
+
+    @mass.setter
+    def mass(self, value):
+        raise AttributeError("'mass' is derived from the mass number and cannot be set directly.")
+
+    @property
+    def _mass(self):
+        return self.atomic.mass.magnitude
+
+    @property
+    def ionicity(self):
+        return self.atomic.ionicity.magnitude
+
+    @ionicity.setter
+    def ionicity(self, value):
+        self.atomic.ionicity.magnitude = value
+
+    @property
+    def magnetization(self):
+        return self.atomic.magnetization.quantity
+
+    @magnetization.setter
+    def magnetization(self, value):
+        self.atomic.magnetization.quantity = value
+
+    @property
+    def mag_amplitude(self):
+        return self.atomic.magnetization.polar_rad[0]
+
+    @mag_amplitude.setter
+    def mag_amplitude(self, value):
+        self.atomic.magnetization.r = value
+
     @property
     def mag_phi(self):
         return Q_(self._mag_phi, u.rad).to("deg")
 
     @mag_phi.setter
     def mag_phi(self, mag_phi):
-        self._mag_phi = mag_phi.to_base_units().magnitude
+        self.atomic.magnetization.phi = mag_phi
+
+    @property
+    def _mag_phi(self):
+        return self.atomic.magnetization.polar_rad[1]
 
     @property
     def mag_gamma(self):
@@ -366,7 +452,11 @@ class Atom:
 
     @mag_gamma.setter
     def mag_gamma(self, mag_gamma):
-        self._mag_gamma = mag_gamma.to_base_units().magnitude
+        self.atomic.magnetization.gamma = mag_gamma
+
+    @property
+    def _mag_gamma(self):
+        return self.atomic.magnetization.polar_rad[2]
 
 
 class AtomMixed(Atom):
@@ -375,7 +465,16 @@ class AtomMixed(Atom):
     Representation of mixed atoms in alloys and stochiometric mixtures.
 
     All properties of the included sub-atoms of class Atom are averaged
-    and weighted with their stochiometric ratio.
+    and weighted with their stochiometric ratio. They are organized as
+    :class:`.AtomMixedParameters` in the `atomic` parameter group, where the
+    atomic number, mass number, mass, and ionicity are derived from the
+    sub-atoms and cannot be set.
+
+    Note:
+        The properties of the sub-atoms are read when they are added to the
+        mixed atom, and those of the mixed atom when it is added to a layer.
+        Hence, changing an atom afterwards does not update the mixed atoms
+        and layers it was already added to.
 
     Args:
         symbol (str): symbol of the atom.
@@ -385,11 +484,16 @@ class AtomMixed(Atom):
         name (str): name of the mixed atom, default is symbol.
         atomic_form_factor_path (str): path to atomic form factor coeffs.
         magnetic_form_factor_path (str): path to magnetic form factor coeffs.
+        mag_amplitude (float): magnetization amplitude 0 .. 1.
+        mag_phi (Quantity): phi angle of magnetization.
+        mag_gamma (Quantity): gamma angle of magnetization.
 
     Attributes:
         symbol (str): symbol of the element.
         id (str): id of the atom, may differ from symbol and/or name.
         name (str): name of the mixed atom, default is symbol.
+        atomic (AtomMixedParameters): parameters of the mixed atom.
+        magnetization (Quantity): cartesian magnetization as for a layer.
         atomic_number_z (int): Z atomic number.
         mass_number_a (float): A atomic mass number.
         ionicity (int): ionicity of the atom.
@@ -398,9 +502,9 @@ class AtomMixed(Atom):
            coefficients for energy-dependent atomic form factor.
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
-        mag_amplitude (float): magnetization amplitude -1 .. 1.
-        mag_phi (float): phi angle of magnetization [rad].
-        mag_gamma (float): gamma angle of magnetization [rad].
+        mag_amplitude (float): magnetization amplitude 0 .. 1.
+        mag_phi (Quantity): phi angle of magnetization from the z-axis.
+        mag_gamma (Quantity): gamma angle of magnetization in the xy-plane from the x-axis.
         atoms (list[Atoms]): list of Atoms.
         num_atoms (int): number of atoms.
 
@@ -410,13 +514,12 @@ class AtomMixed(Atom):
         self.symbol = symbol
         self.id = kwargs.get("id", symbol)
         self.name = kwargs.get("name", symbol)
-        self.mag_amplitude = kwargs.get("mag_amplitude", 0)
-        self.mag_phi = kwargs.get("mag_phi", 0 * u.deg)
-        self.mag_gamma = kwargs.get("mag_gamma", 0 * u.deg)
-        self.ionicity = 0
-        self.atomic_number_z = 0
-        self.mass_number_a = 0
-        self.mass = 0.0
+        self.atomic = AtomMixedParameters()
+        self.atomic.magnetization.polar = (
+            kwargs.get("mag_amplitude", 0.0),
+            kwargs.get("mag_phi", 0.0 * u.deg),
+            kwargs.get("mag_gamma", 0.0 * u.deg),
+        )
         self.atoms = []
         self.num_atoms = 0
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
@@ -426,10 +529,6 @@ class AtomMixed(Atom):
             filename=kwargs.get("magnetic_form_factor_path", "")
         )
 
-    def _form_factor_rows(self):
-        """No Cromer-Mann coefficients for mixed atoms"""
-        return []
-
     def _constituents_table(self):
         """Name/fraction table of the constituent atoms"""
         return [[atom.name, f"{fraction * 100:.1f} %"] for atom, fraction in self.atoms]
@@ -437,32 +536,25 @@ class AtomMixed(Atom):
     def __repr__(self):
         """String representation of this class"""
         return (
-            "AtomMixed with the following properties\n"
+            self._header()
+            + self.atomic._table_representation()
+            + f"\n{self.num_atoms:d} Constituents\n"
             + tabulate(
-                self._property_table(),
-                colalign=("right",),
-                tablefmt="rst",
-                floatfmt=(".2f", ".2f"),
+                self._constituents_table(), headers=["atom", "fraction"], colalign=("left",)
             )
-            + f"\n{self.num_atoms:d} Constituents:\n"
-            + tabulate(self._constituents_table(), colalign=("right",), floatfmt=(".2f", ".2f"))
         )
 
     def _repr_html_(self):
         """HTML representation of this class"""
         return (
-            f"<h3>AtomMixed: {self.name}</h3>"
-            + tabulate(
-                self._property_table(),
-                colalign=("right",),
-                tablefmt="html",
-                floatfmt=(".2f", ".2f"),
-            )
+            f"<h3>{type(self).__name__}: {self.name}</h3>"
+            f"<b>ID:</b> <i>{self.id}</i>, <b>Symbol:</b> <i>{self.symbol}</i><br>"
+            + self.atomic._html_table()
             + f"<h4>{self.num_atoms:d} Constituents</h4>"
             + tabulate(
                 self._constituents_table(),
                 headers=["atom", "fraction"],
-                colalign=("right",),
+                colalign=("left",),
                 tablefmt="html",
             )
         )
@@ -483,10 +575,11 @@ class AtomMixed(Atom):
             self.atoms.append([atom, fraction])
             self.num_atoms = self.num_atoms + 1
             # calculate the mixed atomic properties of the atomMixed instance
-            self.atomic_number_z = self.atomic_number_z + fraction * atom.atomic_number_z
-            self.mass_number_a = self.mass_number_a + fraction * atom.mass_number_a
-            self.mass = self.mass + fraction * atom.mass
-            self.ionicity = self.ionicity + fraction * atom.ionicity
+            p = self.atomic
+            p.atomic_number.magnitude += fraction * atom.atomic_number_z
+            p.mass_number.magnitude += fraction * atom.mass_number_a
+            p.mass.magnitude += fraction * atom._mass
+            p.ionicity.magnitude += fraction * atom.ionicity
         else:
             warnings.warn("Only Atom objects can be added to a MixedAtom!")
 
@@ -622,18 +715,14 @@ class AtomMixed(Atom):
 
         return m
 
-    @property
-    def mag_phi(self):
-        return Q_(self._mag_phi, u.rad).to("deg")
+    @Atom.atomic_number_z.setter
+    def atomic_number_z(self, value):
+        raise AttributeError("The atomic number of an AtomMixed is given by its atoms.")
 
-    @mag_phi.setter
-    def mag_phi(self, mag_phi):
-        self._mag_phi = mag_phi.to_base_units().magnitude
+    @Atom.mass_number_a.setter
+    def mass_number_a(self, value):
+        raise AttributeError("The mass number of an AtomMixed is given by its atoms.")
 
-    @property
-    def mag_gamma(self):
-        return Q_(self._mag_gamma, u.rad).to("deg")
-
-    @mag_gamma.setter
-    def mag_gamma(self, mag_gamma):
-        self._mag_gamma = mag_gamma.to_base_units().magnitude
+    @Atom.ionicity.setter
+    def ionicity(self, value):
+        raise AttributeError("The ionicity of an AtomMixed is given by its atoms.")

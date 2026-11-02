@@ -8,6 +8,8 @@ from .simulations.xrays import Xray, XrayDyn, XrayDynMag, XrayKin
 from .structures.atoms import Atom, AtomMixed
 from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
 from .structures.parameter_groups import (
+    AtomMixedParameters,
+    AtomParameters,
     ElasticParameters,
     LatticeParameters,
     MagneticParameters,
@@ -25,6 +27,8 @@ Q_ = u.Quantity
 __all__ = [
     "Atom",
     "AtomMixed",
+    "AtomMixedParameters",
+    "AtomParameters",
     "ElasticParameters",
     "LatticeParameters",
     "MagneticParameters",
