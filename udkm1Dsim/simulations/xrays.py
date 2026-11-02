@@ -531,9 +531,9 @@ class XrayKin(Xray):
     def homogeneous_reflected_field(self, S, energy, qz, theta, strains=0):
         r"""homogeneous_reflected_field
 
-        Calculates the reflected field :math:`E_p^t` from a :class:`UnitCell` or
+        Calculates the reflected field :math:`E_p^t` from a :class:`.UnitCell` or
         :class:Structure` as well as for each sub-structure (:math:`E_p^N`).
-        The reflected wave field :math:`E_p` from a single :class:`UnitCell` at
+        The reflected wave field :math:`E_p` from a single :class:`.UnitCell` at
         the detector is calculated according to :cite:t:`warren1990`:
 
         .. math::

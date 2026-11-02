@@ -47,8 +47,8 @@ class Structure:
 
     Structure (sample) which holds various `sub_structures`.
 
-    Each `sub_structure` can be either of type :class:`Layer` and its sub-classes,
-    such as :class:`UnitCell` or :class:`AmorphousLayer`, or a :class:`Structure`
+    Each `sub_structure` can be either of type :class:`.Layer` and its sub-classes,
+    such as :class:`.UnitCell` or :class:`.AmorphousLayer`, or a :class:`Structure`
     by itself. It is possible to recursively build up samples.
 
     Args:
@@ -308,7 +308,7 @@ class Structure:
     def add_sub_structure(self, sub_structure, N=1):
         """add_sub_structure
 
-        Add :math:`N` sub_structures of type :class:`Layer` or its sub-classes,
+        Add :math:`N` sub_structures of type :class:`.Layer` or its sub-classes,
         or :class:`Structure`.
 
         Args:
@@ -342,7 +342,7 @@ class Structure:
     def add_superstrate(self, layer):
         """add_superstrate
 
-        Add :class:`Layer` or its sub-classes as static superstrate to the sample.
+        Add :class:`.Layer` or its sub-classes as static superstrate to the sample.
 
         Args:
             sub_structure (Layer): superstrate Layer or its sub-classes.
@@ -362,7 +362,7 @@ class Structure:
     def add_substrate(self, layer, N=1):
         """add_substrate
 
-        Add :math:`N` :class:`Layer` or its sub-classes as static substrate to the sample.
+        Add :math:`N` :class:`.Layer` or its sub-classes as static substrate to the sample.
 
         Args:
             sub_structure (Layer): substrate Layer or its sub-classes.
@@ -382,7 +382,7 @@ class Structure:
     def get_number_of_sub_structures(self):
         """get_number_of_sub_structures
 
-        This methods does not return the number of all :class:`Layer` in the
+        This methods does not return the number of all :class:`.Layer` in the
         :class:`Structure`, see :meth:`.get_number_of_layers`.
 
         Returns:
@@ -400,7 +400,7 @@ class Structure:
     def get_number_of_layers(self):
         """get_number_of_layers
 
-        Determines the number of all :class:`Layer` in the :class:`Structure`.
+        Determines the number of all :class:`.Layer` in the :class:`Structure`.
 
         Returns:
             L (int): number of all Layer in the Structure.
@@ -423,7 +423,7 @@ class Structure:
     def get_number_of_unique_layers(self):
         """get_number_of_unique_layers
 
-        Determines the number of unique :class:`Layer` in the :class:`Structure`.
+        Determines the number of unique :class:`.Layer` in the :class:`Structure`.
 
         Returns:
             N (int): number of unique layers in the Structure.
@@ -435,7 +435,7 @@ class Structure:
     def get_unique_layers(self):
         """get_unique_layers
 
-        The uniqueness is determined by the handle of each :class:`Layer`.
+        The uniqueness is determined by the handle of each :class:`.Layer`.
 
         Returns:
             (tuple):
@@ -490,11 +490,11 @@ class Structure:
     def get_layer_vectors(self, *args):
         """get_layer_vectors
 
-        Returns three lists with the numeric index of all :class:`Layer`
+        Returns three lists with the numeric index of all :class:`.Layer`
         in a :class:`Structure` given by the :meth:`get_unique_layers()`
         method and additionally vectors with the ids and Handles of the
         corresponding layer instances.
-        The list and order of the unique :class:`Layer` can be either handed
+        The list and order of the unique :class:`.Layer` can be either handed
         as an input parameter or is requested at the beginning.
 
         Args:
@@ -562,7 +562,7 @@ class Structure:
     def get_all_positions_per_unique_layer(self):
         """get_all_positions_per_unique_layer
 
-        Determines the position indices for each unique :class:`Layer` in the :class:`Structure`.
+        Determines the position indices for each unique :class:`.Layer` in the :class:`Structure`.
 
         Returns:
             pos (dict{ndarray[int]}): position indices for each unique Layer in
@@ -580,7 +580,7 @@ class Structure:
     def get_distances_of_layers(self, units=True):
         """get_distances_of_layers
 
-        Returns a vector of the distance from the surface for each :class:`Layer`
+        Returns a vector of the distance from the surface for each :class:`.Layer`
         starting at 0 (`d_start`) and starting at the end of the first
         layer (`d_end`) and from the center of each layer (`d_mid`).
 
@@ -633,7 +633,7 @@ class Structure:
     def interp_distance_at_interfaces(self, N, units=True):
         """interp_distance_at_interfaces
 
-        Interpolates the distances at the :class:`Layer` interfaces by an odd number
+        Interpolates the distances at the :class:`.Layer` interfaces by an odd number
         :math:`N`.
 
         Args:
@@ -690,7 +690,7 @@ class Structure:
     def get_layer_property_vector(self, property_name):
         """get_layer_property_vector
 
-        Returns a vector for a property of all :class:`Layer` in the
+        Returns a vector for a property of all :class:`.Layer` in the
         Structure. The property is determined by the `property_name` and
         returns a scalar value or a function handle.
 
@@ -779,7 +779,7 @@ class Structure:
         properties it should return the number of sub-systems.
 
         The method raises an `IndexError` if the dimension of the property
-        is not equal for all :class:`Layer`.
+        is not equal for all :class:`.Layer`.
 
         Args:
             property_name (str): name of property to be checked
@@ -802,7 +802,7 @@ class Structure:
     def get_layer_handle(self, i):
         """get_layer_handle
 
-        Returns the handle to a :class:`Layer` at a given position index.
+        Returns the handle to a :class:`.Layer` at a given position index.
 
         Args:
             i (int): index of the Layer to return.

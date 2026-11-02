@@ -23,7 +23,7 @@
 
 """Scipy-based solver for the N-temperature heat diffusion model.
 
-This is the default backend of the :class:`Heat` simulation. The 1D heat
+This is the default backend of the :class:`.Heat` simulation. The 1D heat
 diffusion equation is solved by the method of lines with
 ``scipy.integrate.solve_ivp`` and :meth:`odefunc` as right-hand side.
 

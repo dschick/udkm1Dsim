@@ -9,13 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Layer`, `AmorphousLayer`, and `UnitCell` accept their properties as parameter groups or dicts, e.g. `thermal=ThermalParameters(...)` or `lattice={"c_axis": ...}`; groups are copied on assignment and can be reused, mistyped parameter names raise an error, and parameters given twice raise an error
+- parameter groups of a layer can be replaced after its creation, e.g. `layer.elastic = {"sound_vel": ...}`
+- read-only `acoustic_impedance` property of `Layer`
+
 ### Changed
+
+- parameter groups notify their layer on changes, which updates all parameters depending on several groups, e.g. the spring constant
+- the `density` of a `UnitCell` with atoms cannot be set, as it is given by their mass and its volume, and its `thickness` is its `c_axis`
+- `AmorphousLayer` does not require `thickness` and `density` as positional arguments anymore
+- `UnitCell` does not require `c_axis` as positional argument if `lattice` is given
+- `a_axis` and `b_axis` of `LatticeParameters` default to its `c_axis`
+- `ElasticParameters` has no `spring_const` argument anymore, as it is always derived
 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+
+- changing parameters directly via their group, e.g. `layer.structural.thickness`, did not update depending parameters of other groups, e.g. the spring constant
+- API documentation of the `parameters`, `parameter_groups`, and `solvers` modules was missing
 
 ### Security
 

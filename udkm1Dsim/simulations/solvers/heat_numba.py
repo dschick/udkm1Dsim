@@ -54,9 +54,9 @@ def solve(
     Between two consecutive requested delays the solution is advanced with a
     fixed time step, sub-stepped so that no step exceeds ``max_step`` of
     ``backend_options``. If ``max_step`` is ``None`` it is a tenth of the
-    shorter of the sub-system coupling time, see :func:`coupling_time_step`,
-    and the shortest pump pulse width. The scheme is second order in time, so
-    halving ``max_step`` reduces the time integration error by four.
+    shorter of the sub-system coupling time and the shortest pump pulse width.
+    The scheme is second order in time, so halving ``max_step`` reduces the
+    time integration error by four.
     ``ode_options`` is not used by this kernel, which does its own time
     integration.
 
