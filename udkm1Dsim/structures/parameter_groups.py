@@ -51,7 +51,7 @@ class ParameterGroup:
     """A group of Parameters with units.
 
     Changes of the independent parameters of a group update its depending
-    parameters and notify the owner of the group, e.g. a :class:`Layer`,
+    parameters and notify the owner of the group, e.g. a :class:`.Layer`,
     which updates the parameters depending on several groups.
 
     """

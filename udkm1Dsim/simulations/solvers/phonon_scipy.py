@@ -23,7 +23,7 @@
 
 """Scipy-based solver for the coherent phonon dynamics of a linear chain.
 
-This is the default backend of the :class:`PhononNum` simulation. The
+This is the default backend of the :class:`.PhononNum` simulation. The
 equations of motion of the linear chain of masses and springs are solved as a
 first-order system for the shifts and velocities of all layers with
 ``scipy.integrate.solve_ivp`` and :meth:`odefunc` as right-hand side.

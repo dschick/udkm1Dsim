@@ -94,11 +94,11 @@ class Layer:
     A layer consists of structural, thermal, elastic, optical, and magnetic properties.
     These properties are organized into dedicated parameter groups:
 
-    * :class:`StructuralParameters`
-    * :class:`ThermalParameters`
-    * :class:`ElasticParameters`
-    * :class:`OpticalParameters`
-    * :class:`MagneticParameters`
+    * :class:`.StructuralParameters`
+    * :class:`.ThermalParameters`
+    * :class:`.ElasticParameters`
+    * :class:`.OpticalParameters`
+    * :class:`.MagneticParameters`
 
     The parameter groups are accessible through the corresponding
     attributes of the layer. They can be given on initialization either as
@@ -220,8 +220,8 @@ class Layer:
         the parameters relevant for this type of simulation are returned.
         Their keys are the paths of the parameters, e.g.
         `structural.thickness`, and their values are the
-        :class:`Parameter` objects, whose `repr` contains their name, value,
-        and unit, as required for :meth:`Structure.get_hash`.
+        :class:`.Parameter` objects, whose `repr` contains their name, value,
+        and unit, as required for :meth:`.Structure.get_hash`.
 
         Args:
             **kwargs (list[str]): types of requested properties.
@@ -709,12 +709,12 @@ class UnitCell(Layer):
     and magnetic properties. These properties are organized into dedicated
     parameter groups:
 
-    * :class:`StructuralParameters`
-    * :class:`LatticeParameters`
-    * :class:`ThermalParameters`
-    * :class:`ElasticParameters`
-    * :class:`OpticalParameters`
-    * :class:`MagneticParameters`
+    * :class:`.StructuralParameters`
+    * :class:`.LatticeParameters`
+    * :class:`.ThermalParameters`
+    * :class:`.ElasticParameters`
+    * :class:`.OpticalParameters`
+    * :class:`.MagneticParameters`
 
     The parameter groups are accessible through the corresponding
     attributes of the layer, see :class:`Layer` for their initialization.

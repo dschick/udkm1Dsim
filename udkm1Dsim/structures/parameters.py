@@ -191,7 +191,8 @@ class VectorParameter(Parameter):
 
     @property
     def polar_rad(self):
-        """[r, phi, gamma] as floats: r in self.unit, angles in rad."""
+        """Polar coordinates [r, phi, gamma] as floats, r in the unit of the
+        parameter and the angles in rad."""
         return self._polar_rad()  # fresh array each call, safe to mutate
 
     @polar_rad.setter
