@@ -23,6 +23,8 @@
 
 __all__ = [
     "ParameterGroup",
+    "AtomParameters",
+    "AtomMixedParameters",
     "StructuralParameters",
     "LatticeParameters",
     "ThermalParameters",
@@ -40,6 +42,7 @@ import re
 import numpy as np
 import pint
 import scipy.constants as constants
+import tabulate as tabulate_module
 from tabulate import tabulate
 
 from .parameters import Parameter, TemperatureParameter, VectorParameter
@@ -107,11 +110,64 @@ class ParameterGroup:
             setattr(new, key, copy.deepcopy(value, memo))
         return new
 
+    _table_headers = ("Parameter", "Symbol", "Value", "Unit")
+    _table_align = ("left", "center", "right", "left")
+
     def _table_representation(self, style="double_grid"):
-        rows = [[name, p.quantity] for name, p in self._parameters().items()]
-        return tabulate(
-            rows, headers=["Parameter", "Value"], tablefmt=style, colalign=("right", "right")
+        """Table of the name, symbol, value, and unit of all parameters in the
+        given tabulate style, where the sub-systems of a parameter are given
+        in separate lines of a single row."""
+        rows = []
+        for name, p in self._parameters().items():
+            symbols, values, units = zip(*p._table_rows("text"))
+            rows.append([name, "\n".join(symbols), "\n".join(values), "\n".join(units)])
+        kwargs = dict(
+            headers=self._table_headers,
+            tablefmt=style,
+            colalign=self._table_align,
+            disable_numparse=True,
         )
+        # The whitespace must be preserved, as the lines of a cell can be empty,
+        # e.g. the dimensionless amplitude of a vector before its angles.
+        try:
+            return tabulate(rows, preserve_whitespace=True, **kwargs)
+        except TypeError:  # tabulate < 0.10 has a module-wide option only
+            preserve_whitespace = tabulate_module.PRESERVE_WHITESPACE
+            tabulate_module.PRESERVE_WHITESPACE = True
+            try:
+                return tabulate(rows, **kwargs)
+            finally:
+                tabulate_module.PRESERVE_WHITESPACE = preserve_whitespace
+
+    def _html_table(self):
+        """HTML table of the name, symbol, value, and unit of all parameters,
+        where the name and unit of a parameter span the rows of its sub-systems.
+        The table is not made by tabulate, which pads all cells to the length of
+        the longest HTML string and does not support cells spanning rows."""
+
+        def cell(tag, content, align, rowspan=1):
+            span = f' rowspan="{rowspan}"' if rowspan > 1 else ""
+            style = f' style="text-align: {align};"' if align != "left" else ""
+            return f"<{tag}{span}{style}>{content}</{tag}>"
+
+        header = "".join(
+            cell("th", name, align) for name, align in zip(self._table_headers, self._table_align)
+        )
+        body = ""
+        for name, p in self._parameters().items():
+            rows = p._table_rows("html")
+            # a unit, which is the same for all rows, spans them
+            same_unit = all(unit == "" for _, _, unit in rows[1:])
+            for i, (symbol, value, unit) in enumerate(rows):
+                cells = [cell("td", symbol, "center"), cell("td", value, "right")]
+                if i == 0:
+                    cells.insert(0, cell("td", name, "left", len(rows)))
+                if i == 0 and same_unit:
+                    cells.append(cell("td", unit, "left", len(rows)))
+                elif not same_unit:
+                    cells.append(cell("td", unit, "left"))
+                body += "<tr>" + "".join(cells) + "</tr>\n"
+        return f"<table>\n<thead>\n<tr>{header}</tr>\n</thead>\n<tbody>\n{body}</tbody>\n</table>"
 
     def _pretty_class_name(self):
         return " ".join(
@@ -126,33 +182,126 @@ class ParameterGroup:
         return class_str
 
     def _repr_html_(self):
-        return f"<h3>{self._pretty_class_name()}</h3>" + self._table_representation(style="html")
+        return f"<h3>{self._pretty_class_name()}</h3>" + self._html_table()
+
+
+class _AtomParametersBase(ParameterGroup):
+    """Parameters common to :class:`AtomParameters` and :class:`AtomMixedParameters`."""
+
+    _derived = ("mass",)
+
+    def __init__(
+        self,
+        atomic_number=0,
+        mass_number=0.0,
+        ionicity=0,
+        magnetization=(0.0, 0.0, 0.0),
+    ):
+        self.atomic_number = Parameter("", atomic_number, symbol="Z")
+        self.mass_number = Parameter("", mass_number, symbol="A")
+        self.mass = Parameter("kg", 0.0, symbol="m")
+        self.ionicity = Parameter("", ionicity, symbol="I")
+        self.magnetization = VectorParameter("", magnetization, symbol=r"\mathbf{m}")
+
+        self._connect_parameters()
+        self._update_group()
+
+    def _update_group(self):
+        self.mass.magnitude = self.mass_number.magnitude * constants.atomic_mass
+
+
+class AtomParameters(_AtomParametersBase):
+    r"""Parameters of an atom.
+
+    The parameters of an atom are read by a layer when the atom is added to
+    it, e.g. its mass for the density of a unit cell. Hence, changing the
+    parameters of an atom afterwards does not update the layers it was
+    already added to.
+
+    Attributes:
+        atomic_number (int): atomic number :math:`Z`.
+        mass_number (float): mass number :math:`A`.
+        mass (float): mass of the atom :math:`m` [kg], derived from the mass number.
+        ionicity (int): ionicity :math:`I`.
+        magnetization (VectorParameter): magnetization :math:`\mathbf{m}` as
+            for the :class:`.MagneticParameters` of a layer, given by its
+            amplitude :math:`r` 0 .. 1 and the angles :math:`\phi` from the
+            z-axis and :math:`\gamma` in the xy-plane from the x-axis.
+        cromer_mann_a (ndarray[float]): Cromer-Mann coefficients :math:`a_1 .. a_4`.
+        cromer_mann_b (ndarray[float]): Cromer-Mann coefficients :math:`b_1 .. b_4`
+            [Å²].
+        cromer_mann_c (float): Cromer-Mann coefficient :math:`c`.
+
+    """
+
+    def __init__(
+        self,
+        atomic_number=0,
+        mass_number=0.0,
+        ionicity=0,
+        magnetization=(0.0, 0.0, 0.0),
+        cromer_mann_a=(0.0, 0.0, 0.0, 0.0),
+        cromer_mann_b=(0.0, 0.0, 0.0, 0.0),
+        cromer_mann_c=0.0,
+    ):
+        super().__init__(atomic_number, mass_number, ionicity, magnetization)
+        self.cromer_mann_a = Parameter("", np.asarray(cromer_mann_a, dtype=float), symbol="a")
+        self.cromer_mann_b = Parameter(
+            "angstrom**2", np.asarray(cromer_mann_b, dtype=float), symbol="b"
+        )
+        self.cromer_mann_c = Parameter("", float(cromer_mann_c), symbol="c")
+
+        self._connect_parameters()
+
+
+class AtomMixedParameters(_AtomParametersBase):
+    r"""Parameters of a mixed atom.
+
+    The atomic number, mass number, mass, and ionicity are the averages of
+    the constituent atoms weighted by their fractions, see
+    :meth:`.AtomMixed.add_atom`. A mixed atom has no Cromer-Mann
+    coefficients, as its form factors are averaged from its constituents.
+
+    Attributes:
+        atomic_number (float): averaged atomic number :math:`Z`.
+        mass_number (float): averaged mass number :math:`A`.
+        mass (float): averaged mass of the atom :math:`m` [kg].
+        ionicity (float): averaged ionicity :math:`I`.
+        magnetization (VectorParameter): magnetization :math:`\mathbf{m}`, see
+            :class:`AtomParameters`.
+
+    """
+
+    _derived = ("atomic_number", "mass_number", "mass", "ionicity")
+
+    def _update_group(self):
+        """The derived parameters are given by the constituents."""
 
 
 class StructuralParameters(ParameterGroup):
-    """Structural parameters of a layer.
+    r"""Structural parameters of a layer.
 
     Attributes:
-        thickness (float): thickness of the layer [m].
-        density (float): density of the layer [kg/m³].
-        area (float): area of layer [m²].
-        roughness (float): gaussian width of the top roughness of a layer [m].
-        mass (float): mass of the layer [kg].
-        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² [kg].
-        volume (float): volume of layer [m³].
+        thickness (float): thickness of the layer :math:`d` [m].
+        density (float): density of the layer :math:`\rho` [kg/m³].
+        area (float): area of layer :math:`A` [m²].
+        roughness (float): gaussian width of the top roughness of a layer :math:`\sigma` [m].
+        mass (float): mass of the layer :math:`m` [kg].
+        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² :math:`m_A` [kg].
+        volume (float): volume of layer :math:`V` [m³].
 
     """
 
     _derived = ("mass", "mass_unit_area", "volume")
 
     def __init__(self, thickness=0.0, density=0.0, area=1.0 * u.angstrom**2, roughness=0.0):
-        self.thickness = Parameter("m", thickness)
-        self.density = Parameter("kg/m**3", density)
-        self.area = Parameter("m**2", area)
-        self.roughness = Parameter("m", roughness)
-        self.mass = Parameter("kg", 0.0)
-        self.mass_unit_area = Parameter("kg", 0.0)
-        self.volume = Parameter("m**3", 0.0)
+        self.thickness = Parameter("m", thickness, symbol="d")
+        self.density = Parameter("kg/m**3", density, symbol=r"\rho")
+        self.area = Parameter("m**2", area, symbol="A")
+        self.roughness = Parameter("m", roughness, symbol=r"\sigma")
+        self.mass = Parameter("kg", 0.0, symbol="m")
+        self.mass_unit_area = Parameter("kg", 0.0, symbol="m_A")
+        self.volume = Parameter("m**3", 0.0, symbol="V")
 
         self._connect_parameters()
         self._update_group()
@@ -172,16 +321,16 @@ class LatticeParameters(ParameterGroup):
     """Lattice parameters of a unit cell.
 
     Attributes:
-        a_axis (float): lattice parameter a [m], defaults to c_axis.
-        b_axis (float): lattice parameter b [m], defaults to c_axis.
-        c_axis (float): lattice parameter c [m].
+        a_axis (float): lattice parameter :math:`a` [m], defaults to c_axis.
+        b_axis (float): lattice parameter :math:`b` [m], defaults to c_axis.
+        c_axis (float): lattice parameter :math:`c` [m].
 
     """
 
     def __init__(self, a_axis=None, b_axis=None, c_axis=0.0):
-        self.a_axis = Parameter("m", c_axis if a_axis is None else a_axis)
-        self.b_axis = Parameter("m", c_axis if b_axis is None else b_axis)
-        self.c_axis = Parameter("m", c_axis)
+        self.a_axis = Parameter("m", c_axis if a_axis is None else a_axis, symbol="a")
+        self.b_axis = Parameter("m", c_axis if b_axis is None else b_axis, symbol="b")
+        self.c_axis = Parameter("m", c_axis, symbol="c")
 
         self._connect_parameters()
 
@@ -191,17 +340,21 @@ class ThermalParameters(ParameterGroup):
 
     Attributes:
         therm_cond (list[@lambda]): list of T-dependent thermal conductivity
-            [W/(m K)].
+            :math:`\kappa` [W/(m K)].
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
-            expansion coefficient (relative).
+            expansion coefficient :math:`\alpha` (relative).
         heat_capacity (list[@lambda]): list of T-dependent heat capacity
-            function [J/(kg K)].
+            function :math:`c` [J/(kg K)].
         sub_system_coupling (list[@lambda]): list of coupling functions of
-            different subsystems [W/m³].
+            different subsystems :math:`G` [W/m³].
         deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
             :math:`\langle u^2\rangle` [m²].
-        num_sub_systems (int): number of subsystems for heat and phonons
-            (electrons, lattice, spins, ...).
+        num_sub_systems (int): number of subsystems :math:`N` for heat and
+            phonons (electrons, lattice, spins, ...).
+        sub_system_labels (list[str]): labels of the subsystems, e.g.
+            ``["e", "p"]``, which are displayed as subscripts of the symbols of
+            the temperature-dependent parameters and of the temperatures.
+            Missing labels default to the index of the subsystem.
 
     """
 
@@ -214,16 +367,36 @@ class ThermalParameters(ParameterGroup):
         lin_therm_exp=0.0,
         sub_system_coupling=0.0,
         deb_wal_fac=0.0,
+        sub_system_labels=None,
     ):
-        self.therm_cond = TemperatureParameter("W/(m K)", therm_cond)
-        self.heat_capacity = TemperatureParameter("J/(kg K)", heat_capacity)
-        self.lin_therm_exp = TemperatureParameter("", lin_therm_exp)
-        self.sub_system_coupling = TemperatureParameter("W/m**3", sub_system_coupling)
-        self.deb_wal_fac = TemperatureParameter("m**2", deb_wal_fac)
-        self.num_sub_systems = Parameter("", 0)
+        self.therm_cond = TemperatureParameter("W/(m K)", therm_cond, symbol=r"\kappa")
+        self.heat_capacity = TemperatureParameter("J/(kg K)", heat_capacity, symbol="c")
+        self.lin_therm_exp = TemperatureParameter("", lin_therm_exp, symbol=r"\alpha")
+        self.sub_system_coupling = TemperatureParameter("W/m**3", sub_system_coupling, symbol="G")
+        self.deb_wal_fac = TemperatureParameter("m**2", deb_wal_fac, symbol=r"\langle u^2 \rangle")
+        self.num_sub_systems = Parameter("", 0, symbol="N")
+        self.sub_system_labels = sub_system_labels
 
         self._connect_parameters()
         self._update_group()
+
+    @property
+    def sub_system_labels(self):
+        """list[str]: labels of the sub-systems, which default to their index."""
+        n = self.num_sub_systems.magnitude
+        labels = (self._sub_system_labels or [])[:n]
+        return labels + [str(i) for i in range(len(labels), n)]
+
+    @sub_system_labels.setter
+    def sub_system_labels(self, labels):
+        self._sub_system_labels = None if labels is None else [str(label) for label in labels]
+
+    def _display_sub_system_labels(self):
+        """Labels of the sub-systems for the display of the temperature-dependent
+        parameters, or None for a single sub-system without label."""
+        if self._sub_system_labels is None and self.num_sub_systems.magnitude <= 1:
+            return None
+        return self.sub_system_labels
 
     def _update_group(self):
         # The number of sub-systems is given by the temperature-dependent
@@ -237,24 +410,24 @@ class ThermalParameters(ParameterGroup):
 
 
 class ElasticParameters(ParameterGroup):
-    """Elastic and phonon parameters of a layer.
+    r"""Elastic and phonon parameters of a layer.
 
     Attributes:
-        sound_vel (float): longitudinal sound velocity in the layer [m/s].
-        phonon_damping (float): damping constant of phonon propagation [kg/s].
-        spring_const (ndarray[float]): spring constant of the layer [kg/s²]
-            and higher orders.
-        acoustic_impedance (float): acoustic impedance of a layer [kg/(m² s)].
+        sound_vel (float): longitudinal sound velocity in the layer :math:`v` [m/s].
+        phonon_damping (float): damping constant of phonon propagation :math:`\gamma` [kg/s].
+        spring_const (ndarray[float]): spring constant :math:`k` of the layer
+            [kg/s²] and higher orders.
+        acoustic_impedance (float): acoustic impedance of a layer :math:`Z` [kg/(m² s)].
 
     """
 
     _derived = ("spring_const", "acoustic_impedance")
 
     def __init__(self, sound_vel=0.0, phonon_damping=0.0):
-        self.sound_vel = Parameter("m/s", sound_vel)
-        self.phonon_damping = Parameter("kg/s", phonon_damping)
-        self.spring_const = Parameter("kg/s**2", np.array([0.0]))
-        self.acoustic_impedance = Parameter("kg/(m**2*s)", 0.0)
+        self.sound_vel = Parameter("m/s", sound_vel, symbol="v")
+        self.phonon_damping = Parameter("kg/s", phonon_damping, symbol=r"\gamma")
+        self.spring_const = Parameter("kg/s**2", np.array([0.0]), symbol="k")
+        self.acoustic_impedance = Parameter("kg/(m**2*s)", 0.0, symbol="Z")
 
         self._connect_parameters()
 
@@ -264,7 +437,7 @@ class ElasticParameters(ParameterGroup):
         Calculates the spring constant of the layer from the mass per unit area,
         sound velocity and thickness
 
-        .. math:: k = m \, \left(\frac{v}{c}\right)^2
+        .. math:: k = m \, \left(\frac{v}{d}\right)^2
 
         """
         try:
@@ -309,21 +482,21 @@ class OpticalParameters(ParameterGroup):
     r"""Optical and X-ray parameters of a layer.
 
     Attributes:
-        opt_pen_depth (float): optical penetration depth of the layer [m].
-        opt_ref_index (ndarray[float]): optical refractive index - real
-            and imaginary part :math:`n + i\kappa`.
-        opt_ref_index_per_strain (ndarray[float]): optical refractive
-            index change per strain - real and imaginary part
-            :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
+        opt_pen_depth (float): optical penetration depth of the layer :math:`\zeta` [m].
+        opt_ref_index (complex): complex optical refractive index :math:`n`.
+        opt_ref_index_per_strain (complex): change of the complex optical
+            refractive index per strain :math:`\mathrm{d}n/\mathrm{d}\epsilon`.
 
     """
 
     def __init__(
         self, opt_pen_depth=0.0, opt_ref_index=0.0 + 0.0j, opt_ref_index_per_strain=0.0 + 0.0j
     ):
-        self.opt_pen_depth = Parameter("m", opt_pen_depth)
-        self.opt_ref_index = Parameter("", opt_ref_index)
-        self.opt_ref_index_per_strain = Parameter("", opt_ref_index_per_strain)
+        self.opt_pen_depth = Parameter("m", opt_pen_depth, symbol=r"\zeta")
+        self.opt_ref_index = Parameter("", opt_ref_index, symbol="n")
+        self.opt_ref_index_per_strain = Parameter(
+            "", opt_ref_index_per_strain, symbol=r"\mathrm{d}n/\mathrm{d}\epsilon"
+        )
 
         self._connect_parameters()
 
@@ -333,7 +506,7 @@ class OpticalParameters(ParameterGroup):
         Set the optical penetration depth from the optical refractive index
         for a given wavelength:
 
-        .. math:: \delta = \frac{\lambda}{4 \pi |\kappa|}
+        .. math:: \zeta = \frac{\lambda}{4 \pi |\mathrm{Im}(n)|}
 
         Args:
             wavelength (Quantity): wavelength as Pint Quantity.
@@ -347,21 +520,22 @@ class OpticalParameters(ParameterGroup):
 
 
 class MagneticParameters(ParameterGroup):
-    """Magnetic parameters of a layer.
+    r"""Magnetic parameters of a layer.
 
     Attributes:
-        eff_spin (float): effective spin.
-        curie_temp (float): Curie temperature [K].
-        mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
-        lamda (float): intrinsic coupling to bath parameter.
-        mag_moment (float): atomic magnetic moment [A m²].
+        eff_spin (float): effective spin :math:`S`.
+        curie_temp (float): Curie temperature :math:`T_\mathrm{C}` [K].
+        mf_exch_coupling (float): mean field exchange coupling constant :math:`J` [m²kg/s²].
+        lamda (float): intrinsic coupling to bath parameter :math:`\lambda`.
+        mag_moment (float): atomic magnetic moment :math:`\mu` [A m²].
         aniso_exponent (ndarray[float]): exponent of T-dependence uniaxial
-            anisotropy.
-        anisotropy (ndarray[float]): anisotropy at T=0 K [J/m³] as x,y,z component vector.
-        exch_stiffness (float): exchange stiffness at T=0 K [J/m].
-        mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
-        magnetization (dict[float]): magnetization amplitude, phi and
-            gamma angle inherited from the atom.
+            anisotropy :math:`\beta`.
+        anisotropy (ndarray[float]): anisotropy :math:`K` at T=0 K [J/m³] as
+            x,y,z component vector.
+        exch_stiffness (float): exchange stiffness at T=0 K :math:`A_\mathrm{ex}` [J/m].
+        mag_saturation (float): saturation magnetization at 0 K :math:`M_s` [J/T/m³].
+        magnetization (dict[float]): magnetization :math:`\mathbf{m}` given by
+            its amplitude, phi and gamma angle inherited from the atom.
 
     """
 
@@ -379,16 +553,16 @@ class MagneticParameters(ParameterGroup):
         mag_saturation=0.0,
         magnetization=np.array([0.0, 0.0, 0.0]),
     ):
-        self.eff_spin = Parameter("", eff_spin)
-        self.curie_temp = Parameter("K", curie_temp)
-        self.mf_exch_coupling = Parameter("m**2kg/s**2", 0.0)
-        self.lamda = Parameter("", lamda)
-        self.mag_moment = Parameter("A*m**2", mag_moment)
-        self.aniso_exponent = Parameter("", aniso_exponent)
-        self.anisotropy = Parameter("J/m**3", anisotropy)
-        self.exch_stiffness = Parameter("J/m", exch_stiffness)
-        self.mag_saturation = Parameter("J/T/m**3", mag_saturation)
-        self.magnetization = VectorParameter("", magnetization)
+        self.eff_spin = Parameter("", eff_spin, symbol="S")
+        self.curie_temp = Parameter("K", curie_temp, symbol=r"T_\mathrm{C}")
+        self.mf_exch_coupling = Parameter("m**2kg/s**2", 0.0, symbol="J")
+        self.lamda = Parameter("", lamda, symbol=r"\lambda")
+        self.mag_moment = Parameter("A*m**2", mag_moment, symbol=r"\mu")
+        self.aniso_exponent = Parameter("", aniso_exponent, symbol=r"\beta")
+        self.anisotropy = Parameter("J/m**3", anisotropy, symbol="K")
+        self.exch_stiffness = Parameter("J/m", exch_stiffness, symbol=r"A_\mathrm{ex}")
+        self.mag_saturation = Parameter("J/T/m**3", mag_saturation, symbol="M_s")
+        self.magnetization = VectorParameter("", magnetization, symbol=r"\mathbf{m}")
 
         self._connect_parameters()
         self._update_group()

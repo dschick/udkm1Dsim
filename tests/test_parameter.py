@@ -1,12 +1,21 @@
 #!/usr/bin/env python
 
+import pickle
+
 import numpy as np
 import pint
 import pytest
 import sympy as sp
 from pint.testing import assert_allclose as assert_approx
 
-from udkm1Dsim import VectorParameter, u
+from udkm1Dsim import Parameter, TemperatureParameter, VectorParameter, u
+from udkm1Dsim.helpers import (
+    add_latex_subscript,
+    expression_to_text,
+    format_number,
+    latex_to_html,
+    latex_to_text,
+)
 
 # tests
 
@@ -385,3 +394,156 @@ def test_vector_parameter_failed_set_does_not_notify(vector_parameter):
 def test_vector_parameter_repr(vector_parameter):
     vector_parameter.magnitude = (1.0, 2.0, 3.0)
     assert repr(vector_parameter).startswith("VectorParameter(B=[1.0, 2.0, 3.0]")
+
+
+# Symbols and display
+
+
+@pytest.mark.parametrize(
+    "symbol, text, html",
+    [
+        ("d", "d", "<i>d</i>"),
+        (r"\kappa", "κ", "<i>κ</i>"),
+        ("c_e", "cₑ", "<i>c</i><sub><i>e</i></sub>"),
+        ("c_{SRO}", "c_{SRO}", "<i>c</i><sub>SRO</sub>"),
+        (r"T_\mathrm{C}", "T_C", "<i>T</i><sub>C</sub>"),
+        (r"A_\mathrm{ex}", "Aₑₓ", "<i>A</i><sub>ex</sub>"),
+        (r"\langle u^2 \rangle", "⟨u²⟩", "⟨<i>u</i><sup>2</sup>⟩"),
+        (r"\mathbf{m}", "m", "<b>m</b>"),
+        (r"\mathrm{d}n/\mathrm{d}\epsilon", "dn/dε", "d<i>n</i>/d<i>ε</i>"),
+    ],
+)
+def test_symbol_formats(symbol, text, html):
+    assert latex_to_text(symbol) == text
+    assert latex_to_html(symbol) == html
+
+
+@pytest.mark.parametrize(
+    "symbol, subscript, expected",
+    [("c", "e", "c_{e}"), ("M_s", "e", "M_{s,e}"), ("M_{s}", "0", "M_{s,0}")],
+)
+def test_add_latex_subscript(symbol, subscript, expected):
+    assert add_latex_subscript(symbol, subscript) == expected
+
+
+@pytest.mark.parametrize(
+    "value, text, latex",
+    [
+        (5000.0, "5000", "5000"),
+        (2e-8, "2×10⁻⁸", r"2 \times 10^{-8}"),
+        (-1.5, "−1.5", "-1.5"),
+        (2.44 + 4.32j, "2.44 + 4.32i", r"2.44 + 4.32\,i"),
+        (2, "2", "2"),
+        (np.array([1.0, 2e-8]), "[1, 2×10⁻⁸]", r"[1, 2 \times 10^{-8}]"),
+    ],
+)
+def test_format_number(value, text, latex):
+    assert format_number(value) == text
+    assert format_number(value, "latex") == latex
+
+
+def test_parameter_display():
+    p = Parameter("m", 2e-8, name="thickness", symbol="d")
+    assert str(p) == "d = 2×10⁻⁸ m"
+    assert p._repr_latex_() == r"$d = 2 \times 10^{-8}\ \mathrm{m}$"
+    assert p._table_rows("html") == [("<i>d</i>", "2×10<sup>−8</sup>", "m")]
+
+
+def test_parameter_display_without_symbol_shows_name():
+    p = Parameter("", 0.5, name="my_param")
+    assert str(p) == "my_param = 0.5"
+    assert p._repr_latex_() == r"$\mathrm{my\_param} = 0.5$"
+
+
+def test_parameter_repr_does_not_depend_on_symbol():
+    # the repr is used for the hash of simulation results
+    p = Parameter("m", 2e-8, name="thickness", symbol="d")
+    q = Parameter("m", 2e-8, name="thickness", symbol="t")
+    assert repr(p) == repr(q) == "Parameter(thickness=2e-08 m)"
+
+
+def test_temperature_parameter_display_single_sub_system():
+    p = TemperatureParameter("J/(kg K)", "0.112*T + 455.2", name="heat_capacity", symbol="c")
+    assert str(p) == "c(T) = 0.112·T + 455.2 J/K/kg"
+    assert p._repr_latex_().startswith("$c(T) = 0.112 T + 455.2")
+
+
+def test_temperature_parameter_display_constant():
+    p = TemperatureParameter("W/(m K)", 94, name="therm_cond", symbol=r"\kappa")
+    assert str(p) == "κ = 94 W/K/m"
+
+
+def test_temperature_parameter_display_sub_systems():
+    # without a group, the sub-systems are labeled by their index
+    p = TemperatureParameter(
+        "W/m**3", ["-4.2e17*(T_0-T_1)", "4.2e17*(T_0-T_1)"], name="coupling", symbol="G"
+    )
+    assert str(p).split("\n") == [
+        "G₀(T₀, T₁) = −4.2×10¹⁷·T₀ + 4.2×10¹⁷·T₁ W/m³",
+        "G₁(T₀, T₁) = 4.2×10¹⁷·T₀ − 4.2×10¹⁷·T₁ W/m³",
+    ]
+    latex = p._repr_latex_()
+    assert latex.startswith(r"$\begin{aligned}G_{0}(T_{0}, T_{1}) &= ")
+    assert latex.count(r" \\ ") == 1
+    rows = p._table_rows("text")
+    assert [row[0] for row in rows] == ["G₀", "G₁"]
+    assert [row[2] for row in rows] == ["W/m³", ""]  # unit only in the first row
+
+
+@pytest.mark.parametrize(
+    "expression, text",
+    [
+        ("0.2*T - 100.0", "0.2·T − 100"),
+        ("-1.5*T", "−1.5·T"),
+        ("470 + 0.19*T - 7.08e6/T**2", "0.19·T + 470 − 7.08×10⁶/T²"),
+        ("-4.2e17*(T_0-T_1)", "−4.2×10¹⁷·T₀ + 4.2×10¹⁷·T₁"),
+        ("(T_0+T_1)**2", "(T₀ + T₁)²"),
+        ("T**2.5", "T^2.5"),
+        ("2.42e4*T**-1.114", "2.42×10⁴/T^1.114"),
+        ("1 + abs(T - 500)**0.7", "|T − 500|^0.7 + 1"),
+    ],
+)
+def test_expression_to_text(expression, text):
+    assert expression_to_text(sp.sympify(expression)) == text
+
+
+def test_vector_parameter_keeps_angles_of_zero_vector():
+    v = VectorParameter("")
+    v.polar = (0, 90 * u.deg, 270 * u.deg)
+    assert_approx(v.phi, 90 * u.deg)
+    assert_approx(v.gamma, -90 * u.deg)  # gamma is given in -180 .. 180 deg
+    np.testing.assert_array_equal(v.magnitude, [0, 0, 0])
+    v.r = 1  # the direction is restored
+    assert np.allclose(v.magnitude, [0, -1, 0])
+    # also cartesian zero vectors keep the angles
+    v.magnitude = [0, 0, 0]
+    assert_approx(v.phi, 90 * u.deg)
+    assert_approx(v.gamma, -90 * u.deg)
+
+
+def test_vector_parameter_keeps_angles_set_before_amplitude():
+    v = VectorParameter("")
+    v.phi = 90 * u.deg
+    v.gamma = 45 * u.deg
+    v.r = 2
+    assert np.allclose(v.magnitude, [np.sqrt(2), np.sqrt(2), 0])
+
+
+def test_vector_parameter_keeps_gamma_along_z_axis():
+    v = VectorParameter("")
+    v.polar = (1, 0 * u.deg, 120 * u.deg)
+    assert_approx(v.gamma, 120 * u.deg)
+    v.phi = 90 * u.deg
+    assert np.allclose(v.magnitude, [-0.5, np.sqrt(3) / 2, 0])
+
+
+def test_vector_parameter_pickled_without_angles():
+    # vectors pickled by former versions have no _angles
+    v = VectorParameter("", (1.0, 0.0, 0.0))
+    del v.__dict__["_angles"]
+    v = pickle.loads(pickle.dumps(v))
+    assert np.allclose(v.polar_rad, [1, np.pi / 2, 0])
+    v.r = 0
+    assert np.allclose(v.polar_rad, [0, np.pi / 2, 0])
+    # the class default is not changed
+    np.testing.assert_array_equal(VectorParameter._angles, [0, 0])

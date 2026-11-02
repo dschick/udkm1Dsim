@@ -199,3 +199,13 @@ def test_structure_check_num_sub_systems():
     S.check_num_sub_systems("heat_capacity")
     with pytest.raises(ValueError, match="layer 'b': 'therm_cond' has 1"):
         S.check_num_sub_systems("heat_capacity", "therm_cond")
+
+
+def test_get_hash_does_not_depend_on_symbols_and_labels(structure):
+    S = copy.deepcopy(structure)  # do not alter the module-scoped fixture
+    hashes = [S.get_hash(types="heat"), S.get_hash(types="phonon")]
+    for layer in S.get_unique_layers()[1]:
+        layer.thermal.heat_capacity.symbol = "C"
+        layer.structural.thickness.symbol = "t"
+        layer.thermal.sub_system_labels = ["x"]
+    assert [S.get_hash(types="heat"), S.get_hash(types="phonon")] == hashes

@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - parameter groups of a layer can be replaced after its creation, e.g. `layer.elastic = {"sound_vel": ...}`
 - read-only `acoustic_impedance` property of `Layer`
 - pre-commit hooks running `ruff check` and keeping `uv.lock` up to date
+- parameters have an editable `symbol` in LaTeX with defaults following the formulas of the simulations, e.g. `layer.thermal.therm_cond.symbol = r"\kappa"`, closing [#224]
+- `print()` and `display()` of a parameter show its symbol, value or expression, and unit, e.g. `c_e(T_e) = 0.027·T_e J/K/kg`
+- `sub_system_labels` of `ThermalParameters`, e.g. `["e", "p"]`, are displayed as subscripts of the temperature-dependent parameters and the temperatures, and default to the index of the sub-system
+- helpers to format symbols given in LaTeX, numbers, and sympy expressions as plain text with unicode characters, HTML, or LaTeX, e.g. `latex_to_text`, `format_number`, and `expression_to_html`
+- `AtomParameters` and `AtomMixedParameters` organize the atomic number, mass number, mass, ionicity, magnetization, and, for `Atom` only, the Cromer-Mann coefficients `cromer_mann_a`, `cromer_mann_b`, and `cromer_mann_c` in their `atomic` parameter group, e.g. `atom.atomic.mass`, while the attributes of the atoms, e.g. `atom.mass`, are kept
+- `magnetization` property of `Atom` and `AtomMixed` with the cartesian magnetization as for layers
+- `VectorParameter` keeps its angles, when they are not defined by its cartesian components, e.g. for a zero amplitude, so that setting the amplitude to zero and back restores its direction
 
 ### Changed
 
@@ -22,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `UnitCell` does not require `c_axis` as positional argument if `lattice` is given
 - `a_axis` and `b_axis` of `LatticeParameters` default to its `c_axis`
 - `ElasticParameters` has no `spring_const` argument anymore, as it is always derived
+- the table views of parameter groups and layers show the name, symbol, value, and unit of each parameter in separate columns and one row per sub-system
+- the examples define their layers by parameter groups and label the sub-systems of the two- and three-temperature models, e.g. `sub_system_labels=["e", "p", "s"]`
+- the `mass` of an atom is derived from its mass number and cannot be set, and the atomic number, mass number, and ionicity of an `AtomMixed` are derived from its atoms
+- the table views of `Atom` and `AtomMixed` show their parameters as the parameter groups of layers
+- the magnetization of `Atom` and `AtomMixed` is a `VectorParameter` and behaves as for layers, i.e. its amplitude must be 0 .. 1 and its gamma angle is given in -180 .. 180 deg
+- vector parameters, e.g. the magnetization, are shown by their amplitude and angles in deg in the table views
+- the symbols of the physical quantities in the docstrings are consistent across all simulations and parameter groups, e.g. the thickness is `d`, the thermal conductivity `κ`, and the anisotropy exponent `β`
 
 ### Deprecated
 
@@ -31,8 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - changing parameters directly via their group, e.g. `layer.structural.thickness`, did not update depending parameters of other groups, e.g. the spring constant
 - API documentation of the `parameters`, `parameter_groups`, and `solvers` modules was missing
+- `AtomMixed` had no `_mass`, which is used for the density of its unit cell by `XrayDynMag`
+- the gamma angle of zero vectors with signed zero components was -180 deg instead of 0 deg in `convert_cartesian_to_polar`
 
 ### Security
+
+[#224]: https://github.com/dschick/udkm1Dsim/issues/224
 
 
 ## [2.5.0] 2026-10-20

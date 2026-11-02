@@ -78,6 +78,10 @@ def test_convert_cartesian_to_polar():
     assert np.allclose(
         convert_cartesian_to_polar(np.array([0.0, 0.0, 0.0])), np.array([0.0, 0.0, 0.0])
     )
+    # also zero vectors with signed zero components have zero angles
+    assert np.array_equal(
+        convert_cartesian_to_polar(np.array([-0.0, -0.0, 0.0])), np.array([0.0, 0.0, 0.0])
+    )
     assert np.allclose(
         convert_cartesian_to_polar(np.array([1.0, 0.0, 0.0])), np.array([1.0, 1.57079633, 0])
     )
