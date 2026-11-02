@@ -418,7 +418,7 @@ class PhononNum(Phonon):
             & + m_i\gamma_i(\dot{x}_i-\dot{x}_{i-1}) + F_i^{heat}(t)
 
         where :math:`x_i(t) = z_{i}(t) - z_i^0` is the shift of each layer.
-        :math:`m_i` is the mass and :math:`k_i = m_i\, v_i^2/c_i^2` is the
+        :math:`m_i` is the mass and :math:`k_i = m_i\, v_i^2/d_i^2` is the
         spring constant of each layer. Furthermore an empirical damping term
         :math:`F_i^{damp} = \gamma_i(\dot{x}_i-\dot{x}_{i-1})` is introduced
         and the external force (thermal stress) :math:`F_i^{heat}(t)`.
@@ -638,7 +638,7 @@ class PhononAna(Phonon):
         layer and :math:`\kappa_{i,i} = -(k_i + k_{i+1})/m_i`, and
         :math:`\kappa_{i,i+1} = \kappa_{i+1,i} = k_{i+1}/m_i`.
 
-        :math:`k_i = m_i\, v_i^2/c_i^2` is the spring constant and :math:`c_i`
+        :math:`k_i = m_i\, v_i^2/d_i^2` is the spring constant and :math:`d_i`
         and :math:`v_i` are the thickness and longitudinal sound velocity of
         each layer respectively.
         One can rewrite the homogeneous differential equation in matrix
@@ -703,7 +703,7 @@ class PhononAna(Phonon):
 
         .. math::
 
-            \epsilon_i(t) = [ \Delta x_i(t) + l_i) ] / c_i
+            \epsilon_i(t) = [ \Delta x_i(t) + l_i) ] / d_i
 
         with :math:`\Delta x_i = x_i - x_{i-1}`. The stick :math:`l_i` have
         to be added here, because :math:`x_i` has been transformed into the new

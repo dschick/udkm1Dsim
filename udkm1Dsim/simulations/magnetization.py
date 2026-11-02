@@ -786,15 +786,15 @@ class LLB(Magnetization):
             \mathbf{H}_\mathrm{A} = -
             \frac{2}{M_s}
             \left(
-                K_x\,m_\mathrm{eq}(T)^{\kappa-2}
+                K_x\,m_\mathrm{eq}(T)^{\beta-2}
                     \begin{bmatrix}0\\m_y\\m_z\end{bmatrix}
-                + K_y\,m_\mathrm{eq}(T)^{\kappa-2}
+                + K_y\,m_\mathrm{eq}(T)^{\beta-2}
                     \begin{bmatrix}m_x\\0\\m_z\end{bmatrix}
-                + K_z\,m_\mathrm{eq}(T)^{\kappa-2}
+                + K_z\,m_\mathrm{eq}(T)^{\beta-2}
                     \begin{bmatrix}m_x\\m_y\\0\end{bmatrix}
             \right)
 
-        with :math:`K = (K_x, K_y, K_z)` as the anisotropy and :math:`\kappa` as
+        with :math:`K = (K_x, K_y, K_z)` as the anisotropy and :math:`\beta` as
         the uniaxial anisotropy exponent.
 
         Args:
@@ -837,12 +837,12 @@ class LLB(Magnetization):
         .. math::
 
             H_{\mathrm{ex}, i}=\frac{2}{M_{s,i} \Delta z_i^2}
-                \left(A_{i}^{i-1}\left(\mathbf{m}_{i-1}-\mathbf{m}_{i}\right)
-                + A_i^{i+1}\left(\mathbf{m}_{i+1}-\mathbf{m}_{i}\right) \right),
+                \left(A_{\mathrm{ex},i}^{i-1}\left(\mathbf{m}_{i-1}-\mathbf{m}_{i}\right)
+                + A_{\mathrm{ex},i}^{i+1}\left(\mathbf{m}_{i+1}-\mathbf{m}_{i}\right) \right),
 
         where :math:`\Delta z` is the thickness of the layers or magnetic grains
-        and :math:`M_s` is the saturation magnetization. :math:`A_{i}^{i-1}` and
-        :math:`A_i^{i+1}` describe the exchange stiffness between the nearest
+        and :math:`M_s` is the saturation magnetization. :math:`A_{\mathrm{ex},i}^{i-1}` and
+        :math:`A_{\mathrm{ex},i}^{i+1}` describe the exchange stiffness between the nearest
         neighboring layers provided by
         :meth:`get_directional_exchange_stiffnesses`.
 

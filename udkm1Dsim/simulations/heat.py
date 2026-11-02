@@ -1070,15 +1070,15 @@ class Heat(Simulation):
         .. math::
 
             c_1(T_1) \rho \frac{\partial T_1}{\partial t} & = & \frac{\partial}{\partial z}
-              \left( k_1(T_1) \frac{\partial T_1}{\partial z} \right)
+              \left( \kappa_1(T_1) \frac{\partial T_1}{\partial z} \right)
               + G_1(T_1,...,T_N) + S(z,t) \\
             & \vdots &  \\
             c_N(T_N) \rho \frac{\partial T_N}{\partial t} & = & \frac{\partial}{\partial z}
-              \left( k_N(T_N) \frac{\partial T_N}{\partial z} \right) + G_N(T_1,...,T_N)
+              \left( \kappa_N(T_N) \frac{\partial T_N}{\partial z} \right) + G_N(T_1,...,T_N)
 
         where :math:`T_i` is the temperature [K], :math:`z` the distance [m],
         :math:`t` the delay [s], :math:`c_i(T)` the temperature dependent heat
-        capacity [J/kg K], :math:`\rho` the density [kg/m³] and :math:`k_i(T)`
+        capacity [J/kg K], :math:`\rho` the density [kg/m³] and :math:`\kappa_i(T)`
         is the temperature-dependent thermal conductivity [W/m K] and
         :math:`S(z,t)` is a source term [W/m³].
         The energy flow between the subsystems is given by the ``sub_system_coupling``

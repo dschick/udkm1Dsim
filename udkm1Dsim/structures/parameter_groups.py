@@ -264,7 +264,7 @@ class ElasticParameters(ParameterGroup):
         Calculates the spring constant of the layer from the mass per unit area,
         sound velocity and thickness
 
-        .. math:: k = m \, \left(\frac{v}{c}\right)^2
+        .. math:: k = m \, \left(\frac{v}{d}\right)^2
 
         """
         try:
@@ -333,7 +333,7 @@ class OpticalParameters(ParameterGroup):
         Set the optical penetration depth from the optical refractive index
         for a given wavelength:
 
-        .. math:: \delta = \frac{\lambda}{4 \pi |\kappa|}
+        .. math:: \zeta = \frac{\lambda}{4 \pi |\mathrm{Im}(n)|}
 
         Args:
             wavelength (Quantity): wavelength as Pint Quantity.

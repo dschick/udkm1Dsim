@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `UnitCell` does not require `c_axis` as positional argument if `lattice` is given
 - `a_axis` and `b_axis` of `LatticeParameters` default to its `c_axis`
 - `ElasticParameters` has no `spring_const` argument anymore, as it is always derived
+- the symbols of the physical quantities in the docstrings are consistent across all simulations and parameter groups, e.g. the thickness is `d`, the thermal conductivity `κ`, and the anisotropy exponent `β`
 
 ### Deprecated
 

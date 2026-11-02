@@ -882,7 +882,7 @@ class UnitCell(Layer):
         Update the mass, density and spring constant of the unit cell
         automatically:
 
-        .. math:: \kappa = m \cdot (v_s / c)^2
+        .. math:: k = m \cdot (v / d)^2
 
         Args:
             atom (Atom, AtomMixed): Atom or AtomMixed added to unit cell.
