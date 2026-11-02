@@ -101,7 +101,14 @@ class Layer:
     * :class:`.MagneticParameters`
 
     The parameter groups are accessible through the corresponding
-    attributes of the layer. They can be given on initialization either as
+    attributes of the layer, e.g. `layer.elastic`, whose attributes are the
+    :class:`.Parameter` objects with their name, symbol, value, and unit, e.g.
+    `layer.elastic.sound_vel`. In contrast, the shortcuts of the layer, e.g.
+    `layer.sound_vel`, return only their values for calculations, i.e. a pint
+    Quantity, a number, or, for temperature-dependent parameters, the list of
+    their functions.
+
+    The parameter groups can be given on initialization either as
     parameter group, as dict, or as single keyword arguments:
 
     .. code-block:: python
