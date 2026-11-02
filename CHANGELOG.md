@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - changing parameters directly via their group, e.g. `layer.structural.thickness`, did not update depending parameters of other groups, e.g. the spring constant
+- API documentation of the `parameters`, `parameter_groups`, and `solvers` modules was missing
 
 ### Security
 

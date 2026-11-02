@@ -132,13 +132,14 @@ class ParameterGroup:
 class StructuralParameters(ParameterGroup):
     """Structural parameters of a layer.
 
-    thickness (float): thickness of the layer [m].
-    density (float): density of the layer [kg/m³].
-    area (float): area of layer [m²].
-    roughness (float): gaussian width of the top roughness of a layer [m].
-    mass (float): mass of the layer [kg].
-    mass_unit_area (float): mass of layer normalized to unit area of 1 Å² [kg].
-    volume (float): volume of layer [m³].
+    Attributes:
+        thickness (float): thickness of the layer [m].
+        density (float): density of the layer [kg/m³].
+        area (float): area of layer [m²].
+        roughness (float): gaussian width of the top roughness of a layer [m].
+        mass (float): mass of the layer [kg].
+        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² [kg].
+        volume (float): volume of layer [m³].
 
     """
 
@@ -170,9 +171,11 @@ class StructuralParameters(ParameterGroup):
 class LatticeParameters(ParameterGroup):
     """Lattice parameters of a unit cell.
 
-    a_axis (float): lattice parameter a [m], defaults to c_axis.
-    b_axis (float): lattice parameter b [m], defaults to c_axis.
-    c_axis (float): lattice parameter c [m].
+    Attributes:
+        a_axis (float): lattice parameter a [m], defaults to c_axis.
+        b_axis (float): lattice parameter b [m], defaults to c_axis.
+        c_axis (float): lattice parameter c [m].
+
     """
 
     def __init__(self, a_axis=None, b_axis=None, c_axis=0.0):
@@ -184,20 +187,21 @@ class LatticeParameters(ParameterGroup):
 
 
 class ThermalParameters(ParameterGroup):
-    """Thermal parameters of a layer.
+    r"""Thermal parameters of a layer.
 
-    therm_cond (list[@lambda]): list of T-dependent thermal conductivity
+    Attributes:
+        therm_cond (list[@lambda]): list of T-dependent thermal conductivity
             [W/(m K)].
-    lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
-        expansion coefficient (relative).
-    heat_capacity (list[@lambda]): list of T-dependent heat capacity
-        function [J/(kg K)].
-    sub_system_coupling (list[@lambda]): list of coupling functions of
-        different subsystems [W/m³].
-    deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
-                    `\\langle u^2\rangle` [m²].
-    num_sub_systems (int): number of subsystems for heat and phonons
-        (electrons, lattice, spins, ...).
+        lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
+            expansion coefficient (relative).
+        heat_capacity (list[@lambda]): list of T-dependent heat capacity
+            function [J/(kg K)].
+        sub_system_coupling (list[@lambda]): list of coupling functions of
+            different subsystems [W/m³].
+        deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
+            :math:`\langle u^2\rangle` [m²].
+        num_sub_systems (int): number of subsystems for heat and phonons
+            (electrons, lattice, spins, ...).
 
     """
 
@@ -235,11 +239,12 @@ class ThermalParameters(ParameterGroup):
 class ElasticParameters(ParameterGroup):
     """Elastic and phonon parameters of a layer.
 
-    sound_vel (float): longitudinal sound velocity in the layer [m/s].
-    phonon_damping (float): damping constant of phonon propagation [kg/s].
-    spring_const (ndarray[float]): spring constant of the layer [kg/s²]
-        and higher orders.
-    acoustic_impedance (float): acoustic impedance of a layer [kg/(m² s)].
+    Attributes:
+        sound_vel (float): longitudinal sound velocity in the layer [m/s].
+        phonon_damping (float): damping constant of phonon propagation [kg/s].
+        spring_const (ndarray[float]): spring constant of the layer [kg/s²]
+            and higher orders.
+        acoustic_impedance (float): acoustic impedance of a layer [kg/(m² s)].
 
     """
 
@@ -301,14 +306,15 @@ class ElasticParameters(ParameterGroup):
 
 
 class OpticalParameters(ParameterGroup):
-    r"""Optical adn X-ray parameters of a layer.
+    r"""Optical and X-ray parameters of a layer.
 
-    opt_pen_depth (float): optical penetration depth of the layer [m].
-    opt_ref_index (ndarray[float]): optical refractive index - real
-        and imagenary part :math:`n + i\kappa`.
-    opt_ref_index_per_strain (ndarray[float]): optical refractive
-        index change per strain - real and imagenary part
-        :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
+    Attributes:
+        opt_pen_depth (float): optical penetration depth of the layer [m].
+        opt_ref_index (ndarray[float]): optical refractive index - real
+            and imaginary part :math:`n + i\kappa`.
+        opt_ref_index_per_strain (ndarray[float]): optical refractive
+            index change per strain - real and imaginary part
+            :math:`\frac{d n}{d \eta} + i\frac{d \kappa}{d \eta}`.
 
     """
 
@@ -343,18 +349,19 @@ class OpticalParameters(ParameterGroup):
 class MagneticParameters(ParameterGroup):
     """Magnetic parameters of a layer.
 
-    eff_spin (float): effective spin.
-    curie_temp (float): Curie temperature [K].
-    mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
-    lamda (float): intrinsic coupling to bath parameter.
-    mag_moment (float): atomic magnetic moment [A m²].
-    aniso_exponent(ndarray[float]): exponent of T-dependence uniaxial
-        anisotropy.
-    anisotropy (ndarray[float]): anisotropy at T=0 K [J/m³] as x,y,z component vector.
-    exch_stiffness (float): exchange stiffness at T=0 K [J/m].
-    mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
-    magnetization (dict[float]): magnetization amplitude, phi and
-        gamma angle inherited from the atom.
+    Attributes:
+        eff_spin (float): effective spin.
+        curie_temp (float): Curie temperature [K].
+        mf_exch_coupling (float): mean field exchange coupling constant [m²kg/s²].
+        lamda (float): intrinsic coupling to bath parameter.
+        mag_moment (float): atomic magnetic moment [A m²].
+        aniso_exponent (ndarray[float]): exponent of T-dependence uniaxial
+            anisotropy.
+        anisotropy (ndarray[float]): anisotropy at T=0 K [J/m³] as x,y,z component vector.
+        exch_stiffness (float): exchange stiffness at T=0 K [J/m].
+        mag_saturation (float): saturation magnetization at 0 K [J/T/m³].
+        magnetization (dict[float]): magnetization amplitude, phi and
+            gamma angle inherited from the atom.
 
     """
 
@@ -396,7 +403,7 @@ class MagneticParameters(ParameterGroup):
 
         Calculate the mean-field exchange coupling constant
 
-        .. math:: J = \frac{3}{S_{eff}+1} k_B T_C
+        .. math:: J = \frac{3 S_{eff}}{S_{eff}+1} k_B T_C
 
         """
         self.mf_exch_coupling.magnitude = (

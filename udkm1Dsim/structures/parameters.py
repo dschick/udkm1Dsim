@@ -21,7 +21,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ["Parameter", "TemperatureParameter"]
+__all__ = ["Parameter", "TemperatureParameter", "VectorParameter"]
 
 __docformat__ = "restructuredtext"
 
