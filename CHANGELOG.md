@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `a_axis` and `b_axis` of `LatticeParameters` default to its `c_axis`
 - `ElasticParameters` has no `spring_const` argument anymore, as it is always derived
 - the table views of parameter groups and layers show the name, symbol, value, and unit of each parameter in separate columns and one row per sub-system
+- the examples define their layers by parameter groups and label the sub-systems of the two- and three-temperature models, e.g. `sub_system_labels=["e", "p", "s"]`
 - the symbols of the physical quantities in the docstrings are consistent across all simulations and parameter groups, e.g. the thickness is `d`, the thermal conductivity `κ`, and the anisotropy exponent `β`
 
 ### Deprecated
