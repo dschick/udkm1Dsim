@@ -9,6 +9,7 @@ from pint.testing import assert_allclose as assert_approx
 from udkm1Dsim import Parameter, TemperatureParameter, VectorParameter, u
 from udkm1Dsim.helpers import (
     add_latex_subscript,
+    expression_to_text,
     format_number,
     latex_to_html,
     latex_to_text,
@@ -485,3 +486,20 @@ def test_temperature_parameter_display_sub_systems():
     rows = p._table_rows("text")
     assert [row[0] for row in rows] == ["G₀", "G₁"]
     assert [row[2] for row in rows] == ["W/m³", ""]  # unit only in the first row
+
+
+@pytest.mark.parametrize(
+    "expression, text",
+    [
+        ("0.2*T - 100.0", "0.2·T − 100"),
+        ("-1.5*T", "−1.5·T"),
+        ("470 + 0.19*T - 7.08e6/T**2", "0.19·T + 470 − 7.08×10⁶/T²"),
+        ("-4.2e17*(T_0-T_1)", "−4.2×10¹⁷·T₀ + 4.2×10¹⁷·T₁"),
+        ("(T_0+T_1)**2", "(T₀ + T₁)²"),
+        ("T**2.5", "T^2.5"),
+        ("2.42e4*T**-1.114", "2.42×10⁴/T^1.114"),
+        ("1 + abs(T - 500)**0.7", "|T − 500|^0.7 + 1"),
+    ],
+)
+def test_expression_to_text(expression, text):
+    assert expression_to_text(sp.sympify(expression)) == text

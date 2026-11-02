@@ -45,7 +45,6 @@ import hashlib
 import re
 
 import numpy as np
-from sympy import Integer, Rational
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.pretty.pretty_symbology import greek_unicode
 from sympy.printing.str import StrPrinter
@@ -502,18 +501,28 @@ class _TextPrinter(StrPrinter):
         self.html = html
 
     def _print_Float(self, expr):
-        return format_number(float(expr), "html" if self.html else "text")
+        # with an ASCII minus, so that sympy recognizes negative numbers in sums,
+        # which is replaced by a proper minus at the end
+        return _format_number(float(expr), "html" if self.html else "text")
 
     def _print_Symbol(self, expr):
         return latex_to_html(expr.name) if self.html else latex_to_text(expr.name)
 
+    def _print_Abs(self, expr):
+        return f"|{self._print(expr.args[0])}|"
+
     def _print_Pow(self, expr, rational=False):
         base, exp = expr.as_base_exp()
-        if isinstance(exp, (Integer, Rational)) and exp.is_integer and exp > 0:
-            base_str = self._print(base) if base.is_Atom else f"({self._print(base)})"
+        if exp.is_Number and exp.is_positive and not (exp.is_Rational and not exp.is_Integer):
+            base_str = self._print(base)
+            if not (base.is_Atom or base.func.__name__ == "Abs"):
+                base_str = f"({base_str})"
+            exp_str = self._print(exp)
             if self.html:
-                return f"{base_str}<sup>{exp}</sup>"
-            return base_str + "".join(_SUP[c] for c in str(exp))
+                return f"{base_str}<sup>{exp_str}</sup>"
+            if all(c in _SUP for c in exp_str):
+                return base_str + "".join(_SUP[c] for c in exp_str)
+            return f"{base_str}^{exp_str}"
         return super()._print_Pow(expr, rational)
 
     def doprint(self, expr):
