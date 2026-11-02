@@ -634,3 +634,95 @@ def test_unit_cell_structural_given_by_lattice_raises(kwargs):
 def test_unit_cell_without_c_axis_raises():
     with pytest.raises(TypeError, match="c_axis"):
         UnitCell("uc", "uc")
+
+
+# ============================================================================
+# symbols, sub-system labels, and table views
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    "path, symbol",
+    [
+        ("structural.thickness", "d"),
+        ("structural.density", r"\rho"),
+        ("thermal.therm_cond", r"\kappa"),
+        ("thermal.heat_capacity", "c"),
+        ("elastic.spring_const", "k"),
+        ("optical.opt_pen_depth", r"\zeta"),
+        ("magnetic.aniso_exponent", r"\beta"),
+        ("magnetic.exch_stiffness", r"A_\mathrm{ex}"),
+    ],
+)
+def test_layer_default_symbols(layer, path, symbol):
+    group_name, name = path.split(".")
+    assert getattr(getattr(layer, group_name), name).symbol == symbol
+
+
+def test_unit_cell_all_parameters_have_symbols(unit_cell):
+    for group_name in unit_cell._parameter_group_names:
+        for name, p in getattr(unit_cell, group_name)._parameters().items():
+            assert p.symbol, f"{group_name}.{name} has no symbol"
+
+
+def test_thermal_sub_system_labels():
+    thermal = ThermalParameters(heat_capacity=["0.027*T", 449], sub_system_coupling=0)
+    assert thermal.sub_system_labels == ["0", "1"]
+    assert thermal._display_sub_system_labels() == ["0", "1"]
+    thermal.sub_system_labels = ["e", "p"]
+    assert str(thermal.heat_capacity).split("\n")[0] == "cₑ(Tₑ) = 0.027·Tₑ J/K/kg"
+    # missing labels default to the index and spare labels are ignored
+    thermal.sub_system_labels = ["e"]
+    assert thermal.sub_system_labels == ["e", "1"]
+    thermal.sub_system_labels = ["e", "p", "s"]
+    assert thermal.sub_system_labels == ["e", "p"]
+    thermal.sub_system_labels = None
+    assert thermal.sub_system_labels == ["0", "1"]
+
+
+def test_thermal_single_sub_system_is_not_labeled():
+    thermal = ThermalParameters(heat_capacity=449)
+    assert thermal._display_sub_system_labels() is None
+    assert str(thermal.heat_capacity) == "c = 449 J/K/kg"
+    thermal.sub_system_labels = ["p"]
+    assert str(thermal.heat_capacity) == "cₚ = 449 J/K/kg"
+
+
+def test_layer_sub_system_labels_as_keyword_argument():
+    layer = Layer("a", "a", heat_capacity=[1, 2], sub_system_labels=["e", "p"])
+    assert layer.thermal.sub_system_labels == ["e", "p"]
+    copied = copy.deepcopy(layer)
+    assert copied.thermal.sub_system_labels == ["e", "p"]
+
+
+def test_parameter_group_table_columns_and_rows():
+    thermal = ThermalParameters(heat_capacity=["0.027*T", 449], sub_system_labels=["e", "p"])
+    text = repr(thermal)
+    assert text.startswith("Thermal Parameters\n")
+    header = text.split("\n")[2]
+    assert [h.strip() for h in header.strip("║").split("║")] == [
+        "Parameter",
+        "Symbol",
+        "Value",
+        "Unit",
+    ]
+    # one row per sub-system, the name and unit only in the first one
+    rows = [line for line in text.split("\n") if "cₑ" in line or "cₚ" in line]
+    assert "heat_capacity" in rows[0] and "J/K/kg" in rows[0]
+    assert "heat_capacity" not in rows[1] and "J/K/kg" not in rows[1]
+    html = thermal._repr_html_()
+    assert '<th style="text-align: center;">Symbol</th>' in html
+    # the name and unit span the rows of the sub-systems
+    assert '<td rowspan="2">heat_capacity</td>' in html
+    assert '<td rowspan="2">J/(K kg)</td>' in html
+    assert '<td style="text-align: center;"><i>c</i><sub><i>e</i></sub></td>' in html
+    # the cells are not padded
+    assert "  " not in html
+
+
+def test_layer_symbol_is_editable(amorphous_layer):
+    layer = copy.deepcopy(amorphous_layer)  # do not alter the module-scoped fixture
+    layer.thermal.heat_capacity.symbol = "C"
+    assert "C" in [row[0] for row in layer.thermal.heat_capacity._table_rows("text")]
+    # the symbol is copied along with the group
+    assert copy.deepcopy(layer).thermal.heat_capacity.symbol == "C"

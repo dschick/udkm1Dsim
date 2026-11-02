@@ -31,19 +31,37 @@ from inspect import isfunction
 import numpy as np
 import pint
 from scipy.integrate import quad
-from sympy import integrate, lambdify, symarray, symbols, sympify
+from sympy import Symbol, integrate, lambdify, symarray, symbols, sympify
 
-from ..helpers import convert_cartesian_to_polar, convert_polar_to_cartesian
+from ..helpers import (
+    add_latex_subscript,
+    convert_cartesian_to_polar,
+    convert_polar_to_cartesian,
+    expression_to_html,
+    expression_to_latex,
+    expression_to_text,
+    format_number,
+    latex_to_html,
+    latex_to_text,
+)
 
 u = pint.get_application_registry()
 
 
 class Parameter:
-    """Parameter with a unit and a magnitude."""
+    r"""Parameter with a unit and a magnitude.
 
-    def __init__(self, unit, magnitude=0.0, name=""):
+    The `symbol` of the parameter is given in LaTeX, e.g. ``r"\kappa"`` or
+    ``"T_\mathrm{C}"``, and is used for its display by `print()` and
+    `display()` together with its value and unit. Without a symbol, the
+    name of the parameter is displayed.
+
+    """
+
+    def __init__(self, unit, magnitude=0.0, name="", symbol=""):
         self.unit = u.Unit(unit)
         self.name = name
+        self.symbol = symbol
         self._caller = None
         self.magnitude = magnitude
 
@@ -79,6 +97,64 @@ class Parameter:
         unit = f" {unit}" if unit else ""
         return f"{type(self).__name__}({self.name}={magnitude}{unit})"
 
+    # The repr is also used for the hash of the simulation results, which must
+    # not depend on the symbol. Hence, the symbol is only used by the following
+    # methods for the display of the parameter.
+
+    def _latex_symbol(self):
+        """LaTeX symbol of the parameter, which is its name if not set."""
+        return self.symbol or r"\mathrm{" + self.name.replace("_", r"\_") + "}"
+
+    @staticmethod
+    def _format_symbol(symbol, mode):
+        """Format a LaTeX symbol in the mode `text`, `html`, or `latex`."""
+        if mode == "latex":
+            return symbol
+        return latex_to_html(symbol) if mode == "html" else latex_to_text(symbol)
+
+    def _format_unit(self, mode):
+        """Format the unit in the mode `text`, `html`, or `latex`."""
+        return format(self.unit, {"text": "~P", "html": "~H", "latex": "~L"}[mode])
+
+    def _entries(self, mode):
+        """List of the symbol, the arguments, and the value of the parameter
+        in the mode `text`, `html`, or `latex`, with one entry per sub-system."""
+        return [
+            (
+                self._format_symbol(self._latex_symbol(), mode),
+                "",
+                format_number(self.magnitude, mode),
+            )
+        ]
+
+    def _table_rows(self, mode):
+        """Rows of the symbol, value, and unit of the parameter for the table
+        view of its group in the mode `text` or `html`."""
+        unit = self._format_unit(mode)
+        return [
+            (symbol, value, unit if i == 0 else "")
+            for i, (symbol, _, value) in enumerate(self._entries(mode))
+        ]
+
+    def __str__(self):
+        unit = self._format_unit("text")
+        return "\n".join(
+            f"{symbol}{arguments} = {value}" + (f" {unit}" if unit else "")
+            for symbol, arguments, value in self._entries("text")
+        )
+
+    def _repr_latex_(self):
+        unit = self._format_unit("latex")
+        unit = rf"\ {unit}" if unit else ""
+        lines = [
+            f"{symbol}{arguments} = {value}{unit}"
+            for symbol, arguments, value in self._entries("latex")
+        ]
+        if len(lines) == 1:
+            return f"${lines[0]}$"
+        lines = [line.replace(" = ", " &= ", 1) for line in lines]
+        return r"$\begin{aligned}" + r" \\ ".join(lines) + r"\end{aligned}$"
+
 
 class VectorParameter(Parameter):
     """3D vector Parameter with a unit, settable in cartesian or polar form.
@@ -88,13 +164,13 @@ class VectorParameter(Parameter):
     phi is the angle from +z, gamma the angle in the xy-plane from +x.
     """
 
-    def __init__(self, unit, magnitude=(0.0, 0.0, 0.0), name="", angle_unit="deg"):
+    def __init__(self, unit, magnitude=(0.0, 0.0, 0.0), name="", angle_unit="deg", symbol=""):
         self.angle_unit = u.Unit(angle_unit)  # unit for bare-float angles
-        super().__init__(unit, magnitude, name)
+        super().__init__(unit, magnitude, name, symbol)
 
     @classmethod
-    def from_polar(cls, unit, r, phi, gamma, name="", angle_unit="deg"):
-        vec = cls(unit, name=name, angle_unit=angle_unit)
+    def from_polar(cls, unit, r, phi, gamma, name="", angle_unit="deg", symbol=""):
+        vec = cls(unit, name=name, angle_unit=angle_unit, symbol=symbol)
         vec.polar = (r, phi, gamma)
         return vec
 
@@ -204,15 +280,22 @@ class VectorParameter(Parameter):
 
 
 class TemperatureParameter(Parameter):
-    """Parameter with a unit and a magnitude, which depends on temperature."""
+    """Parameter with a unit and a magnitude, which depends on temperature.
 
-    def __init__(self, unit, magnitude=0.0, name=""):
+    For several sub-systems, their labels are displayed as subscripts of the
+    symbol and the temperatures, e.g. :math:`c_e(T_e)`. The labels are given
+    by the `sub_system_labels` of the :class:`.ThermalParameters` of the
+    parameter and default to the index of the sub-system.
+
+    """
+
+    def __init__(self, unit, magnitude=0.0, name="", symbol=""):
         self._functional = []
         self._num_sub_systems = 0
         self._takes_temperature_vector = []
         self._integral = []
         self._integral_expr = []
-        super().__init__(unit, magnitude=magnitude, name=name)
+        super().__init__(unit, magnitude=magnitude, name=name, symbol=symbol)
 
     @property
     def magnitude(self):
@@ -239,6 +322,53 @@ class TemperatureParameter(Parameter):
     def num_sub_systems(self):
         """int: number of sub-systems, i.e. the number of given expressions."""
         return self._num_sub_systems
+
+    def _sub_system_labels(self):
+        """Labels of the sub-systems, which are given by the group of the
+        parameter, or None if the sub-systems are not labeled."""
+        group_labels = getattr(self._caller, "_display_sub_system_labels", None)
+        if group_labels is not None:
+            return group_labels()
+        if self.num_sub_systems > 1:
+            return [str(i) for i in range(self.num_sub_systems)]
+        return None
+
+    def _entries(self, mode):
+        labels = self._sub_system_labels()
+
+        def label(i):
+            return labels[i] if i < len(labels) else str(i)
+
+        entries = []
+        for i, expression in enumerate(self.magnitude):
+            symbol = self._latex_symbol()
+            # the temperatures as arguments by the index of their sub-system
+            indices = {
+                s: i if s.name == "T" else int(s.name.split("_")[1])
+                for s in expression.free_symbols
+            }
+            if labels is not None:
+                symbol = add_latex_subscript(symbol, label(i))
+                # the temperatures are labeled as the sub-systems
+                temperatures = {s: Symbol(f"T_{{{label(j)}}}") for s, j in indices.items()}
+                expression = expression.subs(temperatures)
+            else:
+                temperatures = {s: s for s in indices}
+            arguments = [temperatures[s] for s in sorted(indices, key=indices.get)]
+            arguments = (
+                "(" + ", ".join(self._format_symbol(s.name, mode) for s in arguments) + ")"
+                if arguments
+                else ""
+            )
+            printer = {
+                "text": expression_to_text,
+                "html": expression_to_html,
+                "latex": expression_to_latex,
+            }
+            entries.append(
+                (self._format_symbol(symbol, mode), arguments, printer[mode](expression))
+            )
+        return entries
 
     @property
     def takes_temperature_vector(self):

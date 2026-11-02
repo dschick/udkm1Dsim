@@ -30,13 +30,25 @@ __all__ = [
     "multi_gauss",
     "convert_cartesian_to_polar",
     "convert_polar_to_cartesian",
+    "latex_to_text",
+    "latex_to_html",
+    "add_latex_subscript",
+    "format_number",
+    "expression_to_text",
+    "expression_to_html",
+    "expression_to_latex",
 ]
 
 __docformat__ = "restructuredtext"
 
 import hashlib
+import re
 
 import numpy as np
+from sympy import Integer, Rational
+from sympy.printing.latex import LatexPrinter
+from sympy.printing.pretty.pretty_symbology import greek_unicode
+from sympy.printing.str import StrPrinter
 
 
 def make_hash_md5(obj):
@@ -288,3 +300,281 @@ def convert_cartesian_to_polar(cartesian):
     polar[..., 2] = np.arctan2(ys, xs)
 
     return polar
+
+
+# ============================================================================
+# formatting of symbols, numbers, and expressions as text, HTML, and LaTeX
+# ============================================================================
+
+_SUB = dict(zip("0123456789+-=()aehijklmnoprstuvx", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ"))
+_SUP = dict(zip("0123456789+-=()in", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁱⁿ"))
+_COMMANDS = {"langle": "⟨", "rangle": "⟩", "partial": "∂", "cdot": "·", "times": "×"}
+_TOKENS = re.compile(r"\\[A-Za-z]+|\\.|[{}_^]|\s+|.")
+
+
+def _parse(tokens):
+    """Parse LaTeX tokens into a list of nodes until the closing brace."""
+    nodes = []
+    while tokens and tokens[0] != "}":
+        node = _parse_one(tokens)
+        if node is not None:
+            nodes.append(node)
+    if tokens:
+        tokens.pop(0)  # closing brace
+    return nodes
+
+
+def _parse_one(tokens):
+    """Parse a single node, i.e. a group, command, script, or character."""
+    token = tokens.pop(0)
+    if token == "{":
+        return ("group", _parse(tokens))
+    if token in "_^":
+        return (token, _argument(tokens))
+    if token in ("\\mathrm", "\\mathbf"):
+        return (token[1:], _argument(tokens))
+    if token == "\\frac":
+        return ("frac", _argument(tokens), _argument(tokens))
+    if token.isspace():
+        return None
+    return ("char", token)
+
+
+def _argument(tokens):
+    """Parse the argument of a command or script, i.e. a single node."""
+    while tokens and tokens[0].isspace():
+        tokens.pop(0)
+    if not tokens or tokens[0] == "}":
+        return []
+    node = _parse_one(tokens)
+    return node[1] if node[0] == "group" else [node]
+
+
+def _render(nodes, html, italic=True):
+    """Render parsed nodes as HTML or plain text with unicode characters."""
+    out = ""
+    for node in nodes:
+        kind = node[0]
+        if kind == "char":
+            char = node[1]
+            if char.startswith("\\"):
+                name = char[1:]
+                char = greek_unicode.get(name, _COMMANDS.get(name, name))
+            if html and italic and char.isalpha():
+                char = f"<i>{char}</i>"
+            out += char
+        elif kind == "group":
+            out += _render(node[1], html, italic)
+        elif kind == "mathrm":
+            out += _render(node[1], html, italic=False)
+        elif kind == "mathbf":
+            inner = _render(node[1], html, italic=False)
+            out += f"<b>{inner}</b>" if html else inner
+        elif kind == "frac":
+            out += _render(node[1], html, italic) + "/" + _render(node[2], html, italic)
+        else:  # sub- or superscript, which is upright if descriptive
+            descriptive = len(_render(node[1], html=False)) > 1
+            inner = _render(node[1], html, italic and not descriptive)
+            if html:
+                tag = "sub" if kind == "_" else "sup"
+                out += f"<{tag}>{inner}</{tag}>"
+            else:
+                table = _SUB if kind == "_" else _SUP
+                if all(c in table for c in inner):
+                    out += "".join(table[c] for c in inner)
+                else:
+                    out += kind + (inner if len(inner) == 1 else "{" + inner + "}")
+    return out
+
+
+def latex_to_text(latex):
+    r"""latex_to_text
+
+    Convert a symbol given in a small subset of LaTeX to plain text with
+    unicode characters, e.g. ``r"\kappa_e"`` to ``κₑ``. Supported are greek
+    letters, sub- and superscripts, ``\mathrm``, ``\mathbf``, ``\langle``,
+    ``\rangle``, ``\partial``, and ``\frac``. Sub- and superscripts without
+    unicode characters are kept as ``_{...}`` and ``^{...}``.
+
+    Args:
+        latex (str): symbol in LaTeX.
+
+    Returns:
+        text (str): symbol as plain text.
+
+    """
+    return _render(_parse(_TOKENS.findall(latex)), html=False)
+
+
+def latex_to_html(latex):
+    r"""latex_to_html
+
+    Convert a symbol given in a small subset of LaTeX to HTML, e.g.
+    ``r"\kappa_e"`` to ``<i>κ</i><sub><i>e</i></sub>``, see
+    :func:`latex_to_text` for the supported LaTeX. Letters are italic,
+    except for descriptive sub- and superscripts of several characters
+    and within ``\mathrm``.
+
+    Args:
+        latex (str): symbol in LaTeX.
+
+    Returns:
+        html (str): symbol as HTML.
+
+    """
+    return _render(_parse(_TOKENS.findall(latex)), html=True)
+
+
+def add_latex_subscript(latex, subscript):
+    """add_latex_subscript
+
+    Add a subscript to a symbol given in LaTeX, which is merged with an
+    existing trailing subscript, e.g. ``M_s`` and ``e`` result in ``M_{s,e}``.
+
+    Args:
+        latex (str): symbol in LaTeX.
+        subscript (str): subscript to add.
+
+    Returns:
+        latex (str): symbol with subscript in LaTeX.
+
+    """
+    match = re.search(r"_(\{(?P<group>[^{}]*)\}|(?P<single>\\?[A-Za-z0-9]))$", latex)
+    if match:
+        existing = match.group("group") or match.group("single")
+        return latex[: match.start()] + "_{" + existing + "," + subscript + "}"
+    return latex + "_{" + subscript + "}"
+
+
+def _format_real(value, mode):
+    """Format a real number with 4 significant digits and a power of ten."""
+    text = f"{value:.4g}"
+    if "e" not in text:
+        return text
+    mantissa, exponent = text.split("e")
+    exponent = str(int(exponent))
+    if mode == "latex":
+        return rf"{mantissa} \times 10^{{{exponent}}}"
+    if mode == "html":
+        return f"{mantissa}×10<sup>{exponent}</sup>"
+    return f"{mantissa}×10" + "".join(_SUP[c] for c in exponent)
+
+
+def _format_number(value, mode):
+    if isinstance(value, np.ndarray):
+        return "[" + ", ".join(_format_number(v, mode) for v in value.tolist()) + "]"
+    if isinstance(value, complex):
+        real = _format_real(value.real, mode)
+        sign = "-" if value.imag < 0 else "+"
+        imag = _format_real(abs(value.imag), mode)
+        return f"{real} {sign} {imag}i" if mode != "latex" else rf"{real} {sign} {imag}\,i"
+    if isinstance(value, (bool, int, np.integer)):
+        return str(value)
+    return _format_real(float(value), mode)
+
+
+def format_number(value, mode="text"):
+    """format_number
+
+    Format a number, complex number, or array with 4 significant digits and
+    powers of ten as plain text with unicode characters, HTML, or LaTeX,
+    e.g. ``2×10⁻⁸`` or ``2.44 + 4.32i``.
+
+    Args:
+        value (float, int, complex, ndarray): number to format.
+        mode (str, optional): ``text``, ``html``, or ``latex``. Defaults to
+            ``text``.
+
+    Returns:
+        formatted (str): formatted number.
+
+    """
+    text = _format_number(value, mode)
+    return text if mode == "latex" else text.replace("-", "−")
+
+
+class _TextPrinter(StrPrinter):
+    """Prints sympy expressions as plain text with unicode characters or as
+    HTML, e.g. with superscripts for powers and symbols with subscripts."""
+
+    def __init__(self, html=False):
+        super().__init__({"full_prec": False})
+        self.html = html
+
+    def _print_Float(self, expr):
+        return format_number(float(expr), "html" if self.html else "text")
+
+    def _print_Symbol(self, expr):
+        return latex_to_html(expr.name) if self.html else latex_to_text(expr.name)
+
+    def _print_Pow(self, expr, rational=False):
+        base, exp = expr.as_base_exp()
+        if isinstance(exp, (Integer, Rational)) and exp.is_integer and exp > 0:
+            base_str = self._print(base) if base.is_Atom else f"({self._print(base)})"
+            if self.html:
+                return f"{base_str}<sup>{exp}</sup>"
+            return base_str + "".join(_SUP[c] for c in str(exp))
+        return super()._print_Pow(expr, rational)
+
+    def doprint(self, expr):
+        text = super().doprint(expr)
+        return text.replace("*", "·").replace("-", "−")
+
+
+class _LatexPrinter(LatexPrinter):
+    """Prints sympy expressions as LaTeX with 4 significant digits."""
+
+    def _print_Float(self, expr):
+        return format_number(float(expr), "latex")
+
+    def _print_Symbol(self, expr, style="plain"):
+        return expr.name  # the names of the symbols are given in LaTeX
+
+
+def expression_to_text(expr):
+    """expression_to_text
+
+    Convert a sympy expression to plain text with unicode characters in a
+    single line, e.g. ``0.19·Tₚ + 470 − 7.08×10⁶/Tₚ²``. Floats are given
+    with 4 significant digits and the names of symbols in LaTeX.
+
+    Args:
+        expr (sympy.Expr): sympy expression.
+
+    Returns:
+        text (str): expression as plain text.
+
+    """
+    return _TextPrinter().doprint(expr)
+
+
+def expression_to_html(expr):
+    """expression_to_html
+
+    Convert a sympy expression to HTML in a single line, see
+    :func:`expression_to_text`.
+
+    Args:
+        expr (sympy.Expr): sympy expression.
+
+    Returns:
+        html (str): expression as HTML.
+
+    """
+    return _TextPrinter(html=True).doprint(expr)
+
+
+def expression_to_latex(expr):
+    """expression_to_latex
+
+    Convert a sympy expression to LaTeX, where floats are given with 4
+    significant digits and the names of symbols in LaTeX.
+
+    Args:
+        expr (sympy.Expr): sympy expression.
+
+    Returns:
+        latex (str): expression as LaTeX.
+
+    """
+    return _LatexPrinter().doprint(expr)
