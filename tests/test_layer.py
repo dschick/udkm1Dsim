@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import copy
+import pickle
 import warnings
 
 import numpy as np
@@ -9,7 +10,13 @@ import sympy as sp
 from pint.testing import assert_allclose as assert_approx
 from pint.testing import assert_equal
 
-from udkm1Dsim import AmorphousLayer, UnitCell, u
+from udkm1Dsim import AmorphousLayer, Atom, Layer, UnitCell, u
+from udkm1Dsim.structures.parameter_groups import (
+    ElasticParameters,
+    LatticeParameters,
+    StructuralParameters,
+    ThermalParameters,
+)
 from udkm1Dsim.structures.parameters import Parameter
 
 # tests
@@ -441,3 +448,179 @@ def test_unit_cell_position_as_function_raises(atom_oxygen):
     uc = UnitCell("uc", "uc", 5 * u.angstrom)
     with pytest.raises(ValueError):
         uc.add_atom(atom_oxygen, lambda s: s)
+
+
+# ============================================================================
+# ParameterGroups as input and their connection to the layer
+# ============================================================================
+
+
+def _magnitudes(layer):
+    """all parameter magnitudes of a layer by their path"""
+    return {
+        f"{group_name}.{name}": np.asarray(p.magnitude).tolist()
+        for group_name in layer._parameter_group_names
+        for name, p in getattr(layer, group_name)._parameters().items()
+        if name not in ("heat_capacity", "therm_cond")  # sympy expressions
+    }
+
+
+def test_layer_init_with_parameter_groups_or_dicts():
+    single = Layer(
+        "a",
+        "a",
+        thickness=2 * u.nm,
+        density=5000 * u.kg / u.m**3,
+        sound_vel=6 * u.nm / u.ps,
+        heat_capacity=[10, 20],
+    )
+    groups = Layer(
+        "a",
+        "a",
+        structural=StructuralParameters(thickness=2 * u.nm, density=5000 * u.kg / u.m**3),
+        elastic=ElasticParameters(sound_vel=6 * u.nm / u.ps),
+        thermal=ThermalParameters(heat_capacity=[10, 20]),
+    )
+    dicts = Layer(
+        "a",
+        "a",
+        structural={"thickness": 2 * u.nm},
+        density=5000 * u.kg / u.m**3,  # single parameters can complement a dict
+        elastic={"sound_vel": 6 * u.nm / u.ps},
+        thermal={"heat_capacity": [10, 20]},
+    )
+    assert _magnitudes(groups) == _magnitudes(single)
+    assert _magnitudes(dicts) == _magnitudes(single)
+    assert groups.num_sub_systems == 2
+
+
+def test_layer_parameter_groups_are_copied():
+    thermal = ThermalParameters(heat_capacity=[10, 20])
+    elastic = ElasticParameters(sound_vel=6 * u.nm / u.ps)
+    a = Layer("a", "a", thickness=1 * u.nm, density=1000 * u.kg / u.m**3, elastic=elastic)
+    b = Layer("b", "b", thickness=1 * u.nm, density=1000 * u.kg / u.m**3, elastic=elastic)
+    a.thermal = thermal
+    assert a.elastic is not elastic and a.elastic is not b.elastic
+    assert a.thermal is not thermal
+    assert a.elastic._owner is a and b.elastic._owner is b
+    assert elastic._owner is None and thermal._owner is None
+    # changing a copy does not change the others
+    a.sound_vel = 3 * u.nm / u.ps
+    assert_approx(b.sound_vel, 6 * u.nm / u.ps)
+    assert_approx(elastic.sound_vel.quantity, 6 * u.nm / u.ps)
+
+
+@pytest.mark.parametrize(
+    "path, value, spring_const",
+    [
+        ("structural.thickness", 2 * u.nm, 0.9),
+        ("structural.density", 10000 * u.kg / u.m**3, 3.6),
+        ("elastic.sound_vel", 3 * u.nm / u.ps, 0.45),
+    ],
+)
+def test_layer_group_changes_update_layer(amorphous_layer, path, value, spring_const):
+    layer = copy.deepcopy(amorphous_layer)  # do not alter the module-scoped fixture
+    group_name, name = path.split(".")
+    getattr(getattr(layer, group_name), name).quantity = value
+    assert_approx(layer.spring_const, [spring_const] * u.kg / u.s**2)
+
+
+def test_layer_replace_parameter_group(amorphous_layer):
+    layer = copy.deepcopy(amorphous_layer)  # do not alter the module-scoped fixture
+    layer.elastic = {"sound_vel": 3 * u.nm / u.ps}
+    assert layer.elastic._owner is layer
+    assert_approx(layer.spring_const, [0.45] * u.kg / u.s**2)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"thickness": 1 * u.nm, "structural": {"thickness": 2 * u.nm}},
+        {"sound_vel": 1 * u.nm / u.ps, "elastic": ElasticParameters(sound_vel=2 * u.nm / u.ps)},
+    ],
+)
+def test_layer_parameter_given_twice_raises(kwargs):
+    with pytest.raises(ValueError, match="at the same time"):
+        Layer("a", "a", **kwargs)
+
+
+def test_layer_parameter_group_typo_raises():
+    with pytest.raises(TypeError, match="deb_Wal_Fac"):
+        Layer("a", "a", thermal={"deb_Wal_Fac": 1 * u.angstrom**2})
+
+
+@pytest.mark.parametrize("thermal", [ElasticParameters(), [1, 2]])
+def test_layer_parameter_group_wrong_type_raises(thermal):
+    with pytest.raises(TypeError, match="must be ThermalParameters"):
+        Layer("a", "a", thermal=thermal)
+
+
+def test_layer_deepcopy_and_pickle_keep_owner(amorphous_layer):
+    for layer in (copy.deepcopy(amorphous_layer), pickle.loads(pickle.dumps(amorphous_layer))):
+        for group_name in layer._parameter_group_names:
+            assert getattr(layer, group_name)._owner is layer
+        assert_approx(layer.spring_const, amorphous_layer.spring_const)
+
+
+def test_parameter_group_deepcopy_does_not_copy_layer(amorphous_layer):
+    group = copy.deepcopy(amorphous_layer.thermal)
+    assert group._owner is None
+    # parameters stay connected to the copied group
+    assert group.heat_capacity._caller is group
+
+
+def test_amorphous_layer_init_with_structural_group():
+    layer = AmorphousLayer(
+        "a", "a", structural=StructuralParameters(thickness=2 * u.nm, density=1000 * u.kg / u.m**3)
+    )
+    assert_approx(layer.mass, 2e-26 * u.kg)
+
+
+def test_unit_cell_init_with_lattice_group():
+    lattice = LatticeParameters(c_axis=3 * u.angstrom)
+    uc = UnitCell("uc", "uc", lattice=lattice, sound_vel=5 * u.nm / u.ps)
+    assert_approx(uc.a_axis, 3 * u.angstrom)  # a and b default to c
+    assert_approx(uc.b_axis, 3 * u.angstrom)
+    assert_approx(uc.thickness, 3 * u.angstrom)
+    assert_approx(uc.area, 9 * u.angstrom**2)
+
+
+def test_unit_cell_lattice_group_changes_keep_mass(unit_cell):
+    uc = copy.deepcopy(unit_cell)  # do not alter the module-scoped fixture
+    uc.lattice.a_axis.quantity = 10 * u.angstrom
+    assert_approx(uc.mass, unit_cell.mass)
+    assert_approx(uc.area, 2 * unit_cell.area)
+    assert_approx(uc.density, 0.5 * unit_cell.density)
+    assert_approx(uc.spring_const, 0.5 * unit_cell.spring_const)
+
+
+def test_unit_cell_thickness_is_c_axis(unit_cell):
+    uc = copy.deepcopy(unit_cell)  # do not alter the module-scoped fixture
+    uc.thickness = 10 * u.angstrom
+    assert_approx(uc.c_axis, 10 * u.angstrom)
+    assert_approx(uc.structural.thickness.quantity, 10 * u.angstrom)
+
+
+def test_unit_cell_density_with_atoms_is_read_only(unit_cell):
+    with pytest.raises(AttributeError):
+        unit_cell.density = 1000 * u.kg / u.m**3
+    # without atoms the density can be set
+    uc = UnitCell("uc", "uc", 3 * u.angstrom)
+    uc.density = 1000 * u.kg / u.m**3
+    assert_approx(uc.mass, 1000 * u.kg / u.m**3 * uc.volume)
+    uc.add_atom(Atom("Fe"), 0)
+    assert_approx(uc.mass, Atom("Fe").mass)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"thickness": 1 * u.nm}, {"area": 1 * u.nm**2}, {"structural": {"thickness": 1 * u.nm}}],
+)
+def test_unit_cell_structural_given_by_lattice_raises(kwargs):
+    with pytest.raises(ValueError, match="given by its lattice"):
+        UnitCell("uc", "uc", 3 * u.angstrom, **kwargs)
+
+
+def test_unit_cell_without_c_axis_raises():
+    with pytest.raises(TypeError, match="c_axis"):
+        UnitCell("uc", "uc")

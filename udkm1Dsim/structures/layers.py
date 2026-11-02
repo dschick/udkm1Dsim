@@ -25,6 +25,7 @@ __all__ = ["Layer", "Vacuum", "AmorphousLayer", "UnitCell"]
 
 __docformat__ = "restructuredtext"
 
+import copy
 from inspect import isfunction
 from operator import attrgetter
 
@@ -38,6 +39,7 @@ from udkm1Dsim.structures.parameter_groups import (
     LatticeParameters,
     MagneticParameters,
     OpticalParameters,
+    ParameterGroup,
     StructuralParameters,
     ThermalParameters,
 )
@@ -46,6 +48,44 @@ from .atoms import Atom, AtomMixed
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
+
+
+class _GroupAttribute:
+    """Parameter group of a :class:`Layer`.
+
+    An assigned group is copied, so that it can be reused for other layers, and
+    a dict is passed to the constructor of the group. The group is connected to
+    the layer, which updates its parameters depending on several groups.
+
+    """
+
+    def __init__(self, group_class):
+        self.group_class = group_class
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        try:
+            return obj.__dict__[self.name]
+        except KeyError:
+            raise AttributeError(self.name) from None
+
+    def __set__(self, obj, value):
+        if isinstance(value, dict):
+            group = self.group_class(**value)
+        elif isinstance(value, self.group_class):
+            group = copy.deepcopy(value)
+        else:
+            raise TypeError(
+                f"'{self.name}' must be {self.group_class.__name__} or a dict of its "
+                f"parameters, not {type(value).__name__}!"
+            )
+        group._owner = obj
+        obj.__dict__[self.name] = group
+        obj._update_depending()
 
 
 class Layer:
@@ -61,11 +101,29 @@ class Layer:
     * :class:`MagneticParameters`
 
     The parameter groups are accessible through the corresponding
-    attributes of the layer.
+    attributes of the layer. They can be given on initialization either as
+    parameter group, as dict, or as single keyword arguments:
+
+    .. code-block:: python
+
+        thermal = ThermalParameters(heat_capacity=455 * u.J / u.kg / u.K)
+        layer = Layer("SRO", "SRO", thermal=thermal, elastic={"sound_vel": 6.3 * u.nm / u.ps})
+        layer = Layer("SRO", "SRO", heat_capacity=455 * u.J / u.kg / u.K)
+
+    Parameter groups are copied on assignment, so they can be reused for
+    several layers, but changing the original group does not change the layers.
 
     Args:
         id (str): id of the layer.
         name (str): name of the layer.
+
+    Keyword Args:
+        structural (StructuralParameters, dict): structural parameters.
+        thermal (ThermalParameters, dict): thermal parameters.
+        elastic (ElasticParameters, dict): elastic parameters.
+        optical (OpticalParameters, dict): optical parameters.
+        magnetic (MagneticParameters, dict): magnetic parameters.
+        **kwargs: single parameters of any of the groups, e.g. `thickness`.
 
     Attributes:
         id (str): id of the layer.
@@ -73,46 +131,60 @@ class Layer:
 
     """
 
+    structural = _GroupAttribute(StructuralParameters)
+    thermal = _GroupAttribute(ThermalParameters)
+    elastic = _GroupAttribute(ElasticParameters)
+    optical = _GroupAttribute(OpticalParameters)
+    magnetic = _GroupAttribute(MagneticParameters)
+
     _parameter_group_names = ("structural", "thermal", "elastic", "optical", "magnetic")
+    _updating = False
 
     def __init__(self, id, name, **kwargs):
         self.id = id
         self.name = name
 
-        self.structural = StructuralParameters(
-            thickness=kwargs.get("thickness", 0.0 * u.nm),
-            roughness=kwargs.get("roughness", 0.0 * u.nm),
-            density=kwargs.get("density", 0.0 * u.kg / u.m**3),
-        )
-        self.thermal = ThermalParameters(
-            heat_capacity=kwargs.get("heat_capacity", 0.0 * u.J / u.kg / u.K),
-            therm_cond=kwargs.get("therm_cond", 0.0 * u.W / u.m / u.K),
-            lin_therm_exp=kwargs.get("lin_therm_exp", 0.0),
-            sub_system_coupling=kwargs.get("sub_system_coupling", 0.0 * u.W / u.m**3),
-            deb_wal_fac=kwargs.get("deb_wal_fac", 0.0 * u.angstrom**2),
-        )
-        self.elastic = ElasticParameters(
-            sound_vel=kwargs.get("sound_vel", 0.0 * u.m / u.s),
-            phonon_damping=kwargs.get("phonon_damping", 0.0 * u.kg / u.s),
-        )
-        self.optical = OpticalParameters(
-            opt_pen_depth=kwargs.get("opt_pen_depth", 0.0 * u.nm),
-            opt_ref_index=kwargs.get("opt_ref_index", 0.0 + 0.0j),
-            opt_ref_index_per_strain=kwargs.get("opt_ref_index_per_strain", 0.0 + 0.0j),
-        )
-        self.magnetic = MagneticParameters(
-            eff_spin=kwargs.get("eff_spin", 0.0),
-            curie_temp=kwargs.get("curie_temp", 0.0 * u.K),
-            lamda=kwargs.get("lamda", 0.0),
-            mag_moment=kwargs.get("mag_moment", 0.0 * u.bohr_magneton),
-            aniso_exponent=kwargs.get("aniso_exponent", 0.0),
-            anisotropy=kwargs.get("anisotropy", np.array([0.0, 0.0, 0.0]) * u.J / u.m**3),
-            exch_stiffness=kwargs.get("exch_stiffness", np.array([0.0, 0.0, 0.0]) * u.J / u.m),
-            mag_saturation=kwargs.get("mag_saturation", 0.0 * u.J / u.T / u.m**3),
-            magnetization=kwargs.get("magnetization", np.array([0.0, 0.0, 0.0])),
-        )
+        # the parameters depending on several groups are updated once all are set
+        self._updating = True
+        for group_name in self._parameter_group_names:
+            setattr(self, group_name, self._group_input(group_name, kwargs))
+        self._updating = False
+        self._update_depending()
 
-        # calc depending parameters across ParameterGroups
+    def _group_input(self, group_name, kwargs):
+        """Input of a parameter group from the keyword arguments, either as
+        parameter group or as dict of the group and its single parameters."""
+        group_class = getattr(type(self), group_name).group_class
+        single = {key: kwargs[key] for key in group_class._input_names() if key in kwargs}
+        group = kwargs.get(group_name)
+        if group is None:
+            return single
+        if isinstance(group, dict):
+            twice = sorted(set(group) & set(single))
+        elif isinstance(group, ParameterGroup):
+            twice = sorted(single)
+        else:
+            return group  # raises a TypeError on assignment
+        if twice:
+            raise ValueError(
+                f"{', '.join(repr(key) for key in twice)} must not be given as keyword "
+                f"argument and in '{group_name}' at the same time!"
+            )
+        return {**group, **single} if isinstance(group, dict) else group
+
+    def _update_depending(self):
+        """Called on changes of the parameter groups to update the parameters
+        depending on several groups."""
+        if self._updating:
+            return
+        self._updating = True
+        try:
+            self._update_layer()
+        finally:
+            self._updating = False
+
+    def _update_layer(self):
+        """Update the parameters depending on several groups."""
         self._update_elastic()
 
     def _update_elastic(self):
@@ -235,7 +307,6 @@ class Layer:
     @thickness.setter
     def thickness(self, value):
         self.structural.thickness.quantity = value
-        self._update_elastic()
 
     @property
     def mass(self):
@@ -265,7 +336,6 @@ class Layer:
     @density.setter
     def density(self, value):
         self.structural.density.quantity = value
-        self._update_elastic()
 
     @property
     def area(self):
@@ -405,7 +475,6 @@ class Layer:
     @sound_vel.setter
     def sound_vel(self, value):
         self.elastic.sound_vel.quantity = value
-        self._update_elastic()
 
     @property
     def spring_const(self):
@@ -592,8 +661,12 @@ class AmorphousLayer(Layer):
 
     """
 
-    def __init__(self, id, name, thickness, density, **kwargs):
-        super().__init__(id, name, thickness=thickness, density=density, **kwargs)
+    def __init__(self, id, name, thickness=None, density=None, **kwargs):
+        if thickness is not None:
+            kwargs["thickness"] = thickness
+        if density is not None:
+            kwargs["density"] = density
+        super().__init__(id, name, **kwargs)
         self.atom = kwargs.get("atom", [])
 
     @property
@@ -634,17 +707,27 @@ class UnitCell(Layer):
     * :class:`MagneticParameters`
 
     The parameter groups are accessible through the corresponding
-    attributes of the layer.
+    attributes of the layer, see :class:`Layer` for their initialization.
+    The thickness and area of a unit cell are given by its lattice and its
+    mass by its atoms, from which its density follows.
 
     Args:
         id (str): id of the layer.
         name (str): name of the layer.
+        c_axis (Quantity): c-axis of the unit cell, can be omitted if given
+            in `lattice`.
+
+    Keyword Args:
+        lattice (LatticeParameters, dict): lattice parameters.
+        **kwargs: see :class:`Layer`.
 
     Attributes:
         id (str): id of the layer.
         name (str): name of the layer.
 
     """
+
+    lattice = _GroupAttribute(LatticeParameters)
 
     _parameter_group_names = (
         "structural",
@@ -655,22 +738,31 @@ class UnitCell(Layer):
         "magnetic",
     )
 
-    def __init__(self, id, name, c_axis, **kwargs):
-        super().__init__(id, name, **kwargs)
+    def __init__(self, id, name, c_axis=None, **kwargs):
+        if c_axis is not None:
+            kwargs["c_axis"] = c_axis
+        elif "lattice" not in kwargs:
+            raise TypeError("UnitCell requires a c_axis or lattice parameters!")
+        structural = kwargs.get("structural")
+        for key in ("thickness", "area"):
+            if key in kwargs or (isinstance(structural, dict) and key in structural):
+                raise ValueError(f"The {key} of a UnitCell is given by its lattice!")
 
-        self.lattice = LatticeParameters(
-            c_axis=c_axis,
-            a_axis=kwargs.get("a_axis", c_axis),
-            b_axis=kwargs.get("b_axis", c_axis),
-        )
-
-        self.thickness = c_axis
-
-        self.structural.area.quantity = self.a_axis * self.b_axis
-        self.structural.volume.quantity = self.area * self.c_axis
         self.atoms = []
         self.num_atoms = 0
-        self._update_mass_from_atoms()
+        super().__init__(id, name, **kwargs)
+
+    def _update_layer(self):
+        """The thickness and area of a unit cell are given by its lattice and
+        its mass by its atoms. Hence, the density follows from the mass and the
+        volume. Without any atoms, the density is kept and the mass follows."""
+        structural = self.structural
+        structural.thickness.quantity = self.lattice.c_axis.quantity
+        structural.area.quantity = self.lattice.a_axis.quantity * self.lattice.b_axis.quantity
+        if self.num_atoms > 0:
+            mass = sum((atom.mass for atom, _, _ in self.atoms), 0 * u.kg)
+            structural.density.quantity = mass / structural.volume.quantity
+        super()._update_layer()
 
     def _atoms_table(self, style):
         """Table of all atoms in the unit cell in the given tabulate style"""
@@ -770,17 +862,6 @@ class UnitCell(Layer):
         plt.legend()
         plt.show(block=block)
 
-    def _update_mass_from_atoms(self):
-        """The mass of a unit cell is given by its atoms. Hence, the density
-        follows from the mass and the volume, e.g. when the lattice changes.
-        Without any atoms, the density is kept and the mass follows."""
-        if self.num_atoms > 0:
-            mass = sum((atom.mass for atom, _, _ in self.atoms), 0 * u.kg)
-            # the density setter also updates mass, mass_unit_area and elastic parameters
-            self.density = mass / self.volume
-        else:
-            self._update_elastic()
-
     def add_atom(self, atom, position):
         r"""add_atom
 
@@ -838,7 +919,7 @@ class UnitCell(Layer):
         # drop automatic magnetization calculation for unitcell
         # self.magnetization.append([atom.mag_amplitude, atom.mag_phi, atom.mag_gamma])
 
-        self._update_mass_from_atoms()
+        self._update_depending()
 
     def add_multiple_atoms(self, atom, position, Nb):
         """add_multiple_atoms
@@ -903,8 +984,6 @@ class UnitCell(Layer):
     @a_axis.setter
     def a_axis(self, value):
         self.lattice.a_axis.quantity = value
-        self.structural.area.quantity = self.a_axis * self.b_axis
-        self._update_mass_from_atoms()
 
     @property
     def b_axis(self):
@@ -913,8 +992,6 @@ class UnitCell(Layer):
     @b_axis.setter
     def b_axis(self, value):
         self.lattice.b_axis.quantity = value
-        self.structural.area.quantity = self.a_axis * self.b_axis
-        self._update_mass_from_atoms()
 
     @property
     def c_axis(self):
@@ -923,5 +1000,24 @@ class UnitCell(Layer):
     @c_axis.setter
     def c_axis(self, value):
         self.lattice.c_axis.quantity = value
-        self.thickness = value
-        self._update_mass_from_atoms()
+
+    @property
+    def thickness(self):
+        return self.structural.thickness.quantity
+
+    @thickness.setter
+    def thickness(self, value):
+        # the thickness of a unit cell is its c-axis
+        self.lattice.c_axis.quantity = value
+
+    @property
+    def density(self):
+        return self.structural.density.quantity
+
+    @density.setter
+    def density(self, value):
+        if self.num_atoms > 0:
+            raise AttributeError(
+                "The density of a UnitCell with atoms is given by their mass and its volume."
+            )
+        self.structural.density.quantity = value

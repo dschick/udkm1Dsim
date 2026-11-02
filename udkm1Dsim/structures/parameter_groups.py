@@ -33,6 +33,8 @@ __all__ = [
 
 __docformat__ = "restructuredtext"
 
+import copy
+import inspect
 import re
 
 import numpy as np
@@ -46,10 +48,67 @@ u = pint.get_application_registry()
 
 
 class ParameterGroup:
-    """A group of Parameters with units."""
+    """A group of Parameters with units.
+
+    Changes of the independent parameters of a group update its depending
+    parameters and notify the owner of the group, e.g. a :class:`Layer`,
+    which updates the parameters depending on several groups.
+
+    """
+
+    # names of the parameters, which are derived from the others of the group
+    _derived = ()
+    # the owner, e.g. a Layer, which is notified on changes of the group
+    _owner = None
+    _updating = False
+
+    @classmethod
+    def _input_names(cls):
+        """Names of the parameters, which can be given on initialization."""
+        return [name for name in inspect.signature(cls.__init__).parameters if name != "self"]
+
+    def _parameters(self):
+        """All parameters of the group by their names."""
+        return {name: p for name, p in vars(self).items() if isinstance(p, Parameter)}
+
+    def _connect_parameters(self):
+        """Name all parameters and connect the independent ones to the group,
+        so that changes of them update the depending parameters."""
+        for name, p in self._parameters().items():
+            p.name = name
+            if name not in self._derived:
+                p._caller = self
+
+    def _update_depending(self):
+        """Called on changes of the independent parameters of the group."""
+        # the derived parameters are not connected, but the guard prevents any
+        # recursion, e.g. by an owner setting parameters of this group
+        if self._updating:
+            return
+        self._updating = True
+        try:
+            self._update_group()
+        finally:
+            self._updating = False
+        if self._owner is not None:
+            self._owner._update_depending()
+
+    def _update_group(self):
+        """Update the depending parameters within the group."""
+
+    def __deepcopy__(self, memo):
+        # A group copied on its own, e.g. on assignment to a layer, must not copy
+        # its owner along. When copying the owner, it is already in the memo.
+        if self._owner is not None and id(self._owner) not in memo:
+            memo[id(self._owner)] = None
+        new = self.__class__.__new__(self.__class__)
+        memo[id(self)] = new
+        for key, value in vars(self).items():
+            setattr(new, key, copy.deepcopy(value, memo))
+        return new
 
     def _table_representation(self, style="double_grid"):
-        rows = [[name, p.quantity] for name, p in vars(self).items()]
+        rows = [[name, p.quantity] for name, p in self._parameters().items()]
         return tabulate(
             rows, headers=["Parameter", "Value"], tablefmt=style, colalign=("right", "right")
         )
@@ -83,6 +142,8 @@ class StructuralParameters(ParameterGroup):
 
     """
 
+    _derived = ("mass", "mass_unit_area", "volume")
+
     def __init__(self, thickness=0.0, density=0.0, area=1.0 * u.angstrom**2, roughness=0.0):
         self.thickness = Parameter("m", thickness)
         self.density = Parameter("kg/m**3", density)
@@ -92,15 +153,10 @@ class StructuralParameters(ParameterGroup):
         self.mass_unit_area = Parameter("kg", 0.0)
         self.volume = Parameter("m**3", 0.0)
 
-        self._update_depending()
+        self._connect_parameters()
+        self._update_group()
 
-        # automatically set the name of the parameters
-        for name, p in vars(self).items():
-            p.name = name
-            if name in ["thickness", "density", "area"]:
-                p._caller = self
-
-    def _update_depending(self):
+    def _update_group(self):
         self.volume.magnitude = self.thickness.magnitude * self.area.magnitude
         self.mass.magnitude = self.density.magnitude * self.volume.magnitude
         try:
@@ -114,19 +170,17 @@ class StructuralParameters(ParameterGroup):
 class LatticeParameters(ParameterGroup):
     """Lattice parameters of a unit cell.
 
-    a_axis (float): lattice parameter a [m].
-    b_axis (float): lattice parameter b [m].
+    a_axis (float): lattice parameter a [m], defaults to c_axis.
+    b_axis (float): lattice parameter b [m], defaults to c_axis.
     c_axis (float): lattice parameter c [m].
     """
 
-    def __init__(self, a_axis=0.0, b_axis=0.0, c_axis=0.0):
-        self.a_axis = Parameter("m", a_axis)
-        self.b_axis = Parameter("m", b_axis)
+    def __init__(self, a_axis=None, b_axis=None, c_axis=0.0):
+        self.a_axis = Parameter("m", c_axis if a_axis is None else a_axis)
+        self.b_axis = Parameter("m", c_axis if b_axis is None else b_axis)
         self.c_axis = Parameter("m", c_axis)
 
-        # automatically set the name of the parameters
-        for name, p in vars(self).items():
-            p.name = name
+        self._connect_parameters()
 
 
 class ThermalParameters(ParameterGroup):
@@ -147,6 +201,8 @@ class ThermalParameters(ParameterGroup):
 
     """
 
+    _derived = ("num_sub_systems",)
+
     def __init__(
         self,
         therm_cond=0.0,
@@ -162,15 +218,10 @@ class ThermalParameters(ParameterGroup):
         self.deb_wal_fac = TemperatureParameter("m**2", deb_wal_fac)
         self.num_sub_systems = Parameter("", 0)
 
-        self._update_depending()
+        self._connect_parameters()
+        self._update_group()
 
-        # automatically set the name of the parameters
-        for name, p in vars(self).items():
-            p.name = name
-            if isinstance(p, TemperatureParameter):
-                p._caller = self
-
-    def _update_depending(self):
+    def _update_group(self):
         # The number of sub-systems is given by the temperature-dependent
         # parameter with the most sub-systems. Their consistency is not checked
         # here, as they are typically set one after another, but by the
@@ -192,15 +243,15 @@ class ElasticParameters(ParameterGroup):
 
     """
 
-    def __init__(self, sound_vel=0.0, phonon_damping=0.0, spring_const=0.0):
+    _derived = ("spring_const", "acoustic_impedance")
+
+    def __init__(self, sound_vel=0.0, phonon_damping=0.0):
         self.sound_vel = Parameter("m/s", sound_vel)
         self.phonon_damping = Parameter("kg/s", phonon_damping)
         self.spring_const = Parameter("kg/s**2", np.array([0.0]))
         self.acoustic_impedance = Parameter("kg/(m**2*s)", 0.0)
 
-        # automatically set the name of the parameters
-        for name, p in vars(self).items():
-            p.name = name
+        self._connect_parameters()
 
     def calc_spring_const(self, mass_unit_area, thickness):
         r"""calc_spring_const
@@ -268,9 +319,7 @@ class OpticalParameters(ParameterGroup):
         self.opt_ref_index = Parameter("", opt_ref_index)
         self.opt_ref_index_per_strain = Parameter("", opt_ref_index_per_strain)
 
-        # automatically set the name of the parameters
-        for name, p in vars(self).items():
-            p.name = name
+        self._connect_parameters()
 
     def set_opt_pen_depth_from_ref_index(self, wavelength):
         r"""set_opt_pen_depth_from_ref_index
@@ -309,6 +358,8 @@ class MagneticParameters(ParameterGroup):
 
     """
 
+    _derived = ("mf_exch_coupling",)
+
     def __init__(
         self,
         eff_spin=0.0,
@@ -332,15 +383,10 @@ class MagneticParameters(ParameterGroup):
         self.mag_saturation = Parameter("J/T/m**3", mag_saturation)
         self.magnetization = VectorParameter("", magnetization)
 
-        self._update_depending()
+        self._connect_parameters()
+        self._update_group()
 
-        # automatically set the name of the parameters
-        for name, p in vars(self).items():
-            p.name = name
-            if name in ["eff_spin", "curie_temp", "exch_stiffness", "anisotropy"]:
-                p._caller = self
-
-    def _update_depending(self):
+    def _update_group(self):
         self.calc_mf_exchange_coupling()
         self.check_array(self.exch_stiffness, "Exchange stiffness")
         self.check_array(self.anisotropy, "Anisotropy")
@@ -353,17 +399,13 @@ class MagneticParameters(ParameterGroup):
         .. math:: J = \frac{3}{S_{eff}+1} k_B T_C
 
         """
-        try:
-            self.mf_exch_coupling.magnitude = (
-                3
-                * self.eff_spin.magnitude
-                / (self.eff_spin.magnitude + 1)
-                * constants.k
-                * self.curie_temp.magnitude
-            )
-        except AttributeError:
-            # on initialization self.curie_temp
-            self.mf_exch_coupling.magnitude = 0
+        self.mf_exch_coupling.magnitude = (
+            3
+            * self.eff_spin.magnitude
+            / (self.eff_spin.magnitude + 1)
+            * constants.k
+            * self.curie_temp.magnitude
+        )
 
     def check_array(self, parameter, name):
         value = np.asarray(parameter.magnitude)
@@ -375,5 +417,5 @@ class MagneticParameters(ParameterGroup):
         elif value.shape != (3,):
             raise ValueError(f"{name} must be a scalar or a vector of length 3!")
 
-        # set directly, as the setter would call _update_depending() recursively
+        # set directly, as the setter would notify the group again
         parameter._magnitude = value
