@@ -296,7 +296,8 @@ def convert_cartesian_to_polar(cartesian):
     mask = amplitudes != 0.0  # mask for non-zero amplitudes
     polar[..., 0] = amplitudes
     polar[mask, 1] = np.arccos(np.divide(zs[mask], amplitudes[mask]))
-    polar[..., 2] = np.arctan2(ys, xs)
+    # the angles of zero vectors are zero, also for signed zero components
+    polar[mask, 2] = np.arctan2(ys[mask], xs[mask])
 
     return polar
 
