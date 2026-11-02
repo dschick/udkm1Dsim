@@ -1,0 +1,10 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.6  # keep in sync with ruff in uv.lock, which is used by the CI
+    hooks:
+      - id: ruff-check
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.12.12
+    hooks:
+      - id: uv-lock
