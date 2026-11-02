@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import pickle
+
 import numpy as np
 import pint
 import pytest
@@ -503,3 +505,45 @@ def test_temperature_parameter_display_sub_systems():
 )
 def test_expression_to_text(expression, text):
     assert expression_to_text(sp.sympify(expression)) == text
+
+
+def test_vector_parameter_keeps_angles_of_zero_vector():
+    v = VectorParameter("")
+    v.polar = (0, 90 * u.deg, 270 * u.deg)
+    assert_approx(v.phi, 90 * u.deg)
+    assert_approx(v.gamma, -90 * u.deg)  # gamma is given in -180 .. 180 deg
+    np.testing.assert_array_equal(v.magnitude, [0, 0, 0])
+    v.r = 1  # the direction is restored
+    assert np.allclose(v.magnitude, [0, -1, 0])
+    # also cartesian zero vectors keep the angles
+    v.magnitude = [0, 0, 0]
+    assert_approx(v.phi, 90 * u.deg)
+    assert_approx(v.gamma, -90 * u.deg)
+
+
+def test_vector_parameter_keeps_angles_set_before_amplitude():
+    v = VectorParameter("")
+    v.phi = 90 * u.deg
+    v.gamma = 45 * u.deg
+    v.r = 2
+    assert np.allclose(v.magnitude, [np.sqrt(2), np.sqrt(2), 0])
+
+
+def test_vector_parameter_keeps_gamma_along_z_axis():
+    v = VectorParameter("")
+    v.polar = (1, 0 * u.deg, 120 * u.deg)
+    assert_approx(v.gamma, 120 * u.deg)
+    v.phi = 90 * u.deg
+    assert np.allclose(v.magnitude, [-0.5, np.sqrt(3) / 2, 0])
+
+
+def test_vector_parameter_pickled_without_angles():
+    # vectors pickled by former versions have no _angles
+    v = VectorParameter("", (1.0, 0.0, 0.0))
+    del v.__dict__["_angles"]
+    v = pickle.loads(pickle.dumps(v))
+    assert np.allclose(v.polar_rad, [1, np.pi / 2, 0])
+    v.r = 0
+    assert np.allclose(v.polar_rad, [0, np.pi / 2, 0])
+    # the class default is not changed
+    np.testing.assert_array_equal(VectorParameter._angles, [0, 0])

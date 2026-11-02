@@ -117,38 +117,39 @@ class Parameter:
         return format(self.unit, {"text": "~P", "html": "~H", "latex": "~L"}[mode])
 
     def _entries(self, mode):
-        """List of the symbol, the arguments, and the value of the parameter
-        in the mode `text`, `html`, or `latex`, with one entry per sub-system."""
+        """List of the symbol, the arguments, the value, and the unit of the
+        parameter in the mode `text`, `html`, or `latex`, with one entry per
+        sub-system or component."""
         return [
             (
                 self._format_symbol(self._latex_symbol(), mode),
                 "",
                 format_number(self.magnitude, mode),
+                self._format_unit(mode),
             )
         ]
 
     def _table_rows(self, mode):
         """Rows of the symbol, value, and unit of the parameter for the table
-        view of its group in the mode `text` or `html`."""
-        unit = self._format_unit(mode)
+        view of its group in the mode `text` or `html`. A unit, which is the
+        same for all rows, is only given in the first one."""
+        entries = self._entries(mode)
+        same_unit = len({unit for *_, unit in entries}) == 1
         return [
-            (symbol, value, unit if i == 0 else "")
-            for i, (symbol, _, value) in enumerate(self._entries(mode))
+            (symbol, value, unit if i == 0 or not same_unit else "")
+            for i, (symbol, _, value, unit) in enumerate(entries)
         ]
 
     def __str__(self):
-        unit = self._format_unit("text")
         return "\n".join(
             f"{symbol}{arguments} = {value}" + (f" {unit}" if unit else "")
-            for symbol, arguments, value in self._entries("text")
+            for symbol, arguments, value, unit in self._entries("text")
         )
 
     def _repr_latex_(self):
-        unit = self._format_unit("latex")
-        unit = rf"\ {unit}" if unit else ""
         lines = [
-            f"{symbol}{arguments} = {value}{unit}"
-            for symbol, arguments, value in self._entries("latex")
+            f"{symbol}{arguments} = {value}" + (rf"\ {unit}" if unit else "")
+            for symbol, arguments, value, unit in self._entries("latex")
         ]
         if len(lines) == 1:
             return f"${lines[0]}$"
@@ -161,12 +162,37 @@ class VectorParameter(Parameter):
 
     `magnitude` holds the cartesian components (x, y, z) in `self.unit`.
     Polar form is (r, phi, gamma) as in convert_polar_to_cartesian:
-    phi is the angle from +z, gamma the angle in the xy-plane from +x.
+    phi is the angle from +z, gamma the angle in the xy-plane from +x,
+    which is given in -180 .. 180 deg.
+
+    The angles are kept, when they are not defined by the cartesian
+    components, i.e. both angles for a zero vector and gamma for a vector
+    along the z-axis. Hence, e.g. setting the amplitude to zero and back
+    restores the direction of the vector.
     """
+
+    # symbols of the polar components for the display of the vector
+    _polar_symbols = ("r", r"\phi", r"\gamma")
+    # The last defined angles phi and gamma in rad, see _polar_rad(). The class
+    # default is used by vectors pickled before, and it is replaced, but never
+    # changed in place.
+    _angles = np.zeros(2)
 
     def __init__(self, unit, magnitude=(0.0, 0.0, 0.0), name="", angle_unit="deg", symbol=""):
         self.angle_unit = u.Unit(angle_unit)  # unit for bare-float angles
         super().__init__(unit, magnitude, name, symbol)
+
+    def _entries(self, mode):
+        """The polar components of the vector with the angles in its
+        `angle_unit`, which is used for bare-float angles."""
+        r, phi, gamma = self.polar
+        units = [self._format_unit(mode)] + 2 * [
+            format(self.angle_unit, {"text": "~P", "html": "~H", "latex": "~L"}[mode])
+        ]
+        return [
+            (self._format_symbol(symbol, mode), "", format_number(value.magnitude, mode), unit)
+            for symbol, value, unit in zip(self._polar_symbols, (r, phi, gamma), units)
+        ]
 
     @classmethod
     def from_polar(cls, unit, r, phi, gamma, name="", angle_unit="deg", symbol=""):
@@ -196,7 +222,13 @@ class VectorParameter(Parameter):
         if arr.shape != (3,):
             raise ValueError(f"Parameter '{self.name}' needs exactly 3 components")
         # float cast matters: the helpers use zeros_like and would truncate ints
-        Parameter.magnitude.fset(self, arr.astype(float))
+        arr = arr.astype(float)
+        # keep the angles, which are defined by the cartesian components
+        r, phi, gamma = convert_cartesian_to_polar(arr)
+        if r > 0:
+            defined_gamma = arr[0] != 0 or arr[1] != 0
+            self._angles = np.array([phi, gamma if defined_gamma else self._angles[1]])
+        Parameter.magnitude.fset(self, arr)
 
     @property
     def cartesian(self):
@@ -209,13 +241,22 @@ class VectorParameter(Parameter):
 
     # ---- polar (r, phi, gamma) -------------------------------------------
     def _polar_rad(self):
-        """[r, phi, gamma] as floats, angles in rad."""
-        return convert_cartesian_to_polar(self._magnitude)
+        """[r, phi, gamma] as floats, angles in rad, where the angles, which
+        are not defined by the cartesian components, are the last given ones."""
+        polar = convert_cartesian_to_polar(self._magnitude)
+        if polar[0] == 0:
+            polar[1:] = self._angles
+        elif self._magnitude[0] == 0 and self._magnitude[1] == 0:
+            polar[2] = self._angles[1]
+        return polar
 
     def _set_polar_rad(self, polar):
+        polar = np.asarray(polar, dtype=float)
         if polar[0] < 0:
             raise ValueError("r must be >= 0")
-        self.magnitude = convert_polar_to_cartesian(np.asarray(polar, dtype=float))
+        self.magnitude = convert_polar_to_cartesian(polar)
+        # keep the given angles with gamma in -pi .. pi, also if not defined
+        self._angles = np.array([polar[1], np.arctan2(np.sin(polar[2]), np.cos(polar[2]))])
 
     def _set_component(self, index, value):
         polar = self._polar_rad()
@@ -335,6 +376,7 @@ class TemperatureParameter(Parameter):
 
     def _entries(self, mode):
         labels = self._sub_system_labels()
+        unit = self._format_unit(mode)
 
         def label(i):
             return labels[i] if i < len(labels) else str(i)
@@ -366,7 +408,7 @@ class TemperatureParameter(Parameter):
                 "latex": expression_to_latex,
             }
             entries.append(
-                (self._format_symbol(symbol, mode), arguments, printer[mode](expression))
+                (self._format_symbol(symbol, mode), arguments, printer[mode](expression), unit)
             )
         return entries
 

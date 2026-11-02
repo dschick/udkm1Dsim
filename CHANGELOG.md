@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `print()` and `display()` of a parameter show its symbol, value or expression, and unit, e.g. `c_e(T_e) = 0.027·T_e J/K/kg`
 - `sub_system_labels` of `ThermalParameters`, e.g. `["e", "p"]`, are displayed as subscripts of the temperature-dependent parameters and the temperatures, and default to the index of the sub-system
 - helpers to format symbols given in LaTeX, numbers, and sympy expressions as plain text with unicode characters, HTML, or LaTeX, e.g. `latex_to_text`, `format_number`, and `expression_to_html`
+- `VectorParameter` keeps its angles, when they are not defined by its cartesian components, e.g. for a zero amplitude, so that setting the amplitude to zero and back restores its direction
 
 ### Changed
 
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ElasticParameters` has no `spring_const` argument anymore, as it is always derived
 - the table views of parameter groups and layers show the name, symbol, value, and unit of each parameter in separate columns and one row per sub-system
 - the examples define their layers by parameter groups and label the sub-systems of the two- and three-temperature models, e.g. `sub_system_labels=["e", "p", "s"]`
+- vector parameters, e.g. the magnetization, are shown by their amplitude and angles in deg in the table views
 - the symbols of the physical quantities in the docstrings are consistent across all simulations and parameter groups, e.g. the thickness is `d`, the thermal conductivity `κ`, and the anisotropy exponent `β`
 
 ### Deprecated

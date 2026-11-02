@@ -40,6 +40,7 @@ import re
 import numpy as np
 import pint
 import scipy.constants as constants
+import tabulate as tabulate_module
 from tabulate import tabulate
 
 from .parameters import Parameter, TemperatureParameter, VectorParameter
@@ -117,14 +118,24 @@ class ParameterGroup:
         rows = []
         for name, p in self._parameters().items():
             symbols, values, units = zip(*p._table_rows("text"))
-            rows.append([name, "\n".join(symbols), "\n".join(values), units[0]])
-        return tabulate(
-            rows,
+            rows.append([name, "\n".join(symbols), "\n".join(values), "\n".join(units)])
+        kwargs = dict(
             headers=self._table_headers,
             tablefmt=style,
             colalign=self._table_align,
             disable_numparse=True,
         )
+        # The whitespace must be preserved, as the lines of a cell can be empty,
+        # e.g. the dimensionless amplitude of a vector before its angles.
+        try:
+            return tabulate(rows, preserve_whitespace=True, **kwargs)
+        except TypeError:  # tabulate < 0.10 has a module-wide option only
+            preserve_whitespace = tabulate_module.PRESERVE_WHITESPACE
+            tabulate_module.PRESERVE_WHITESPACE = True
+            try:
+                return tabulate(rows, **kwargs)
+            finally:
+                tabulate_module.PRESERVE_WHITESPACE = preserve_whitespace
 
     def _html_table(self):
         """HTML table of the name, symbol, value, and unit of all parameters,
@@ -143,11 +154,16 @@ class ParameterGroup:
         body = ""
         for name, p in self._parameters().items():
             rows = p._table_rows("html")
+            # a unit, which is the same for all rows, spans them
+            same_unit = all(unit == "" for _, _, unit in rows[1:])
             for i, (symbol, value, unit) in enumerate(rows):
                 cells = [cell("td", symbol, "center"), cell("td", value, "right")]
                 if i == 0:
                     cells.insert(0, cell("td", name, "left", len(rows)))
+                if i == 0 and same_unit:
                     cells.append(cell("td", unit, "left", len(rows)))
+                elif not same_unit:
+                    cells.append(cell("td", unit, "left"))
                 body += "<tr>" + "".join(cells) + "</tr>\n"
         return f"<table>\n<thead>\n<tr>{header}</tr>\n</thead>\n<tbody>\n{body}</tbody>\n</table>"
 
