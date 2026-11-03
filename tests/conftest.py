@@ -57,7 +57,9 @@ def atom_iron():
 @pytest.fixture(scope="module")
 def atom_oxygen():
     atom_oxygen = Atom("O")
-    atom_oxygen.ionicity = 1
+    # not tabulated for the Cromer-Mann coefficients, which fall back to ionicity 0
+    with pytest.warns(UserWarning, match="closest ionicity 0"):
+        atom_oxygen.ionicity = 1
     atom_oxygen.mag_amplitude = 0.5
     atom_oxygen.mag_phi = 0 * u.deg
     atom_oxygen.mag_gamma = 180 * u.deg
@@ -85,7 +87,9 @@ def atom_titanium():
 @pytest.fixture(scope="module")
 def atom_dysprosium():
     atom_dysprosium = Atom("Dy")
-    atom_dysprosium.ionicity = 1
+    # not tabulated for the Cromer-Mann coefficients, which fall back to ionicity 0
+    with pytest.warns(UserWarning, match="closest ionicity 0"):
+        atom_dysprosium.ionicity = 1
     atom_dysprosium.mag_amplitude = 0.0
     atom_dysprosium.mag_phi = 0.0 * u.deg
     atom_dysprosium.mag_gamma = 0.0 * u.deg

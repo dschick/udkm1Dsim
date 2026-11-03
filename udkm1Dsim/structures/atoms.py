@@ -122,6 +122,19 @@ class Atom:
         self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
             filename=kwargs.get("magnetic_form_factor_path", "")
         )
+        self._read_cromer_mann_coeff()
+        # changes of the parameters, e.g. of the ionicity, are notified to the atom
+        self.atomic._owner = self
+
+    def _update_depending(self):
+        """Called on changes of the atomic parameters to re-read the
+        Cromer-Mann coefficients on a change of the ionicity."""
+        if self.ionicity != getattr(self, "_cromer_mann_ionicity", None):
+            self._read_cromer_mann_coeff()
+
+    def _read_cromer_mann_coeff(self):
+        """Read the Cromer-Mann coefficients for the current ionicity."""
+        self._cromer_mann_ionicity = self.ionicity
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
     @property
@@ -248,7 +261,10 @@ class Atom:
         .. math:: Z\; I\; a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c
 
         where the :math:`b_i` are given in Å². For several entries of the same
-        :math:`Z` and :math:`I`, the first one is returned.
+        :math:`Z` and :math:`I`, the first one is returned. If the ionicity
+        is not tabulated for the atomic number, the entry of the closest
+        tabulated ionicity is returned with a warning, which is the one
+        closer to the neutral atom for two equally close ionicities.
 
         Returns:
             cm (ndarray[float]): Cromer-Mann coefficients.
@@ -265,7 +281,24 @@ class Atom:
             print(f"Cromer Mann coefficient file {filename:s} not found!")
             raise
 
-        return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
+        entries = cm[cm[:, 0] == self.atomic_number_z]
+        if len(entries) == 0:
+            raise ValueError(
+                f"No Cromer-Mann coefficients tabulated for {self.symbol} "
+                f"(Z = {self.atomic_number_z})!"
+            )
+        exact = entries[entries[:, 1] == self.ionicity]
+        if len(exact) > 0:
+            return exact[0]
+        # the closest ionicity, but not the special valence entry of I = 99
+        ionicities = np.unique(entries[entries[:, 1] != 99, 1])
+        closest = min(ionicities, key=lambda i: (abs(i - self.ionicity), abs(i)))
+        warnings.warn(
+            f"No Cromer-Mann coefficients tabulated for {self.symbol} with an ionicity "
+            f"of {self.ionicity}, the ones of the closest ionicity {closest:.0f} are used.",
+            stacklevel=2,
+        )
+        return entries[entries[:, 1] == closest][0]
 
     @u.wraps(None, (None, "eV", "m**-1"), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
@@ -400,7 +433,7 @@ class Atom:
 
     @atomic_number_z.setter
     def atomic_number_z(self, value):
-        self.atomic.atomic_number.magnitude = value
+        raise AttributeError("The atomic number of an Atom is given by its symbol.")
 
     @property
     def mass_number_a(self):
@@ -408,7 +441,7 @@ class Atom:
 
     @mass_number_a.setter
     def mass_number_a(self, value):
-        self.atomic.mass_number.magnitude = value
+        raise AttributeError("The mass number of an Atom is given by its symbol.")
 
     @property
     def mass(self):

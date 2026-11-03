@@ -2,6 +2,7 @@
 
 
 import copy
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -282,12 +283,10 @@ def test_atom_parameters(atom_iron):
     }
 
 
-def test_atom_mass_is_derived_from_mass_number():
-    atom = Atom("Fe")
-    atom.mass_number_a = 2 * atom.mass_number_a
-    assert_allclose(atom.mass, 2 * Atom("Fe").mass)
+def test_atom_mass_is_derived_from_mass_number(atom_iron):
+    assert_allclose(atom_iron.mass, atom_iron.mass_number_a * u.atomic_mass_constant)
     with pytest.raises(AttributeError):
-        atom.mass = 1 * u.kg
+        atom_iron.mass = 1 * u.kg
 
 
 @pytest.mark.parametrize("cls", ["Atom", "AtomMixed", "Layer"])
@@ -385,3 +384,41 @@ def test_atom_get_form_factor_units(request, fixture_name, method):
     expected = get(700)
     assert get(700 * u.eV) == pytest.approx(expected)
     assert get(0.7 * u.keV) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("attribute", ["atomic_number_z", "mass_number_a"])
+def test_atom_atomic_and_mass_number_are_read_only(atom_iron, attribute):
+    with pytest.raises(AttributeError, match="given by its symbol"):
+        setattr(atom_iron, attribute, 5)
+
+
+def test_atom_ionicity_updates_cromer_mann_coeff():
+    atom = Atom("Dy")
+    assert atom.cromer_mann_coeff[1] == 0
+    atom.ionicity = 3
+    assert atom.cromer_mann_coeff[1] == 3
+    assert np.array_equal(atom.cromer_mann_coeff, Atom("Dy", ionicity=3).cromer_mann_coeff)
+    # also changes via the parameter group are taken into account
+    atom.atomic.ionicity.magnitude = 0
+    assert np.array_equal(atom.cromer_mann_coeff, Atom("Dy").cromer_mann_coeff)
+
+
+@pytest.mark.parametrize(
+    "symbol, ionicity, closest",
+    [
+        ("Dy", 1, 0),
+        ("Dy", 2, 3),
+        ("Fe", 1, 0),  # equally close to 0 and 2, the one closer to the neutral atom
+        ("O", -3, -2),
+        ("Si", 50, 4),  # not the valence entry of ionicity 99
+    ],
+)
+def test_atom_cromer_mann_coeff_of_closest_ionicity(symbol, ionicity, closest):
+    with pytest.warns(UserWarning, match=f"closest ionicity {closest}"):
+        atom = Atom(symbol, ionicity=ionicity)
+    assert atom.ionicity == ionicity
+    assert atom.cromer_mann_coeff[1] == closest
+    # the coefficients are only read again on a change of the ionicity
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        atom.mag_amplitude = 0.5

@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the magnetization of `Atom` and `AtomMixed` is a `VectorParameter` and behaves as for layers, i.e. its amplitude must be 0 .. 1 and its gamma angle is given in -180 .. 180 deg
 - vector parameters, e.g. the magnetization, are shown by their amplitude and angles in deg in the table views
 - the symbols of the physical quantities in the docstrings are consistent across all simulations and parameter groups, e.g. the thickness is `d`, the thermal conductivity `κ`, and the anisotropy exponent `β`
+- the atomic number and mass number of an `Atom` are given by its symbol and cannot be set
+- for an ionicity, which is not tabulated for the Cromer-Mann coefficients, the ones of the closest tabulated ionicity are used with a warning instead of raising an `IndexError`
 
 ### Deprecated
 
@@ -49,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the gamma angle of zero vectors with signed zero components was -180 deg instead of 0 deg in `convert_cartesian_to_polar`
 - the Cromer-Mann atomic form factor of `XrayKin` and `XrayDyn` used wrong coefficients and converted `q_z` wrongly, so that its `q_z`-dependence was wrong; cached results require `force_recalc=True`, closing [#226]
 - Cromer-Mann coefficients of `Cs1+`, `Ba2+`, `Ru4+`, `Bi5+`, `Np3+`, `Np4+`, `Np6+`, and `Pu` corrected and 16 rounded coefficients completed according to the International Tables for Crystallography, Vol. C, Table 6.1.1.4
+- the Cromer-Mann coefficients of an `Atom` were not updated on a change of its ionicity
 
 ### Security
 
