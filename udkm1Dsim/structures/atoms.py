@@ -130,6 +130,19 @@ class Atom:
         self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
             filename=kwargs.get("magnetic_form_factor_path", "")
         )
+        self._read_cromer_mann_coeff()
+        # changes of the parameters, e.g. of the ionicity, are notified to the atom
+        self.atomic._owner = self
+
+    def _update_depending(self):
+        """Called on changes of the atomic parameters to re-read the
+        Cromer-Mann coefficients on a change of the ionicity."""
+        if self.ionicity != getattr(self, "_cromer_mann_ionicity", None):
+            self._read_cromer_mann_coeff()
+
+    def _read_cromer_mann_coeff(self):
+        """Read the Cromer-Mann coefficients for the current ionicity."""
+        self._cromer_mann_ionicity = self.ionicity
         self.cromer_mann_coeff = self.read_cromer_mann_coeff()
 
     @property
@@ -227,7 +240,8 @@ class Atom:
         Convention of Ref. :cite:t:`alsnielsen2011` (p. 11, footnote) is a negative :math:`f_2`.
 
         Args:
-            energy (ndarray[float]): photon energy [eV].
+            energy (Quantity, ndarray[float]): photon energy, where floats
+                are taken in [eV].
 
         Returns:
             f (ndarray[complex]): energy-dependent atomic form factors.
@@ -246,10 +260,19 @@ class Atom:
     def read_cromer_mann_coeff(self):
         r"""read_cromer_mann_coeff
 
-        The Cromer-Mann coefficients (see :cite:t:`cromermann1968`) are read from a parameter file
-        and are returned in the following order:
+        The Cromer-Mann coefficients (see :cite:t:`cromermann1968`) of the
+        atomic number :math:`Z` and ionicity :math:`I` of the atom are read
+        from the parameter file, see its README for the source, which is
+        Table 6.1.1.4 of the International Tables for Crystallography
+        :cite:`brown2006`. They are returned in the following order:
 
-        .. math:: a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c
+        .. math:: Z\; I\; a_1\; a_2\; a_3\; a_4\; b_1\; b_2\; b_3\; b_4\; c
+
+        where the :math:`b_i` are given in Å². For several entries of the same
+        :math:`Z` and :math:`I`, the first one is returned. If the ionicity
+        is not tabulated for the atomic number, the entry of the closest
+        tabulated ionicity is returned with a warning, which is the one
+        closer to the neutral atom for two equally close ionicities.
 
         Returns:
             cm (ndarray[float]): Cromer-Mann coefficients.
@@ -266,67 +289,88 @@ class Atom:
             print(f"Cromer Mann coefficient file {filename:s} not found!")
             raise
 
-        return cm[(cm[:, 0] == self.atomic_number_z) & (cm[:, 1] == self.ionicity)][0]
+        entries = cm[cm[:, 0] == self.atomic_number_z]
+        if len(entries) == 0:
+            raise ValueError(
+                f"No Cromer-Mann coefficients tabulated for {self.symbol} "
+                f"(Z = {self.atomic_number_z})!"
+            )
+        exact = entries[entries[:, 1] == self.ionicity]
+        if len(exact) > 0:
+            return exact[0]
+        # the closest ionicity, but not the special valence entry of I = 99
+        ionicities = np.unique(entries[entries[:, 1] != 99, 1])
+        closest = min(ionicities, key=lambda i: (abs(i - self.ionicity), abs(i)))
+        warnings.warn(
+            f"No Cromer-Mann coefficients tabulated for {self.symbol} with an ionicity "
+            f"of {self.ionicity}, the ones of the closest ionicity {closest:.0f} are used.",
+            stacklevel=2,
+        )
+        return entries[entries[:, 1] == closest][0]
 
     @u.wraps(None, (None, "eV", "m**-1"), strict=False)
     def get_cm_atomic_form_factor(self, energy, qz):
         r"""get_cm_atomic_form_factor
 
         The atomic form factor :math:`f` is calculated in dependence of the
-        photon energy :math:`E` [eV] and the :math:`z`-component of the
-        scattering vector :math:`q_z` [Å :math:`^{-1}`] (see :cite:t:`cromermann1968`).
+        photon energy :math:`E` and the :math:`z`-component of the scattering
+        vector :math:`q_z` (see :cite:t:`cromermann1968`), which are given as
+        Quantities or as floats in [eV] and [1/m], respectively.
         Note that the Cromer-Mann coefficients are fitted for :math:`q_z` in
-        [Å :math:`^{-1}`]!
+        [Å :math:`^{-1}`], to which :math:`q_z` is converted internally!
 
         See Ref. :cite:t:`alsnielsen2011` (p. 235).
 
         .. math:: f(q_z,E) = f_{CM}(q_z) + \delta f_1(E) -i f_2(E)
 
-        :math:`f_{CM}(q_z)` is given in Ref. :cite:t:`cromermann1968`:
+        :math:`f_{CM}(q_z)` is given in Ref. :cite:t:`cromermann1968` and in
+        Table 6.1.1.4 of Ref. :cite:t:`brown2006` with
+        :math:`\sin(\theta)/\lambda = q_z/4\pi` and :math:`b_i` in Å² for
+        :math:`\sin(\theta)/\lambda < 2` Å :math:`^{-1}`:
 
         .. math::
 
-            f_{CM}(q_z) = \sum(a_i \, \exp(-b_i \, (q_z/4\pi)^2))+ c
+            f_{CM}(q_z) = \sum^4_{i=1} a_i \, \exp\left(-b_i \, (q_z/4\pi)^2\right) + c
 
-        :math:`\delta f_1(E)` is the dispersion correction:
+        :math:`\delta f_1(E)` is the dispersion correction with respect to
+        :math:`f_{CM}(0)`:
 
         .. math::
 
-            \delta f_1(E) = f_1(E) - \left(\sum^4_i(a_i) + c\right)
+            \delta f_1(E) = f_1(E) - f_{CM}(0) = f_1(E) - \left(\sum^4_{i=1} a_i + c\right)
 
         Thus:
 
-        .. math:: f(q_z,E) = \sum(a_i \, \exp(-b_i \, q_z/2\pi))
-           + c + f_1(E)-i f_2(E) - \left(\sum(a_i) + c\right)
-
-        .. math:: f(q_z,E) = \sum(a_i \, \exp(-b_i \, q_z/2\pi))
-           + f_1(E) -i f_2(E) - \sum(a_i)
+        .. math:: f(q_z,E) = \sum^4_{i=1} a_i \, \exp\left(-b_i \, (q_z/4\pi)^2\right)
+           + c + f_1(E) - i f_2(E) - \left(\sum^4_{i=1} a_i + c\right)
 
         Args:
-            energy (ndarray[float]): photon energy [eV].
-            qz (ndarray[float]): scattering vector [1/m].
+            energy (Quantity, ndarray[float]): photon energy, where floats
+                are taken in [eV].
+            qz (Quantity, ndarray[float]): scattering vector, where floats
+                are taken in [1/m].
 
         Returns:
             f (ndarray[complex]): energy- and qz-dependent Cromer-Mann atomic form
             factors.
 
         """
-        # convert from 1/nm to 1/Å and to a real column vector
-        qz = np.array(qz * 1e10, ndmin=2)
+        # convert from 1/m to 1/Å and to a real column vector
+        qz = np.array(qz * 1e-10, ndmin=2)
         energy = np.array(energy, ndmin=1)
         if np.size(qz, 0) != len(energy):
             raise TypeError("qz need to have as many rows as energies!")
 
         f = np.zeros_like(qz, dtype=complex)
+        a = self.atomic.cromer_mann_a.magnitude
+        b = self.atomic.cromer_mann_b.magnitude
+        c = self.atomic.cromer_mann_c.magnitude
 
         for i, en in enumerate(energy):
             _qz = qz[i, :].reshape(-1, 1)
-
-            f_cm = np.dot(
-                self.cromer_mann_coeff[0:3],
-                np.exp(np.outer(-self.cromer_mann_coeff[4:7], (_qz / (4 * np.pi)) ** 2)),
-            )
-            f[i, :] = f_cm + self.get_atomic_form_factor(en) - np.sum(self.cromer_mann_coeff[0:3])
+            f_cm = np.dot(a, np.exp(np.outer(-b, (_qz / (4 * np.pi)) ** 2))) + c
+            # f_1(E) - i f_2(E) with the dispersion correction with respect to f_CM(0)
+            f[i, :] = f_cm + self.get_atomic_form_factor(en) - (np.sum(a) + c)
         return f
 
     def read_magnetic_form_factor_coeff(self, filename=""):
@@ -370,7 +414,8 @@ class Atom:
         Convention of Ref. :cite:t:`alsnielsen2011` (p. 11, footnote) is a negative :math:`m_2`
 
         Args:
-            energy (ndarray[float]): photon energy [eV].
+            energy (Quantity, ndarray[float]): photon energy, where floats
+                are taken in [eV].
 
         Returns:
             m (ndarray[complex]): energy-dependent magnetic form factors.
@@ -396,7 +441,7 @@ class Atom:
 
     @atomic_number_z.setter
     def atomic_number_z(self, value):
-        self.atomic.atomic_number.magnitude = value
+        raise AttributeError("The atomic number of an Atom is given by its symbol.")
 
     @property
     def mass_number_a(self):
@@ -404,7 +449,7 @@ class Atom:
 
     @mass_number_a.setter
     def mass_number_a(self, value):
-        self.atomic.mass_number.magnitude = value
+        raise AttributeError("The mass number of an Atom is given by its symbol.")
 
     @property
     def mass(self):
@@ -660,7 +705,8 @@ class AtomMixed(Atom):
         will be used instead.
 
         Args:
-            energy (ndarray[float]): photon energy [eV].
+            energy (Quantity, ndarray[float]): photon energy, where floats
+                are taken in [eV].
 
         Returns:
             f (ndarray[complex]): energy-dependent atomic form factors.
@@ -684,8 +730,10 @@ class AtomMixed(Atom):
         Averaged energy and qz-dependent atomic form factors.
 
         Args:
-            energy (ndarray[float]): photon energy [eV].
-            qz (ndarray[float]): scattering vector [1/m].
+            energy (Quantity, ndarray[float]): photon energy, where floats
+                are taken in [eV].
+            qz (Quantity, ndarray[float]): scattering vector, where floats
+                are taken in [1/m].
 
         Returns:
             f (ndarray[complex]): energy- and qz-dependent Cromer-Mann atomic
@@ -741,7 +789,8 @@ class AtomMixed(Atom):
         Mixed energy dependent magnetic form factors.
 
         Args:
-            energy (ndarray[float]): photon energy [eV].
+            energy (Quantity, ndarray[float]): photon energy, where floats
+                are taken in [eV].
 
         Returns:
             f (ndarray[complex]): energy-dependent magnetic form factors.

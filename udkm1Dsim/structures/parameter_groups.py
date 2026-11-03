@@ -188,7 +188,7 @@ class ParameterGroup:
 class _AtomParametersBase(ParameterGroup):
     """Parameters common to :class:`AtomParameters` and :class:`AtomMixedParameters`."""
 
-    _derived = ("mass",)
+    _derived = ("atomic_number", "mass_number", "mass")
 
     def __init__(
         self,
@@ -218,6 +218,10 @@ class AtomParameters(_AtomParametersBase):
     parameters of an atom afterwards does not update the layers it was
     already added to.
 
+    The atomic number and mass number are given by the element of the atom.
+    A change of the ionicity updates the Cromer-Mann coefficients, see
+    :meth:`.Atom.read_cromer_mann_coeff`.
+
     Attributes:
         atomic_number (int): atomic number :math:`Z`.
         mass_number (float): mass number :math:`A`.
@@ -234,6 +238,9 @@ class AtomParameters(_AtomParametersBase):
         cromer_mann_c (float): Cromer-Mann coefficient :math:`c`.
 
     """
+
+    # the Cromer-Mann coefficients are given by the atomic number and ionicity
+    _derived = _AtomParametersBase._derived + ("cromer_mann_a", "cromer_mann_b", "cromer_mann_c")
 
     def __init__(
         self,
