@@ -85,6 +85,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the `mf_exch_coupling` of a layer was not defined for an infinite `eff_spin`
 - `LLB.get_magnetization_map` rejected a valid `Nx3` initial magnetization
 - `LLB.get_magnetization_map` failed for `progress_bar=False`
+- `LLB.get_magnetization_map` failed for a single delay and for structures without magnetic layers
+- the adaptive step size of the magnetization solver could grow so large for a magnetization in equilibrium that the solver stepped over the excitation, e.g. for low initial temperatures; its `max_step` is limited to the shortest delay step now
+- the `LLB` overflowed or stalled at low temperatures, where the tiny longitudinal susceptibility makes the longitudinal field huge, whose rounding errors entered the torques; it only enters the longitudinal relaxation now
+- the anisotropy and exchange fields of the `LLB` were not finite for layers with a Curie temperature but without saturation magnetization, which stalled the solver; these fields vanish now
+- `LLB` raises an error for layers with a Curie temperature but without an effective spin instead of silently keeping them at zero magnetization
+- `LLB` raises an error for layers with an anisotropy or a magnetoelastic coupling and an `aniso_exponent` below 2, for which these fields diverge at the Curie temperature and stalled the solver
 
 ### Security
 

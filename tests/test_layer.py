@@ -213,7 +213,7 @@ def test_layer_set_magnetic_parameters_after_creation(layer):
 
 
 def test_layer_aniso_exponent(layer):
-    assert layer.aniso_exponent == 1
+    assert layer.aniso_exponent == 3
 
 
 def test_layer_anisotropy(layer):

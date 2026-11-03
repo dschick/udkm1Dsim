@@ -800,6 +800,12 @@ class LLG(Magnetization):
             init_state (ndarray[float]): initial state.
 
         """
+        if kwargs:
+            raise TypeError(
+                f"{type(self).__name__} got unexpected keyword argument(s) "
+                + ", ".join(f"'{key}'" for key in kwargs)
+                + "!"
+            )
         return init_dir
 
 
@@ -963,7 +969,9 @@ class iLLG(LLG):
 
         """
         N, P = init_dir.shape[0:2]
-        if init_velocity is None:
+        if init_velocity is None and N == 0:
+            velocity = np.zeros_like(init_dir)
+        elif init_velocity is None:
             # the velocity of the LLG for the initial state
             velocity = magnetization_scipy.llg_rhs(
                 inputs.delays[0],
@@ -1050,6 +1058,10 @@ class LLB(Magnetization):
     The effective spin ``eff_spin`` of the layers selects the model: finite
     spins give the quantum LLB with Brillouin functions, e.g. :math:`S = 1/2`
     for Ni, an infinite spin the classical LLB with the Langevin function.
+    Layers with an anisotropy or a magnetoelastic coupling require an
+    ``aniso_exponent`` of at least 2, since these fields scale as
+    :math:`m_\mathrm{eq}^{\beta-2}` and would diverge at the Curie temperature
+    otherwise.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -1120,6 +1132,22 @@ class LLB(Magnetization):
         is_magnetic = self.S.get_layer_property_vector("magnetic.curie_temp.magnitude") > 0
         layers = self.get_magnetic_parameters(is_magnetic)
         N = len(layers)
+        if any(layer.eff_spin.magnitude <= 0 for layer in layers):
+            raise ValueError(
+                "All layers with a Curie temperature must have an eff_spin > 0 for the "
+                "LLB, which can also be infinite for the classical LLB!"
+            )
+        for layer in layers:
+            anisotropic = np.any(np.asarray(layer.anisotropy.magnitude) != 0) or np.any(
+                np.asarray(layer.magnetoelastic_coupling.magnitude) != 0
+            )
+            if anisotropic and layer.aniso_exponent.magnitude < 2:
+                raise ValueError(
+                    "The anisotropy and magnetoelastic fields of the LLB scale as "
+                    "m_eq**(aniso_exponent - 2) and diverge at the Curie temperature for "
+                    "aniso_exponent < 2 - it is 3 for a uniaxial anisotropy following "
+                    "the Callen-Callen law!"
+                )
 
         if implicit_init_mag and N > 0:
             # start in the equilibrium of the initial temperature, tabulated

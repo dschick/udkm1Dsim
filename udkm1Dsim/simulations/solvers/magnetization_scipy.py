@@ -232,7 +232,7 @@ def prepare_inputs(delays, N, H_ext, amplitude_map=None, temp_map=None, strain_m
     return Inputs(
         delays,
         np.ascontiguousarray(H_ext),
-        np.ascontiguousarray(amplitude_map.reshape(M, N, -1)),
+        np.ascontiguousarray(amplitude_map.reshape(M, N, amplitude_map.shape[-1])),
         as_map(temp_map, 0.0),
         as_map(strain_map, 0.0),
     )
@@ -343,7 +343,7 @@ def anisotropy_field(m, ref_mags, mag):
         B (ndarray[float]): field :math:`N \times P \times 3` [T].
 
     """
-    factor = 2 / mag.mag_saturation * _scaling(ref_mags, mag.aniso_exponent)
+    factor = 2 / _safe_saturations(mag.mag_saturation) * _scaling(ref_mags, mag.aniso_exponent)
     return factor[..., np.newaxis] * mag.anisotropy * m
 
 
@@ -379,7 +379,7 @@ def interlayer_exchange_field(m, mag, exch_stiffnesses, thicknesses):
     B = np.zeros_like(m)
     if len(m) < 2:
         return B
-    es = 2 / (mag.mag_saturation * thicknesses[:, np.newaxis] ** 2)
+    es = 2 / (_safe_saturations(mag.mag_saturation) * thicknesses[:, np.newaxis] ** 2)
     A = exch_stiffnesses
     B[1:] += (es[1:] * A[1:, 0, np.newaxis])[..., np.newaxis] * (m[:-1] - m[1:])
     B[:-1] += (es[:-1] * A[:-1, 1, np.newaxis])[..., np.newaxis] * (m[1:] - m[:-1])
@@ -416,7 +416,7 @@ def magnetoelastic_field(m, ref_mags, strains, mag):
         -2
         * mag.magnetoelastic_coupling
         * strains[:, np.newaxis]
-        / mag.mag_saturation
+        / _safe_saturations(mag.mag_saturation)
         * _scaling(ref_mags, mag.aniso_exponent)
         * m[..., 2]
     )
@@ -792,11 +792,17 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
 
     B = effective_field(m, me, H_ext, strains, mag, exch_stiffnesses, thicknesses)
     B += transverse_sublattice_exchange_field(m, m_squared, mag)
-    B += longitudinal_field(m, m_norm, me, chi, mag)
+    # the longitudinal field is parallel to m and exerts no torque - it only
+    # enters the longitudinal term, since it is huge at low temperatures, where
+    # the susceptibility is tiny, and its rounding errors would otherwise
+    # dominate the cross products
+    B_par = longitudinal_field(m, m_norm, me, chi, mag)
 
     precession = np.cross(m, B)
     transverse = (alpha_perp / m_squared)[..., np.newaxis] * np.cross(m, precession)
-    longitudinal = (alpha_par / m_squared * np.einsum("npi,npi->np", m, B))[..., np.newaxis] * m
+    longitudinal = (alpha_par / m_squared * np.einsum("npi,npi->np", m, B + B_par))[
+        ..., np.newaxis
+    ] * m
     dmdt = GAMMA_E * (precession + transverse - longitudinal)
     return (mag.active[..., np.newaxis] * dmdt).ravel()
 
@@ -825,6 +831,11 @@ def solve(
     iLLG integrate the unit vectors of the magnetization, which are scaled by
     the prescribed amplitude of the ``inputs`` afterwards.
 
+    The ``max_step`` of the ode solver is limited to the shortest step of the
+    delays, on which the inputs are given. Otherwise, the adaptive step size
+    can grow so large, e.g. for a magnetization in equilibrium, that the
+    solver steps over a change of the inputs, such as the excitation.
+
     Args:
         model (str): one of ``llg``, ``illg`` or ``llb``, see :data:`RHS`.
         init_state (ndarray[float]): initial state - cartesian
@@ -837,7 +848,8 @@ def solve(
         exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
             upper and lower magnetic layer :math:`N \times 2` [J/m].
         thicknesses (ndarray[float]): thicknesses :math:`N` [m].
-        ode_options (dict): options for scipy solve_ivp ode solver.
+        ode_options (dict): options for scipy solve_ivp ode solver, whose
+            ``max_step`` is only decreased by the shortest delay step.
         progress_bar (boolean, optional): enable tqdm progress bar. Defaults
             to False.
 
@@ -877,20 +889,30 @@ def solve(
         pbar = None
         fun = rhs
 
-    sol = solve_ivp(
-        fun,
-        [delays[0], delays[-1]],
-        init_state.ravel(),
-        args=args,
-        t_eval=delays,
-        **ode_options,
-    )
+    if M < 2:
+        # nothing to integrate for a single delay
+        sol = None
+        y = init_state.reshape(M, -1)
+    else:
+        options = dict(ode_options)
+        max_step = options.get("max_step")
+        max_step = np.inf if max_step is None else max_step
+        options["max_step"] = min(max_step, np.min(np.diff(delays)))
+        sol = solve_ivp(
+            fun,
+            [delays[0], delays[-1]],
+            init_state.ravel(),
+            args=args,
+            t_eval=delays,
+            **options,
+        )
     if pbar is not None:
         pbar.close()
-    if not sol.success:
-        raise RuntimeError("solve_ivp failed: " + sol.message)
+    if sol is not None:
+        if not sol.success:
+            raise RuntimeError("solve_ivp failed: " + sol.message)
+        y = sol.y.T
 
-    y = sol.y.T
     if model == "llb":
         magnetization_map = y.reshape([M, N, P, 3])
     else:
@@ -912,6 +934,14 @@ def _safe_moments(mag_moments):
     1e-23 J/T, far below the norm floor MIN_MAG, so they must not be floored."""
     mag_moments = np.asarray(mag_moments, dtype=float)
     return np.where(mag_moments > 0, mag_moments, np.inf)
+
+
+def _safe_saturations(mag_saturations):
+    """saturation magnetizations as divisors: a vanishing saturation
+    magnetization yields vanishing anisotropy, exchange and magnetoelastic
+    fields instead of a division by zero"""
+    mag_saturations = np.asarray(mag_saturations, dtype=float)
+    return np.where(mag_saturations > 0, mag_saturations, np.inf)
 
 
 def _cubic_coefficients(eff_spins):

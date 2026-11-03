@@ -515,3 +515,78 @@ def test_illg_free_nutation(tmp_path):
     m = convert_polar_to_cartesian(mag_map)[-1, 0]
     displacement = v0 * tau * alpha / (alpha + 1j)
     assert np.isclose(m[1] + 1j * m[2], displacement, rtol=1e-3)
+
+
+@pytest.mark.parametrize("cls", [LLB, LLG, iLLG])
+def test_no_magnetic_layers(cls, tmp_path):
+    spacer = make_layer("s", mag_saturation=0 * u.J / u.T / u.m**3, curie_temp=0 * u.K)
+    sim = simulation(cls, make_structure((spacer, 2)), tmp_path)
+    delays = np.r_[0:5:1] * u.ps
+    mag_map = sim.get_magnetization_map(delays, temp_map=np.full((len(delays), 2), 300.0))
+    assert np.allclose(mag_map, 0)
+
+
+@pytest.mark.parametrize("cls", [LLB, LLG, iLLG])
+def test_single_delay(cls, tmp_path):
+    """a single delay returns the initial state"""
+    S = make_structure((make_layer("m", gilbert_damping=0.1, inertial_time=1 * u.fs), 1))
+    sim = simulation(cls, S, tmp_path)
+    mag_map = sim.get_magnetization_map(np.r_[0] * u.ps, temp_map=np.full((1, 1), 300.0))
+    assert mag_map.shape == (1, 1, 3)
+    assert np.allclose(mag_map[0, 0, 1:], ALONG_X[1:])
+
+
+def test_llb_without_saturation_magnetization(tmp_path):
+    """the fields scaled by 1/M_s vanish for M_s = 0 instead of diverging"""
+    S = make_structure((make_layer("m", mag_saturation=0 * u.J / u.T / u.m**3), 1))
+    llb = simulation(LLB, S, tmp_path)
+    delays = np.r_[0:5:1] * u.ps
+    mag_map = llb.get_magnetization_map(delays, temp_map=np.full((len(delays), 1), 300.0))
+    assert np.all(np.isfinite(mag_map))
+
+
+def test_llb_requires_eff_spin(tmp_path):
+    llb = simulation(LLB, make_structure((make_layer("m", eff_spin=0), 1)), tmp_path)
+    with pytest.raises(ValueError, match="eff_spin"):
+        llb.get_magnetization_map(np.r_[0:2:1] * u.ps, temp_map=np.full((2, 1), 300.0))
+
+
+def test_llg_rejects_unknown_keyword(tmp_path):
+    llg = simulation(LLG, make_structure((make_layer("m"), 1)), tmp_path)
+    with pytest.raises(TypeError, match="init_velocty"):
+        llg.get_magnetization_map(np.r_[0:2:1] * u.ps, init_velocty=np.r_[0, 1, 0])
+
+
+@pytest.mark.parametrize("eff_spin", [0.5, 3.5])
+def test_llb_pumped_at_low_temperature(eff_spin, tmp_path):
+    """at low temperatures the tiny susceptibility makes the longitudinal field
+    huge, which must not spoil the torques, and the solver must not step over
+    the excitation of the magnetization in equilibrium with the default
+    tolerances"""
+    S = make_structure((make_layer("m", eff_spin=eff_spin), 1))
+    llb = LLB(S, True, save_data=False, disp_messages=False)
+    delays = np.r_[0:50:0.1] * u.ps
+    temp_map = np.full((len(delays), 1), 5.0)
+    temp_map[20:, 0] += 400 * np.exp(-np.arange(len(delays) - 20) * 0.1 / 5)
+    mag_map = llb.get_magnetization_map(delays, temp_map=temp_map)
+    assert np.all(np.isfinite(mag_map))
+    assert mag_map[:, 0, 0].min() < 0.97 * mag_map[0, 0, 0]
+    assert np.all(mag_map[:, 0, 0] <= mag_map[0, 0, 0] + 1e-9)
+    # the direction is untouched without any field
+    assert np.allclose(mag_map[:, 0, 1:], ALONG_X[1:])
+
+
+@pytest.mark.parametrize(
+    "props",
+    [
+        {"anisotropy": [0, 0, 1e5] * u.J / u.m**3},
+        {"magnetoelastic_coupling": 1e6 * u.J / u.m**3},
+    ],
+)
+def test_llb_requires_aniso_exponent_of_two(props, tmp_path):
+    """the anisotropy and magnetoelastic fields diverge at T_C for beta < 2"""
+    llb = simulation(
+        LLB, make_structure((make_layer("m", aniso_exponent=1, **props), 1)), tmp_path
+    )
+    with pytest.raises(ValueError, match="aniso_exponent"):
+        llb.get_magnetization_map(np.r_[0:2:1] * u.ps, temp_map=np.full((2, 1), 300.0))
