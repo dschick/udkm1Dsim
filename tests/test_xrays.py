@@ -127,10 +127,11 @@ def test_xray_kin_get_hash(xray_kin, strain_map):
 
 
 def test_xray_kin_get_uc_structure_factor(xray_kin, unit_cell_iron):
+    # for q_z -> 0, the structure factor is the sum of the atomic form factors
     assert_allclose(
-        xray_kin.get_uc_structure_factor(1000, 1, unit_cell_iron, strain=0.01),
-        -15.52 - 11.72j,
-        rtol=1e-2,
+        xray_kin.get_uc_structure_factor(1000, 0, unit_cell_iron, strain=0.01),
+        sum(atom.get_atomic_form_factor(1000) for atom, _, _ in unit_cell_iron.atoms),
+        rtol=1e-9,
     )
 
 

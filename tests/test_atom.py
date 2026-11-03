@@ -157,17 +157,36 @@ def test_atom_get_atomic_form_factor(request, fixture_name, expected):
     assert atom.get_atomic_form_factor(700) == pytest.approx(expected, abs=1e-2)
 
 
-@pytest.mark.parametrize(
-    "fixture_name, expected",
-    [
-        ("atom_iron", np.complex128(-33.9 - 1.9j)),
-        ("atom_dysprosium", np.complex128(-56.5 - 11.3j)),
-        ("atom_mixed", np.complex128(-43.0 - 5.6j)),
-    ],
-)
-def test_atom_get_cm_atomic_form_factor(request, fixture_name, expected):
+@pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_dysprosium", "atom_mixed"])
+@pytest.mark.parametrize("energy", [700, 8000])
+def test_atom_get_cm_atomic_form_factor_at_zero_qz(request, fixture_name, energy):
+    # for q_z -> 0, the Cromer-Mann form factor is the energy-dependent one
     atom = request.getfixturevalue(fixture_name)
-    assert atom.get_cm_atomic_form_factor(700, 1) == pytest.approx(expected, abs=0.1)
+    assert atom.get_cm_atomic_form_factor(energy, 0)[0, 0] == pytest.approx(
+        atom.get_atomic_form_factor(energy)
+    )
+
+
+# f_0(sin(theta)/lambda) of Hubbell et al., J. Phys. Chem. Ref. Data 4, 471 (1975),
+# as given by xraylib 4.3.0, FF_Rayl(Z, sin(theta)/lambda)
+F0_HUBBELL = {
+    "O": {0.25: 4.805, 0.5: 2.335, 1.0: 1.376},
+    "Fe": {0.25: 18.340, 0.5: 11.468, 1.0: 6.515},
+    "Sr": {0.25: 27.794, 0.5: 19.839, 1.0: 10.699},
+}
+
+
+@pytest.mark.parametrize("symbol", F0_HUBBELL)
+def test_atom_get_cm_atomic_form_factor_qz_dependence(symbol):
+    atom = Atom(symbol)
+    p = atom.atomic
+    f_cm_0 = np.sum(p.cromer_mann_a.magnitude) + p.cromer_mann_c.magnitude
+    f_0 = atom.get_cm_atomic_form_factor(8000, 0)[0, 0]
+    for s, f0_ref in F0_HUBBELL[symbol].items():
+        qz = 4 * np.pi * s / u.angstrom
+        f_cm = atom.get_cm_atomic_form_factor(8000 * u.eV, qz)[0, 0] - f_0 + f_cm_0
+        # the analytical approximation agrees within its accuracy of about 1 %
+        assert f_cm.real == pytest.approx(f0_ref, rel=1e-2)
 
 
 @pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_dysprosium", "atom_mixed"])
@@ -338,3 +357,31 @@ def test_atom_cromer_mann_parameters(atom_iron):
 def test_atom_mixed_has_no_cromer_mann_parameters(atom_mixed):
     assert not hasattr(atom_mixed.atomic, "cromer_mann_a")
     assert "cromer_mann" not in repr(atom_mixed)
+
+
+@pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_mixed"])
+def test_atom_get_cm_atomic_form_factor_units(request, fixture_name):
+    # Quantities in any unit and floats in eV and 1/m give the same result
+    atom = request.getfixturevalue(fixture_name)
+    expected = atom.get_cm_atomic_form_factor(8000, 3e10)
+    for energy, qz in [
+        (8000 * u.eV, 3 / u.angstrom),
+        (8 * u.keV, 30 / u.nm),
+        (8000, 3e10 / u.m),
+        (8 * u.keV, 3e10),
+    ]:
+        assert atom.get_cm_atomic_form_factor(energy, qz) == pytest.approx(expected)
+    # a float of 1 is taken in 1/m and hence equal to q_z = 0, not to 1/Å
+    assert atom.get_cm_atomic_form_factor(8000, 1) == pytest.approx(
+        atom.get_cm_atomic_form_factor(8000, 0)
+    )
+
+
+@pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_mixed"])
+@pytest.mark.parametrize("method", ["get_atomic_form_factor", "get_magnetic_form_factor"])
+def test_atom_get_form_factor_units(request, fixture_name, method):
+    # Quantities in any unit and floats in eV give the same result
+    get = getattr(request.getfixturevalue(fixture_name), method)
+    expected = get(700)
+    assert get(700 * u.eV) == pytest.approx(expected)
+    assert get(0.7 * u.keV) == pytest.approx(expected)

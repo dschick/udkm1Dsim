@@ -47,10 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API documentation of the `parameters`, `parameter_groups`, and `solvers` modules was missing
 - `AtomMixed` had no `_mass`, which is used for the density of its unit cell by `XrayDynMag`
 - the gamma angle of zero vectors with signed zero components was -180 deg instead of 0 deg in `convert_cartesian_to_polar`
+- the Cromer-Mann atomic form factor of `XrayKin` and `XrayDyn` used wrong coefficients and converted `q_z` wrongly, so that its `q_z`-dependence was wrong; cached results require `force_recalc=True`, closing [#226]
 
 ### Security
 
 [#224]: https://github.com/dschick/udkm1Dsim/issues/224
+[#226]: https://github.com/dschick/udkm1Dsim/issues/226
 
 
 ## [2.5.0] 2026-10-20
