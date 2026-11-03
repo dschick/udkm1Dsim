@@ -212,3 +212,109 @@ def test_phonon_inconsistent_num_sub_systems_raises(tmp_path, phonon_class):
     temp_map = 300 * np.ones([len(delays), S.get_number_of_layers(), 2])
     with pytest.raises(ValueError, match="'lin_therm_exp' has 1"):
         phonon.get_strain_map(delays, temp_map, np.zeros_like(temp_map))
+
+
+# PhononAna vs. PhononNum
+#
+# The analytical solution is exact for the harmonic linear chain without
+# damping and serves as reference for the numerical solvers.
+
+
+@pytest.fixture(scope="module")
+def structure_freestanding(amorphous_layer_iron):
+    S = Structure("freestanding layer")
+    S.add_sub_structure(amorphous_layer_iron, 50)
+    return S
+
+
+def _heating(S, delays, two_steps=True):
+    """step-like heating of the top 20 layers at t = 0 and, optionally, of
+    the top 10 layers at t = 3 ps to test the re-initialization of the
+    analytical solution at each temperature change"""
+    t = delays.to("s").magnitude
+    temp_map = 300 * np.ones((len(t), S.get_number_of_layers()))
+    temp_map[np.ix_(t >= 0, np.r_[0:20])] += 100
+    if two_steps:
+        temp_map[np.ix_(t >= 3e-12, np.r_[0:10])] += 50
+    delta_temp_map = np.zeros_like(temp_map)
+    delta_temp_map[1:] = np.diff(temp_map, axis=0)
+    return temp_map, delta_temp_map
+
+
+# the freestanding layer and the substrate of the crystalline structure with
+# its acoustic mismatch are thin enough to reflect the strain wave at their
+# backside within the delays
+@pytest.fixture(scope="module", params=["structure_freestanding", "structure_crystalline"])
+def reference_structure(request):
+    return request.getfixturevalue(request.param)
+
+
+@pytest.fixture(scope="module")
+def reference_strain_map(reference_structure, delays, tmp_path_factory):
+    phonon_ana = PhononAna(
+        reference_structure,
+        True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=False,
+        disp_messages=False,
+    )
+    strain_map, _, _ = phonon_ana.calc_strain_map(delays, *_heating(reference_structure, delays))
+    return strain_map
+
+
+def test_phonon_ana_free_backside(structure_freestanding, delays, tmp_path):
+    """the strain wave is reflected at the free backside of a freestanding
+    layer with an inverted sign, closing #186"""
+    phonon_ana = PhononAna(
+        structure_freestanding, True, cache_dir=tmp_path, save_data=False, disp_messages=False
+    )
+    strain_map, _, _ = phonon_ana.calc_strain_map(
+        delays, *_heating(structure_freestanding, delays, two_steps=False)
+    )
+    # the compressive front of the strain wave reaches the backside of the
+    # 50 nm layer after 5 ps and is reflected as expansion, while a clamped
+    # backside would reflect it as compression
+    i = np.argmin(np.abs(delays.to("s").magnitude - 8e-12))
+    assert np.mean(strain_map[i, 40:49]) > 4e-4
+
+
+def test_phonon_ana_zero_mode(reference_structure, tmp_path):
+    """the free chain has exactly one zero-frequency mode for its translation"""
+    phonon_ana = PhononAna(
+        reference_structure, True, cache_dir=tmp_path, save_data=False, disp_messages=False
+    )
+    Xi, omega = phonon_ana.solve_eigenproblem()
+    assert np.all(np.isreal(omega)) and np.all(omega >= 0)
+    assert np.sum(omega == 0) == 1
+    # the eigenvectors are orthonormal with respect to the masses
+    masses = reference_structure.get_layer_property_vector("structural.mass_unit_area.magnitude")
+    np.testing.assert_allclose(Xi.T @ (masses[:, None] * Xi), np.eye(len(masses)), atol=1e-10)
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "scipy",
+        pytest.param(
+            "numba", marks=pytest.mark.skipif(not HAS_NUMBA, reason="numba is not installed")
+        ),
+    ],
+)
+def test_phonon_num_matches_ana(
+    reference_structure, reference_strain_map, delays, backend, tmp_path
+):
+    """the numerical solvers reproduce the analytical solution"""
+    phonon_num = PhononNum(
+        reference_structure,
+        True,
+        cache_dir=tmp_path,
+        save_data=False,
+        disp_messages=False,
+        backend=backend,
+    )
+    phonon_num.ode_options.update({"rtol": 1e-8, "atol": 1e-20})
+    strain_map, _, _ = phonon_num.calc_strain_map(delays, *_heating(reference_structure, delays))
+
+    max_strain = np.max(np.abs(reference_strain_map))
+    assert max_strain > 1e-4
+    np.testing.assert_allclose(strain_map, reference_strain_map, rtol=0, atol=1e-5 * max_strain)
