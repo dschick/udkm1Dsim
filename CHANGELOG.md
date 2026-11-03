@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VectorParameter` keeps its angles, when they are not defined by its cartesian components, e.g. for a zero amplitude, so that setting the amplitude to zero and back restores its direction
 - the magnetization of an `Atom`, `AtomMixed`, and `Layer` is given by `magnetization` on initialization and assignment, either as cartesian components, e.g. `(0, 0, 1)`, as dict of polar or cartesian components, e.g. `{"r": -1, "phi": 90 * u.deg, "gamma": 0 * u.deg}` or `{"x": 0, "y": 0, "z": 1}`, or as `VectorParameter`; components missing in a dict keep their values, e.g. `atom.magnetization = {"r": 0.5}` only changes the amplitude
 - `VectorParameter.set()` for all these inputs
+- `simulations.solvers.magnetization_scipy` with the right-hand side of the `LLB` assembled from one function per physical term, vectorized over all magnetic layers, and `simulations.solvers.mean_field` with the equilibrium magnetization, the damping parameters and the longitudinal susceptibility of the mean-field model; the solver takes the `MagneticParameters` of the magnetic layers, ported from [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber)
+- classical `LLB` with the Langevin function for an infinite `eff_spin`
+- `Magnetization.get_magnetic_parameters` and `Magnetization.get_interlayer_exchange_stiffnesses` collect the inputs of the solver from the structure
+- `Magnetization.temp_sub_system` to select the sub-system of the `temp_map` that drives the magnetization dynamics
+- `LLB.get_magnetization_map` accepts an external field `H_ext` per delay as `Mx3` array
+- `LLB` warns if a layer ends at a vanishing magnetization below its Curie temperature, since `m = 0` is a fixed point of the LLB
 
 ### Changed
 
@@ -43,10 +49,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the symbols of the physical quantities in the docstrings are consistent across all simulations and parameter groups, e.g. the thickness is `d`, the thermal conductivity `κ`, and the anisotropy exponent `β`
 - the atomic number and mass number of an `Atom` are given by its symbol and cannot be set
 - for an ionicity, which is not tabulated for the Cromer-Mann coefficients, the ones of the closest tabulated ionicity are used with a warning instead of raising an `IndexError`
+- the physics of the `LLB` moved from its static methods into `simulations.solvers.magnetization_scipy` and `simulations.solvers.mean_field`; the temperature and the external field are interpolated linearly in time instead of being held constant between delays, and the mean-field magnetization, damping parameters, and susceptibility are interpolated from tables per layer instead of a root search per temperature
+- `get_mean_field_mag_map` and `get_directional_exchange_stiffnesses` moved from `LLB` to `Magnetization`; the mean-field magnetization is zero above the Curie temperature instead of raising an `IndexError` if no temperature is below it
+- without explicit `init_mag` the `LLB` starts in the mean-field equilibrium of the initial temperature along the magnetization of the layers
+- the anisotropy field of the `LLB` is `2/M_s m_eq^(β-2) (K_x m_x, K_y m_y, K_z m_z)` according to Raposo et al. (2022); the former expression had the same torque but an additional field `-2/M_s m_eq^(β-2) (K_x+K_y+K_z) m` along the magnetization, which altered the longitudinal relaxation
+- the hash of a magnetization simulation includes its type and the `temp_sub_system`, hence cached results are recalculated
 
 ### Deprecated
 
 ### Removed
+
+- the static methods `LLB.odefunc`, `calc_uniaxial_anisotropy_field`, `calc_exchange_field`, `calc_thermal_field`, `calc_Brillouin`, `calc_dBrillouin_dx`, `calc_transverse_damping`, `calc_longitudinal_damping`, `calc_qs`, and `calc_long_susceptibility`, see `simulations.solvers.magnetization_scipy` and `simulations.solvers.mean_field` instead
 
 ### Fixed
 
@@ -62,6 +75,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cromer-Mann coefficients of `Cs1+`, `Ba2+`, `Ru4+`, `Bi5+`, `Np3+`, `Np4+`, `Np6+`, and `Pu` corrected and 16 rounded coefficients completed according to the International Tables for Crystallography, Vol. C, Table 6.1.1.4
 - the Cromer-Mann coefficients of an `Atom` were not updated on a change of its ionicity
 - the backside of the structure was clamped instead of free for `PhononAna`, so that strain waves were reflected with a wrong sign, e.g. for freestanding layers; the analytical and numerical phonon models have the same boundary conditions now and are compared in the tests; cached results require `force_recalc=True`, closing [#186]
+- the exchange field of the `LLB` mixed the vector components of neighbouring layers and had the wrong sign, which pulled neighbouring layers out of alignment instead of aligning them
+- magnetic layers separated by a non-magnetic spacer are not coupled by the exchange field of the `LLB` anymore
+- the thermal field of the `LLB` above the Curie temperature was multiplied by the squared magnetization; it is `-(1/chi)(1 + c_S T_C/(T - T_C) m²) m` now (Atxitia et al. 2012), with `c_S` from the Brillouin expansion and the classical `3/5` for an infinite effective spin
+- the parameter `q_s` of the quantum `LLB` was calculated with swapped arguments, i.e. from the effective spin in place of the mean-field magnetization, which suppressed the longitudinal relaxation of layers with a large spin and Curie temperature and made their transverse damping negative, and used `2S+1` instead of `2(S+1)` (Nieves et al. 2014), and the longitudinal damping diverged at the Curie temperature; the longitudinal and transverse damping parameters are continuous at the Curie temperature now and reduce to the ones of Garanin for an infinite effective spin
+- the `mf_exch_coupling` of a layer was not defined for an infinite `eff_spin`
+- `LLB.get_magnetization_map` rejected a valid `Nx3` initial magnetization
+- `LLB.get_magnetization_map` failed for `progress_bar=False`
 
 ### Security
 

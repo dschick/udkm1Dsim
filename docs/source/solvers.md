@@ -32,3 +32,17 @@
 .. automodule:: udkm1Dsim.simulations.solvers.phonon_numba
     :members:
 ```
+
+## `solvers.magnetization_scipy`
+
+```{eval-rst}
+.. automodule:: udkm1Dsim.simulations.solvers.magnetization_scipy
+    :members:
+```
+
+## `solvers.mean_field`
+
+```{eval-rst}
+.. automodule:: udkm1Dsim.simulations.solvers.mean_field
+    :members:
+```
