@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AtomMixed` had no `_mass`, which is used for the density of its unit cell by `XrayDynMag`
 - the gamma angle of zero vectors with signed zero components was -180 deg instead of 0 deg in `convert_cartesian_to_polar`
 - the Cromer-Mann atomic form factor of `XrayKin` and `XrayDyn` used wrong coefficients and converted `q_z` wrongly, so that its `q_z`-dependence was wrong; cached results require `force_recalc=True`, closing [#226]
+- Cromer-Mann coefficients of `Cs1+`, `Ba2+`, `Ru4+`, `Bi5+`, `Np3+`, `Np4+`, `Np6+`, and `Pu` corrected and 16 rounded coefficients completed according to the International Tables for Crystallography, Vol. C, Table 6.1.1.4
 
 ### Security
 
