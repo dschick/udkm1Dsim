@@ -73,8 +73,10 @@ class Parameter:
     def magnitude(self, value):
         if isinstance(value, u.Quantity):
             self._magnitude = value.to(self.unit).magnitude
-        elif isinstance(value, (int, float, complex, np.ndarray)):
+        elif isinstance(value, (int, float, complex, np.number, np.ndarray)):
             self._magnitude = value
+        elif isinstance(value, (list, tuple)):
+            self._magnitude = np.asarray(value)
         else:
             raise TypeError(f"Cannot set Parameter '{self.name}' from type {type(value)}")
 
