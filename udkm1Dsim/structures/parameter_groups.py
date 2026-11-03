@@ -594,14 +594,13 @@ class MagneticParameters(ParameterGroup):
 
         .. math:: J = \frac{3 S_{eff}}{S_{eff}+1} k_B T_C
 
+        which is :math:`J = 3 k_B T_C` in the classical limit of an infinite
+        effective spin.
+
         """
-        self.mf_exch_coupling.magnitude = (
-            3
-            * self.eff_spin.magnitude
-            / (self.eff_spin.magnitude + 1)
-            * constants.k
-            * self.curie_temp.magnitude
-        )
+        eff_spin = self.eff_spin.magnitude
+        factor = 3.0 if np.isinf(eff_spin) else 3 * eff_spin / (eff_spin + 1)
+        self.mf_exch_coupling.magnitude = factor * constants.k * self.curie_temp.magnitude
 
     def check_array(self, parameter, name):
         value = np.asarray(parameter.magnitude)

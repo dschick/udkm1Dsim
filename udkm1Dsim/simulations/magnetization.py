@@ -25,15 +25,12 @@ __all__ = ["Magnetization", "LLB"]
 
 __docformat__ = "restructuredtext"
 
+import warnings
 from os import path
 from time import time
 
 import numpy as np
 import pint
-import scipy.constants as constants
-from scipy.integrate import solve_ivp
-from scipy.optimize import fsolve
-from tqdm.auto import tqdm
 
 from ..helpers import (
     convert_cartesian_to_polar,
@@ -43,6 +40,8 @@ from ..helpers import (
 )
 from ..structures.layers import UnitCell
 from .simulation import Simulation
+from .solvers import magnetization_scipy
+from .solvers.mean_field import TABLE, interpolate_tables_map
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -51,7 +50,13 @@ Q_ = u.Quantity
 class Magnetization(Simulation):
     """Magnetization
 
-    Base class for all magnetization simulations.
+    Base class for all magnetization simulations. It prepares the inputs and
+    the material parameters of the magnetic layers, caches the results and
+    converts them to polar coordinates. The physics - the right-hand sides
+    and the time integration - lives in
+    :mod:`~udkm1Dsim.simulations.solvers.magnetization_scipy` and the
+    equilibrium quantities of the mean-field model in
+    :mod:`~udkm1Dsim.simulations.solvers.mean_field`.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -72,7 +77,9 @@ class Magnetization(Simulation):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        ode_options (dict): options for scipy solve_ivp ode solver
+        ode_options (dict): options for scipy solve_ivp ode solver.
+        temp_sub_system (int): index of the sub-system of the ``temp_map``
+            whose temperature drives the magnetization dynamics.
 
     """
 
@@ -87,16 +94,21 @@ class Magnetization(Simulation):
             "rtol": 1e-3,
             "atol": 1e-6,
         }
+        self.temp_sub_system = 0
+
+    def _property_rows(self):
+        """extend the simulation properties by the temperature sub-system"""
+        return super()._property_rows() + [["temperature sub-system", self.temp_sub_system]]
 
     def get_hash(self, **kwargs):
         """get_hash
 
         Calculates an unique hash given by the delays as well as the sample
-        structure hash for relevant magnetic parameters.
+        structure hash for relevant magnetic parameters, the type of the
+        simulation and the temperature sub-system.
         Optionally, part of the ``strain_map`` and ``temp_map`` are used.
 
         Args:
-            delays (ndarray[float]): delay grid for the simulation.
             **kwargs (ndarray[float], optional): optional delays, strain and
                 temperature profile as well as external magnetic field and
                 initial magnetization.
@@ -105,21 +117,14 @@ class Magnetization(Simulation):
             hash (str): unique hash.
 
         """
-        param = []
+        param = [type(self).__name__, self.temp_sub_system]
 
-        if "strain_map" in kwargs:
-            strain_map = kwargs.get("strain_map")
-            if np.size(strain_map) > 1e6:
-                strain_map = strain_map.flatten()[0:1000000]
-            param.append(strain_map)
-            kwargs.pop("strain_map")
-
-        if "temp_map" in kwargs:
-            temp_map = kwargs.get("temp_map")
-            if np.size(temp_map) > 1e6:
-                temp_map = temp_map.flatten()[0:1000000]
-            param.append(temp_map)
-            kwargs.pop("temp_map")
+        for name in ("strain_map", "temp_map"):
+            if name in kwargs:
+                value = kwargs.pop(name)
+                if value is not None and np.size(value) > 1e6:
+                    value = np.asarray(value).flatten()[0:1000000]
+                param.append(value)
 
         for value in kwargs.values():
             param.append(value)
@@ -219,8 +224,9 @@ class Magnetization(Simulation):
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile as well external magnetic field in [T] and
-                initial magnetization.
+                temperature profile as well external magnetic field in [T],
+                either constant or one vector per delay, and initial
+                magnetization.
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
@@ -250,16 +256,20 @@ class Magnetization(Simulation):
             if "H_ext" in kwargs:
                 if not isinstance(kwargs["H_ext"], np.ndarray):
                     raise TypeError("H_ext must be a numpy ndarray!")
-                elif kwargs["H_ext"].shape != (3,):
-                    raise ValueError("H_ext must be a vector with 3 components (H_x, H_y, H_z)!")
-            if "init_mag" in kwargs:
+                elif kwargs["H_ext"].shape not in [(3,), (np.size(delays), 3)]:
+                    raise ValueError(
+                        "H_ext must be a vector with 3 components (H_x, H_y, H_z) or an "
+                        "array of Mx3 with M being the number of delays!"
+                    )
+            if "init_mag" in kwargs and len(kwargs["init_mag"]) > 0:
                 if not isinstance(kwargs["init_mag"], np.ndarray):
                     raise TypeError(
                         "init_mag must be a numpy ndarray with all in radians without units!"
                     )
-                elif kwargs["init_mag"].shape != (3,):
+                elif kwargs["init_mag"].shape not in [(3,), (self.S.get_number_of_layers(), 3)]:
                     raise ValueError(
-                        "init_mag must be a vector with Nx3 with N being the number of layers."
+                        "init_mag must be a vector with 3 components or an array of Nx3 "
+                        "with N being the number of layers."
                     )
 
             magnetization_map = self.calc_magnetization_map(delays, **kwargs)
@@ -291,189 +301,6 @@ class Magnetization(Simulation):
 
         """
         raise NotImplementedError
-
-
-class LLB(Magnetization):
-    """LLB
-
-    Mean-field quantum Landau-Lifshitz-Bloch simulations.
-
-    Please find a detailed review on the Landau-Lifshitz-Bloch equation by
-    :cite:t:`atxitia2017`.
-
-    In collaboration with Theodor Griepe
-    (`@Nilodirf <https://github.com/Nilodirf>`_) from the group of
-    Unai Atxitia at Instituto de Ciencia de Materiales de Madrid (ICMM-CSIC).
-
-    Args:
-        S (Structure): sample to do simulations with.
-        force_recalc (boolean): force recalculation of results.
-
-    Keyword Args:
-        save_data (boolean): true to save simulation results.
-        cache_dir (str): path to cached data.
-        disp_messages (boolean): true to display messages from within the
-            simulations.
-        progress_bar (boolean): enable tqdm progress bar.
-
-    Attributes:
-        S (Structure): sample structure to calculate simulations on.
-        force_recalc (boolean): force recalculation of results.
-        save_data (boolean): true to save simulation results.
-        cache_dir (str): path to cached data.
-        disp_messages (boolean): true to display messages from within the
-            simulations.
-        progress_bar (boolean): enable tqdm progress bar.
-
-    """
-
-    _title = "Landau-Lifshitz-Bloch Magnetization Dynamics simulation"
-
-    def __init__(self, S, force_recalc, **kwargs):
-        super().__init__(S, force_recalc, **kwargs)
-
-    def calc_magnetization_map(self, delays, temp_map, H_ext=np.array([0, 0, 0]), init_mag=[]):
-        r"""calc_magnetization_map
-
-        Calculates the magnetization map using the mean-field quantum
-        Landau-Lifshitz-Bloch equation (LLB) for a given delay range and
-        according temperature map:
-
-        .. math::
-
-            \frac{d\mathbf{m}}{dt}=\gamma_e \left(\mathbf{m} \times
-              \mathbf{H}_\mathrm{eff} + \frac{\alpha_{\perp}}{m^2}\mathbf{m}
-              \times (\mathbf{m} \times \mathbf{H}_\mathrm{eff}) -
-              \frac{\alpha_{\parallel}}{m^2}(\mathbf{m} \cdot
-              \mathbf{H}_\mathrm{eff}) \cdot \mathbf{m}\right)
-
-        The three terms describe
-
-        #. **precession** at Larmor frequency,
-        #. **transversal damping** (conserving the macrospin length), and
-        #. **longitudinal damping** (changing macrospin length due to incoherent
-           atomistic spin excitations within the layer the macrospin is
-           defined on).
-
-        :math:`\alpha_{\parallel}` and :math:`\alpha_{\perp}` are the
-        :meth:`longitudinal damping<calc_longitudinal_damping>` and
-        :meth:`transverse damping<calc_transverse_damping>` parameters,
-        respectively.
-        :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,T^{-1}}` is
-        the gyromagnetic ratio of an electron.
-
-        The effective magnetic field is the sum of all relevant magnetic
-        interactions:
-
-        .. math::
-
-            \mathbf{H}_\mathrm{eff} = \mathbf{H}_\mathrm{ext}
-              + \mathbf{H}_\mathrm{A}
-              + \mathbf{H}_\mathrm{ex}
-              + \mathbf{H}_\mathrm{th}
-
-        where
-
-        * :math:`\mathbf{H}_\mathrm{ext}` is the external magnetic field
-        * :math:`\mathbf{H}_\mathrm{A}` is the :meth:`uniaxial anisotropy field
-          <calc_uniaxial_anisotropy_field>`
-        * :math:`\mathbf{H}_\mathrm{ex}` is the :meth:`exchange field
-          <calc_exchange_field>`
-        * :math:`\mathbf{H}_\mathrm{th}` is the :meth:`thermal field
-          <calc_thermal_field>`
-
-        Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
-            temp_map (ndarray[float]): spatio-temporal temperature map.
-            H_ext (ndarray[float], optional): external magnetic field
-                (H_x, H_y, H_z) [T].
-
-        Returns:
-            magnetization_map (ndarray[float]): spatio-temporal absolute
-            magnetization profile.
-
-        """
-        t1 = time()
-        try:
-            delays = delays.to("s").magnitude
-        except AttributeError:
-            pass
-        M = len(delays)  # nb of delay steps
-        L = self.S.get_number_of_layers()
-        K = self.S.num_sub_systems
-
-        temp_map = np.reshape(temp_map, [M, L, K])
-
-        distances, _, _ = self.S.get_distances_of_layers(False)
-
-        init_mag = self.check_initial_magnetization(init_mag, distances)
-        # convert initial magnetization from polar to cartesian coordinates
-        init_mag = convert_polar_to_cartesian(init_mag)
-        # get layer properties
-        curie_temps = self.S.get_layer_property_vector("magnetic.curie_temp.magnitude")
-        eff_spins = self.S.get_layer_property_vector("magnetic.eff_spin.magnitude")
-        lambdas = self.S.get_layer_property_vector("magnetic.lamda.magnitude")
-        mf_exch_couplings = self.S.get_layer_property_vector("magnetic.mf_exch_coupling.magnitude")
-        mag_moments = self.S.get_layer_property_vector("magnetic.mag_moment.magnitude")
-        aniso_exponents = self.S.get_layer_property_vector("magnetic.aniso_exponent.magnitude")
-        anisotropies = self.S.get_layer_property_vector("magnetic.anisotropy.magnitude")
-        mag_saturations = self.S.get_layer_property_vector("magnetic.mag_saturation.magnitude")
-        exch_stiffnesses = self.get_directional_exchange_stiffnesses()
-        thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
-        # calculate the mean magnetization maps for each unique layer
-        # and all relevant parameters
-        mean_mag_map = self.get_mean_field_mag_map(temp_map[:, :, 0])
-        # mask for magnetic layers only
-        is_magnetic = curie_temps > 0
-        N = np.count_nonzero(is_magnetic)
-
-        if self.progress_bar:  # with tqdm progressbar
-            pbar = tqdm()
-            pbar.set_description(f"Delay = {delays[0] * 1e12:.3f} ps")
-            state = [delays[0], abs(delays[-1] - delays[0]) / 100]
-        else:  # without progressbar
-            pbar = None
-            state = None
-        # solve pdepe with method-of-lines
-        sol = solve_ivp(
-            LLB.odefunc,
-            [delays[0], delays[-1]],
-            np.reshape(init_mag[is_magnetic, :], N * 3, order="F"),
-            args=(
-                delays,
-                N,
-                H_ext,
-                temp_map[:, is_magnetic, 0],  # provide only the electron temperature
-                mean_mag_map[:, is_magnetic],
-                curie_temps[is_magnetic],
-                eff_spins[is_magnetic],
-                lambdas[is_magnetic],
-                mf_exch_couplings[is_magnetic],
-                mag_moments[is_magnetic],
-                aniso_exponents[is_magnetic],
-                anisotropies[is_magnetic],
-                mag_saturations[is_magnetic],
-                exch_stiffnesses[is_magnetic],
-                thicknesses[is_magnetic],
-                pbar,
-                state,
-            ),
-            t_eval=delays,
-            **self.ode_options,
-        )
-
-        if pbar is not None:  # close tqdm progressbar if used
-            pbar.close()
-        temp = sol.y.T
-        # final magnetization map is zero for all non-magnetic layers
-        magnetization_map = np.zeros([M, len(distances), 3])
-        # reshape results and set only for magnetic layers
-        magnetization_map[:, is_magnetic, :] = np.array(temp).reshape([M, N, 3], order="F")
-        # convert to polar coordinates
-        magnetization_map = convert_cartesian_to_polar(magnetization_map)
-        self.disp_message(f"Elapsed time for _LLB_: {time() - t1:f} s")
-
-        return magnetization_map
 
     def get_mean_field_mag_map(self, temp_map):
         r"""get_mean_field_mag_map
@@ -518,84 +345,37 @@ class LLB(Magnetization):
     def calc_mean_field_mag_map(self, temp_map):
         r"""calc_mean_field_mag_map
 
-        Calculate the mean-field magnetization map :math:`m_\mathrm{eq}` by
-        solving the self consistent equation
+        Calculate the mean-field magnetization map :math:`m_\mathrm{eq}` of
+        every layer, the non-trivial solution of the self-consistent equation
 
         .. math::
 
-            m_\mathrm{eq}(T) & = B_S(m_\mathrm{eq}, T) \\
+            m_\mathrm{eq} = B_S\left(\frac{J\, m_\mathrm{eq}}{k_\mathrm{B} T}\right)
 
-        where :math:`B_S` is the Brillouin function.
+        with the Brillouin function :math:`B_S` of the effective spin - the
+        Langevin function for an infinite spin - which is tabulated on a
+        temperature grid, see
+        :func:`~udkm1Dsim.simulations.solvers.mean_field.equilibrium_tables`,
+        and interpolated onto the ``temp_map``. The magnetization is zero for
+        non-magnetic layers and at and above the Curie temperature.
 
         Args:
-            temp_map (ndarray[float]): spatio-temporal electron temperature map.
+            temp_map (ndarray[float]): spatio-temporal electron temperature map
+                :math:`M \times N`.
 
         Returns:
             mf_mag_map (ndarray[float]): spatio-temporal mean_field
             magnetization map.
 
         """
-        (M, N) = temp_map.shape  # M - number of delays, N - number of layers
-
-        mf_mag_map = np.zeros_like(temp_map)
-
-        unique_layers = self.S.get_unique_layers()
-        relevant_temps = {}
-        # iterate over all positions per unique layers
-        for i, (k, v) in enumerate(self.S.get_all_positions_per_unique_layer().items()):
-            relevant_temps[k] = []
-            # unique layer properties
-            curie_temp = unique_layers[1][i].magnetic.curie_temp.magnitude
-            # mean-field magnetization is only calculated for a non-zero Curie
-            # temperature of magnetic layers
-            if curie_temp > 0:
-                eff_spin = unique_layers[1][i].magnetic.eff_spin.magnitude
-                mf_exch_coupling = unique_layers[1][i].magnetic.mf_exch_coupling.magnitude
-
-                temps = temp_map[:, v].flatten()
-                # only temperatures below T_C are relevant, above T_C the
-                # mean-field magnetization is zero
-                below_tc = temps < curie_temp
-                if not np.any(below_tc):
-                    raise IndexError(
-                        "No temperature in _temp_map_ was found that is below "
-                        f"the curie temperature for layer {unique_layers[0][i]:s}!"
-                    )
-                # simple round for down-sampling, but temperatures below T_C must
-                # not be rounded up to T_C, where the mean-field magnetization is
-                # zero, as they are treated as ferromagnetic in the LLB equations.
-                # The margin of 0.05 K keeps fsolve from converging to the trivial
-                # solution of zero mean-field magnetization close to T_C.
-                last_temp_below_tc = np.floor((curie_temp - 0.05) * 10) / 10
-                rounded_temps = np.minimum(
-                    np.round(temps[below_tc], decimals=1), last_temp_below_tc
-                )
-                unique_temps = np.unique(rounded_temps)
-                # normalized by T_C
-                reduced_temps = unique_temps / curie_temp
-                mf_mags = np.zeros_like(reduced_temps)
-
-                for j, T in enumerate(reduced_temps):
-                    root = fsolve(
-                        lambda x: (
-                            x - LLB.calc_Brillouin(x, T, eff_spin, mf_exch_coupling, curie_temp)
-                        ),
-                        np.sqrt(1 - T),
-                    )
-                    mf_mags[j] = float(root.item())
-
-                relevant_temps[k] = np.stack((unique_temps, mf_mags))
-
-                # assign the mean-field magnetization of every rounded temperature
-                # below T_C into the mf_mag_map, which is zero above T_C
-                layer_mf_mags = np.zeros_like(temps)
-                layer_mf_mags[below_tc] = mf_mags[np.searchsorted(unique_temps, rounded_temps)]
-                mf_mag_map[:, v] = np.reshape(layer_mf_mags, (M, len(v)))
-            else:
-                # non-magnetic layers with Curie temperature = 0
-                mf_mag_map[:, v] = 0
-
-        return mf_mag_map
+        temp_map = np.asarray(temp_map, dtype=float)
+        L = self.S.get_number_of_layers()
+        layers = self.get_magnetic_parameters(np.ones(L, dtype=bool))
+        temp_grid, tables = magnetization_scipy.tabulate_equilibrium(
+            layers, temp_max=float(np.max(temp_map))
+        )
+        values = interpolate_tables_map(temp_grid, tables, temp_map)
+        return values[..., 0, TABLE["mag"]]
 
     def get_directional_exchange_stiffnesses(self):
         r"""get_directional_exchange_stiffnesses
@@ -632,589 +412,284 @@ class LLB(Magnetization):
 
         return A
 
-    @staticmethod
-    def odefunc(
-        t,
-        m,
-        delays,
-        N,
-        H_ext,
-        temp_map,
-        mean_mag_map,
-        curie_temps,
-        eff_spins,
-        lambdas,
-        mf_exch_couplings,
-        mag_moments,
-        aniso_exponents,
-        anisotropies,
-        mag_saturations,
-        exch_stiffnesses,
-        thicknesses,
-        pbar,
-        state,
-    ):
-        """odefunc
+    def get_magnetic_parameters(self, is_magnetic):
+        r"""get_magnetic_parameters
 
-        Ordinary differential equation that is solved for 1D LLB.
+        Returns the
+        :class:`~udkm1Dsim.structures.parameter_groups.MagneticParameters` of
+        the magnetic layers, as they are passed to the solver. Repeated
+        layers share the same parameters.
 
         Args:
-            t (ndarray[float]): internal time steps of the ode solver.
-            m (ndarray[float]): internal variable of the ode solver.
-            delays (ndarray[float]): delays range of simulation [s].
-            N (int): number of spatial grid points.
-            H_ext (ndarray[float]): external magnetic field
-                (H_x, H_y, H_z) [T].
-            temp_map (ndarray[float]): spatio-temporal electron temperature map.
-            mean_mag_map (ndarray[float]): spatio-temporal
-                mean-field magnetization map.
-            curie_temps (ndarray[float]): Curie temperatures of layers.
-            eff_spins (ndarray[float]): effective spins of layers.
-            lambdas (ndarray[float]): coupling-to-bath parameter of layers.
-            mf_exch_couplings (ndarray[float]): mean-field exchange couplings of
-                 layers.
-            mag_moments (ndarray[float]): atomic magnetic moments of layers.
-            aniso_exponents (ndarray[float]): exponent of uniaxial anisotropy of
-                layers.
-            anisotropies (ndarray[float]): anisotropy vectors of layers.
-            mag_saturations (ndarray[float]): saturation magnetization of
-                layers.
-            exch_stiffnesses (ndarray[float]): exchange stiffness of layers
-                towards the upper and lower layer.
-            thicknesses (ndarray[float]): thicknesses of layers.
-            pbar (tqdm): tqdm progressbar.
-            state (list[float]): state variables for progress bar.
+            is_magnetic (ndarray[boolean]): mask of the magnetic layers.
 
         Returns:
-            dmdt (ndarray[float]): temporal derivative of internal variable.
+            layers (list[MagneticParameters]): magnetic parameters of the
+            magnetic layers.
 
         """
-        # state is a list containing last updated time t:
-        # state = [last_t, dt]
-        # I used a list because its values can be carried between function
-        # calls throughout the ODE integration
-        last_t, dt = state
-        try:
-            n = int((t - last_t) / dt)
-        except ValueError:
-            n = 0
+        handles = self.S.get_layer_vectors()[2]
+        return [handles[i].magnetic for i in np.flatnonzero(is_magnetic)]
 
-        if n >= 1:
-            pbar.update(n)
-            pbar.set_description(f"Delay = {t * 1e12:.3f} ps")
-            state[0] = t
-        elif n < 0:
-            state[0] = t
+    def get_interlayer_exchange_stiffnesses(self, is_magnetic):
+        r"""get_interlayer_exchange_stiffnesses
 
-        # initialize arrays
-        # reshape input temperature
-        m = np.array(m).reshape([N, 3], order="F")
-
-        # nearest delay index for current time t
-        idt = finderb(t, delays)[0]
-        temps = temp_map[idt, :].flatten()
-        # binary masks for layers being under or over its Curie temperature
-        under_tc = temps < curie_temps
-        over_tc = ~under_tc
-        # get the current mean-field magnetization
-        mf_magnetizations = mean_mag_map[idt, :]
-
-        # actual calculations
-        m_squared = np.sum(np.power(m, 2), axis=1)
-        gamma_e = -1.761e11
-
-        # external field H_ext is given as input
-        # calculate uniaxial anisotropy field
-        H_A = LLB.calc_uniaxial_anisotropy_field(
-            m, mf_magnetizations, aniso_exponents, anisotropies, mag_saturations
-        )
-        # calculate exchange field
-        H_ex = LLB.calc_exchange_field(m, exch_stiffnesses, mag_saturations, thicknesses)
-        # calculate thermal field
-        H_th = LLB.calc_thermal_field(
-            m,
-            m_squared,
-            temps,
-            mf_magnetizations,
-            eff_spins,
-            curie_temps,
-            mf_exch_couplings,
-            mag_moments,
-            under_tc,
-            over_tc,
-        )
-
-        # calculate the effective field
-        H_eff = H_ext + H_A + H_ex + H_th
-
-        # calculate components of LLB
-        # precessional term:
-        m_rot = np.cross(m, H_eff)
-
-        # damping
-        qs = LLB.calc_qs(temps, curie_temps, eff_spins, mf_magnetizations, under_tc)
-        # transversal damping
-        alpha_trans = LLB.calc_transverse_damping(
-            temps, curie_temps, lambdas, qs, mf_magnetizations, under_tc, over_tc
-        )
-        trans_damping = np.multiply(
-            np.divide(alpha_trans, m_squared)[:, np.newaxis], np.cross(m, m_rot)
-        )
-        # longitudinal damping
-        alpha_long = LLB.calc_longitudinal_damping(
-            temps, curie_temps, eff_spins, lambdas, qs, under_tc, over_tc
-        )
-        long_damping = np.multiply(
-            np.divide(alpha_long, m_squared)[:, np.newaxis],
-            np.multiply(np.einsum("ij,ij->i", m, H_eff)[:, np.newaxis], m),
-        )
-
-        dmdt = gamma_e * (m_rot + trans_damping - long_damping)
-
-        return np.reshape(dmdt, N * 3, order="F")
-
-    @staticmethod
-    def calc_uniaxial_anisotropy_field(
-        mag_map, mf_magnetizations, aniso_exponents, anisotropies, mag_saturations
-    ):
-        r"""calc_uniaxial_anisotropy_field
-
-        Calculate the uniaxial anisotropy component of the effective field.
-
-        .. math::
-
-            \mathbf{H}_\mathrm{A} = -
-            \frac{2}{M_s}
-            \left(
-                K_x\,m_\mathrm{eq}(T)^{\beta-2}
-                    \begin{bmatrix}0\\m_y\\m_z\end{bmatrix}
-                + K_y\,m_\mathrm{eq}(T)^{\beta-2}
-                    \begin{bmatrix}m_x\\0\\m_z\end{bmatrix}
-                + K_z\,m_\mathrm{eq}(T)^{\beta-2}
-                    \begin{bmatrix}m_x\\m_y\\0\end{bmatrix}
-            \right)
-
-        with :math:`K = (K_x, K_y, K_z)` as the anisotropy and :math:`\beta` as
-        the uniaxial anisotropy exponent.
+        Returns the :meth:`get_directional_exchange_stiffnesses` of the
+        magnetic layers with size :math:`N \times 2` towards the upper and
+        lower magnetic layer. The exchange coupling between two magnetic
+        layers that are not direct neighbours in the structure, i.e.
+        separated by a non-magnetic spacer, as well as at the top and bottom
+        of the stack is set to zero.
 
         Args:
-            mag_map (ndarray[float]): spatio-temporal magnetization map
-                - possibly for a single delay.
-            mf_magnetizations (ndarray[float]): mean-field magnetization of
-                layers.
-            aniso_exponents (ndarray[float]): exponent of uniaxial
-                anisotropy of layers.
-            anisotropies (ndarray[float]): anisotropy vectors of layers.
-            mag_saturations (ndarray[float]): saturation magnetization of
-                layers.
+            is_magnetic (ndarray[boolean]): mask of the magnetic layers.
 
         Returns:
-            H_A (ndarray[float]): uniaxial anisotropy field.
+            A (ndarray[float]): exchange stiffnesses of the magnetic layers.
 
         """
-        H_A = np.zeros_like(mag_map)
+        idx = np.flatnonzero(is_magnetic)
+        A = self.get_directional_exchange_stiffnesses()[idx, :].copy()
+        if len(idx) > 1:
+            adjacent = np.diff(idx) == 1
+            A[1:, 0] *= adjacent
+            A[:-1, 1] *= adjacent
+        if len(idx) > 0:
+            A[0, 0] = 0
+            A[-1, 1] = 0
+        return A
 
-        factor = -2 / mag_saturations
-        unit_vector = np.array([0, 1, 1])[np.newaxis, :]
-        for i in range(3):
-            H_A += (
-                factor[:, np.newaxis]
-                * anisotropies[:, i, np.newaxis]
-                * np.power(mf_magnetizations, aniso_exponents - 2)[:, np.newaxis]
-                * mag_map
-                * np.roll(unit_vector, i, axis=1)
+    def check_temp_map(self, temp_map, M, L):
+        r"""check_temp_map
+
+        Checks the ``temp_map`` and returns the temperature of the
+        ``temp_sub_system`` as :math:`M \times L` array.
+
+        Args:
+            temp_map (ndarray[float]): temperature map :math:`M \times L` or
+                :math:`M \times L \times K`.
+            M (int): number of delays.
+            L (int): number of layers.
+
+        Returns:
+            temps (ndarray[float]): temperature map :math:`M \times L`.
+
+        """
+        temp_map = np.asarray(temp_map, dtype=float)
+        if temp_map.ndim == 3:
+            if self.temp_sub_system >= temp_map.shape[2]:
+                raise ValueError(
+                    f"Sub-system {self.temp_sub_system:d} is not contained in temp_map!"
+                )
+            temp_map = temp_map[:, :, self.temp_sub_system]
+        if temp_map.shape != (M, L):
+            raise ValueError(
+                "temp_map must have the dimension M x L (x K), where M is the "
+                "number of delays and L the number of layers!"
             )
+        return temp_map
 
-        return H_A
 
-    @staticmethod
-    def calc_exchange_field(mag_map, exch_stiffnesses, mag_saturations, thicknesses):
-        r"""calc_exchange_field
+class LLB(Magnetization):
+    r"""LLB
 
-        Calculate the exchange component of the effective field, which is
-        defined as for each :math:`i^\mathrm{th}` layer in the structure as
+    Mean-field Landau-Lifshitz-Bloch simulations.
 
-        .. math::
+    Please find a detailed review on the Landau-Lifshitz-Bloch equation by
+    :cite:t:`atxitia2017` and its quantum version by :cite:t:`nieves2014`.
 
-            H_{\mathrm{ex}, i}=\frac{2}{M_{s,i} \Delta z_i^2}
-                \left(A_{\mathrm{ex},i}^{i-1}\left(\mathbf{m}_{i-1}-\mathbf{m}_{i}\right)
-                + A_{\mathrm{ex},i}^{i+1}\left(\mathbf{m}_{i+1}-\mathbf{m}_{i}\right) \right),
+    In collaboration with Theodor Griepe
+    (`@Nilodirf <https://github.com/Nilodirf>`_) from the group of
+    Unai Atxitia at Instituto de Ciencia de Materiales de Madrid (ICMM-CSIC).
 
-        where :math:`\Delta z` is the thickness of the layers or magnetic grains
-        and :math:`M_s` is the saturation magnetization. :math:`A_{\mathrm{ex},i}^{i-1}` and
-        :math:`A_{\mathrm{ex},i}^{i+1}` describe the exchange stiffness between the nearest
-        neighboring layers provided by
-        :meth:`get_directional_exchange_stiffnesses`.
+    The LLB for the magnetization :math:`\mathbf{m}` of each layer reads
 
-        Args:
-            mag_map (ndarray[float]): spatio-temporal magnetization map
-                - possibly for a single delay.
-            exch_stiffnesses (ndarray[float]): exchange stiffness of layers
-                towards the upper and lower layer.
-            mag_saturations (ndarray[float]): saturation magnetization of
-                layers.
+    .. math::
 
-        Returns:
-            H_ex (ndarray[float]): exchange field.
+        \frac{d\mathbf{m}}{dt}=\gamma_e \left(\mathbf{m} \times
+          \mathbf{B} + \frac{\alpha_{\perp}}{m^2}\mathbf{m}
+          \times (\mathbf{m} \times \mathbf{B}) -
+          \frac{\alpha_{\parallel}}{m^2}(\mathbf{m} \cdot
+          \mathbf{B}) \cdot \mathbf{m}\right)
 
-        """
-        H_ex = np.zeros_like(mag_map)
+    see :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.llb_rhs`.
+    The three terms describe
 
-        m_diff_down = np.concatenate((np.diff(mag_map, axis=0), np.zeros((1, 3))), axis=0)
-        m_diff_up = -np.roll(m_diff_down, 1)
+    #. **precession** at Larmor frequency,
+    #. **transversal damping** (conserving the macrospin length), and
+    #. **longitudinal damping** (changing macrospin length due to incoherent
+       atomistic spin excitations within the layer the macrospin is
+       defined on).
 
-        es = np.divide(2, np.multiply(mag_saturations, thicknesses**2))
+    :math:`\alpha_{\parallel}` and :math:`\alpha_{\perp}` are the longitudinal
+    and transverse :func:`damping parameters
+    <udkm1Dsim.simulations.solvers.mean_field.damping_parameters>` and
+    :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,T^{-1}}` is
+    the gyromagnetic ratio of an electron.
 
-        H_ex = (
-            es[:, np.newaxis] * exch_stiffnesses[:, 0, np.newaxis] * m_diff_up
-            + es[:, np.newaxis] * exch_stiffnesses[:, 1, np.newaxis] * m_diff_down
-        )
+    The field :math:`\mathbf{B}` [T] is the sum of all relevant magnetic
+    interactions:
 
-        return -H_ex
+    * the external magnetic field ``H_ext``
+    * the :func:`anisotropy field
+      <udkm1Dsim.simulations.solvers.magnetization_scipy.anisotropy_field>`
+    * the :func:`interlayer exchange field
+      <udkm1Dsim.simulations.solvers.magnetization_scipy.interlayer_exchange_field>`
+    * the :func:`longitudinal field
+      <udkm1Dsim.simulations.solvers.magnetization_scipy.longitudinal_field>`,
+      which relaxes the norm of the magnetization towards its equilibrium
+      with the :func:`longitudinal susceptibility
+      <udkm1Dsim.simulations.solvers.mean_field.longitudinal_susceptibility>`
 
-    @staticmethod
-    def calc_thermal_field(
-        mag_map,
-        mag_map_squared,
-        temp_map,
-        mf_magnetizations,
-        eff_spins,
-        curie_temps,
-        mf_exch_couplings,
-        mag_moments,
-        under_tc,
-        over_tc,
-    ):
-        r"""calc_thermal_field
+    The equilibrium magnetization, the damping parameters and the
+    susceptibility of every layer depend on the temperature of the
+    ``temp_sub_system`` only and are tabulated by the mean-field model, see
+    :func:`~udkm1Dsim.simulations.solvers.mean_field.equilibrium_tables`.
+    The effective spin ``eff_spin`` of the layers selects the model: finite
+    spins give the quantum LLB with Brillouin functions, e.g. :math:`S = 1/2`
+    for Ni, an infinite spin the classical LLB with the Langevin function.
 
-        Calculate the thermal component of the effective field.
+    Args:
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
 
-        .. math::
+    Keyword Args:
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
-            \mathbf{H}_\mathrm{th} = \begin{cases}
-                \frac{1}{2\chi_{\parallel}}\left(1-\frac{m^2}{m_\mathrm{eq}^2}
-                    \right)\mathbf{m} & \mathrm{for}\ T < T_\mathrm{C} \\
-                -\frac{1}{\chi_{\parallel}}\left(1+\frac{3}{5}
-                    \frac{T_\mathrm{C}}{T-T_\mathrm{C}}m^2\right)\mathbf{m}
-                    & \mathrm{for}\ T \geq T_\mathrm{C}
-            \end{cases}
+    Attributes:
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
 
-        with :math:`\chi_{\parallel}` being the
-        :meth:`longitudinal susceptibility<calc_long_susceptibility>`.
+    """
 
-        Args:
-            mag_map (ndarray[float]): spatio-temporal magnetization map
-                - possibly for a single delay.
-            mag_map_squared (ndarray[float]): spatio-temporal magnetization map
-                squared- possibly for a single delay.
-            temp_map (ndarray[float]): spatio-temporal temperature map
-                - possibly for a single delay.
-            mf_magnetizations (ndarray[float]): mean-field magnetization of
-                layers.
-            eff_spins (ndarray[float]): effective spin of layers.
-            curie_temps (ndarray[float]): Curie temperature of layers.
-            mf_exch_couplings (ndarray[float]): mean-field exch. coupling of
-                layers.
-            mag_moments (ndarray[float]): atomic magnetic moments of layers.
-            under_tc (ndarray[boolean]): mask temperatures under the Curie
-                temperature.
-            over_tc (ndarray[boolean]): mask temperatures over the Curie
-                temperature.
+    _title = "Landau-Lifshitz-Bloch Magnetization Dynamics simulation"
 
-        Returns:
-            H_th (ndarray[float]): thermal field.
+    def __init__(self, S, force_recalc, **kwargs):
+        super().__init__(S, force_recalc, **kwargs)
 
-        """
-        chi_long = LLB.calc_long_susceptibility(
-            temp_map,
-            mf_magnetizations,
-            curie_temps,
-            eff_spins,
-            mf_exch_couplings,
-            mag_moments,
-            under_tc,
-            over_tc,
-        )
+    def calc_magnetization_map(self, delays, temp_map, H_ext=np.array([0, 0, 0]), init_mag=[]):
+        r"""calc_magnetization_map
 
-        H_th = np.zeros_like(temp_map)
-        H_th[under_tc] = (
-            1
-            / (2 * chi_long[under_tc])
-            * (1 - mag_map_squared[under_tc] / mf_magnetizations[under_tc] ** 2)
-        )
-        H_th[over_tc] = (
-            -1
-            / chi_long[over_tc]
-            * (1 + 3 / 5 * curie_temps[over_tc] / (temp_map[over_tc] - curie_temps[over_tc]))
-            * mag_map_squared[over_tc]
-        )
-
-        return np.multiply(H_th[:, np.newaxis], mag_map)
-
-    @staticmethod
-    def calc_Brillouin(mag, temp, eff_spin, mf_exch_coupling, curie_temp):
-        r"""calc_Brillouin
-
-        .. math::
-
-            B_S(m, T) = \frac{2 S+1}{2S} \coth{\left(\frac{2S+1}{2S}
-            \frac{J \, m}{k_\mathrm{B}\, T}\right)}
-            - \frac{1}{2S}\coth{\left(\frac{1}{2S}
-            \frac{J \, m}{k_\mathrm{B}\,T}\right)}
-
-        where
-
-        .. math::
-
-            J = 3\frac{S}{S+1}k_\mathrm{B} \, T_\mathrm{C}
-
-        is the mean field exchange coupling constant for effective spin
-        :math:`S` and Curie temperature :math:`T_\mathrm{C}`.
+        Calculates the magnetization map using the mean-field
+        Landau-Lifshitz-Bloch equation (LLB) for a given delay range and
+        according temperature map, see :class:`LLB`.
 
         Args:
-            mag (ndarray[float]): magnetization of layer.
-            temp (ndarray[float]): electron temperature of layer.
-            eff_spin (ndarray[float]): effective spin of layer.
-            mf_exch_coupling (ndarray[float]): mean-field exch. coupling of
-                layers.
-            curie_temp (ndarray[float]): Curie temperature of layer.
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            temp_map (ndarray[float]): spatio-temporal temperature map.
+            H_ext (ndarray[float], optional): external magnetic field
+                (H_x, H_y, H_z) [T], either constant or one vector per delay.
+            init_mag (ndarray[float], optional): initial magnetization in
+                polar coordinates, see :meth:`check_initial_magnetization`. If
+                none is given, the layers start in the equilibrium of their
+                initial temperature along the magnetization of the layers.
 
         Returns:
-            brillouin (ndarray[float]): brillouin function.
+            magnetization_map (ndarray[float]): spatio-temporal absolute
+            magnetization profile.
 
         """
+        t1 = time()
+        try:
+            delays = delays.to("s").magnitude
+        except AttributeError:
+            pass
+        delays = np.asarray(delays, dtype=float)
+        M = len(delays)  # nb of delay steps
+        L = self.S.get_number_of_layers()
 
-        eta = mf_exch_coupling * mag / constants.k / temp / curie_temp
-        c1 = (2 * eff_spin + 1) / (2 * eff_spin)
-        c2 = 1 / (2 * eff_spin)
-        brillouin = c1 / np.tanh(c1 * eta) - c2 / np.tanh(c2 * eta)
-        return brillouin
+        temps = self.check_temp_map(temp_map, M, L)
 
-    @staticmethod
-    def calc_dBrillouin_dx(temp_map, mf_magnetizations, eff_spins, mf_exch_couplings):
-        r"""calc_dBrillouin_dx
+        implicit_init_mag = len(init_mag) == 0
+        init_mag = np.array(self.check_initial_magnetization(init_mag), dtype=float)
 
-        Calculate the derivative of the Brillouin function :math:`B_x` at
-        :math:`m = m_\mathrm{eq}`:
+        # magnetic layers carry a Curie temperature
+        is_magnetic = self.S.get_layer_property_vector("magnetic.curie_temp.magnitude") > 0
+        layers = self.get_magnetic_parameters(is_magnetic)
+        N = len(layers)
 
-        .. math::
+        if implicit_init_mag and N > 0:
+            # start in the equilibrium of the initial temperature, tabulated
+            # on the same grid as by the solver
+            temp_grid, tables = magnetization_scipy.tabulate_equilibrium(
+                layers, temp_max=np.max(temps[:, is_magnetic])
+            )
+            mean_mags = interpolate_tables_map(temp_grid, tables, temps[:1, is_magnetic])[
+                0, :, 0, TABLE["mag"]
+            ]
+            init_mag[is_magnetic, 0] *= mean_mags
+        init_state = convert_polar_to_cartesian(init_mag)[is_magnetic, np.newaxis, :]
 
-            B_x = \frac{dB}{dx} = \frac{1}{4S^2\sinh^2(x/2S)}
-                -\frac{(2S+1)^2}{4S^2\sinh^2\left(\frac{(2S+1)x}{2S}\right)}
+        inputs = magnetization_scipy.prepare_inputs(
+            delays, N, H_ext, temp_map=temps[:, is_magnetic]
+        )
+        mag_map = magnetization_scipy.solve(
+            init_state,
+            inputs,
+            layers,
+            self.get_interlayer_exchange_stiffnesses(is_magnetic),
+            self.S.get_layer_property_vector("structural.thickness.magnitude")[is_magnetic],
+            self.ode_options,
+            self.progress_bar,
+        )
+        self.check_demagnetization_collapse(mag_map, temps[:, is_magnetic], layers)
 
-        with :math:`x=\frac{J\,m}{k_\mathrm{B}\,T}`.
+        # final magnetization map is zero for all non-magnetic layers
+        magnetization_map = np.zeros([M, L, 3])
+        magnetization_map[:, is_magnetic, :] = mag_map[:, :, 0, :]
+        # convert to polar coordinates
+        magnetization_map = convert_cartesian_to_polar(magnetization_map)
+        self.disp_message(f"Elapsed time for _LLB_: {time() - t1:f} s")
+
+        return magnetization_map
+
+    def check_demagnetization_collapse(self, mag_map, temps, layers):
+        r"""check_demagnetization_collapse
+
+        Warns if a layer ends at :math:`|\mathbf{m}| < 10^{-6}` although it is
+        below its Curie temperature at the end of the delay range. Without an
+        external field :math:`\mathbf{m} = 0` is an exact fixed point of the
+        LLB, which is never left again once reached in floating point, and a
+        magnetization that was quenched to a tiny value regrows only
+        exponentially slowly from it.
 
         Args:
-            temp_map (ndarray[float]): spatio-temporal temperature map
-                - possibly for a single delay.
-            mf_magnetizations (ndarray[float]): mean-field magnetization of
-                layers.
-            eff_spins (ndarray[float]): effective spin of layers.
-            mf_exch_couplings (ndarray[float]): mean-field exchange couplings of
-                layers.
+            mag_map (ndarray[float]): cartesian magnetization map of the
+                magnetic layers :math:`M \times N \times P \times 3`.
+            temps (ndarray[float]): temperature map of the magnetic layers
+                :math:`M \times N` [K].
+            layers (list[MagneticParameters]): magnetic parameters of the
+                magnetic layers.
 
         Returns:
-            dBdx (ndarray[float]): derivative of Brillouin function.
+            collapsed (ndarray[boolean]): mask :math:`N \times P` of the
+            collapsed layers.
 
         """
-        x = np.divide(
-            mf_exch_couplings * mf_magnetizations,
-            constants.k * temp_map,
-        )
-
-        two_eff_spins = 2 * eff_spins
-        dBdx = 1 / (two_eff_spins**2 * np.sinh(x / (two_eff_spins)) ** 2) - (
-            two_eff_spins + 1
-        ) ** 2 / (two_eff_spins**2 * np.sinh(((two_eff_spins + 1) * x) / (two_eff_spins)) ** 2)
-
-        return dBdx
-
-    @staticmethod
-    def calc_transverse_damping(
-        temp_map, curie_temps, lambdas, qs, mf_magnetizations, under_tc, over_tc
-    ):
-        r"""calc_transverse_damping
-
-        Calculate the transverse damping parameter:
-
-        .. math::
-
-            \alpha_{\perp} = \begin{cases}
-                \frac{\lambda}{m_\mathrm{eq}(T)}\left(\frac{\tanh(q_s)}{q_s}-
-                    \frac{T}{3T_\mathrm{C}}\right)
-                    & \mathrm{for}\ T < T_\mathrm{C} \\
-                \frac{2 \lambda}{3}\frac{T}{T_\mathrm{C}}
-                    & \mathrm{for}\ T \geq T_\mathrm{C}
-            \end{cases}
-
-        Args:
-            temp_map (ndarray[float]): spatio-temporal temperature map
-                - possibly for a single delay.
-            curie_temps (ndarray[float]): Curie temperatures of layers.
-            lambdas (ndarray[float]): coupling-to-bath parameter of layers.
-            qs (ndarray[float]): qs parameter.
-            mf_magnetizations (ndarray[float]): mean-field magnetization of
-                layers.
-            under_tc (ndarray[boolean]): mask temperatures under the Curie
-                temperature.
-            over_tc (ndarray[boolean]): mask temperatures over the Curie
-                temperature.
-
-        Returns:
-            alpha_trans (ndarray[float]): transverse damping parameter.
-
-        """
-        alpha_trans = np.zeros_like(temp_map)
-        alpha_trans[under_tc] = np.multiply(
-            np.divide(lambdas[under_tc], mf_magnetizations[under_tc]),
-            (
-                np.divide(np.tanh(qs), qs)
-                - np.divide(temp_map[under_tc], 3 * curie_temps[under_tc])
-            ),
-        )
-        alpha_trans[over_tc] = (
-            lambdas[over_tc] * 2 / 3 * np.divide(temp_map[over_tc], curie_temps[over_tc])
-        )
-        return alpha_trans
-
-    @staticmethod
-    def calc_longitudinal_damping(
-        temp_map, curie_temps, eff_spins, lambdas, qs, under_tc, over_tc
-    ):
-        r"""calc_transverse_damping
-
-        Calculate the transverse damping parameter:
-
-        .. math::
-
-            \alpha_{\parallel} = \begin{cases}
-                \frac{2\lambda}{S+1}
-                \frac{1}{\sinh(2q_s)} & \mathrm{for}\ T < T_\mathrm{C} \\
-                \frac{2 \lambda}{3}\frac{T}{T_\mathrm{C}}
-                    & \mathrm{for}\ T \geq T_\mathrm{C}
-            \end{cases}
-
-        Args:
-            temp_map (ndarray[float]): spatio-temporal temperature map
-                - possibly for a single delay.
-            curie_temps (ndarray[float]): Curie temperatures of layers.
-            eff_spins (ndarray[float]): effective spins of layers.
-            lambdas (ndarray[float]): coupling-to-bath parameter of layers.
-            qs (ndarray[float]): qs parameter.
-            under_tc (ndarray[boolean]): mask temperatures under the Curie
-                temperature.
-            over_tc (ndarray[boolean]): mask temperatures over the Curie
-                temperature.
-
-        Returns:
-            alpha_long (ndarray[float]): transverse damping parameter.
-
-        """
-        alpha_long = np.zeros_like(temp_map)
-        alpha_long[under_tc] = np.divide(
-            2 * np.divide(lambdas[under_tc], (eff_spins[under_tc] + 1)), np.sinh(2 * qs)
-        )
-        alpha_long[over_tc] = (
-            lambdas[over_tc] * 2 / 3 * np.divide(temp_map[over_tc], curie_temps[over_tc])
-        )
-
-        return alpha_long
-
-    @staticmethod
-    def calc_qs(temp_map, mf_magnetizations, curie_temps, eff_spins, under_tc):
-        r"""calc_qs
-
-        Calculate the :math:`q_s` parameter:
-
-        .. math::
-
-            q_s=\frac{3 T_\mathrm{C} m_\mathrm{eq}(T)}{(2S+1)T}
-
-        Args:
-            temp_map (ndarray[float]): spatio-temporal temperature map
-                - possibly for a single delay.
-            mf_magnetizations (ndarray[float]): mean-field magnetization of
-                layers.
-            curie_temps (ndarray[float]): Curie temperatures of layers.
-            eff_spins (ndarray[float]): effective spins of layers.
-            under_tc (ndarray[boolean]): mask temperatures below the Curie
-                temperature.
-
-        Returns:
-            qs (ndarray[float]): qs parameter.
-
-        """
-        return np.divide(
-            3 * curie_temps[under_tc] * mf_magnetizations[under_tc],
-            (2 * eff_spins[under_tc] + 1) * temp_map[under_tc],
-        )
-
-    @staticmethod
-    def calc_long_susceptibility(
-        temp_map,
-        mf_magnetizations,
-        curie_temps,
-        eff_spins,
-        mf_exch_couplings,
-        mag_moments,
-        under_tc,
-        over_tc,
-    ):
-        r"""calc_long_susceptibility
-
-        Calculate the the longitudinal susceptibility
-
-        .. math::
-
-            \chi_{\parallel} = \begin{cases}
-                \frac{\mu_{\rm{B}}\,B_x(m_{eq}, T)}{
-                    T\,k_\mathrm{B}-J\,B_x(m_{eq}, T)}
-                    & \mathrm{for}\ T < T_\mathrm{C} \\
-                \frac{\mu_{\rm{B}}T_\mathrm{C}}{J(T-T_\mathrm{C})}
-                    & \mathrm{for}\ T \geq T_\mathrm{C}
-            \end{cases}
-
-        with :math:`B_x(m_{eq},T)` being the :meth:`derivative of the Brillouin
-        function<calc_dBrillouin_dx>`.
-
-        Args:
-            temp_map (ndarray[float]): spatio-temporal temperature map
-                - possibly for a single delay.
-            mf_magnetizations (ndarray[float]): mean-field magnetization of
-                layers.
-            curie_temps (ndarray[float]): Curie temperatures of layers.
-            eff_spins (ndarray[float]): effective spins of layers.
-            mf_exch_couplings (ndarray[float]): mean-field exchange couplings of
-                layers.
-            mag_moments (ndarray[float]): atomic magnetic moments of layers.
-            under_tc (ndarray[boolean]): mask temperatures below the Curie
-                temperature.
-            over_tc (ndarray[boolean]): mask temperatures over the Curie
-                temperature.
-
-        Returns:
-            chi_long (ndarray[float]): longitudinal susceptibility.
-
-        """
-
-        dBdx = LLB.calc_dBrillouin_dx(
-            temp_map[under_tc],
-            mf_magnetizations[under_tc],
-            eff_spins[under_tc],
-            mf_exch_couplings[under_tc],
-        )
-
-        chi_long = np.zeros_like(temp_map)
-        chi_long[under_tc] = np.divide(
-            mag_moments[under_tc] * dBdx,
-            temp_map[under_tc] * constants.k - (mf_exch_couplings)[under_tc] * dBdx,
-        )
-        chi_long[over_tc] = np.divide(
-            mag_moments[over_tc] * curie_temps[over_tc],
-            (mf_exch_couplings)[over_tc] * (temp_map[over_tc] - curie_temps[over_tc]),
-        )
-
-        return chi_long
+        if len(mag_map) == 0 or mag_map.shape[1] == 0:
+            return np.zeros(mag_map.shape[1:3], dtype=bool)
+        mag = magnetization_scipy.stack_magnetic_parameters(layers)
+        norms = np.sqrt(np.sum(mag_map[-1] ** 2, axis=2))
+        cold = temps[-1] < mag.curie_temp[:, 0]
+        collapsed = (norms < 1e-6) & (mag.active > 0) & cold[:, np.newaxis]
+        if np.any(collapsed):
+            warnings.warn(
+                f"{int(np.count_nonzero(collapsed)):d} layer(s) ended at |m| < 1e-6 although "
+                "the final temperature is below the Curie temperature. m = 0 is an exact "
+                "fixed point of the LLB without an external field and a quenched "
+                "magnetization regrows only exponentially slowly - consider a small "
+                "external field or a longer delay range."
+            )
+        return collapsed
 
     @property
     def distances(self):
