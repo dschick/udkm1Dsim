@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VectorParameter.set()` for all these inputs
 - `simulations.solvers.magnetization_scipy` with the right-hand side of the `LLB` assembled from one function per physical term, vectorized over all magnetic layers, and `simulations.solvers.mean_field` with the equilibrium magnetization, the damping parameters and the longitudinal susceptibility of the mean-field model; the solver takes the `MagneticParameters` of the magnetic layers, ported from [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber)
 - classical `LLB` with the Langevin function for an infinite `eff_spin`
+- `LLG` and inertial `iLLG` (Ciornei et al. 2011) simulations with a prescribed magnetization amplitude, given as `mag_amplitude_map`, taken from the `mag_sub_system` of the `temp_map`, derived from its `temp_sub_system` by the mean-field model, or kept at the initial amplitude; the `iLLG` accepts an `init_velocity`, which defaults to the one of the LLG, and uses `LSODA` as default integrator, ported from [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber), superseding [#164]
+- magnetic parameters `gilbert_damping`, `inertial_time`, and `magnetoelastic_coupling` of layers
+- magnetoelastic field of the out-of-plane strain for `LLG`, `iLLG`, and `LLB`, which accept a `strain_map`
 - `Magnetization.get_magnetic_parameters` and `Magnetization.get_interlayer_exchange_stiffnesses` collect the inputs of the solver from the structure
 - `Magnetization.temp_sub_system` to select the sub-system of the `temp_map` that drives the magnetization dynamics
 - `LLB.get_magnetization_map` accepts an external field `H_ext` per delay as `Mx3` array
@@ -82,9 +85,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the `mf_exch_coupling` of a layer was not defined for an infinite `eff_spin`
 - `LLB.get_magnetization_map` rejected a valid `Nx3` initial magnetization
 - `LLB.get_magnetization_map` failed for `progress_bar=False`
+- `LLB.get_magnetization_map` failed for a single delay and for structures without magnetic layers
+- the adaptive step size of the magnetization solver could grow so large for a magnetization in equilibrium that the solver stepped over the excitation, e.g. for low initial temperatures; its `max_step` is limited to the shortest delay step now
+- the `LLB` overflowed or stalled at low temperatures, where the tiny longitudinal susceptibility makes the longitudinal field huge, whose rounding errors entered the torques; it only enters the longitudinal relaxation now
+- the anisotropy and exchange fields of the `LLB` were not finite for layers with a Curie temperature but without saturation magnetization, which stalled the solver; these fields vanish now
+- `LLB` raises an error for layers with a Curie temperature but without an effective spin instead of silently keeping them at zero magnetization
+- `LLB` raises an error for layers with an anisotropy or a magnetoelastic coupling and an `aniso_exponent` below 2, for which these fields diverge at the Curie temperature and stalled the solver
 
 ### Security
 
+[#164]: https://github.com/dschick/udkm1Dsim/pull/164
 [#186]: https://github.com/dschick/udkm1Dsim/issues/186
 [#224]: https://github.com/dschick/udkm1Dsim/issues/224
 [#226]: https://github.com/dschick/udkm1Dsim/issues/226

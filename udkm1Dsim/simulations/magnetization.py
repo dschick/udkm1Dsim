@@ -21,7 +21,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ["Magnetization", "LLB"]
+__all__ = ["Magnetization", "LLG", "iLLG", "LLB"]
 
 __docformat__ = "restructuredtext"
 
@@ -100,6 +100,10 @@ class Magnetization(Simulation):
         """extend the simulation properties by the temperature sub-system"""
         return super()._property_rows() + [["temperature sub-system", self.temp_sub_system]]
 
+    def _hash_params(self):
+        """simulation settings that enter the hash of the results"""
+        return [type(self).__name__, self.temp_sub_system]
+
     def get_hash(self, **kwargs):
         """get_hash
 
@@ -117,9 +121,9 @@ class Magnetization(Simulation):
             hash (str): unique hash.
 
         """
-        param = [type(self).__name__, self.temp_sub_system]
+        param = self._hash_params()
 
-        for name in ("strain_map", "temp_map"):
+        for name in ("strain_map", "temp_map", "mag_amplitude_map"):
             if name in kwargs:
                 value = kwargs.pop(name)
                 if value is not None and np.size(value) > 1e6:
@@ -247,12 +251,12 @@ class Magnetization(Simulation):
             self.disp_message("Calculating _magnetization_map_ ...")
             # parse the input arguments
 
-            if "strain_map" in kwargs:
+            if kwargs.get("strain_map") is not None:
                 if not isinstance(kwargs["strain_map"], np.ndarray):
                     raise TypeError("strain_map must be a numpy ndarray!")
-            if "temp_map" in kwargs:
-                if not isinstance(kwargs["temp_map"], np.ndarray):
-                    raise TypeError("temp_map must be a numpy ndarray!")
+            for name in ("temp_map", "mag_amplitude_map"):
+                if kwargs.get(name) is not None and not isinstance(kwargs[name], np.ndarray):
+                    raise TypeError(f"{name} must be a numpy ndarray!")
             if "H_ext" in kwargs:
                 if not isinstance(kwargs["H_ext"], np.ndarray):
                     raise TypeError("H_ext must be a numpy ndarray!")
@@ -475,19 +479,522 @@ class Magnetization(Simulation):
             temps (ndarray[float]): temperature map :math:`M \times L`.
 
         """
-        temp_map = np.asarray(temp_map, dtype=float)
-        if temp_map.ndim == 3:
-            if self.temp_sub_system >= temp_map.shape[2]:
-                raise ValueError(
-                    f"Sub-system {self.temp_sub_system:d} is not contained in temp_map!"
-                )
-            temp_map = temp_map[:, :, self.temp_sub_system]
-        if temp_map.shape != (M, L):
+        return self.check_map("temp_map", temp_map, M, L, self.temp_sub_system)
+
+    @staticmethod
+    def check_map(name, values, M, L, sub_system=None):
+        r"""check_map
+
+        Checks a spatio-temporal map of the layers, e.g. the ``strain_map``,
+        and returns it as :math:`M \times L` array. For a map
+        :math:`M \times L \times K` with several sub-systems, the given
+        ``sub_system`` is selected.
+
+        Args:
+            name (str): name of the map for the error messages.
+            values (ndarray[float]): map :math:`M \times L` or
+                :math:`M \times L \times K`.
+            M (int): number of delays.
+            L (int): number of layers.
+            sub_system (int, optional): sub-system of a map with several
+                sub-systems. Defaults to None.
+
+        Returns:
+            values (ndarray[float]): map :math:`M \times L`.
+
+        """
+        values = np.asarray(values, dtype=float)
+        if values.ndim == 3 and sub_system is not None:
+            if sub_system >= values.shape[2]:
+                raise ValueError(f"Sub-system {sub_system:d} is not contained in {name}!")
+            values = values[:, :, sub_system]
+        if values.shape != (M, L):
             raise ValueError(
-                "temp_map must have the dimension M x L (x K), where M is the "
-                "number of delays and L the number of layers!"
+                f"{name} must have the dimension M x L"
+                + (" (x K)" if sub_system is not None else "")
+                + ", where M is the number of delays and L the number of layers!"
             )
-        return temp_map
+        return values
+
+    @staticmethod
+    def parse_delays(delays):
+        """parse_delays
+
+        Returns the delays as plain array in seconds.
+
+        Args:
+            delays (ndarray[Quantity, float]): delays [s].
+
+        Returns:
+            delays (ndarray[float]): delays [s].
+
+        """
+        try:
+            delays = delays.to("s").magnitude
+        except AttributeError:
+            pass
+        return np.asarray(delays, dtype=float)
+
+    def solve(self, model, init_state, inputs, is_magnetic):
+        r"""solve
+
+        Solves the ``model`` for the magnetic layers, see
+        :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.solve`.
+
+        Args:
+            model (str): one of ``llg``, ``illg`` or ``llb``.
+            init_state (ndarray[float]): initial state of the solver.
+            inputs (Inputs): time-dependent inputs of the magnetic layers.
+            is_magnetic (ndarray[boolean]): mask of the magnetic layers.
+
+        Returns:
+            mag_map (ndarray[float]): cartesian magnetization map of the
+            magnetic layers :math:`M \times N \times P \times 3`.
+
+        """
+        return magnetization_scipy.solve(
+            model,
+            init_state,
+            inputs,
+            self.get_magnetic_parameters(is_magnetic),
+            self.get_interlayer_exchange_stiffnesses(is_magnetic),
+            self.S.get_layer_property_vector("structural.thickness.magnitude")[is_magnetic],
+            self.ode_options,
+            self.progress_bar,
+        )
+
+    @staticmethod
+    def embed_magnetization(mag_map, is_magnetic):
+        r"""embed_magnetization
+
+        Embeds the cartesian magnetization of the magnetic layers into the
+        polar magnetization map of all layers, which is zero for the
+        non-magnetic layers.
+
+        Args:
+            mag_map (ndarray[float]): cartesian magnetization map of the
+                magnetic layers :math:`M \times N \times P \times 3`.
+            is_magnetic (ndarray[boolean]): mask of the magnetic layers.
+
+        Returns:
+            magnetization_map (ndarray[float]): polar magnetization map
+            :math:`M \times L \times 3`.
+
+        """
+        magnetization_map = np.zeros([len(mag_map), len(is_magnetic), 3])
+        magnetization_map[:, is_magnetic, :] = mag_map[:, :, 0, :]
+        return convert_cartesian_to_polar(magnetization_map)
+
+
+class LLG(Magnetization):
+    r"""LLG
+
+    Landau-Lifshitz-Gilbert simulations with a prescribed magnetization amplitude.
+
+    Ported from `friweber/udkm1Dsim_LLG-LLB
+    <https://github.com/friweber/udkm1Dsim_LLG-LLB>`_ by
+    `@friweber <https://github.com/friweber>`_.
+
+    The LLG describes the precession and the transverse relaxation of the
+    unit vector :math:`\mathbf{n}` of the magnetization of each layer
+
+    .. math::
+
+        \frac{d\mathbf{n}}{dt} = \frac{\gamma_e}{1+\alpha^2}\left(
+            \mathbf{n} \times \mathbf{B}
+            + \alpha\, \mathbf{n} \times (\mathbf{n} \times
+            \mathbf{B})\right)
+
+    with the Gilbert damping :math:`\alpha` (``gilbert_damping`` of the
+    layers) and :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,
+    T^{-1}}` the gyromagnetic ratio of an electron, see
+    :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.llg_rhs`. The
+    amplitude :math:`m(t)` of the magnetization :math:`\mathbf{m} = m(t)\,
+    \mathbf{n}`, i.e. the reduced magnetization :math:`m = |\mathbf{M}|/M_s`,
+    which is 1 at saturation, is not a dynamic variable but an input, which is
+
+    #. given directly as ``mag_amplitude_map``,
+    #. taken from the sub-system ``mag_sub_system`` of the ``temp_map``,
+       e.g. of a microscopic three-temperature model solved with the
+       :class:`~.heat.Heat` class, where one sub-system holds the
+       magnetization amplitude,
+    #. derived from the temperature of the ``temp_sub_system`` of the
+       ``temp_map`` by the mean-field model, see
+       :meth:`~Magnetization.calc_mean_field_mag_map`, or
+    #. kept at the initial amplitude of the layers.
+
+    The amplitude must not be negative, a reversed direction is given by a
+    negative amplitude of the initial magnetization only.
+
+    The field :math:`\mathbf{B}` [T] is the sum of the external field
+    ``H_ext``, the :func:`anisotropy field
+    <udkm1Dsim.simulations.solvers.magnetization_scipy.anisotropy_field>`,
+    the :func:`interlayer exchange field
+    <udkm1Dsim.simulations.solvers.magnetization_scipy.interlayer_exchange_field>`
+    and the :func:`magnetoelastic field
+    <udkm1Dsim.simulations.solvers.magnetization_scipy.magnetoelastic_field>`
+    of the ``strain_map``. The temperature dependence of the anisotropy and
+    magnetoelastic fields is scaled with the magnetization amplitude :math:`m(t)`.
+    Magnetic layers are those with a saturation magnetization.
+
+    Args:
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
+
+    Keyword Args:
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+
+    Attributes:
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        ode_options (dict): options for scipy solve_ivp ode solver.
+        temp_sub_system (int): index of the sub-system of the ``temp_map``
+            whose temperature yields the mean-field magnetization amplitude.
+        mag_sub_system (int): index of the sub-system of the ``temp_map``
+            that holds the magnetization amplitude. Defaults to None, in
+            which case the amplitude is derived from the temperature of the
+            ``temp_sub_system`` by the mean-field model.
+
+    """
+
+    _title = "Landau-Lifshitz-Gilbert Magnetization Dynamics simulation"
+    model = "llg"
+
+    def __init__(self, S, force_recalc, **kwargs):
+        super().__init__(S, force_recalc, **kwargs)
+        self.mag_sub_system = None
+
+    def _property_rows(self):
+        """extend the simulation properties by the magnetization sub-system"""
+        return super()._property_rows() + [["magnetization sub-system", self.mag_sub_system]]
+
+    def _hash_params(self):
+        return super()._hash_params() + [self.mag_sub_system]
+
+    def calc_magnetization_map(
+        self,
+        delays,
+        mag_amplitude_map=None,
+        temp_map=None,
+        H_ext=np.array([0, 0, 0]),
+        init_mag=[],
+        strain_map=None,
+        **kwargs,
+    ):
+        r"""calc_magnetization_map
+
+        Calculates the magnetization map using the Landau-Lifshitz-Gilbert
+        equation for a given delay range and magnetization amplitude, see
+        :class:`LLG`.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            mag_amplitude_map (ndarray[float], optional): spatio-temporal
+                amplitude of the magnetization :math:`M \times L`, i.e. the
+                reduced magnetization :math:`m = |\mathbf{M}|/M_s`, which is 1
+                at saturation and must not be negative. The LLG keeps it as
+                prescribed and only evolves the direction.
+            temp_map (ndarray[float], optional): spatio-temporal temperature
+                map, used for the magnetization amplitude if no
+                ``mag_amplitude_map`` is given, see :class:`LLG`.
+            H_ext (ndarray[float], optional): external magnetic field
+                (H_x, H_y, H_z) [T], either constant or one vector per delay.
+            init_mag (ndarray[float], optional): initial magnetization in
+                polar coordinates, see :meth:`check_initial_magnetization`.
+                Its amplitude is kept if neither ``mag_amplitude_map`` nor
+                ``temp_map`` are given, otherwise only its direction is used.
+            strain_map (ndarray[float], optional): spatio-temporal strain map
+                :math:`M \times L` for the magnetoelastic field.
+            **kwargs: model-specific options, see :class:`iLLG`.
+
+        Returns:
+            magnetization_map (ndarray[float]): spatio-temporal absolute
+            magnetization profile.
+
+        """
+        t1 = time()
+        delays = self.parse_delays(delays)
+        M = len(delays)
+        L = self.S.get_number_of_layers()
+
+        init_mag = np.array(self.check_initial_magnetization(init_mag), dtype=float)
+        # the directions of the initial magnetization, a negative amplitude
+        # reverses the direction
+        init_dir = init_mag.copy()
+        init_dir[:, 0] = np.where(init_mag[:, 0] < 0, -1.0, 1.0)
+        init_dir = convert_polar_to_cartesian(init_dir)
+
+        # the magnetization amplitude
+        if mag_amplitude_map is not None:
+            amplitude_map = self.check_map("mag_amplitude_map", mag_amplitude_map, M, L)
+        elif temp_map is not None:
+            if self.mag_sub_system is not None:
+                amplitude_map = self.check_map("temp_map", temp_map, M, L, self.mag_sub_system)
+            else:
+                amplitude_map = self.get_mean_field_mag_map(self.check_temp_map(temp_map, M, L))
+        else:
+            amplitude_map = np.tile(np.abs(init_mag[:, 0]), (M, 1))
+        if np.any(amplitude_map < 0):
+            raise ValueError(
+                "The magnetization amplitude must not be negative - a reversed direction "
+                "is given by a negative amplitude of init_mag only!"
+            )
+        if strain_map is not None:
+            strain_map = self.check_map("strain_map", strain_map, M, L)
+
+        # magnetic layers carry a saturation magnetization
+        is_magnetic = self.S.get_layer_property_vector("magnetic.mag_saturation.magnitude") > 0
+        layers = self.get_magnetic_parameters(is_magnetic)
+        self.check_parameters(layers)
+
+        inputs = magnetization_scipy.prepare_inputs(
+            delays,
+            len(layers),
+            H_ext,
+            amplitude_map=amplitude_map[:, is_magnetic],
+            strain_map=None if strain_map is None else strain_map[:, is_magnetic],
+        )
+        init_state = self.get_initial_state(
+            init_dir[is_magnetic, np.newaxis, :], inputs, is_magnetic, **kwargs
+        )
+        mag_map = self.solve(self.model, init_state, inputs, is_magnetic)
+
+        magnetization_map = self.embed_magnetization(mag_map, is_magnetic)
+        self.disp_message(f"Elapsed time for _{type(self).__name__:s}_: {time() - t1:f} s")
+        return magnetization_map
+
+    def check_parameters(self, layers):
+        """check_parameters
+
+        Checks the parameters of the magnetic layers for the model.
+
+        Args:
+            layers (list[MagneticParameters]): magnetic parameters of the
+                magnetic layers.
+
+        """
+
+    def get_initial_state(self, init_dir, inputs, is_magnetic, **kwargs):
+        r"""get_initial_state
+
+        Returns the initial state of the solver, which are the unit vectors of
+        the magnetic layers for the LLG.
+
+        Args:
+            init_dir (ndarray[float]): initial unit vectors of the magnetic
+                layers :math:`N \times P \times 3`.
+            inputs (Inputs): time-dependent inputs of the magnetic layers.
+            is_magnetic (ndarray[boolean]): mask of the magnetic layers.
+            **kwargs: model-specific options.
+
+        Returns:
+            init_state (ndarray[float]): initial state.
+
+        """
+        if kwargs:
+            raise TypeError(
+                f"{type(self).__name__} got unexpected keyword argument(s) "
+                + ", ".join(f"'{key}'" for key in kwargs)
+                + "!"
+            )
+        return init_dir
+
+
+class iLLG(LLG):
+    r"""iLLG
+
+    Inertial Landau-Lifshitz-Gilbert simulations with a prescribed
+    magnetization amplitude.
+
+    Ported from `friweber/udkm1Dsim_LLG-LLB
+    <https://github.com/friweber/udkm1Dsim_LLG-LLB>`_ by
+    `@friweber <https://github.com/friweber>`_.
+
+    The inertial LLG of :cite:t:`ciornei2011` adds the inertia of the
+    magnetization to the :class:`LLG`
+
+    .. math::
+
+        \frac{d\mathbf{n}}{dt} = \gamma_e\, \mathbf{n} \times
+            \mathbf{B} + \alpha\, \mathbf{n} \times \left(
+            \frac{d\mathbf{n}}{dt} + \tau \frac{d^2\mathbf{n}}{dt^2}\right)
+
+    with the inertial relaxation time :math:`\tau` (``inertial_time`` of the
+    layers), which gives rise to a nutation of the magnetization at the
+    frequency :math:`1/(\alpha\tau)`. The second-order equation is split into
+    two first-order equations for the unit vector and its velocity
+    :math:`\mathbf{v} = d\mathbf{n}/dt`, see
+    :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.illg_rhs`.
+    All magnetic layers must have a non-zero Gilbert damping and inertial
+    relaxation time. Apart from that everything is identical to the
+    :class:`LLG`.
+
+    The velocity relaxes on the time scale of the inertial time :math:`\tau`,
+    which makes the equations stiff. Hence, the default ``method`` of the
+    ``ode_options`` is ``LSODA``, which switches automatically between a stiff
+    and a non-stiff integrator. The explicit ``RK45`` has to resolve the
+    inertial time and is orders of magnitude slower.
+
+    Args:
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
+
+    Keyword Args:
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+
+    Attributes:
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        ode_options (dict): options for scipy solve_ivp ode solver.
+        temp_sub_system (int): index of the sub-system of the ``temp_map``
+            whose temperature yields the mean-field magnetization amplitude.
+        mag_sub_system (int): index of the sub-system of the ``temp_map``
+            that holds the magnetization amplitude.
+
+    """
+
+    _title = "Inertial Landau-Lifshitz-Gilbert Magnetization Dynamics simulation"
+    model = "illg"
+
+    def __init__(self, S, force_recalc, **kwargs):
+        super().__init__(S, force_recalc, **kwargs)
+        self.ode_options["method"] = "LSODA"
+
+    def calc_magnetization_map(
+        self,
+        delays,
+        mag_amplitude_map=None,
+        temp_map=None,
+        H_ext=np.array([0, 0, 0]),
+        init_mag=[],
+        strain_map=None,
+        init_velocity=None,
+    ):
+        r"""calc_magnetization_map
+
+        Calculates the magnetization map using the inertial
+        Landau-Lifshitz-Gilbert equation for a given delay range and
+        magnetization amplitude, see :class:`iLLG` and :meth:`LLG.calc_magnetization_map`.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            mag_amplitude_map (ndarray[float], optional): spatio-temporal
+                amplitude of the magnetization :math:`M \times L`, i.e. the
+                reduced magnetization :math:`m = |\mathbf{M}|/M_s`, which is 1
+                at saturation and must not be negative. The LLG keeps it as
+                prescribed and only evolves the direction.
+            temp_map (ndarray[float], optional): spatio-temporal temperature
+                map, used for the magnetization amplitude if no
+                ``mag_amplitude_map`` is given, see :class:`LLG`.
+            H_ext (ndarray[float], optional): external magnetic field
+                (H_x, H_y, H_z) [T], either constant or one vector per delay.
+            init_mag (ndarray[float], optional): initial magnetization in
+                polar coordinates.
+            strain_map (ndarray[float], optional): spatio-temporal strain map
+                :math:`M \times L`.
+            init_velocity (ndarray[float], optional): initial velocity
+                :math:`d\mathbf{n}/dt` of the unit vectors [1/s], a single
+                vector or one per layer :math:`L \times 3`. Defaults to None,
+                in which case the velocity of the LLG for the initial state is
+                used, which avoids an artificial nutation at the start.
+
+        Returns:
+            magnetization_map (ndarray[float]): spatio-temporal absolute
+            magnetization profile.
+
+        """
+        return super().calc_magnetization_map(
+            delays,
+            mag_amplitude_map=mag_amplitude_map,
+            temp_map=temp_map,
+            H_ext=H_ext,
+            init_mag=init_mag,
+            strain_map=strain_map,
+            init_velocity=init_velocity,
+        )
+
+    def check_parameters(self, layers):
+        """check_parameters
+
+        The inertial LLG requires a non-zero Gilbert damping and inertial
+        relaxation time for all magnetic layers.
+
+        Args:
+            layers (list[MagneticParameters]): magnetic parameters of the
+                magnetic layers.
+
+        """
+        for layer in layers:
+            if layer.gilbert_damping.magnitude <= 0 or layer.inertial_time.magnitude <= 0:
+                raise ValueError(
+                    "The inertial LLG requires a gilbert_damping > 0 and an "
+                    "inertial_time > 0 for all magnetic layers!"
+                )
+
+    def get_initial_state(self, init_dir, inputs, is_magnetic, init_velocity=None, **kwargs):
+        r"""get_initial_state
+
+        Returns the initial state of the solver, which are the unit vectors of
+        the magnetic layers and their velocities for the inertial LLG.
+
+        Args:
+            init_dir (ndarray[float]): initial unit vectors of the magnetic
+                layers :math:`N \times P \times 3`.
+            inputs (Inputs): time-dependent inputs of the magnetic layers.
+            is_magnetic (ndarray[boolean]): mask of the magnetic layers.
+            init_velocity (ndarray[float], optional): initial velocities
+                [1/s], see :meth:`calc_magnetization_map`. Defaults to None.
+
+        Returns:
+            init_state (ndarray[float]): initial state :math:`2 \times N
+            \times P \times 3`.
+
+        """
+        N, P = init_dir.shape[0:2]
+        if init_velocity is None and N == 0:
+            velocity = np.zeros_like(init_dir)
+        elif init_velocity is None:
+            # the velocity of the LLG for the initial state
+            velocity = magnetization_scipy.llg_rhs(
+                inputs.delays[0],
+                init_dir.ravel(),
+                inputs,
+                magnetization_scipy.stack_magnetic_parameters(
+                    self.get_magnetic_parameters(is_magnetic)
+                ),
+                self.get_interlayer_exchange_stiffnesses(is_magnetic),
+                self.S.get_layer_property_vector("structural.thickness.magnitude")[is_magnetic],
+            ).reshape(N, P, 3)
+        else:
+            init_velocity = np.asarray(init_velocity, dtype=float)
+            if init_velocity.shape == (3,):
+                velocity = np.tile(init_velocity, (N, P, 1))
+            elif init_velocity.shape == (len(is_magnetic), 3):
+                velocity = np.tile(init_velocity[is_magnetic, np.newaxis, :], (1, P, 1))
+            else:
+                raise ValueError(
+                    "init_velocity must be a vector with 3 components or an array of "
+                    "Lx3 with L being the number of layers!"
+                )
+        return np.stack((init_dir, velocity))
 
 
 class LLB(Magnetization):
@@ -535,9 +1042,12 @@ class LLB(Magnetization):
       <udkm1Dsim.simulations.solvers.magnetization_scipy.anisotropy_field>`
     * the :func:`interlayer exchange field
       <udkm1Dsim.simulations.solvers.magnetization_scipy.interlayer_exchange_field>`
+    * the :func:`magnetoelastic field
+      <udkm1Dsim.simulations.solvers.magnetization_scipy.magnetoelastic_field>`
+      of the ``strain_map``
     * the :func:`longitudinal field
       <udkm1Dsim.simulations.solvers.magnetization_scipy.longitudinal_field>`,
-      which relaxes the norm of the magnetization towards its equilibrium
+      which relaxes the amplitude of the magnetization towards its equilibrium
       with the :func:`longitudinal susceptibility
       <udkm1Dsim.simulations.solvers.mean_field.longitudinal_susceptibility>`
 
@@ -548,6 +1058,10 @@ class LLB(Magnetization):
     The effective spin ``eff_spin`` of the layers selects the model: finite
     spins give the quantum LLB with Brillouin functions, e.g. :math:`S = 1/2`
     for Ni, an infinite spin the classical LLB with the Langevin function.
+    Layers with an anisotropy or a magnetoelastic coupling require an
+    ``aniso_exponent`` of at least 2, since these fields scale as
+    :math:`m_\mathrm{eq}^{\beta-2}` and would diverge at the Curie temperature
+    otherwise.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -576,7 +1090,9 @@ class LLB(Magnetization):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
 
-    def calc_magnetization_map(self, delays, temp_map, H_ext=np.array([0, 0, 0]), init_mag=[]):
+    def calc_magnetization_map(
+        self, delays, temp_map, H_ext=np.array([0, 0, 0]), init_mag=[], strain_map=None
+    ):
         r"""calc_magnetization_map
 
         Calculates the magnetization map using the mean-field
@@ -592,6 +1108,8 @@ class LLB(Magnetization):
                 polar coordinates, see :meth:`check_initial_magnetization`. If
                 none is given, the layers start in the equilibrium of their
                 initial temperature along the magnetization of the layers.
+            strain_map (ndarray[float], optional): spatio-temporal strain map
+                :math:`M \times L` for the magnetoelastic field.
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
@@ -599,15 +1117,13 @@ class LLB(Magnetization):
 
         """
         t1 = time()
-        try:
-            delays = delays.to("s").magnitude
-        except AttributeError:
-            pass
-        delays = np.asarray(delays, dtype=float)
+        delays = self.parse_delays(delays)
         M = len(delays)  # nb of delay steps
         L = self.S.get_number_of_layers()
 
         temps = self.check_temp_map(temp_map, M, L)
+        if strain_map is not None:
+            strain_map = self.check_map("strain_map", strain_map, M, L)
 
         implicit_init_mag = len(init_mag) == 0
         init_mag = np.array(self.check_initial_magnetization(init_mag), dtype=float)
@@ -616,6 +1132,22 @@ class LLB(Magnetization):
         is_magnetic = self.S.get_layer_property_vector("magnetic.curie_temp.magnitude") > 0
         layers = self.get_magnetic_parameters(is_magnetic)
         N = len(layers)
+        if any(layer.eff_spin.magnitude <= 0 for layer in layers):
+            raise ValueError(
+                "All layers with a Curie temperature must have an eff_spin > 0 for the "
+                "LLB, which can also be infinite for the classical LLB!"
+            )
+        for layer in layers:
+            anisotropic = np.any(np.asarray(layer.anisotropy.magnitude) != 0) or np.any(
+                np.asarray(layer.magnetoelastic_coupling.magnitude) != 0
+            )
+            if anisotropic and layer.aniso_exponent.magnitude < 2:
+                raise ValueError(
+                    "The anisotropy and magnetoelastic fields of the LLB scale as "
+                    "m_eq**(aniso_exponent - 2) and diverge at the Curie temperature for "
+                    "aniso_exponent < 2 - it is 3 for a uniaxial anisotropy following "
+                    "the Callen-Callen law!"
+                )
 
         if implicit_init_mag and N > 0:
             # start in the equilibrium of the initial temperature, tabulated
@@ -630,24 +1162,17 @@ class LLB(Magnetization):
         init_state = convert_polar_to_cartesian(init_mag)[is_magnetic, np.newaxis, :]
 
         inputs = magnetization_scipy.prepare_inputs(
-            delays, N, H_ext, temp_map=temps[:, is_magnetic]
+            delays,
+            N,
+            H_ext,
+            temp_map=temps[:, is_magnetic],
+            strain_map=None if strain_map is None else strain_map[:, is_magnetic],
         )
-        mag_map = magnetization_scipy.solve(
-            init_state,
-            inputs,
-            layers,
-            self.get_interlayer_exchange_stiffnesses(is_magnetic),
-            self.S.get_layer_property_vector("structural.thickness.magnitude")[is_magnetic],
-            self.ode_options,
-            self.progress_bar,
-        )
+        mag_map = self.solve("llb", init_state, inputs, is_magnetic)
         self.check_demagnetization_collapse(mag_map, temps[:, is_magnetic], layers)
 
         # final magnetization map is zero for all non-magnetic layers
-        magnetization_map = np.zeros([M, L, 3])
-        magnetization_map[:, is_magnetic, :] = mag_map[:, :, 0, :]
-        # convert to polar coordinates
-        magnetization_map = convert_cartesian_to_polar(magnetization_map)
+        magnetization_map = self.embed_magnetization(mag_map, is_magnetic)
         self.disp_message(f"Elapsed time for _LLB_: {time() - t1:f} s")
 
         return magnetization_map

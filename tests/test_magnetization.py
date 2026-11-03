@@ -2,12 +2,13 @@
 
 import copy
 import warnings
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 import udkm1Dsim as ud
-from udkm1Dsim import LLB, Magnetization, u
+from udkm1Dsim import LLB, LLG, Magnetization, iLLG, u
 from udkm1Dsim.helpers import convert_polar_to_cartesian
 from udkm1Dsim.simulations.solvers import magnetization_scipy, mean_field
 
@@ -129,6 +130,12 @@ def test_magnetization_get_hash_distinguishes_simulations(structure_amorph, dela
     assert hash != magnetization.get_hash(delays=delays, temp_map=temp_map)
     llb.temp_sub_system = 1
     assert hash != llb.get_hash(delays=delays, temp_map=temp_map)
+    llg = LLG(structure_amorph, True, save_data=False, disp_messages=False)
+    illg = iLLG(structure_amorph, True, save_data=False, disp_messages=False)
+    hash = llg.get_hash(delays=delays, temp_map=temp_map)
+    assert hash != illg.get_hash(delays=delays, temp_map=temp_map)
+    llg.mag_sub_system = 1
+    assert hash != llg.get_hash(delays=delays, temp_map=temp_map)
 
 
 def test_magnetization_check_initial_magnetization(magnetization):
@@ -347,3 +354,239 @@ def test_llb_warns_on_demagnetization_collapse(tmp_path):
     temp_map = 300 * np.ones((len(delays), 1, 1))
     with pytest.warns(UserWarning, match="m = 0 is an exact fixed point"):
         llb.get_magnetization_map(delays, temp_map=temp_map, init_mag=np.zeros(3))
+
+
+# LLG and iLLG
+
+
+def test_magnetoelastic_field():
+    """the magnetoelastic field is an anisotropy along z scaled by the strain"""
+    mag = SimpleNamespace(
+        magnetoelastic_coupling=np.array([[2e6]]),
+        mag_saturation=np.array([[5e5]]),
+        aniso_exponent=np.array([[3.0]]),
+    )
+    m = np.array([[[0.3, 0.4, 0.5]]])
+    B = magnetization_scipy.magnetoelastic_field(m, np.array([[0.8]]), np.array([1e-3]), mag)
+    assert np.allclose(B[..., :2], 0)
+    assert np.isclose(B[0, 0, 2], -2 * 2e6 * 1e-3 / 5e5 * 0.8 * 0.5)
+
+
+@pytest.mark.parametrize("alpha", [0.0, 0.1])
+def test_llg_damped_precession(alpha, tmp_path):
+    """the LLG precesses around the external field at the Larmor frequency
+    reduced by 1/(1+alpha^2) and relaxes towards it with
+    tan(phi/2) = tan(phi_0/2) exp(-alpha |gamma| B t / (1+alpha^2))"""
+    S = make_structure((make_layer("m", gilbert_damping=alpha), 1))
+    llg = simulation(LLG, S, tmp_path)
+    delays = np.r_[0:100:0.5] * u.ps
+    B = 0.5
+    mag_map = llg.get_magnetization_map(delays, H_ext=np.r_[0, 0, B])
+    t = delays.to("s").magnitude
+    omega = magnetization_scipy.GAMMA_E * B / (1 + alpha**2)
+    phi = 2 * np.arctan(np.exp(-alpha * abs(omega) * t))
+    gamma = np.mod(-omega * t + np.pi, 2 * np.pi) - np.pi
+    assert np.allclose(mag_map[:, 0, 0], 1)
+    assert np.allclose(mag_map[:, 0, 1], phi, atol=1e-5)
+    assert np.allclose(np.exp(1j * mag_map[:, 0, 2]), np.exp(1j * gamma), atol=1e-4)
+
+
+def test_llg_magnetization_amplitude(tmp_path):
+    """the amplitude is given as mag_amplitude_map, taken from the
+    mag_sub_system or the mean field of the temp_map, or kept at the initial
+    amplitude"""
+    S = make_structure((make_layer("m", gilbert_damping=0.1), 2))
+    llg = simulation(LLG, S, tmp_path)
+    delays = np.r_[0:5:0.5] * u.ps
+    M = len(delays)
+    amplitude_map = np.linspace(0.2, 0.9, M)[:, np.newaxis] * np.ones((1, 2))
+    mag_map = llg.get_magnetization_map(delays, mag_amplitude_map=amplitude_map)
+    assert np.allclose(mag_map[:, :, 0], amplitude_map)
+
+    temp_map = np.stack((np.full((M, 2), 400.0), amplitude_map), axis=2)
+    mag_map = llg.get_magnetization_map(delays, temp_map=temp_map)
+    assert np.allclose(mag_map[:, :, 0], llg.get_mean_field_mag_map(temp_map[:, :, 0]))
+    llg.mag_sub_system = 1
+    mag_map = llg.get_magnetization_map(delays, temp_map=temp_map)
+    assert np.allclose(mag_map[:, :, 0], amplitude_map)
+
+    # a negative amplitude reverses the direction
+    init_mag = np.array([[0.7, np.pi / 2, 0.0], [-0.7, np.pi / 2, 0.0]])
+    mag_map = llg.get_magnetization_map(delays, init_mag=init_mag)
+    m = convert_polar_to_cartesian(mag_map)
+    assert np.allclose(m[:, 0], [0.7, 0, 0])
+    assert np.allclose(m[:, 1], [-0.7, 0, 0])
+    # but a negative prescribed amplitude is not allowed
+    with pytest.raises(ValueError, match="must not be negative"):
+        llg.get_magnetization_map(delays, mag_amplitude_map=-amplitude_map)
+
+
+def test_llg_non_magnetic_layers(tmp_path):
+    """layers without a saturation magnetization are not magnetic"""
+    spacer = make_layer("s", mag_saturation=0 * u.J / u.T / u.m**3)
+    S = make_structure((make_layer("m", gilbert_damping=0.1), 1), (spacer, 1))
+    llg = simulation(LLG, S, tmp_path)
+    mag_map = llg.get_magnetization_map(np.r_[0:5:1] * u.ps, H_ext=np.r_[0, 0, 1])
+    assert np.allclose(mag_map[:, 1], 0)
+    assert np.all(mag_map[1:, 0, 1] < np.pi / 2)
+
+
+@pytest.mark.parametrize("cls", [LLG, LLB])
+def test_strain_acts_as_anisotropy(cls, tmp_path):
+    """the magnetoelastic field of a strain is the anisotropy K_z = -B_1 strain"""
+    K, strain = 2e5, 1e-3
+    delays = np.r_[0:50:1] * u.ps
+    temp_map = np.full((len(delays), 1), 300.0)
+    init_mag = np.array([1.0, np.pi / 4, 0.0])
+    kwargs = {"temp_map": temp_map} if cls is LLB else {}
+    S = make_structure(
+        (make_layer("a", gilbert_damping=0.1, anisotropy=[0, 0, K] * u.J / u.m**3), 1)
+    )
+    reference = simulation(cls, S, tmp_path).get_magnetization_map(
+        delays, init_mag=init_mag, **kwargs
+    )
+    S = make_structure(
+        (
+            make_layer(
+                "b", gilbert_damping=0.1, magnetoelastic_coupling=-K / strain * u.J / u.m**3
+            ),
+            1,
+        )
+    )
+    mag_map = simulation(cls, S, tmp_path).get_magnetization_map(
+        delays, init_mag=init_mag, strain_map=np.full((len(delays), 1), strain), **kwargs
+    )
+    assert not np.allclose(reference[-1], reference[0], atol=1e-3)
+    assert np.allclose(mag_map, reference, atol=1e-6)
+
+
+def test_illg_requires_damping_and_inertia(tmp_path):
+    S = make_structure((make_layer("m", gilbert_damping=0.1), 1))
+    illg = simulation(iLLG, S, tmp_path)
+    with pytest.raises(ValueError, match="inertial_time"):
+        illg.get_magnetization_map(np.r_[0:2:1] * u.ps)
+
+
+def test_illg_approaches_llg(tmp_path):
+    """for a short inertial time the iLLG follows the LLG, starting with the
+    velocity of the LLG"""
+    S = make_structure((make_layer("m", gilbert_damping=0.2, inertial_time=1 * u.fs), 1))
+    delays = np.r_[0:20:0.5] * u.ps
+    H_ext = np.r_[0, 0, 1]
+    llg = simulation(LLG, S, tmp_path)
+    illg = simulation(iLLG, S, tmp_path)
+    assert illg.ode_options["method"] == "LSODA"
+    reference = convert_polar_to_cartesian(llg.get_magnetization_map(delays, H_ext=H_ext))
+    m = convert_polar_to_cartesian(illg.get_magnetization_map(delays, H_ext=H_ext))
+    assert np.allclose(np.sum(m**2, axis=2), 1)
+    assert np.allclose(m, reference, atol=1e-2)
+
+
+def test_illg_initial_velocity(tmp_path):
+    """the default initial velocity is the one of the LLG, a given one is
+    used as is"""
+    S = make_structure((make_layer("m", gilbert_damping=0.2, inertial_time=10 * u.fs), 2))
+    illg = simulation(iLLG, S, tmp_path)
+    is_magnetic = np.ones(2, dtype=bool)
+    delays = np.r_[0:1:0.5] * 1e-12
+    inputs = magnetization_scipy.prepare_inputs(delays, 2, np.r_[0, 0, 1])
+    n = np.tile([1.0, 0, 0], (2, 1, 1))
+    state = illg.get_initial_state(n, inputs, is_magnetic)
+    assert state.shape == (2, 2, 1, 3)
+    assert np.allclose(state[0], n)
+    omega = magnetization_scipy.GAMMA_E / 1.04
+    # precession along y and damping towards the field along z
+    assert np.allclose(state[1, :, 0], [0, -omega, -0.2 * omega])
+    state = illg.get_initial_state(n, inputs, is_magnetic, init_velocity=np.r_[0, 1e9, 0])
+    assert np.allclose(state[1, :, 0], [0, 1e9, 0])
+    with pytest.raises(ValueError, match="init_velocity"):
+        illg.get_initial_state(n, inputs, is_magnetic, init_velocity=np.zeros((3, 3)))
+
+
+def test_illg_free_nutation(tmp_path):
+    """without a field an initial velocity v_0 decays on the inertial time tau
+    while it rotates at 1/(alpha tau), which displaces the unit vector by
+    v_0 tau alpha / (alpha + i) in the plane perpendicular to it"""
+    alpha, tau, v0 = 0.5, 10e-15, 1e11
+    S = make_structure((make_layer("m", gilbert_damping=alpha, inertial_time=tau * u.s), 1))
+    illg = simulation(iLLG, S, tmp_path)
+    delays = np.r_[0:1:0.01] * u.ps
+    mag_map = illg.get_magnetization_map(delays, init_velocity=np.r_[0, v0, 0])
+    m = convert_polar_to_cartesian(mag_map)[-1, 0]
+    displacement = v0 * tau * alpha / (alpha + 1j)
+    assert np.isclose(m[1] + 1j * m[2], displacement, rtol=1e-3)
+
+
+@pytest.mark.parametrize("cls", [LLB, LLG, iLLG])
+def test_no_magnetic_layers(cls, tmp_path):
+    spacer = make_layer("s", mag_saturation=0 * u.J / u.T / u.m**3, curie_temp=0 * u.K)
+    sim = simulation(cls, make_structure((spacer, 2)), tmp_path)
+    delays = np.r_[0:5:1] * u.ps
+    mag_map = sim.get_magnetization_map(delays, temp_map=np.full((len(delays), 2), 300.0))
+    assert np.allclose(mag_map, 0)
+
+
+@pytest.mark.parametrize("cls", [LLB, LLG, iLLG])
+def test_single_delay(cls, tmp_path):
+    """a single delay returns the initial state"""
+    S = make_structure((make_layer("m", gilbert_damping=0.1, inertial_time=1 * u.fs), 1))
+    sim = simulation(cls, S, tmp_path)
+    mag_map = sim.get_magnetization_map(np.r_[0] * u.ps, temp_map=np.full((1, 1), 300.0))
+    assert mag_map.shape == (1, 1, 3)
+    assert np.allclose(mag_map[0, 0, 1:], ALONG_X[1:])
+
+
+def test_llb_without_saturation_magnetization(tmp_path):
+    """the fields scaled by 1/M_s vanish for M_s = 0 instead of diverging"""
+    S = make_structure((make_layer("m", mag_saturation=0 * u.J / u.T / u.m**3), 1))
+    llb = simulation(LLB, S, tmp_path)
+    delays = np.r_[0:5:1] * u.ps
+    mag_map = llb.get_magnetization_map(delays, temp_map=np.full((len(delays), 1), 300.0))
+    assert np.all(np.isfinite(mag_map))
+
+
+def test_llb_requires_eff_spin(tmp_path):
+    llb = simulation(LLB, make_structure((make_layer("m", eff_spin=0), 1)), tmp_path)
+    with pytest.raises(ValueError, match="eff_spin"):
+        llb.get_magnetization_map(np.r_[0:2:1] * u.ps, temp_map=np.full((2, 1), 300.0))
+
+
+def test_llg_rejects_unknown_keyword(tmp_path):
+    llg = simulation(LLG, make_structure((make_layer("m"), 1)), tmp_path)
+    with pytest.raises(TypeError, match="init_velocty"):
+        llg.get_magnetization_map(np.r_[0:2:1] * u.ps, init_velocty=np.r_[0, 1, 0])
+
+
+@pytest.mark.parametrize("eff_spin", [0.5, 3.5])
+def test_llb_pumped_at_low_temperature(eff_spin, tmp_path):
+    """at low temperatures the tiny susceptibility makes the longitudinal field
+    huge, which must not spoil the torques, and the solver must not step over
+    the excitation of the magnetization in equilibrium with the default
+    tolerances"""
+    S = make_structure((make_layer("m", eff_spin=eff_spin), 1))
+    llb = LLB(S, True, save_data=False, disp_messages=False)
+    delays = np.r_[0:50:0.1] * u.ps
+    temp_map = np.full((len(delays), 1), 5.0)
+    temp_map[20:, 0] += 400 * np.exp(-np.arange(len(delays) - 20) * 0.1 / 5)
+    mag_map = llb.get_magnetization_map(delays, temp_map=temp_map)
+    assert np.all(np.isfinite(mag_map))
+    assert mag_map[:, 0, 0].min() < 0.97 * mag_map[0, 0, 0]
+    assert np.all(mag_map[:, 0, 0] <= mag_map[0, 0, 0] + 1e-9)
+    # the direction is untouched without any field
+    assert np.allclose(mag_map[:, 0, 1:], ALONG_X[1:])
+
+
+@pytest.mark.parametrize(
+    "props",
+    [
+        {"anisotropy": [0, 0, 1e5] * u.J / u.m**3},
+        {"magnetoelastic_coupling": 1e6 * u.J / u.m**3},
+    ],
+)
+def test_llb_requires_aniso_exponent_of_two(props, tmp_path):
+    """the anisotropy and magnetoelastic fields diverge at T_C for beta < 2"""
+    llb = simulation(
+        LLB, make_structure((make_layer("m", aniso_exponent=1, **props), 1)), tmp_path
+    )
+    with pytest.raises(ValueError, match="aniso_exponent"):
+        llb.get_magnetization_map(np.r_[0:2:1] * u.ps, temp_map=np.full((2, 1), 300.0))

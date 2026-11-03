@@ -116,7 +116,7 @@ def properties():
         "curie_temp": 100 * u.K,
         "lamda": 1,
         "mag_moment": 1 * u.bohr_magneton,
-        "aniso_exponent": 1,
+        "aniso_exponent": 3,
         "anisotropy": [1, 2, 3] * u.J / u.m**3,
         "exch_stiffness": 1 * u.J / u.m,
         "mag_saturation": 1 * u.J / u.T / u.m**3,

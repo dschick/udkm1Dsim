@@ -1,7 +1,7 @@
 import pint
 
 from .simulations.heat import Heat
-from .simulations.magnetization import LLB, Magnetization
+from .simulations.magnetization import LLB, LLG, Magnetization, iLLG
 from .simulations.phonons import Phonon, PhononAna, PhononNum
 from .simulations.simulation import Simulation
 from .simulations.xrays import Xray, XrayDyn, XrayDynMag, XrayKin
@@ -47,6 +47,8 @@ __all__ = [
     "PhononNum",
     "PhononAna",
     "Magnetization",
+    "LLG",
+    "iLLG",
     "LLB",
     "TemperatureParameter",
     "VectorParameter",

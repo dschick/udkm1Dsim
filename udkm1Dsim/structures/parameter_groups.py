@@ -603,6 +603,11 @@ class MagneticParameters(ParameterGroup):
             "gamma": 0 * u.deg}`` or ``{"x": 0, "y": 0, "z": 1}``, see
             :class:`.VectorParameter`. For an :class:`.AmorphousLayer` it is
             inherited from its atom.
+        gilbert_damping (float): Gilbert damping :math:`\alpha` of the LLG.
+        inertial_time (float): inertial relaxation time :math:`\tau` of the
+            inertial LLG [s].
+        magnetoelastic_coupling (float): magnetoelastic coupling constant
+            :math:`B_1` of the out-of-plane strain [J/m³].
 
     """
 
@@ -619,6 +624,9 @@ class MagneticParameters(ParameterGroup):
         exch_stiffness=np.array([0.0, 0.0, 0.0]),
         mag_saturation=0.0,
         magnetization=np.array([0.0, 0.0, 0.0]),
+        gilbert_damping=0.0,
+        inertial_time=0.0,
+        magnetoelastic_coupling=0.0,
     ):
         self.eff_spin = Parameter("", eff_spin, symbol="S")
         self.curie_temp = Parameter("K", curie_temp, symbol=r"T_\mathrm{C}")
@@ -630,6 +638,9 @@ class MagneticParameters(ParameterGroup):
         self.exch_stiffness = Parameter("J/m", exch_stiffness, symbol=r"A_\mathrm{ex}")
         self.mag_saturation = Parameter("J/T/m**3", mag_saturation, symbol="M_s")
         self.magnetization = VectorParameter("", magnetization, symbol=r"\mathbf{m}")
+        self.gilbert_damping = Parameter("", gilbert_damping, symbol=r"\alpha")
+        self.inertial_time = Parameter("s", inertial_time, symbol=r"\tau")
+        self.magnetoelastic_coupling = Parameter("J/m**3", magnetoelastic_coupling, symbol="B_1")
 
         self._connect_parameters()
         self._update_group()

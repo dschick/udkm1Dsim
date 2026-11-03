@@ -283,6 +283,9 @@ class Layer:
                 "magnetic.exch_stiffness",
                 "magnetic.mag_saturation",
                 "magnetic.lamda",
+                "magnetic.gilbert_damping",
+                "magnetic.inertial_time",
+                "magnetic.magnetoelastic_coupling",
             ],
         }
 
@@ -649,6 +652,30 @@ class Layer:
     @magnetization.setter
     def magnetization(self, value):
         self.magnetic.magnetization.set(value)
+
+    @property
+    def gilbert_damping(self):
+        return self.magnetic.gilbert_damping.quantity
+
+    @gilbert_damping.setter
+    def gilbert_damping(self, value):
+        self.magnetic.gilbert_damping.quantity = value
+
+    @property
+    def inertial_time(self):
+        return self.magnetic.inertial_time.quantity
+
+    @inertial_time.setter
+    def inertial_time(self, value):
+        self.magnetic.inertial_time.quantity = value
+
+    @property
+    def magnetoelastic_coupling(self):
+        return self.magnetic.magnetoelastic_coupling.quantity
+
+    @magnetoelastic_coupling.setter
+    def magnetoelastic_coupling(self, value):
+        self.magnetic.magnetoelastic_coupling.quantity = value
 
 
 class Vacuum(Layer):
