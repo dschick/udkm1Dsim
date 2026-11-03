@@ -24,9 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VectorParameter.set()` for all these inputs
 - `simulations.solvers.magnetization_scipy` with the right-hand side of the `LLB` assembled from one function per physical term, vectorized over all magnetic layers, and `simulations.solvers.mean_field` with the equilibrium magnetization, the damping parameters and the longitudinal susceptibility of the mean-field model; the solver takes the `MagneticParameters` of the magnetic layers, ported from [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber)
 - classical `LLB` with the Langevin function for an infinite `eff_spin`
-- `LLG` and inertial `iLLG` (Ciornei et al. 2011) simulations with a prescribed magnetization amplitude, given as `mag_amplitude_map`, taken from the `mag_sub_system` of the `temp_map`, derived from its `temp_sub_system` by the mean-field model, or kept at the initial amplitude; the `iLLG` accepts an `init_velocity`, which defaults to the one of the LLG, and uses `LSODA` as default integrator, ported from [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber), superseding [#164]
+- `LLG` and inertial `iLLG` (Ciornei et al. 2011) simulations with a prescribed magnetization amplitude, given as `mag_amplitude_map`, taken from the `mag_sub_system` of the `temp_map`, derived from its `temp_sub_system` by the mean-field model, or kept at the initial amplitude; the `iLLG` accepts an `init_velocity`, which defaults to the one of the LLG, ported from [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber), superseding [#164]
 - magnetic parameters `gilbert_damping`, `inertial_time`, and `magnetoelastic_coupling` of layers
 - magnetoelastic field of the out-of-plane strain for `LLG`, `iLLG`, and `LLB`, which accept a `strain_map`
+- magnetic sublattices of layers, e.g. of ferri- and antiferromagnets, for `LLG`, `iLLG`, and `LLB`, ported from [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber): the per-sublattice parameters of `MagneticParameters` are given as scalar for all sublattices or one value per sublattice, `magnetization` as a list of vectors, and `mf_exch_coupling` as `PxP` exchange matrix, from which the `curie_temp` is derived; `num_sublattices` and `check_sublattices()` of `MagneticParameters`, `num_sublattices` of `Layer`
+- an `AmorphousLayer` of an `AtomMixed` with one constituent per sublattice inherits the magnetizations of the constituents for its sublattices
+- `get_sublattice_magnetization_map` and `get_sublattice_mean_field_mag_map` of `Magnetization`, which are calculated and cached together with the net `get_magnetization_map` and `get_mean_field_mag_map`; `init_mag` of several sublattices is given as `Px3` or `LxPx3` array, `mag_amplitude_map` of the `LLG` and `init_velocity` of the `iLLG` also per sublattice
+- `mf_exch_coupling` of `MagneticParameters` and `Layer` can be set, which makes the `curie_temp` the derived parameter, and vice versa for a single sublattice
 - `Magnetization.get_magnetic_parameters` and `Magnetization.get_interlayer_exchange_stiffnesses` collect the inputs of the solver from the structure
 - `Magnetization.temp_sub_system` to select the sub-system of the `temp_map` that drives the magnetization dynamics
 - `LLB.get_magnetization_map` accepts an external field `H_ext` per delay as `Mx3` array
@@ -34,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- the default integrator of the magnetization simulations is `LSODA` instead of `RK45`, which is much faster for the stiff equations of strongly coupled sublattices, the inertial LLG, and the LLB at low temperatures; with the default tolerances it is also more accurate, e.g. the largest deviation of the magnetization amplitude in the LLB example from a tightly converged solution drops from 0.03 to 0.004
+- `Magnetization.check_initial_magnetization` returns the initial magnetization of all sublattices as `NxPx3` array, and `calc_magnetization_map` of `LLG`, `iLLG`, and `LLB` returns the net and the sublattice magnetization maps
+- caches of magnetization maps of former versions are recalculated, as they hold no sublattice maps
 - parameter groups notify their layer on changes, which updates all parameters depending on several groups, e.g. the spring constant
 - the `density` of a `UnitCell` with atoms cannot be set, as it is given by their mass and its volume, and its `thickness` is its `c_axis`
 - `AmorphousLayer` does not require `thickness` and `density` as positional arguments anymore

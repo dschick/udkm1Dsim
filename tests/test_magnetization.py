@@ -590,3 +590,186 @@ def test_llb_requires_aniso_exponent_of_two(props, tmp_path):
     )
     with pytest.raises(ValueError, match="aniso_exponent"):
         llb.get_magnetization_map(np.r_[0:2:1] * u.ps, temp_map=np.full((2, 1), 300.0))
+
+
+# sublattices
+
+K_B = 1.380649e-23
+
+
+def mf_exchange(eff_spin, curie_temp):
+    """mean-field exchange constant of a single sublattice"""
+    factor = 3.0 if np.isinf(eff_spin) else 3 * eff_spin / (eff_spin + 1)
+    return factor * K_B * curie_temp
+
+
+def make_sublattice_layer(id, magnetizations, mf_exch_coupling, **overrides):
+    """a magnetic amorphous layer with several sublattices"""
+    layer = make_layer(id, mf_exch_coupling=mf_exch_coupling * u.J, **overrides)
+    layer.magnetization = magnetizations
+    return layer
+
+
+def sublattice_llb(S, tmp_path, temp_map, delays, **kwargs):
+    llb = simulation(LLB, S, tmp_path)
+    return (
+        llb.get_magnetization_map(delays, temp_map=temp_map, **kwargs),
+        llb.get_sublattice_magnetization_map(delays, temp_map=temp_map, **kwargs),
+    )
+
+
+def pulse(delays, T0=300.0, dT=200.0, L=1):
+    """a temperature pulse, which stays below the Curie temperature"""
+    t = delays.to("ps").magnitude
+    temps = T0 + dT * np.exp(-np.clip(t - 1, 0, None) / 3) * (t >= 1)
+    return np.repeat(temps[:, np.newaxis], L, axis=1)
+
+
+def test_uncoupled_sublattices_are_independent_layers(tmp_path):
+    """sublattices without coupling evolve as separate layers"""
+    J_a, J_b = mf_exchange(0.5, 630), mf_exchange(3.5, 1000)
+    delays = np.r_[0:20:0.1] * u.ps
+    kwargs = {"lamda": [0.01, 0.02], "eff_spin": [0.5, 3.5], "gilbert_damping": [0.05, 0.1]}
+    layer = make_sublattice_layer("ab", [(1, 0, 0), (0, 1, 0)], np.diag([J_a, J_b]), **kwargs)
+    reference = make_structure(
+        (make_layer("a", lamda=0.01, eff_spin=0.5, curie_temp=630 * u.K, gilbert_damping=0.05), 1),
+        (make_layer("b", lamda=0.02, eff_spin=3.5, curie_temp=1000 * u.K, gilbert_damping=0.1), 1),
+    )
+    reference.get_layer_vectors()[2][1].magnetization = (0, 1, 0)
+    H_ext = np.r_[0, 0, 0.5]
+    temp_map = pulse(delays)
+    # LLB
+    _, sub = sublattice_llb(make_structure((layer, 1)), tmp_path, temp_map, delays, H_ext=H_ext)
+    ref_llb = simulation(LLB, reference, tmp_path)
+    ref = ref_llb.get_magnetization_map(
+        delays, temp_map=np.repeat(temp_map, 2, axis=1), H_ext=H_ext
+    )
+    assert sub.shape == (len(delays), 1, 2, 3)
+    assert np.allclose(convert_polar_to_cartesian(sub[:, 0]), convert_polar_to_cartesian(ref))
+    # LLG
+    llg = simulation(LLG, make_structure((layer, 1)), tmp_path)
+    sub = llg.get_sublattice_magnetization_map(delays, H_ext=H_ext)
+    ref = simulation(LLG, reference, tmp_path).get_magnetization_map(delays, H_ext=H_ext)
+    assert np.allclose(convert_polar_to_cartesian(sub[:, 0]), convert_polar_to_cartesian(ref))
+
+
+@pytest.mark.parametrize("sign", [1, -1])
+def test_identical_coupled_sublattices_are_one_sublattice(sign, tmp_path):
+    """two identical sublattices with the exchange J_1 within and +-J_2 between
+    them evolve as a single sublattice with J_1 + J_2 below the ordering
+    temperature, parallel for a ferromagnetic and antiparallel for an
+    antiferromagnetic coupling"""
+    J_1, J_2 = mf_exchange(0.5, 400), mf_exchange(0.5, 230)
+    delays = np.r_[0:20:0.1] * u.ps
+    temp_map = pulse(delays)
+    layer = make_sublattice_layer(
+        "ab", [(1, 0, 0), (sign, 0, 0)], np.array([[J_1, sign * J_2], [sign * J_2, J_1]])
+    )
+    assert np.isclose(layer.curie_temp.magnitude, 630)
+    S = make_structure((layer, 1))
+    net, sub = sublattice_llb(S, tmp_path, temp_map, delays)
+    ref = simulation(LLB, make_structure((make_layer("r"), 1)), tmp_path).get_magnetization_map(
+        delays, temp_map=temp_map
+    )
+    m = convert_polar_to_cartesian(sub[:, 0])
+    assert np.allclose(m[:, 0], convert_polar_to_cartesian(ref[:, 0]), atol=1e-6)
+    assert np.allclose(m[:, 1], sign * m[:, 0], atol=1e-6)
+    # the net magnetization of an antiferromagnet vanishes
+    assert np.allclose(net[:, 0, 0], ref[:, 0, 0] if sign > 0 else 0, atol=1e-6)
+    llb = simulation(LLB, S, tmp_path)
+    mf_sub = llb.get_sublattice_mean_field_mag_map(temp_map)
+    assert np.allclose(mf_sub[:, 0, 0], mf_sub[:, 0, 1])
+    assert np.allclose(llb.get_mean_field_mag_map(temp_map)[:, 0], mf_sub[:, 0, 0] * (sign > 0))
+
+
+def test_ferrimagnet(tmp_path):
+    """the net magnetization of a ferrimagnet is the sum of the sublattice
+    magnetizations weighted by their saturation magnetizations, which relax
+    to the coupled mean field"""
+    J = np.array([[mf_exchange(3.5, 300), -2e-22], [-2e-22, mf_exchange(1, 800)]])
+    Ms = [6e5, 1.2e6]
+    layer = make_sublattice_layer(
+        "GdFe",
+        [(0, 0, -1), (0, 0, 1)],
+        J,
+        eff_spin=[3.5, 1],
+        mag_saturation=Ms * u.J / u.T / u.m**3,
+        mag_moment=[7.6, 2.2] * u.bohr_magneton,
+        lamda=[0.05, 0.05],
+    )
+    delays = np.r_[0:50:0.5] * u.ps
+    temp_map = np.full((len(delays), 1), 250.0)
+    net, sub = sublattice_llb(make_structure((layer, 1)), tmp_path, temp_map, delays)
+    m = convert_polar_to_cartesian(sub[:, 0])
+    expected = (Ms[0] * m[:, 0] + Ms[1] * m[:, 1]) / sum(Ms)
+    assert np.allclose(convert_polar_to_cartesian(net[:, 0]), expected)
+    me = np.abs(mean_field.mean_field_magnetization_coupled(250.0, J, [3.5, 1]))[0]
+    assert np.allclose(sub[-1, 0, :, 0], me, atol=1e-6)
+    assert m[-1, 0, 2] < 0 < m[-1, 1, 2]
+
+
+def test_mixed_numbers_of_sublattices(tmp_path):
+    """layers with fewer sublattices are padded, and only existing
+    sublattices are coupled to the neighbouring layers"""
+    J = mf_exchange(0.5, 630)
+    A = 1e-12 * u.J / u.m
+    two = make_sublattice_layer("ab", [(1, 0, 0), (0, 1, 0)], np.diag([J, J]), exch_stiffness=A)
+    one = make_layer("c", exch_stiffness=A)
+    S = make_structure((two, 1), (one, 1))
+    llb = simulation(LLB, S, tmp_path)
+    is_magnetic = np.ones(2, dtype=bool)
+    mag = magnetization_scipy.stack_magnetic_parameters(llb.get_magnetic_parameters(is_magnetic))
+    assert np.array_equal(mag.active, [[1, 1], [1, 0]])
+    m = np.array([[[1.0, 0, 0], [0, 1, 0]], [[0, 0, 1], [0, 0, 0]]])
+    thicknesses = S.get_layer_property_vector("structural.thickness.magnitude")
+    B = magnetization_scipy.interlayer_exchange_field(
+        m, mag, llb.get_interlayer_exchange_stiffnesses(is_magnetic), thicknesses
+    )
+    assert np.allclose(B[0, 1], 0)
+    assert np.allclose(B[1, 1], 0)
+    assert not np.allclose(B[0, 0], 0)
+    delays = np.r_[0:5:0.5] * u.ps
+    sub = llb.get_sublattice_magnetization_map(delays, temp_map=np.full((len(delays), 2), 300.0))
+    assert sub.shape == (len(delays), 2, 2, 3)
+    assert np.allclose(sub[:, 1, 1], 0)
+
+
+def test_sublattice_input_validation(tmp_path):
+    J = mf_exchange(0.5, 630)
+    layer = make_sublattice_layer("ab", [(1, 0, 0), (-1, 0, 0)], np.diag([J, J]))
+    llb = simulation(LLB, make_structure((layer, 3)), tmp_path)
+    delays = np.r_[0:2:1] * u.ps
+    temp_map = np.full((2, 3), 300.0)
+    # a vector per layer is not accepted for several sublattices
+    for init_mag in (ALONG_X, np.tile(ALONG_X, (3, 1))):
+        with pytest.raises(ValueError, match="sublattices"):
+            llb.get_magnetization_map(delays, temp_map=temp_map, init_mag=init_mag)
+    init_mag = np.array([ALONG_X, [1, np.pi / 2, np.pi]])
+    sub = llb.get_sublattice_magnetization_map(delays, temp_map=temp_map, init_mag=init_mag)
+    assert np.allclose(convert_polar_to_cartesian(sub[0, :, 1])[:, 0], -sub[0, :, 0, 0])
+    full = llb.get_sublattice_magnetization_map(
+        delays, temp_map=temp_map, init_mag=np.tile(init_mag, (3, 1, 1))
+    )
+    assert np.allclose(full, sub)
+    # inconsistent numbers of sublattices
+    layer.magnetic.lamda = [0.1, 0.2, 0.3]
+    with pytest.raises(ValueError, match="2 magnetizations, but 3 sublattices"):
+        llb.get_magnetization_map(delays, temp_map=temp_map)
+
+
+def test_llg_sublattice_amplitudes(tmp_path):
+    """the amplitudes of the LLG are given per sublattice or taken from the
+    coupled mean field"""
+    J = np.array([[mf_exchange(0.5, 500), -1e-21], [-1e-21, mf_exchange(0.5, 700)]])
+    layer = make_sublattice_layer("ab", [(1, 0, 0), (-1, 0, 0)], J, gilbert_damping=0.1)
+    llg = simulation(LLG, make_structure((layer, 2)), tmp_path)
+    delays = np.r_[0:5:0.5] * u.ps
+    M = len(delays)
+    amplitudes = np.stack([np.full((M, 2), 0.3), np.full((M, 2), 0.8)], axis=2)
+    sub = llg.get_sublattice_magnetization_map(delays, mag_amplitude_map=amplitudes)
+    assert np.allclose(sub[..., 0], amplitudes)
+    temp_map = np.full((M, 2), 400.0)
+    sub = llg.get_sublattice_magnetization_map(delays, temp_map=temp_map)
+    assert np.allclose(sub[..., 0], llg.get_sublattice_mean_field_mag_map(temp_map))
+    with pytest.raises(ValueError, match="M x L x P"):
+        llg.get_magnetization_map(delays, mag_amplitude_map=np.ones((M, 2, 3)))

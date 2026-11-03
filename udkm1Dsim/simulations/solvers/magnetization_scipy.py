@@ -112,13 +112,16 @@ def stack_magnetic_parameters(layers):
 
     Stacks the parameters of the
     :class:`~udkm1Dsim.structures.parameter_groups.MagneticParameters` of
-    the :math:`N` magnetic layers into arrays with a sublattice axis of
-    length :math:`P = 1`, which keep the names of the parameters: scalars as
-    :math:`N \times P`, vectors as :math:`N \times P \times 3` and the
-    mean-field exchange coupling as matrix :math:`N \times P \times P`. The
-    magnetization is the state of the solver and is left out. The mask
-    ``active`` :math:`N \times P` is 1 for existing sublattices and 0 for
-    padding.
+    the :math:`N` magnetic layers into arrays with a sublattice axis of the
+    largest number of sublattices :math:`P`, which keep the names of the
+    parameters: the per-sublattice scalars as :math:`N \times P`, the
+    anisotropy as :math:`N \times P \times 3`, the mean-field exchange matrix
+    as :math:`N \times P \times P`, and the Curie temperature as
+    :math:`N \times 1`. Layers with fewer sublattices are padded with zeros.
+    The mask ``active`` :math:`N \times P` is 1 for existing sublattices and
+    0 for the padding. The numbers of sublattices of the layers are checked,
+    see :meth:`~udkm1Dsim.structures.parameter_groups.MagneticParameters.check_sublattices`.
+    The magnetization is the state of the solver and is left out.
 
     Args:
         layers (list[MagneticParameters]): magnetic parameters of the
@@ -129,16 +132,24 @@ def stack_magnetic_parameters(layers):
 
     """
     N = len(layers)
-    mag = SimpleNamespace(active=np.ones((N, 1)))
+    sizes = [layer.check_sublattices() for layer in layers]
+    P = max(sizes, default=1)
+    mag = SimpleNamespace(active=np.zeros((N, P)))
+    for k, p in enumerate(sizes):
+        mag.active[k, :p] = 1.0
     if N == 0:
         return mag
-    group = type(layers[0])
-    for name in [*group._input_names(), *group._derived]:
-        if name == "magnetization":
-            continue
-        values = np.array([getattr(layer, name).magnitude for layer in layers], dtype=float)
-        setattr(mag, name, values[:, np.newaxis, ...])
-    mag.mf_exch_coupling = mag.mf_exch_coupling[..., np.newaxis]
+    for name in layers[0]._sublattice_scalars:
+        values = np.zeros((N, P))
+        for k, (layer, p) in enumerate(zip(layers, sizes)):
+            values[k, :p] = layer.sublattice_values(name)
+        setattr(mag, name, values)
+    mag.anisotropy = np.zeros((N, P, 3))
+    mag.mf_exch_coupling = np.zeros((N, P, P))
+    for k, (layer, p) in enumerate(zip(layers, sizes)):
+        mag.anisotropy[k, :p] = layer.sublattice_values("anisotropy")
+        mag.mf_exch_coupling[k, :p, :p] = layer.sublattice_values("mf_exch_coupling")
+    mag.curie_temp = np.array([[layer.curie_temp.magnitude] for layer in layers], dtype=float)
     return mag
 
 
@@ -362,7 +373,8 @@ def interlayer_exchange_field(m, mag, exch_stiffnesses, thicknesses):
     with the thicknesses :math:`\Delta z` and the directional exchange
     stiffnesses :math:`A` of the layers, see
     :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_directional_exchange_stiffnesses`.
-    Missing neighbours at the top and bottom do not contribute.
+    Missing neighbours at the top and bottom as well as sublattices, which
+    do not exist in the neighbouring layer, do not contribute.
 
     Args:
         m (ndarray[float]): magnetization vectors :math:`N \times P \times 3`.
@@ -381,8 +393,10 @@ def interlayer_exchange_field(m, mag, exch_stiffnesses, thicknesses):
         return B
     es = 2 / (_safe_saturations(mag.mag_saturation) * thicknesses[:, np.newaxis] ** 2)
     A = exch_stiffnesses
-    B[1:] += (es[1:] * A[1:, 0, np.newaxis])[..., np.newaxis] * (m[:-1] - m[1:])
-    B[:-1] += (es[:-1] * A[:-1, 1, np.newaxis])[..., np.newaxis] * (m[1:] - m[:-1])
+    # only sublattices, which exist in both neighbours, are coupled
+    pairs = mag.active[1:] * mag.active[:-1]
+    B[1:] += (es[1:] * A[1:, 0, np.newaxis] * pairs)[..., np.newaxis] * (m[:-1] - m[1:])
+    B[:-1] += (es[:-1] * A[:-1, 1, np.newaxis] * pairs)[..., np.newaxis] * (m[1:] - m[:-1])
     return B
 
 

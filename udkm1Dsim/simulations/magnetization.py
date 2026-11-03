@@ -41,7 +41,7 @@ from ..helpers import (
 from ..structures.layers import UnitCell
 from .simulation import Simulation
 from .solvers import magnetization_scipy
-from .solvers.mean_field import TABLE, interpolate_tables_map
+from .solvers.mean_field import TABLE, interpolate_tables_map, sublattice_signs
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -77,7 +77,12 @@ class Magnetization(Simulation):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        ode_options (dict): options for scipy solve_ivp ode solver.
+        ode_options (dict): options for scipy solve_ivp ode solver. The
+            default ``method`` is ``LSODA``, which switches automatically
+            between a stiff and a non-stiff integrator, since the strong
+            exchange between sublattices, the inertia of the iLLG, and the
+            longitudinal relaxation of the LLB at low temperatures make the
+            equations stiff.
         temp_sub_system (int): index of the sub-system of the ``temp_map``
             whose temperature drives the magnetization dynamics.
 
@@ -88,7 +93,7 @@ class Magnetization(Simulation):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.ode_options = {
-            "method": "RK45",
+            "method": "LSODA",
             "first_step": None,
             "max_step": np.inf,
             "rtol": 1e-3,
@@ -135,16 +140,34 @@ class Magnetization(Simulation):
 
         return self.S.get_hash(types="magnetic") + "_" + make_hash_md5(param)
 
-    def check_initial_magnetization(self, init_mag, distances=[]):
-        """check_initial_magnetization
+    @property
+    def num_sublattices(self):
+        """int: largest number of magnetic sublattices of all layers."""
+        layers = self.S.get_unique_layers()[1]
+        return max((layer.magnetic.num_sublattices for layer in layers), default=1)
 
-        Check if a given initial magnetization profile is valid. The profile
-        must be either a vector `[amplitude, phi, gamma]` describing a global
-        initial magnetization or an array of shape `[Nx3]` with N being the
-        number of layers or the length of the specific spatial grid. If no
-        initial magnetization is given, the initial profile is determined from
-        the magnetization of the layers on creation. In addition, a spatial
-        grid can be provided.
+    def check_initial_magnetization(self, init_mag, distances=[]):
+        r"""check_initial_magnetization
+
+        Check if a given initial magnetization profile is valid and return it
+        for all sublattices of all layers as polar array
+        :math:`N \times P \times 3` with the components
+        ``[amplitude, phi, gamma]`` in radians, where :math:`N` is the number
+        of layers or the length of the specific spatial grid and :math:`P`
+        the largest number of sublattices. Layers with fewer sublattices are
+        padded with zeros.
+
+        If no initial magnetization is given, the profile is determined from
+        the magnetization of the layers. Otherwise it is either a single
+        vector or an :math:`N \times 3` array with one vector per layer for
+        structures with a single sublattice, and a :math:`P \times 3` array
+        with one vector per sublattice for all layers or the full
+        :math:`N \times P \times 3` array for several sublattices. Since the
+        sublattices of a layer can point in arbitrary directions, e.g.
+        antiparallel for a ferrimagnet, a vector per layer is not accepted for
+        several sublattices. For as many layers as sublattices, an array
+        :math:`P \times 3` is one vector per sublattice. In addition, a
+        spatial grid can be provided.
 
         Args:
             init_mag (ndarray[float]): initial global or local magnetization
@@ -153,8 +176,8 @@ class Magnetization(Simulation):
                 initial magnetization.
 
         Returns:
-            init_mag (ndarray[float]): checked initial magnetization as array on
-                the according spatial grid.
+            init_mag (ndarray[float]): checked initial magnetization
+            :math:`N \times P \times 3` on the according spatial grid.
 
         """
         layers = self.S.get_unique_layers()
@@ -174,41 +197,51 @@ class Magnetization(Simulation):
             # no spatial grid is provided
             N = self.S.get_number_of_layers()
             [distances, _, _] = self.S.get_distances_of_layers(False)
+        # use finderb search to find the corresponding indices between the
+        # internal and external spatial grids
+        [d_start, _, _] = self.S.get_distances_of_layers(False)
+        idx = finderb(distances, d_start)
+        handles = self.S.get_layer_vectors()[2]
+        sizes = np.array([handles[i].magnetic.num_sublattices for i in idx])
+        P = int(np.max(sizes, initial=1))
 
         if len(init_mag) == 0:
             self.disp_message(
                 "No explicit initial magnetization given - use magnetization of layers instead."
             )
-            init_mag = np.zeros([N, 3])
-            # use finderb search to find the corresponding indices between the
-            # internal and external spatial grids
-            [d_start, _, _] = self.S.get_distances_of_layers(False)
-            idx = finderb(distances, d_start)
+            result = np.zeros([N, P, 3])
+            for k, i in enumerate(idx):
+                for a, vector in enumerate(handles[i].magnetic.sublattice_magnetizations()):
+                    result[k, a] = vector.polar_rad
+            return result
 
-            init_mag = self.S.get_layer_property_vector("magnetic.magnetization.polar")[idx, :]
+        init_mag = np.array(init_mag, dtype=float)
+        if P == 1 and init_mag.shape == (3,):
+            # it is the same initial magnetization for all layers
+            result = np.tile(init_mag, (N, 1, 1))
+        elif P == 1 and init_mag.shape == (N, 3):
+            result = init_mag[:, np.newaxis, :]
+        elif P > 1 and init_mag.shape == (P, 3):
+            # the same initial magnetization of the sublattices for all layers
+            result = np.tile(init_mag, (N, 1, 1))
+        elif init_mag.shape == (N, P, 3):
+            result = init_mag.copy()
+        elif P > 1:
+            raise ValueError(
+                f"The initial magnetization of the {P:d} sublattices must be given as "
+                "array of Px3 for all layers or NxPx3, where N is the number of layers "
+                "in the structure or the length of the spatial grid provided as distances "
+                "vector!"
+            )
         else:
-            if np.size(init_mag) == 3:
-                # it is the same initial magnetization for all layers
-                init_mag = np.tile(init_mag, (N, 1))
-            elif np.shape(init_mag) != (N, 3):
-                # init_temp is a vector but has not as many elements as layers
-                raise ValueError(
-                    "The initial magnetization array must have 3 or "
-                    "Nx3 elements, where N is the number of layers "
-                    "in the structure or the length of the spatial "
-                    "grid provided as distances vector!"
-                )
-
-            # convert phi and gamma to rad and store only magnitudes
-            try:
-                init_mag[:, 1] = init_mag[:, 1].to("rad").magnitude
-            except AttributeError:
-                pass
-            try:
-                init_mag[:, 2] = init_mag[:, 2].to("rad").magnitude
-            except AttributeError:
-                pass
-        return init_mag
+            raise ValueError(
+                "The initial magnetization array must have 3 or Nx3 elements, where N is "
+                "the number of layers in the structure or the length of the spatial grid "
+                "provided as distances vector!"
+            )
+        # sublattices beyond the number of a layer are padding
+        result[np.arange(P)[np.newaxis, :] >= sizes[:, np.newaxis]] = 0.0
+        return result
 
     def get_magnetization_map(self, delays, **kwargs):
         r"""get_magnetization_map
@@ -217,7 +250,12 @@ class Magnetization(Simulation):
         the dimension :math:`M \times N \times 3` with :math:`M` being the
         number of delays and :math:`N` the number of layers in the structure or
         the length of the given spatial grid. Each element of the map contains
-        the three magnetization components ``[amplitude, phi, gamma]``.
+        the three magnetization components ``[amplitude, phi, gamma]``. For
+        layers with several sublattices it is the net magnetization, i.e. the
+        sum of the sublattice magnetizations weighted by their saturation
+        magnetizations :math:`M_{s,a}` and normalized to their sum
+        :math:`\sum_a M_{s,a}\mathbf{m}_a / \sum_a M_{s,a}`, see
+        :meth:`get_sublattice_magnetization_map` for the sublattices.
         The angles ``phi`` and ``gamma`` must be returned in radians as pure
         numpy arrays.
         The ``magnetization_map`` can depend on the ``temp_map`` and
@@ -237,14 +275,48 @@ class Magnetization(Simulation):
                magnetization profile.
 
         """
+        return self._get_magnetization_maps(delays, **kwargs)[0]
+
+    def get_sublattice_magnetization_map(self, delays, **kwargs):
+        r"""get_sublattice_magnetization_map
+
+        Returns the ``sublattice_magnetization_map`` of all sublattices of the
+        layers with the dimension :math:`M \times N \times P \times 3`, with
+        :math:`P` being the largest number of sublattices, see
+        :meth:`get_magnetization_map` for the arguments. The sublattices of
+        layers with fewer sublattices are zero. It is calculated and cached
+        together with the net ``magnetization_map``.
+
+        Args:
+            delays (ndarray[Quantity]): delays range of simulation [s].
+            **kwargs (ndarray[float], optional): optional strain and
+                temperature profile as well external magnetic field in [T],
+                either constant or one vector per delay, and initial
+                magnetization.
+
+        Returns:
+            sublattice_magnetization_map (ndarray[float]): spatio-temporal
+            absolute magnetization profile of the sublattices.
+
+        """
+        return self._get_magnetization_maps(delays, **kwargs)[1]
+
+    def _get_magnetization_maps(self, delays, **kwargs):
+        """the net and the sublattice magnetization maps, which are calculated
+        and cached together, see :meth:`get_magnetization_map`"""
         # create a hash of all simulation parameters
         filename = "magnetization_map_" + self.get_hash(delays=delays, **kwargs) + ".npz"
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
-        if path.exists(full_filename) and not self.force_recalc:
-            # found something so load it
+        cached = path.exists(full_filename) and not self.force_recalc
+        if cached:
             tmp = np.load(full_filename)
+            # caches of former versions hold no sublattice map
+            cached = "sublattice_magnetization_map" in tmp
+        if cached:
+            # found something so load it
             magnetization_map = tmp["magnetization_map"]
+            sublattice_map = tmp["sublattice_magnetization_map"]
             self.disp_message("_magnetization_map_ loaded from file:\n\t" + filename)
         else:
             t1 = time()
@@ -270,19 +342,27 @@ class Magnetization(Simulation):
                     raise TypeError(
                         "init_mag must be a numpy ndarray with all in radians without units!"
                     )
-                elif kwargs["init_mag"].shape not in [(3,), (self.S.get_number_of_layers(), 3)]:
-                    raise ValueError(
-                        "init_mag must be a vector with 3 components or an array of Nx3 "
-                        "with N being the number of layers."
-                    )
+                # the shape is checked by check_initial_magnetization
+                self.check_initial_magnetization(kwargs["init_mag"])
 
-            magnetization_map = self.calc_magnetization_map(delays, **kwargs)
+            maps = self.calc_magnetization_map(delays, **kwargs)
+            if isinstance(maps, tuple):
+                magnetization_map, sublattice_map = maps
+            else:
+                # simulations without sublattices
+                magnetization_map = maps
+                sublattice_map = maps[:, :, np.newaxis, :]
 
             self.disp_message(f"Elapsed time for _magnetization_map_: {time() - t1:f} s")
             self.save(
-                full_filename, {"magnetization_map": magnetization_map}, "_magnetization_map_"
+                full_filename,
+                {
+                    "magnetization_map": magnetization_map,
+                    "sublattice_magnetization_map": sublattice_map,
+                },
+                "_magnetization_map_",
             )
-        return magnetization_map
+        return magnetization_map, sublattice_map
 
     def calc_magnetization_map(self, delays, **kwargs):
         """calc_magnetization_map
@@ -300,8 +380,14 @@ class Magnetization(Simulation):
                 magnetization.
 
         Returns:
-            magnetization_map (ndarray[float]): spatio-temporal absolute
-                magnetization profile.
+            (tuple):
+            - *magnetization_map (ndarray[float])* - spatio-temporal absolute
+              net magnetization profile :math:`M \times N \times 3`.
+            - *sublattice_magnetization_map (ndarray[float])* - spatio-temporal
+              absolute magnetization profile of the sublattices
+              :math:`M \times N \times P \times 3`.
+
+            Simulations without sublattices may only return the net map.
 
         """
         raise NotImplementedError
@@ -312,7 +398,9 @@ class Magnetization(Simulation):
         Returns the mean-field magnetization map see
         :meth:`calc_mean_field_mag_map` for details. The dimension of the map
         are :math:`M \times N` with :math:`M` being the number of delays and
-        :math:`N` the number of layers in the structure.
+        :math:`N` the number of layers in the structure. For several
+        sublattices it is the amplitude of the net magnetization, see
+        :meth:`get_sublattice_mean_field_mag_map` for the sublattices.
 
         Args:
             temp_map (ndarray[float]): spatio-temporal electron temperature map.
@@ -322,14 +410,42 @@ class Magnetization(Simulation):
             magnetization map.
 
         """
+        return self._get_mean_field_mag_maps(temp_map)[0]
+
+    def get_sublattice_mean_field_mag_map(self, temp_map):
+        r"""get_sublattice_mean_field_mag_map
+
+        Returns the mean-field magnetization map of all sublattices with the
+        dimension :math:`M \times N \times P`, see
+        :meth:`calc_mean_field_mag_map` for details. It is calculated and
+        cached together with the net mean-field magnetization.
+
+        Args:
+            temp_map (ndarray[float]): spatio-temporal electron temperature map.
+
+        Returns:
+            sublattice_mf_mag_map (ndarray[float]): spatio-temporal mean_field
+            magnetization map of the sublattices.
+
+        """
+        return self._get_mean_field_mag_maps(temp_map)[1]
+
+    def _get_mean_field_mag_maps(self, temp_map):
+        """the net and the sublattice mean-field magnetization maps, which are
+        calculated and cached together, see :meth:`get_mean_field_mag_map`"""
         # create a hash of all simulation parameters
         filename = "mf_magnetization_map_" + self.get_hash(temp_map=temp_map) + ".npz"
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
-        if path.exists(full_filename) and not self.force_recalc:
-            # found something so load it
+        cached = path.exists(full_filename) and not self.force_recalc
+        if cached:
             tmp = np.load(full_filename)
+            # caches of former versions hold no sublattice map
+            cached = "sublattice_mf_mag_map" in tmp
+        if cached:
+            # found something so load it
             mf_mag_map = tmp["mf_mag_map"]
+            sublattice_map = tmp["sublattice_mf_mag_map"]
             self.disp_message("_mean_field_magnetization_map_ loaded from file:\n\t" + filename)
         else:
             t1 = time()
@@ -338,13 +454,17 @@ class Magnetization(Simulation):
             if not isinstance(temp_map, np.ndarray):
                 raise TypeError("temp_map must be a numpy ndarray!")
 
-            mf_mag_map = self.calc_mean_field_mag_map(temp_map)
+            mf_mag_map, sublattice_map = self._calc_mean_field_mag_maps(temp_map)
 
             self.disp_message(
                 f"Elapsed time for _mean_field_magnetization_map_: {time() - t1:f} s"
             )
-            self.save(full_filename, {"mf_mag_map": mf_mag_map}, "_mean_field_magnetization_map_")
-        return mf_mag_map
+            self.save(
+                full_filename,
+                {"mf_mag_map": mf_mag_map, "sublattice_mf_mag_map": sublattice_map},
+                "_mean_field_magnetization_map_",
+            )
+        return mf_mag_map, sublattice_map
 
     def calc_mean_field_mag_map(self, temp_map):
         r"""calc_mean_field_mag_map
@@ -357,29 +477,60 @@ class Magnetization(Simulation):
             m_\mathrm{eq} = B_S\left(\frac{J\, m_\mathrm{eq}}{k_\mathrm{B} T}\right)
 
         with the Brillouin function :math:`B_S` of the effective spin - the
-        Langevin function for an infinite spin - which is tabulated on a
-        temperature grid, see
+        Langevin function for an infinite spin - or of the coupled equations
+        of several sublattices, see
+        :func:`~udkm1Dsim.simulations.solvers.mean_field.mean_field_magnetization_coupled`,
+        which is tabulated on a temperature grid, see
         :func:`~udkm1Dsim.simulations.solvers.mean_field.equilibrium_tables`,
         and interpolated onto the ``temp_map``. The magnetization is zero for
-        non-magnetic layers and at and above the Curie temperature.
+        non-magnetic layers and at and above the Curie temperature. The net
+        mean-field magnetization of several sublattices is the amplitude of
+        their sum in the collinear ground state, weighted by their saturation
+        magnetizations, see :meth:`get_magnetization_map`.
 
         Args:
             temp_map (ndarray[float]): spatio-temporal electron temperature map
                 :math:`M \times N`.
 
         Returns:
-            mf_mag_map (ndarray[float]): spatio-temporal mean_field
-            magnetization map.
+            mf_mag_map (ndarray[float]): spatio-temporal net mean-field
+            magnetization map :math:`M \times N`.
 
         """
+        return self._calc_mean_field_mag_maps(temp_map)[0]
+
+    def _calc_mean_field_mag_maps(self, temp_map):
+        """the net mean-field magnetization map M x N and the one of the
+        sublattices M x N x P, see :meth:`calc_mean_field_mag_map`"""
         temp_map = np.asarray(temp_map, dtype=float)
         L = self.S.get_number_of_layers()
         layers = self.get_magnetic_parameters(np.ones(L, dtype=bool))
         temp_grid, tables = magnetization_scipy.tabulate_equilibrium(
             layers, temp_max=float(np.max(temp_map))
         )
-        values = interpolate_tables_map(temp_grid, tables, temp_map)
-        return values[..., 0, TABLE["mag"]]
+        sublattice_map = interpolate_tables_map(temp_grid, tables, temp_map)[..., TABLE["mag"]]
+        # the signs of the sublattices in the collinear ground state
+        mag = magnetization_scipy.stack_magnetic_parameters(layers)
+        signs = np.zeros_like(mag.active)
+        for k, layer in enumerate(layers):
+            P = layer.num_sublattices
+            signs[k, :P] = sublattice_signs(
+                layer.sublattice_values("mf_exch_coupling"), layer.sublattice_values("eff_spin")
+            )
+        weights = self._net_weights(mag) * signs
+        mf_mag_map = np.abs(np.einsum("mnp,np->mn", sublattice_map, weights))
+        return mf_mag_map, sublattice_map
+
+    @staticmethod
+    def _net_weights(mag):
+        """weights of the sublattices for the net magnetization of the layers,
+        their saturation magnetizations normalized to their sum, or equal
+        weights for layers without saturation magnetization"""
+        weights = mag.mag_saturation * mag.active if hasattr(mag, "mag_saturation") else mag.active
+        total = np.sum(weights, axis=1)
+        weights = np.where((total > 0)[:, np.newaxis], weights, mag.active)
+        total = np.sum(weights, axis=1)
+        return weights / np.where(total > 0, total, 1.0)[:, np.newaxis]
 
     def get_directional_exchange_stiffnesses(self):
         r"""get_directional_exchange_stiffnesses
@@ -563,13 +714,14 @@ class Magnetization(Simulation):
             self.progress_bar,
         )
 
-    @staticmethod
-    def embed_magnetization(mag_map, is_magnetic):
+    def embed_magnetization(self, mag_map, is_magnetic):
         r"""embed_magnetization
 
         Embeds the cartesian magnetization of the magnetic layers into the
-        polar magnetization map of all layers, which is zero for the
-        non-magnetic layers.
+        polar magnetization maps of all layers, which are zero for the
+        non-magnetic layers. The net magnetization of a layer is the sum of its
+        sublattice magnetizations weighted by their saturation magnetizations
+        and normalized to their sum, see :meth:`get_magnetization_map`.
 
         Args:
             mag_map (ndarray[float]): cartesian magnetization map of the
@@ -577,13 +729,30 @@ class Magnetization(Simulation):
             is_magnetic (ndarray[boolean]): mask of the magnetic layers.
 
         Returns:
-            magnetization_map (ndarray[float]): polar magnetization map
-            :math:`M \times L \times 3`.
+            (tuple):
+            - *magnetization_map (ndarray[float])* - polar net magnetization
+              map :math:`M \times L \times 3`.
+            - *sublattice_magnetization_map (ndarray[float])* - polar
+              magnetization map of the sublattices
+              :math:`M \times L \times P \times 3`.
 
         """
-        magnetization_map = np.zeros([len(mag_map), len(is_magnetic), 3])
-        magnetization_map[:, is_magnetic, :] = mag_map[:, :, 0, :]
-        return convert_cartesian_to_polar(magnetization_map)
+        M, N, P = mag_map.shape[0:3]
+        P = max(P, self.num_sublattices)
+        L = len(is_magnetic)
+        sublattice_map = np.zeros([M, L, P, 3])
+        sublattice_map[:, is_magnetic, : mag_map.shape[2], :] = mag_map
+        magnetization_map = np.zeros([M, L, 3])
+        if N > 0:
+            mag = magnetization_scipy.stack_magnetic_parameters(
+                self.get_magnetic_parameters(is_magnetic)
+            )
+            weights = self._net_weights(mag)
+            magnetization_map[:, is_magnetic, :] = np.einsum("mnpc,np->mnc", mag_map, weights)
+        return (
+            convert_cartesian_to_polar(magnetization_map),
+            convert_cartesian_to_polar(sublattice_map),
+        )
 
 
 class LLG(Magnetization):
@@ -631,11 +800,18 @@ class LLG(Magnetization):
     <udkm1Dsim.simulations.solvers.magnetization_scipy.anisotropy_field>`,
     the :func:`interlayer exchange field
     <udkm1Dsim.simulations.solvers.magnetization_scipy.interlayer_exchange_field>`
-    and the :func:`magnetoelastic field
+    the :func:`magnetoelastic field
     <udkm1Dsim.simulations.solvers.magnetization_scipy.magnetoelastic_field>`
-    of the ``strain_map``. The temperature dependence of the anisotropy and
-    magnetoelastic fields is scaled with the magnetization amplitude :math:`m(t)`.
-    Magnetic layers are those with a saturation magnetization.
+    of the ``strain_map`` and, for layers with several sublattices, the
+    :func:`mean-field exchange field of the other sublattices
+    <udkm1Dsim.simulations.solvers.magnetization_scipy.sublattice_exchange_field>`,
+    which couples the sublattices of ferri- and antiferromagnets. The
+    temperature dependence of the anisotropy and magnetoelastic fields is
+    scaled with the magnetization amplitude :math:`m(t)`. Magnetic layers are
+    those with a saturation magnetization. Every sublattice :math:`a` of a
+    layer, see :class:`~udkm1Dsim.structures.parameter_groups.MagneticParameters`,
+    has its own unit vector :math:`\mathbf{n}_a`, amplitude :math:`m_a(t)` and
+    parameters, see :meth:`~Magnetization.get_sublattice_magnetization_map`.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -726,23 +902,39 @@ class LLG(Magnetization):
         M = len(delays)
         L = self.S.get_number_of_layers()
 
-        init_mag = np.array(self.check_initial_magnetization(init_mag), dtype=float)
+        init_mag = self.check_initial_magnetization(init_mag)
+        P = init_mag.shape[1]
         # the directions of the initial magnetization, a negative amplitude
         # reverses the direction
         init_dir = init_mag.copy()
-        init_dir[:, 0] = np.where(init_mag[:, 0] < 0, -1.0, 1.0)
+        init_dir[..., 0] = np.where(init_mag[..., 0] < 0, -1.0, 1.0)
         init_dir = convert_polar_to_cartesian(init_dir)
 
-        # the magnetization amplitude
+        # the magnetization amplitude of all sublattices
         if mag_amplitude_map is not None:
-            amplitude_map = self.check_map("mag_amplitude_map", mag_amplitude_map, M, L)
+            mag_amplitude_map = np.asarray(mag_amplitude_map, dtype=float)
+            if mag_amplitude_map.ndim == 3:
+                if mag_amplitude_map.shape != (M, L, P):
+                    raise ValueError(
+                        "mag_amplitude_map must have the dimension M x L or M x L x P, where "
+                        "M is the number of delays, L the number of layers, and P the number "
+                        "of sublattices!"
+                    )
+                amplitude_map = mag_amplitude_map
+            else:
+                amplitude_map = self.check_map("mag_amplitude_map", mag_amplitude_map, M, L)
         elif temp_map is not None:
             if self.mag_sub_system is not None:
                 amplitude_map = self.check_map("temp_map", temp_map, M, L, self.mag_sub_system)
             else:
-                amplitude_map = self.get_mean_field_mag_map(self.check_temp_map(temp_map, M, L))
+                amplitude_map = self.get_sublattice_mean_field_mag_map(
+                    self.check_temp_map(temp_map, M, L)
+                )
         else:
-            amplitude_map = np.tile(np.abs(init_mag[:, 0]), (M, 1))
+            amplitude_map = np.tile(np.abs(init_mag[..., 0]), (M, 1, 1))
+        if amplitude_map.ndim == 2:
+            # the same amplitude for all sublattices
+            amplitude_map = np.repeat(amplitude_map[:, :, np.newaxis], P, axis=2)
         if np.any(amplitude_map < 0):
             raise ValueError(
                 "The magnetization amplitude must not be negative - a reversed direction "
@@ -752,25 +944,30 @@ class LLG(Magnetization):
             strain_map = self.check_map("strain_map", strain_map, M, L)
 
         # magnetic layers carry a saturation magnetization
-        is_magnetic = self.S.get_layer_property_vector("magnetic.mag_saturation.magnitude") > 0
+        handles = self.S.get_layer_vectors()[2]
+        is_magnetic = np.array(
+            [np.any(np.asarray(h.magnetic.mag_saturation.magnitude) > 0) for h in handles],
+            dtype=bool,
+        )
         layers = self.get_magnetic_parameters(is_magnetic)
         self.check_parameters(layers)
+        P = magnetization_scipy.stack_magnetic_parameters(layers).active.shape[1]
 
         inputs = magnetization_scipy.prepare_inputs(
             delays,
             len(layers),
             H_ext,
-            amplitude_map=amplitude_map[:, is_magnetic],
+            amplitude_map=amplitude_map[:, is_magnetic, :P],
             strain_map=None if strain_map is None else strain_map[:, is_magnetic],
         )
         init_state = self.get_initial_state(
-            init_dir[is_magnetic, np.newaxis, :], inputs, is_magnetic, **kwargs
+            init_dir[is_magnetic, :P, :], inputs, is_magnetic, **kwargs
         )
         mag_map = self.solve(self.model, init_state, inputs, is_magnetic)
 
-        magnetization_map = self.embed_magnetization(mag_map, is_magnetic)
+        maps = self.embed_magnetization(mag_map, is_magnetic)
         self.disp_message(f"Elapsed time for _{type(self).__name__:s}_: {time() - t1:f} s")
-        return magnetization_map
+        return maps
 
     def check_parameters(self, layers):
         """check_parameters
@@ -839,10 +1036,9 @@ class iLLG(LLG):
     :class:`LLG`.
 
     The velocity relaxes on the time scale of the inertial time :math:`\tau`,
-    which makes the equations stiff. Hence, the default ``method`` of the
-    ``ode_options`` is ``LSODA``, which switches automatically between a stiff
-    and a non-stiff integrator. The explicit ``RK45`` has to resolve the
-    inertial time and is orders of magnitude slower.
+    which makes the equations stiff. The default ``method`` ``LSODA`` of the
+    ``ode_options`` handles this, whereas the explicit ``RK45`` has to resolve
+    the inertial time and is orders of magnitude slower.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -873,10 +1069,6 @@ class iLLG(LLG):
 
     _title = "Inertial Landau-Lifshitz-Gilbert Magnetization Dynamics simulation"
     model = "illg"
-
-    def __init__(self, S, force_recalc, **kwargs):
-        super().__init__(S, force_recalc, **kwargs)
-        self.ode_options["method"] = "LSODA"
 
     def calc_magnetization_map(
         self,
@@ -912,7 +1104,8 @@ class iLLG(LLG):
                 :math:`M \times L`.
             init_velocity (ndarray[float], optional): initial velocity
                 :math:`d\mathbf{n}/dt` of the unit vectors [1/s], a single
-                vector or one per layer :math:`L \times 3`. Defaults to None,
+                vector, one per layer :math:`L \times 3`, or one per
+                sublattice :math:`L \times P \times 3`. Defaults to None,
                 in which case the velocity of the LLG for the initial state is
                 used, which avoids an artificial nutation at the start.
 
@@ -943,10 +1136,12 @@ class iLLG(LLG):
 
         """
         for layer in layers:
-            if layer.gilbert_damping.magnitude <= 0 or layer.inertial_time.magnitude <= 0:
+            if np.any(layer.sublattice_values("gilbert_damping") <= 0) or np.any(
+                layer.sublattice_values("inertial_time") <= 0
+            ):
                 raise ValueError(
                     "The inertial LLG requires a gilbert_damping > 0 and an "
-                    "inertial_time > 0 for all magnetic layers!"
+                    "inertial_time > 0 for all sublattices of the magnetic layers!"
                 )
 
     def get_initial_state(self, init_dir, inputs, is_magnetic, init_velocity=None, **kwargs):
@@ -989,11 +1184,20 @@ class iLLG(LLG):
                 velocity = np.tile(init_velocity, (N, P, 1))
             elif init_velocity.shape == (len(is_magnetic), 3):
                 velocity = np.tile(init_velocity[is_magnetic, np.newaxis, :], (1, P, 1))
+            elif init_velocity.shape[0:1] == (len(is_magnetic),) and init_velocity.shape[2:] == (
+                3,
+            ):
+                velocity = np.zeros_like(init_dir)
+                p = min(P, init_velocity.shape[1])
+                velocity[:, :p] = init_velocity[is_magnetic, :p]
             else:
                 raise ValueError(
                     "init_velocity must be a vector with 3 components or an array of "
-                    "Lx3 with L being the number of layers!"
+                    "Lx3 or LxPx3 with L being the number of layers and P the number of "
+                    "sublattices!"
                 )
+            # no velocity of the padded sublattices
+            velocity = velocity * (np.linalg.norm(init_dir, axis=-1) > 0)[..., np.newaxis]
         return np.stack((init_dir, velocity))
 
 
@@ -1045,11 +1249,15 @@ class LLB(Magnetization):
     * the :func:`magnetoelastic field
       <udkm1Dsim.simulations.solvers.magnetization_scipy.magnetoelastic_field>`
       of the ``strain_map``
+    * the :func:`transverse exchange field of the other sublattices
+      <udkm1Dsim.simulations.solvers.magnetization_scipy.transverse_sublattice_exchange_field>`
+      of layers with several sublattices
     * the :func:`longitudinal field
       <udkm1Dsim.simulations.solvers.magnetization_scipy.longitudinal_field>`,
       which relaxes the amplitude of the magnetization towards its equilibrium
       with the :func:`longitudinal susceptibility
       <udkm1Dsim.simulations.solvers.mean_field.longitudinal_susceptibility>`
+      and carries the longitudinal exchange between the sublattices
 
     The equilibrium magnetization, the damping parameters and the
     susceptibility of every layer depend on the temperature of the
@@ -1058,7 +1266,11 @@ class LLB(Magnetization):
     The effective spin ``eff_spin`` of the layers selects the model: finite
     spins give the quantum LLB with Brillouin functions, e.g. :math:`S = 1/2`
     for Ni, an infinite spin the classical LLB with the Langevin function.
-    Layers with an anisotropy or a magnetoelastic coupling require an
+    Layers with several sublattices, e.g. ferrimagnets, follow the LLB of
+    :cite:t:`raposo2022` with the coupled mean-field equations of the
+    sublattices, whose equilibrium magnetizations, damping parameters and
+    susceptibilities are those of the collinear ground state. Layers with an
+    anisotropy or a magnetoelastic coupling require an
     ``aniso_exponent`` of at least 2, since these fields scale as
     :math:`m_\mathrm{eq}^{\beta-2}` and would diverge at the Curie temperature
     otherwise.
@@ -1126,22 +1338,23 @@ class LLB(Magnetization):
             strain_map = self.check_map("strain_map", strain_map, M, L)
 
         implicit_init_mag = len(init_mag) == 0
-        init_mag = np.array(self.check_initial_magnetization(init_mag), dtype=float)
+        init_mag = self.check_initial_magnetization(init_mag)
 
         # magnetic layers carry a Curie temperature
         is_magnetic = self.S.get_layer_property_vector("magnetic.curie_temp.magnitude") > 0
         layers = self.get_magnetic_parameters(is_magnetic)
         N = len(layers)
-        if any(layer.eff_spin.magnitude <= 0 for layer in layers):
+        P = magnetization_scipy.stack_magnetic_parameters(layers).active.shape[1]
+        if any(np.any(layer.sublattice_values("eff_spin") <= 0) for layer in layers):
             raise ValueError(
-                "All layers with a Curie temperature must have an eff_spin > 0 for the "
-                "LLB, which can also be infinite for the classical LLB!"
+                "All sublattices of the layers with a Curie temperature must have an "
+                "eff_spin > 0 for the LLB, which can also be infinite for the classical LLB!"
             )
         for layer in layers:
-            anisotropic = np.any(np.asarray(layer.anisotropy.magnitude) != 0) or np.any(
-                np.asarray(layer.magnetoelastic_coupling.magnitude) != 0
+            anisotropic = np.any(layer.sublattice_values("anisotropy") != 0, axis=1) | (
+                layer.sublattice_values("magnetoelastic_coupling") != 0
             )
-            if anisotropic and layer.aniso_exponent.magnitude < 2:
+            if np.any(anisotropic & (layer.sublattice_values("aniso_exponent") < 2)):
                 raise ValueError(
                     "The anisotropy and magnetoelastic fields of the LLB scale as "
                     "m_eq**(aniso_exponent - 2) and diverge at the Curie temperature for "
@@ -1156,10 +1369,10 @@ class LLB(Magnetization):
                 layers, temp_max=np.max(temps[:, is_magnetic])
             )
             mean_mags = interpolate_tables_map(temp_grid, tables, temps[:1, is_magnetic])[
-                0, :, 0, TABLE["mag"]
+                0, ..., TABLE["mag"]
             ]
-            init_mag[is_magnetic, 0] *= mean_mags
-        init_state = convert_polar_to_cartesian(init_mag)[is_magnetic, np.newaxis, :]
+            init_mag[is_magnetic, :P, 0] *= mean_mags
+        init_state = convert_polar_to_cartesian(init_mag)[is_magnetic, :P, :]
 
         inputs = magnetization_scipy.prepare_inputs(
             delays,
@@ -1171,11 +1384,11 @@ class LLB(Magnetization):
         mag_map = self.solve("llb", init_state, inputs, is_magnetic)
         self.check_demagnetization_collapse(mag_map, temps[:, is_magnetic], layers)
 
-        # final magnetization map is zero for all non-magnetic layers
-        magnetization_map = self.embed_magnetization(mag_map, is_magnetic)
+        # final magnetization maps are zero for all non-magnetic layers
+        maps = self.embed_magnetization(mag_map, is_magnetic)
         self.disp_message(f"Elapsed time for _LLB_: {time() - t1:f} s")
 
-        return magnetization_map
+        return maps
 
     def check_demagnetization_collapse(self, mag_map, temps, layers):
         r"""check_demagnetization_collapse
