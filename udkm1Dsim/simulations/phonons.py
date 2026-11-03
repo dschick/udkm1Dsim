@@ -649,7 +649,10 @@ class PhononAna(Phonon):
             \frac{d^2}{dt^2} X = K \, X
 
         Here :math:`X = (x_1 \ldots x_N)` and :math:`K` is the
-        tri-diagonal matrix of :math:`\kappa` which is real and symmetric.
+        tri-diagonal matrix of :math:`\kappa`. The spring :math:`k_{i+1}`
+        connects the layers :math:`i` and :math:`i+1`, hence the :math:`N`
+        layers are coupled by :math:`N-1` springs and the surface and the
+        backside of the structure are free, as for :class:`PhononNum`.
         The differential equation can be solved with the ansatz:
 
         .. math::
@@ -673,6 +676,10 @@ class PhononAna(Phonon):
 
             A = \Xi \setminus X(0) \qquad B = (\Xi \setminus V(0)) / \omega
 
+        The free chain has zero-frequency modes :math:`\omega_j = 0`, e.g. the
+        translation of the whole structure, which do not move, since the total
+        momentum is zero, hence :math:`B_j = 0`.
+
         The external force is implemented as spacer sticks which are
         inserted into the springs and hence the layers have a new
         equilibrium positions :math:`z_i(\infty) = z_i^\infty`.
@@ -692,10 +699,13 @@ class PhononAna(Phonon):
 
         .. math::
 
-            x_i^\infty(0) = z_i^0 - z_i^\infty = \sum_{j = i+1}^N l_j
+            x_i^\infty(0) = z_i^0 - z_i^\infty = \sum_{j = i}^{N-1} l_j
 
         :math:`x_i^\infty(0)` is the new initial condition after the excitation
-        where :math:`l_i` is the length of the :math:`i`-th spacer stick.
+        where :math:`l_i` is the length of the :math:`i`-th spacer stick in the
+        spring between the layers :math:`i` and :math:`i+1`. The last layer
+        is chosen to stay at rest, which only adds a translation of the whole
+        structure without any strain.
         The spacer sticks are calculated from the temperature change and the
         linear thermal expansion coefficients.
         The actual strain :math:`\epsilon_i(t)` of each layer is calculates
@@ -705,7 +715,7 @@ class PhononAna(Phonon):
 
             \epsilon_i(t) = [ \Delta x_i(t) + l_i) ] / d_i
 
-        with :math:`\Delta x_i = x_i - x_{i-1}`. The stick :math:`l_i` have
+        with :math:`\Delta x_i = x_{i+1} - x_i`. The stick :math:`l_i` have
         to be added here, because :math:`x_i` has been transformed into the new
         coordinate system :math:`x_i^\infty`.
 
@@ -798,19 +808,26 @@ class PhononAna(Phonon):
                         delay0 = delays[i]  # set new initial delay
                         # determining the shifts due to inserted sticks
                         # as new initial conditions
+                        # only the sticks of the L-1 springs are relevant
                         if i > 0:
-                            temp = np.flipud(
-                                np.cumsum(np.flipud(sticks[i, :].T - sticks[i - 1, :].T))
-                            )
+                            delta_sticks = sticks[i, 0:-1] - sticks[i - 1, 0:-1]
                         else:
                             # initial sticks are zero
-                            temp = np.flipud(np.cumsum(np.flipud(sticks[i, :].T)))
+                            delta_sticks = sticks[i, 0:-1]
+                        temp = np.r_[np.flipud(np.cumsum(np.flipud(delta_sticks))), 0]
                         X0 = X0 + temp
                         # determining the coefficient vectors A and B of
                         # the general solution of X(t) using the initial
                         # conditions X0 and V0
                         A[i + 1, :] = np.real(np.linalg.solve(Xi, X0))
-                        B[i + 1, :] = np.real((np.linalg.solve(Xi, V0) / omega).T)
+                        # the zero-frequency modes are not moving, since
+                        # the total momentum of the free chain is zero
+                        B[i + 1, :] = np.divide(
+                            np.real(np.linalg.solve(Xi, V0)),
+                            omega,
+                            out=np.zeros(L),
+                            where=omega > 0,
+                        )
                     else:
                         # no temperature change, so keep the current As,
                         # Bs, and sticks
@@ -824,11 +841,24 @@ class PhononAna(Phonon):
     def solve_eigenproblem(self):
         r"""solve_eigenproblem
 
-        Creates the real and symmetric :math:`K` matrix (:math:`L \times L`) of
+        Creates the tri-diagonal :math:`K` matrix (:math:`L \times L`) of
         spring constants :math:`k_i` and masses :math:`m_i` and calculates the
         eigenvectors :math:`\Xi_j` and eigenfrequencies :math:`\omega_j` for the
         matrix which are used to calculate the ``strain_map`` of the structure.
         If the result has been save to file, load it from there.
+
+        The spring :math:`k_i` connects the layers :math:`i` and :math:`i+1`,
+        so that the :math:`L` layers are coupled by :math:`L-1` springs and
+        both, the surface and the backside of the structure are free as for
+        :class:`PhononNum`. The eigenproblem is solved for the real and
+        symmetric matrix :math:`\tilde{K} = M^{1/2} K M^{-1/2}` with
+        :math:`M = \mathrm{diag}(m_1, \ldots, m_L)`, which has the same
+        eigenvalues :math:`-\omega_j^2` and the orthonormal eigenvectors
+        :math:`U`, hence :math:`\Xi = M^{-1/2} U`.
+
+        Since the chain is free, it has a zero-frequency mode for each part
+        which is not connected by springs, e.g. the translation of the whole
+        structure. These eigenfrequencies are exactly zero.
 
         Returns:
             (tuple):
@@ -851,27 +881,33 @@ class PhononAna(Phonon):
             self.disp_message("Calculating _eigen_values_ ...")
             # initialize
             L = self.S.get_number_of_layers()
-            K = np.zeros([L, L])  # initializing three-diagonal springs-masses matrix.
-            # initializing a vector for eigenfrequencies
-            omega = np.zeros([L, 1], dtype=np.complex128)
+            # initializing the symmetric three-diagonal springs-masses matrix
+            K = np.zeros([L, L])
 
             masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
             spring_consts = self.S.get_layer_property_vector("elastic.spring_const.magnitude")
-            spring_consts = np.hstack((0, spring_consts))  # set the first spring free
+            # the spring k_i connects the layers i and i+1, so the first
+            # layer has no spring on its left and the last layer none on
+            # its right - free surface and backside
+            spring_consts = np.r_[0, spring_consts[:-1], 0]
 
             for i in range(L):  # defining main diagonal
                 K[i, i] = -(spring_consts[i] + spring_consts[i + 1]) / masses[i]
 
             # defining the two other diagonals - nearest neighbor interaction
             for i in range(1, L):
-                K[i, i - 1] = spring_consts[i] / masses[i]
-                K[i - 1, i] = spring_consts[i] / masses[i - 1]
+                K[i, i - 1] = spring_consts[i] / np.sqrt(masses[i] * masses[i - 1])
+                K[i - 1, i] = K[i, i - 1]
 
-            # determining the eigenvectors and the eigenvalues
-            lambd, Xi = np.linalg.eig(K)
+            # determining the eigenvalues and orthonormal eigenvectors
+            lambd, U = np.linalg.eigh(K)
 
-            # calculate the eigenfrequencies from the eigenvalues
-            omega = np.sqrt(-lambd)
+            # calculate the eigenfrequencies from the eigenvalues, which are
+            # zero for the free modes within the numerical precision
+            omega = np.sqrt(np.clip(-lambd, 0, None))
+            omega[-lambd <= L * np.finfo(float).eps * np.max(np.abs(lambd))] = 0
+            # transform the eigenvectors back to the shifts of the layers
+            Xi = U / np.sqrt(masses)[:, None]
 
             self.disp_message(f"Elapsed time for _eigen_values_: {time() - t1:f} s")
             # save the result to file

@@ -59,9 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the Cromer-Mann atomic form factor of `XrayKin` and `XrayDyn` used wrong coefficients and converted `q_z` wrongly, so that its `q_z`-dependence was wrong; cached results require `force_recalc=True`, closing [#226]
 - Cromer-Mann coefficients of `Cs1+`, `Ba2+`, `Ru4+`, `Bi5+`, `Np3+`, `Np4+`, `Np6+`, and `Pu` corrected and 16 rounded coefficients completed according to the International Tables for Crystallography, Vol. C, Table 6.1.1.4
 - the Cromer-Mann coefficients of an `Atom` were not updated on a change of its ionicity
+- the backside of the structure was clamped instead of free for `PhononAna`, so that strain waves were reflected with a wrong sign, e.g. for freestanding layers; the analytical and numerical phonon models have the same boundary conditions now and are compared in the tests; cached results require `force_recalc=True`, closing [#186]
 
 ### Security
 
+[#186]: https://github.com/dschick/udkm1Dsim/issues/186
 [#224]: https://github.com/dschick/udkm1Dsim/issues/224
 [#226]: https://github.com/dschick/udkm1Dsim/issues/226
 
