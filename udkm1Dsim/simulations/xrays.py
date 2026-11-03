@@ -2926,9 +2926,7 @@ class XrayDynMag(Xray):
                     self.pol_out,
                     density,
                     distance,
-                    atom.mag_amplitude,
-                    atom.mag_gamma,
-                    atom.mag_phi,
+                    *atom.atomic.magnetization.polar_rad,
                     *args,
                 ]
             )
@@ -3009,17 +3007,9 @@ class XrayDynMag(Xray):
             # here we catch magnetizations with only one instead of three
             # elements
             try:
-                mag_amplitude = atom.mag_amplitude
+                mag_amplitude, mag_phi, mag_gamma = atom.atomic.magnetization.polar_rad
             except AttributeError:
-                mag_amplitude = 0
-            try:
-                mag_phi = atom._mag_phi
-            except AttributeError:
-                mag_phi = 0
-            try:
-                mag_gamma = atom._mag_gamma
-            except AttributeError:
-                mag_gamma = 0
+                mag_amplitude, mag_phi, mag_gamma = 0, 0, 0
 
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z

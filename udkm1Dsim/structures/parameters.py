@@ -177,6 +177,17 @@ class VectorParameter(Parameter):
     which are not defined by them, i.e. both angles for a zero vector and
     gamma for a vector along the z-axis, are kept. Hence, e.g. setting the
     radius to zero and back restores the direction of the vector.
+
+    The vector can be given on initialization and by :meth:`set` as
+
+    - cartesian components, e.g. ``(0, 0, 1)`` or a pint Quantity,
+    - dict of polar components, e.g. ``{"r": -1, "phi": 90, "gamma": 0}``,
+      with bare-float angles in `angle_unit`,
+    - dict of cartesian components, e.g. ``{"x": 0, "y": 0, "z": 1}``,
+    - another VectorParameter, whose polar form is copied.
+
+    Components missing in a dict keep their current value, e.g. ``{"r": -1}``
+    only changes the radius.
     """
 
     # symbols of the polar components for the display of the vector
@@ -188,7 +199,8 @@ class VectorParameter(Parameter):
         self.angle_unit = u.Unit(angle_unit)  # unit for bare-float angles
         self._polar = np.zeros(3)  # [r, phi, gamma] with the angles in rad
         self._cartesian = None  # cartesian components, given or calculated
-        super().__init__(unit, magnitude, name, symbol)
+        super().__init__(unit, (0.0, 0.0, 0.0), name, symbol)
+        self.set(magnitude)
 
     def __setstate__(self, state):
         # vectors pickled by former versions store the cartesian components
@@ -211,6 +223,45 @@ class VectorParameter(Parameter):
             (self._format_symbol(symbol, mode), "", format_number(value.magnitude, mode), unit)
             for symbol, value, unit in zip(self._polar_symbols, (r, phi, gamma), units)
         ]
+
+    _polar_keys = ("r", "phi", "gamma")
+    _cartesian_keys = ("x", "y", "z")
+
+    def set(self, value):
+        """Set the vector from cartesian components, a dict of polar or
+        cartesian components, or another VectorParameter, see the class
+        description."""
+        if isinstance(value, VectorParameter):
+            polar = value.polar_rad
+            polar[0] = (polar[0] * value.unit).to(self.unit).magnitude
+            self._polar = polar
+            # keep the given cartesian components
+            self._cartesian = (
+                None
+                if value._cartesian is None
+                else (value._cartesian * value.unit).to(self.unit).magnitude
+            )
+            self._notify()
+        elif isinstance(value, dict):
+            keys = set(value)
+            if keys and keys <= set(self._polar_keys):
+                self.polar = [
+                    value.get(key, current) for key, current in zip(self._polar_keys, self.polar)
+                ]
+            elif keys and keys <= set(self._cartesian_keys):
+                cartesian = self.magnitude
+                for i, key in enumerate(self._cartesian_keys):
+                    if key in value:
+                        cartesian[i] = self._to_magnitude(value[key], self.unit)
+                self.magnitude = cartesian
+            else:
+                raise ValueError(
+                    f"Parameter '{self.name}' must be given by the polar components "
+                    f"{self._polar_keys} or the cartesian components {self._cartesian_keys} "
+                    f"in a dict, not by {tuple(value)}"
+                )
+        else:
+            self.magnitude = value
 
     @classmethod
     def from_polar(cls, unit, r, phi, gamma, name="", angle_unit="deg", symbol=""):

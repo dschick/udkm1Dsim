@@ -648,7 +648,7 @@ class Layer:
 
     @magnetization.setter
     def magnetization(self, value):
-        self.magnetic.magnetization.quantity = value
+        self.magnetic.magnetization.set(value)
 
 
 class Vacuum(Layer):
@@ -704,7 +704,7 @@ class AmorphousLayer(Layer):
                 + "Only Atom and AtomMixed are allowed!"
             )
         self._atom = atom
-        self.magnetic.magnetization.polar = (atom.mag_amplitude, atom.mag_phi, atom.mag_gamma)
+        self.magnetic.magnetization.set(atom.atomic.magnetization)
 
 
 class UnitCell(Layer):
@@ -785,15 +785,16 @@ class UnitCell(Layer):
         """Table of all atoms in the unit cell in the given tabulate style"""
         atoms_str = []
         for atom, position, position_function in self.atoms:
+            mag_amplitude, mag_phi, mag_gamma = atom.atomic.magnetization.polar
             atoms_str.append(
                 [
                     atom.name,
                     f"{position(0):0.2f}",
                     position_function,
                     "",
-                    atom.mag_amplitude,
-                    atom.mag_phi.to("deg").magnitude,
-                    atom.mag_gamma.to("deg").magnitude,
+                    mag_amplitude.magnitude,
+                    mag_phi.to("deg").magnitude,
+                    mag_gamma.to("deg").magnitude,
                 ]
             )
         return tabulate(

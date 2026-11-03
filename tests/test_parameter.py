@@ -622,3 +622,59 @@ def test_vector_parameter_pickled_by_former_versions(state, polar_rad):
     assert np.allclose(v.polar_rad, polar_rad)
     # the cartesian components are kept, e.g. for the hash of the structure
     np.testing.assert_array_equal(v.magnitude, state["_magnitude"])
+
+
+# VectorParameter.set
+
+
+@pytest.mark.parametrize(
+    "value, polar_rad",
+    [
+        ((0.0, 2.0, 0.0), [2, np.pi / 2, np.pi / 2]),
+        ({"r": -1.0, "phi": 90.0, "gamma": 0.0}, [-1, np.pi / 2, 0]),
+        ({"r": -1.0}, [-1, np.pi / 4, np.pi / 2]),  # the angles are kept
+        ({"phi": 0.5 * u.rad}, [1, 0.5, np.pi / 2]),
+        ({"x": 1.0}, [np.sqrt(2), np.pi / 3, np.arctan(np.sqrt(0.5))]),  # y and z are kept
+        ({"x": 0.0, "y": 0.0, "z": 3.0}, [3, 0, np.pi / 2]),  # gamma is kept
+    ],
+)
+def test_vector_parameter_set(vector_parameter, value, polar_rad):
+    vector_parameter.polar = (1.0, 45.0, 90.0)
+    caller = DummyCaller()
+    vector_parameter._caller = caller
+    vector_parameter.set(value)
+    np.testing.assert_allclose(vector_parameter.polar_rad, polar_rad, atol=1e-15)
+    assert caller.calls == 1
+
+
+def test_vector_parameter_set_from_vector_parameter():
+    source = VectorParameter("mT", (1.0, 2.0, 3.0))
+    target = VectorParameter("T", angle_unit="rad")
+    target.set(source)
+    # the cartesian components are kept and converted to the unit of the target
+    np.testing.assert_array_equal(target.magnitude, [1e-3, 2e-3, 3e-3])
+    assert target.angle_unit == u.rad
+    # also a signed radius and undefined angles are copied
+    source.polar = (-1.0, 0.0, 30.0)
+    target.set(source)
+    np.testing.assert_allclose(target.polar_rad, [-1e-3, 0, np.pi / 6])
+    # the copy is independent of the source
+    source.r = 2
+    np.testing.assert_allclose(target.polar_rad, [-1e-3, 0, np.pi / 6])
+
+
+def test_vector_parameter_init_by_dict():
+    vector = VectorParameter("T", {"r": -1, "phi": 90, "gamma": 180}, name="B")
+    np.testing.assert_array_equal(vector.magnitude, [1.0, 0.0, 0.0])
+    np.testing.assert_allclose(vector.polar_rad, [-1, np.pi / 2, np.pi])
+
+
+@pytest.mark.parametrize("value", [{}, {"r": 1, "x": 0}, {"amplitude": 1}])
+def test_vector_parameter_set_invalid_dict(vector_parameter, value):
+    vector_parameter.magnitude = (1.0, 2.0, 3.0)
+    caller = DummyCaller()
+    vector_parameter._caller = caller
+    with pytest.raises(ValueError):
+        vector_parameter.set(value)
+    np.testing.assert_array_equal(vector_parameter.magnitude, [1.0, 2.0, 3.0])
+    assert caller.calls == 0

@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AtomParameters` and `AtomMixedParameters` organize the atomic number, mass number, mass, ionicity, magnetization, and, for `Atom` only, the Cromer-Mann coefficients `cromer_mann_a`, `cromer_mann_b`, and `cromer_mann_c` in their `atomic` parameter group, e.g. `atom.atomic.mass`, while the attributes of the atoms, e.g. `atom.mass`, are kept
 - `magnetization` property of `Atom` and `AtomMixed` with the cartesian magnetization as for layers
 - `VectorParameter` keeps its angles, when they are not defined by its cartesian components, e.g. for a zero amplitude, so that setting the amplitude to zero and back restores its direction
+- the magnetization of an `Atom`, `AtomMixed`, and `Layer` is given by `magnetization` on initialization and assignment, either as cartesian components, e.g. `(0, 0, 1)`, as dict of polar or cartesian components, e.g. `{"r": -1, "phi": 90 * u.deg, "gamma": 0 * u.deg}` or `{"x": 0, "y": 0, "z": 1}`, or as `VectorParameter`; components missing in a dict keep their values, e.g. `atom.magnetization = {"r": 0.5}` only changes the amplitude
+- `VectorParameter.set()` for all these inputs
 
 ### Changed
 
