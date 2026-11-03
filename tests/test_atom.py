@@ -355,11 +355,17 @@ def _magnetized(cls, magnetization, how):
 
 
 @pytest.mark.parametrize("magnetization", MAGNETIZATION_INPUTS)
-@pytest.mark.parametrize("how", ["init", "group", "assignment"])
-@pytest.mark.parametrize("cls", ["Atom", "AtomMixed", "Layer"])
+@pytest.mark.parametrize(
+    "cls, how",
+    [
+        # only layers are given parameter groups
+        (cls, how)
+        for cls in ["Atom", "AtomMixed", "Layer"]
+        for how in ["init", "group", "assignment"]
+        if how != "group" or cls == "Layer"
+    ],
+)
 def test_magnetization_input(cls, how, magnetization):
-    if how == "group" and cls != "Layer":
-        pytest.skip("atoms are not given parameter groups")
     obj = _magnetized(cls, magnetization, how)
     np.testing.assert_allclose(obj.magnetization.magnitude, [0, 1, 0], atol=1e-15)
     group = obj.magnetic if cls == "Layer" else obj.atomic
