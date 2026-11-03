@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API documentation of the `parameters`, `parameter_groups`, and `solvers` modules was missing
 - `AtomMixed` had no `_mass`, which is used for the density of its unit cell by `XrayDynMag`
 - the gamma angle of zero vectors with signed zero components was -180 deg instead of 0 deg in `convert_cartesian_to_polar`
+- the pdf documentation on Read the Docs failed, as pdflatex cannot handle the unicode characters of the notebook outputs; it is built with xelatex now
 
 ### Security
 
