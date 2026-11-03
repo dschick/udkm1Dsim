@@ -9,6 +9,7 @@ import pytest
 from pint.testing import assert_allclose, assert_equal
 
 from udkm1Dsim import (
+    AmorphousLayer,
     Atom,
     AtomMixed,
     AtomMixedParameters,
@@ -199,9 +200,10 @@ def test_atom_get_magnetic_form_factor(request, fixture_name, expected):
 )
 def test_atom_magnetization(request, fixture_name, expected):
     atom = request.getfixturevalue(fixture_name)
-    assert atom.mag_amplitude == expected[0]
-    assert_equal(atom.mag_phi, expected[1])
-    assert_equal(atom.mag_gamma, expected[2])
+    r, phi, gamma = atom.atomic.magnetization.polar
+    assert r.magnitude == expected[0]
+    assert_equal(phi, expected[1])
+    assert_equal(gamma, expected[2])
 
 
 @pytest.mark.parametrize(
@@ -286,22 +288,116 @@ def test_magnetization_of_atoms_and_layers_is_identical(cls):
     # the gamma angle is given in -180 .. 180 deg
     assert_allclose(group.magnetization.polar[2], -90 * u.deg)
     assert np.allclose(obj.magnetization.magnitude, [0, -1, 0])
-    with pytest.raises(ValueError):
-        group.magnetization.polar = (-1, 0 * u.deg, 0 * u.deg)
+    # a negative amplitude reverses the direction and keeps the angles
+    group.magnetization.polar = (-1, 0 * u.deg, 0 * u.deg)
+    assert np.allclose(obj.magnetization.magnitude, [0, 0, -1])
+    assert_allclose(group.magnetization.polar[1], 0 * u.deg)
     # the angles are given in deg in the tables
     rows = group.magnetization._table_rows("text")
     assert [row[0] for row in rows] == ["r", "φ", "γ"]
     assert [row[2] for row in rows] == ["", "deg", "deg"]
 
 
-def test_atom_magnetization_attributes():
-    atom = Atom("Fe", mag_amplitude=1, mag_phi=90 * u.deg, mag_gamma=45 * u.deg)
+def test_atom_negative_mag_amplitude():
+    atom = Atom("Fe", magnetization={"r": -0.5, "phi": 90 * u.deg, "gamma": 0 * u.deg})
+    assert_allclose(atom.atomic.magnetization.r, -0.5 * u.dimensionless)
+    assert_allclose(atom.atomic.magnetization.phi, 90 * u.deg)
+    np.testing.assert_array_equal(atom.magnetization.magnitude, [-0.5, 0, 0])
+    atom.magnetization = {"r": 2}
+    np.testing.assert_array_equal(atom.magnetization.magnitude, [2, 0, 0])
+
+
+MAGNETIZATION_INPUTS = [
+    (0.0, 1.0, 0.0),
+    np.array([0.0, 1.0, 0.0]),
+    [0.0, 1.0, 0.0] * u.dimensionless,
+    {"r": 1, "phi": 90 * u.deg, "gamma": 90 * u.deg},
+    {"r": 1, "phi": 90, "gamma": 90},  # bare angles in deg
+    {"r": 1, "phi": np.pi / 2 * u.rad, "gamma": np.pi / 2 * u.rad},
+    {"x": 0, "y": 1, "z": 0},
+    {"y": 1},  # the missing components are zero
+    VectorParameter.from_polar("", 1, 90, 90),
+]
+
+
+def _magnetized(cls, magnetization, how):
+    """Atom, AtomMixed, or Layer with the given magnetization, which is set on
+    initialization, by its parameter group, or by assignment afterwards."""
+    if how == "assignment":
+        obj = _magnetized(cls, (0, 0, 0), "init")
+        obj.magnetization = magnetization
+        return obj
+    if cls == "Layer":
+        if how == "group":
+            return Layer("Fe", "Fe", magnetic={"magnetization": magnetization})
+        return Layer("Fe", "Fe", magnetization=magnetization)
+    if cls == "Atom":
+        return Atom("Fe", magnetization=magnetization)
+    return AtomMixed("FeCr", magnetization=magnetization)
+
+
+@pytest.mark.parametrize("magnetization", MAGNETIZATION_INPUTS)
+@pytest.mark.parametrize("how", ["init", "group", "assignment"])
+@pytest.mark.parametrize("cls", ["Atom", "AtomMixed", "Layer"])
+def test_magnetization_input(cls, how, magnetization):
+    if how == "group" and cls != "Layer":
+        pytest.skip("atoms are not given parameter groups")
+    obj = _magnetized(cls, magnetization, how)
+    np.testing.assert_allclose(obj.magnetization.magnitude, [0, 1, 0], atol=1e-15)
+    group = obj.magnetic if cls == "Layer" else obj.atomic
+    assert_allclose(group.magnetization.phi, 90 * u.deg)
+    assert_allclose(group.magnetization.gamma, 90 * u.deg)
+
+
+@pytest.mark.parametrize("cls", ["Atom", "AtomMixed", "Layer"])
+def test_magnetization_partial_polar_input_keeps_angles(cls):
+    obj = _magnetized(cls, {"r": 1, "phi": 90 * u.deg, "gamma": 45 * u.deg}, "init")
+    obj.magnetization = {"r": -2}
+    group = obj.magnetic if cls == "Layer" else obj.atomic
+    assert_allclose(group.magnetization.r, -2 * u.dimensionless)
+    assert_allclose(group.magnetization.phi, 90 * u.deg)
+    assert_allclose(group.magnetization.gamma, 45 * u.deg)
+    np.testing.assert_allclose(obj.magnetization.magnitude, [-np.sqrt(2), -np.sqrt(2), 0])
+
+
+@pytest.mark.parametrize("cls", [Atom, AtomMixed])
+def test_atom_magnetization_shortcuts(cls):
+    symbol = "Fe" if cls is Atom else "FeCr"
+    atom = cls(symbol, mag_amplitude=1, mag_phi=90 * u.deg, mag_gamma=45 * u.deg)
+    np.testing.assert_allclose(atom.magnetization.magnitude, [np.sqrt(0.5), np.sqrt(0.5), 0])
     assert atom.mag_amplitude == pytest.approx(1)
     assert_allclose(atom.mag_phi, 90 * u.deg)
     assert_allclose(atom.mag_gamma, 45 * u.deg)
-    assert atom._mag_gamma == pytest.approx(np.pi / 4)
     atom.mag_gamma = 0 * u.deg
-    assert np.allclose(atom.magnetization.magnitude, [1, 0, 0])
+    atom.mag_phi = 0 * u.deg
+    atom.mag_amplitude = -1
+    np.testing.assert_allclose(atom.magnetization.magnitude, [0, 0, -1])
+
+
+@pytest.mark.parametrize("cls", [Atom, AtomMixed])
+def test_atom_magnetization_given_twice(cls):
+    symbol = "Fe" if cls is Atom else "FeCr"
+    with pytest.raises(ValueError, match="'mag_phi' must not be given together"):
+        cls(symbol, magnetization=(0, 0, 1), mag_phi=90 * u.deg)
+
+
+@pytest.mark.parametrize(
+    "magnetization", [{"r": 1, "x": 0}, {"amplitude": 1}, {}, {"R": 1, "phi": 0}]
+)
+def test_magnetization_invalid_dict(magnetization):
+    with pytest.raises(ValueError, match="polar components"):
+        Atom("Fe", magnetization=magnetization)
+    with pytest.raises(ValueError, match="polar components"):
+        Layer("Fe", "Fe", magnetization=magnetization)
+
+
+def test_amorphous_layer_inherits_magnetization_of_atom():
+    atom = Atom("Fe", magnetization={"r": -1, "phi": 0, "gamma": 30})
+    layer = AmorphousLayer("Fe", "Fe", atom=atom)
+    np.testing.assert_allclose(layer.magnetic.magnetization.polar_rad, [-1, 0, np.pi / 6])
+    # the layer has its own copy
+    atom.magnetization = {"r": 1}
+    assert_allclose(layer.magnetic.magnetization.r, -1 * u.dimensionless)
 
 
 def test_atom_mixed_parameters(atom_mixed, atom_iron, atom_dysprosium):
@@ -319,8 +415,8 @@ def test_atom_mixed_derived_parameters_are_read_only(atom_mixed, attribute):
 
 def test_atom_parameters_are_copied(atom_iron):
     atom = copy.deepcopy(atom_iron)
-    atom.mag_amplitude = 0.1
-    assert atom_iron.mag_amplitude != 0.1
+    atom.magnetization = {"r": 0.1}
+    assert atom_iron.atomic.magnetization.r != 0.1
     assert atom.atomic is not atom_iron.atomic
 
 
