@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the magnetization of `Atom` and `AtomMixed` is a `VectorParameter` and behaves as for layers, e.g. its gamma angle is given in -180 .. 180 deg
 - `VectorParameter` stores its polar form (r, phi, gamma), and its cartesian components are kept as given or calculated on demand, where components, which are zero within the numerical precision, are exactly zero
 - the radius of a `VectorParameter`, e.g. the magnetization amplitude, can be negative, which reverses the direction given by its angles, and is not limited in size, so that its magnitude can be changed while keeping its angles
+- the examples set the magnetization of atoms by `magnetization={"r": ..., "phi": ..., "gamma": ...}`
 - vector parameters, e.g. the magnetization, are shown by their amplitude and angles in deg in the table views
 - the symbols of the physical quantities in the docstrings are consistent across all simulations and parameter groups, e.g. the thickness is `d`, the thermal conductivity `κ`, and the anisotropy exponent `β`
 
