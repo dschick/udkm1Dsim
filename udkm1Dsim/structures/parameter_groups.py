@@ -99,6 +99,58 @@ class ParameterGroup:
     def _update_group(self):
         """Update the depending parameters within the group."""
 
+    def __setattr__(self, name, value):
+        """Assignments to a parameter of the group set its value, so that the
+        parameter keeps its unit, symbol and connection to the group and the
+        depending parameters are updated, e.g. ``group.curie_temp = 500 * u.K``.
+        A :class:`.Parameter` of the same type replaces the parameter, e.g. to
+        give a new symbol, after its value is converted to the unit of the
+        group. Derived parameters cannot be set."""
+        current = self.__dict__.get(name)
+        if not isinstance(current, Parameter):
+            # parameters on initialization and all other attributes
+            super().__setattr__(name, value)
+            return
+        if name in self._derived:
+            raise AttributeError(
+                f"'{name}' is derived from the other parameters of "
+                f"{type(self).__name__} and cannot be set!"
+            )
+        if isinstance(value, Parameter):
+            self._replace_parameter(name, current, value)
+        elif isinstance(current, VectorParameter):
+            current.set(value)
+        else:
+            current.magnitude = value
+
+    def _replace_parameter(self, name, current, parameter):
+        """Replace the parameter by a copy of the given one in the unit of the
+        group and connect it to the group."""
+        if type(parameter) is not type(current):
+            raise TypeError(
+                f"'{name}' must be a {type(current).__name__}, not {type(parameter).__name__}!"
+            )
+        if not parameter.unit.is_compatible_with(current.unit):
+            raise pint.DimensionalityError(parameter.unit, current.unit)
+        # do not copy the group the parameter is connected to
+        new = copy.deepcopy(parameter, {id(parameter._caller): None})
+        if new.unit != current.unit:
+            if isinstance(new, TemperatureParameter):
+                raise ValueError(
+                    f"The temperature-dependent parameter '{name}' must be given in "
+                    f"{current.unit:~P}!"
+                )
+            if isinstance(new, VectorParameter):
+                new.unit = current.unit
+                new.set(parameter)
+            else:
+                new.unit = current.unit
+                new.magnitude = parameter.quantity
+        new.name = name
+        new._caller = self
+        super().__setattr__(name, new)
+        self._update_depending()
+
     def __deepcopy__(self, memo):
         # A group copied on its own, e.g. on assignment to a layer, must not copy
         # its owner along. When copying the owner, it is already in the memo.
