@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `VectorParameter.set()` for all these inputs
 - `simulations.solvers.magnetization_scipy` with the right-hand side of the `LLB` assembled from one function per physical term, vectorized over all magnetic layers, and `simulations.solvers.mean_field` with the equilibrium magnetization, the damping parameters and the longitudinal susceptibility of the mean-field model; the solver takes the `MagneticParameters` of the magnetic layers, ported from [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber)
 - classical `LLB` with the Langevin function for an infinite `eff_spin`
+- `LLG` and inertial `iLLG` (Ciornei et al. 2011) simulations with a prescribed magnetization amplitude, given as `mag_amplitude_map`, taken from the `mag_sub_system` of the `temp_map`, derived from its `temp_sub_system` by the mean-field model, or kept at the initial amplitude; the `iLLG` accepts an `init_velocity`, which defaults to the one of the LLG, and uses `LSODA` as default integrator, ported from [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber), superseding [#164]
+- magnetic parameters `gilbert_damping`, `inertial_time`, and `magnetoelastic_coupling` of layers
+- magnetoelastic field of the out-of-plane strain for `LLG`, `iLLG`, and `LLB`, which accept a `strain_map`
 - `Magnetization.get_magnetic_parameters` and `Magnetization.get_interlayer_exchange_stiffnesses` collect the inputs of the solver from the structure
 - `Magnetization.temp_sub_system` to select the sub-system of the `temp_map` that drives the magnetization dynamics
 - `LLB.get_magnetization_map` accepts an external field `H_ext` per delay as `Mx3` array
@@ -85,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+[#164]: https://github.com/dschick/udkm1Dsim/pull/164
 [#186]: https://github.com/dschick/udkm1Dsim/issues/186
 [#224]: https://github.com/dschick/udkm1Dsim/issues/224
 [#226]: https://github.com/dschick/udkm1Dsim/issues/226

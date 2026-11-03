@@ -24,10 +24,12 @@
 r"""Scipy-based solver for the magnetization dynamics.
 
 This is the default backend of the magnetization simulations. The right-hand
-side of the Landau-Lifshitz-Bloch (LLB) equation :func:`llb_rhs` is assembled
-from small functions, one per physical term, which are vectorized with
-``numpy`` over all magnetic layers and their sublattices. The time integration
-is done by ``scipy.integrate.solve_ivp``.
+sides of the Landau-Lifshitz-Gilbert (LLG) equation :func:`llg_rhs`, its
+inertial extension (iLLG) :func:`illg_rhs` and the Landau-Lifshitz-Bloch
+(LLB) equation :func:`llb_rhs` are assembled from small functions, one per
+physical term, which are vectorized with ``numpy`` over all magnetic layers
+and their sublattices. The time integration is done by
+``scipy.integrate.solve_ivp``, see :func:`solve`.
 
 Every magnetic layer carries :math:`P \geq 1` magnetic sublattices, which
 are coupled by the mean-field exchange matrix :math:`J_{ab}` of the layer.
@@ -35,12 +37,13 @@ are coupled by the mean-field exchange matrix :math:`J_{ab}` of the layer.
 with fewer sublattices are padded with inactive ones.
 
 The static effective field :func:`effective_field` is the sum of the external
-field, the anisotropy field and the exchange field between the same
-sublattice of neighbouring layers. The LLB adds the transverse exchange field
-of the other sublattices of a layer and the longitudinal field. All fields
-are in tesla. The time-dependent inputs - the external field and the
-temperature - are given on the delay grid as :class:`Inputs` and are
-interpolated linearly in time. The material parameters are the
+field, the anisotropy field, the exchange field between the same sublattice
+of neighbouring layers and the magnetoelastic field. The LLG and iLLG add the
+exchange field of the other sublattices of a layer, the LLB its transverse
+part and the longitudinal field. All fields are in tesla. The time-dependent
+inputs - the external field, the magnetization amplitude of the LLG and iLLG, the
+temperature of the LLB and the strain - are given on the delay grid as
+:class:`Inputs` and are interpolated linearly in time. The material parameters are the
 :class:`~udkm1Dsim.structures.parameter_groups.MagneticParameters` of the
 magnetic layers, which are stacked once per simulation into arrays by
 :func:`stack_magnetic_parameters`. The equilibrium quantities of the LLB are
@@ -52,6 +55,7 @@ __all__ = [
     "GAMMA_E",
     "MIN_MAG",
     "Inputs",
+    "RHS",
     "stack_magnetic_parameters",
     "tabulate_equilibrium",
     "prepare_inputs",
@@ -60,9 +64,13 @@ __all__ = [
     "external_field",
     "anisotropy_field",
     "interlayer_exchange_field",
+    "magnetoelastic_field",
     "effective_field",
+    "sublattice_exchange_field",
     "transverse_sublattice_exchange_field",
     "longitudinal_field",
+    "llg_rhs",
+    "illg_rhs",
     "llb_rhs",
     "solve",
 ]
@@ -84,13 +92,17 @@ GAMMA_E = -1.761e11
 # floor for magnetization norms that appear in denominators
 MIN_MAG = 1e-12
 
-Inputs = namedtuple("Inputs", ["delays", "H_ext", "temp_map"])
+Inputs = namedtuple("Inputs", ["delays", "H_ext", "amplitude_map", "temp_map", "strain_map"])
 Inputs.__doc__ = r"""Time-dependent inputs of the solver on the delay grid.
 
 Attributes:
     delays (ndarray[float]): delays :math:`M` [s].
     H_ext (ndarray[float]): external magnetic field :math:`M \times 3` [T].
-    temp_map (ndarray[float]): temperature :math:`M \times N` [K].
+    amplitude_map (ndarray[float]): magnetization amplitude :math:`M \times N \times P`
+        of the LLG and iLLG, ones for the LLB.
+    temp_map (ndarray[float]): temperature :math:`M \times N` [K] of the
+        LLB, zeros for the LLG and iLLG.
+    strain_map (ndarray[float]): strain :math:`M \times N`.
 
 """
 
@@ -174,19 +186,25 @@ def tabulate_equilibrium(layers, temp_max=None):
     return temp_grid, tables
 
 
-def prepare_inputs(delays, N, H_ext, temp_map=None):
+def prepare_inputs(delays, N, H_ext, amplitude_map=None, temp_map=None, strain_map=None):
     r"""prepare_inputs
 
     Brings all time-dependent inputs onto their canonical shapes on the
-    delay grid, filling in defaults for missing ones.
+    delay grid, filling in defaults for missing ones. Per-layer amplitude maps
+    :math:`M \times N` are broadcast to all sublattices.
 
     Args:
         delays (ndarray[float]): delays range of simulation [s].
         N (int): number of magnetic layers.
         H_ext (ndarray[float]): external magnetic field [T], a single vector
             or one vector per delay :math:`M \times 3`.
+        amplitude_map (ndarray[float], optional): magnetization amplitude map
+            :math:`M \times N` or :math:`M \times N \times P` or None for
+            ones.
         temp_map (ndarray[float], optional): temperature map
             :math:`M \times N` [K] or None for zeros.
+        strain_map (ndarray[float], optional): strain map :math:`M \times N`
+            or None for zeros.
 
     Returns:
         inputs (Inputs): inputs.
@@ -200,11 +218,24 @@ def prepare_inputs(delays, N, H_ext, temp_map=None):
     elif H_ext.shape != (M, 3):
         raise ValueError("H_ext must have the shape (3,) or (M, 3)!")
 
-    if temp_map is None:
-        temp_map = np.zeros((M, N))
-    temp_map = np.ascontiguousarray(np.asarray(temp_map, dtype=float).reshape(M, N))
+    def as_map(values, default):
+        if values is None:
+            return np.full((M, N), default, dtype=float)
+        return np.ascontiguousarray(np.asarray(values, dtype=float).reshape(M, N))
 
-    return Inputs(delays, np.ascontiguousarray(H_ext), temp_map)
+    if amplitude_map is None:
+        amplitude_map = np.ones((M, N, 1))
+    amplitude_map = np.asarray(amplitude_map, dtype=float)
+    if amplitude_map.ndim == 2:
+        amplitude_map = amplitude_map[:, :, np.newaxis]
+
+    return Inputs(
+        delays,
+        np.ascontiguousarray(H_ext),
+        np.ascontiguousarray(amplitude_map.reshape(M, N, -1)),
+        as_map(temp_map, 0.0),
+        as_map(strain_map, 0.0),
+    )
 
 
 def time_weights(t, delays):
@@ -244,7 +275,10 @@ def interpolate_inputs(t, inputs):
     Returns:
         (tuple):
         - *H_ext (ndarray[float])* - external field [T].
+        - *amplitudes (ndarray[float])* - magnetization amplitudes
+          :math:`N \\times P`.
         - *temps (ndarray[float])* - temperatures :math:`N` [K].
+        - *strains (ndarray[float])* - strains :math:`N`.
 
     """
     idx, w = time_weights(t, inputs.delays)
@@ -254,7 +288,12 @@ def interpolate_inputs(t, inputs):
             return (1 - w) * values[idx] + w * values[idx + 1]
         return values[idx]
 
-    return interpolate(inputs.H_ext), interpolate(inputs.temp_map)
+    return (
+        interpolate(inputs.H_ext),
+        interpolate(inputs.amplitude_map),
+        interpolate(inputs.temp_map),
+        interpolate(inputs.strain_map),
+    )
 
 
 # effective field, term by term
@@ -290,8 +329,8 @@ def anisotropy_field(m, ref_mags, mag):
 
     with the anisotropy constants :math:`K = (K_x, K_y, K_z)` and the exponent
     :math:`\beta` of their temperature dependence, which is expressed through
-    the reference magnetization :math:`m_\mathrm{ref}`, the equilibrium
-    magnetization for the LLB. The field has a component along
+    the reference magnetization :math:`m_\mathrm{ref}`, the prescribed amplitude
+    for the LLG and the equilibrium magnetization for the LLB. The field has a component along
     :math:`\mathbf{m}`, which enters the longitudinal dynamics of the LLB.
 
     Args:
@@ -347,25 +386,63 @@ def interlayer_exchange_field(m, mag, exch_stiffnesses, thicknesses):
     return B
 
 
-def effective_field(m, ref_mags, H_ext, mag, exch_stiffnesses, thicknesses):
+def magnetoelastic_field(m, ref_mags, strains, mag):
+    r"""magnetoelastic_field
+
+    Magnetoelastic field of the out-of-plane strain :math:`\epsilon_{zz}` of
+    the one-dimensional structure. The energy density
+    :math:`B_1 \epsilon_{zz} m_z^2` with the magnetoelastic coupling
+    :math:`B_1` acts as an additional anisotropy along :math:`z` with the same
+    temperature scaling as the :func:`anisotropy_field`:
+
+    .. math::
+
+        \mathbf{B}_\mathrm{me} = -\frac{2 B_1 \epsilon_{zz}}{M_s}\,
+            m_\mathrm{ref}^{\beta-2} \begin{bmatrix}0\\0\\m_z\end{bmatrix}
+
+    Args:
+        m (ndarray[float]): magnetization vectors :math:`N \times P \times 3`.
+        ref_mags (ndarray[float]): reference magnetization :math:`N \times P`.
+        strains (ndarray[float]): strains of the layers :math:`N`.
+        mag (SimpleNamespace): stacked magnetic parameters, see
+            :func:`stack_magnetic_parameters`.
+
+    Returns:
+        B (ndarray[float]): field :math:`N \times P \times 3` [T].
+
+    """
+    B = np.zeros_like(m)
+    B[..., 2] = (
+        -2
+        * mag.magnetoelastic_coupling
+        * strains[:, np.newaxis]
+        / mag.mag_saturation
+        * _scaling(ref_mags, mag.aniso_exponent)
+        * m[..., 2]
+    )
+    return B
+
+
+def effective_field(m, ref_mags, H_ext, strains, mag, exch_stiffnesses, thicknesses):
     r"""effective_field
 
-    Static effective field
+    Static effective field common to all models
 
     .. math::
 
         \mathbf{B} = \mathbf{B}_\mathrm{ext} + \mathbf{B}_\mathrm{A}
-            + \mathbf{B}_\mathrm{ex}
+            + \mathbf{B}_\mathrm{ex} + \mathbf{B}_\mathrm{me}
 
-    the sum of the :func:`external_field`, the :func:`anisotropy_field` and
-    the :func:`interlayer_exchange_field`. The exchange between the
-    sublattices of a layer is model specific and added by the right-hand
-    side.
+    the sum of the :func:`external_field`, the :func:`anisotropy_field`, the
+    :func:`interlayer_exchange_field` and the :func:`magnetoelastic_field`.
+    The exchange between the sublattices of a layer is model specific and
+    added by the right-hand sides.
 
     Args:
         m (ndarray[float]): magnetization vectors :math:`N \times P \times 3`.
         ref_mags (ndarray[float]): reference magnetization :math:`N \times P`.
         H_ext (ndarray[float]): external field [T].
+        strains (ndarray[float]): strains of the layers :math:`N`.
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
         exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
@@ -381,7 +458,39 @@ def effective_field(m, ref_mags, H_ext, mag, exch_stiffnesses, thicknesses):
         external_field(H_ext, N, P)
         + anisotropy_field(m, ref_mags, mag)
         + interlayer_exchange_field(m, mag, exch_stiffnesses, thicknesses)
+        + magnetoelastic_field(m, ref_mags, strains, mag)
     )
+
+
+def sublattice_exchange_field(m, mag):
+    r"""sublattice_exchange_field
+
+    Full mean-field exchange field on sublattice :math:`a` due to the other
+    sublattices :math:`b` of the same layer
+
+    .. math::
+
+        \mathbf{B}_\mathrm{ex}^{a} = \frac{1}{\mu_a} \sum_{b \neq a}
+            J_{ab}\, \mathbf{m}_b
+
+    used by the LLG and iLLG, where the amplitudes are prescribed. The
+    intra-sublattice term :math:`J_{aa} \mathbf{m}_a` exerts no torque and is
+    left out. Negative :math:`J_{ab}` couple antiferromagnetically. It
+    vanishes for a single sublattice.
+
+    Args:
+        m (ndarray[float]): magnetization vectors :math:`N \times P \times 3`.
+        mag (SimpleNamespace): stacked magnetic parameters, see
+            :func:`stack_magnetic_parameters`.
+
+    Returns:
+        B (ndarray[float]): field :math:`N \times P \times 3` [T].
+
+    """
+    if m.shape[1] == 1:
+        return np.zeros_like(m)
+    J_off = _off_diagonal(mag.mf_exch_coupling)
+    return np.einsum("nab,nbc->nac", J_off, m) / _safe_moments(mag.mag_moment)[..., None]
 
 
 def transverse_sublattice_exchange_field(m, m_squared, mag):
@@ -514,7 +623,116 @@ def longitudinal_field(m, m_norm, me, chi, mag):
     return coef[..., np.newaxis] * m
 
 
-# right-hand side
+# right-hand sides
+
+
+def llg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
+    r"""llg_rhs
+
+    Right-hand side of the Landau-Lifshitz-Gilbert equation in its
+    Landau-Lifshitz form for the unit vector :math:`\mathbf{n}_a` of each
+    sublattice of each layer
+
+    .. math::
+
+        \frac{d\mathbf{n}_a}{dt} = \frac{\gamma_e}{1+\alpha_a^2}\left(
+            \mathbf{n}_a \times \mathbf{B}_a
+            + \alpha_a\, \mathbf{n}_a \times (\mathbf{n}_a \times
+            \mathbf{B}_a)\right)
+
+    with the Gilbert damping :math:`\alpha_a` and :math:`\gamma_e = -1.761
+    \times 10^{11}` rad/(s T). The field is the :func:`effective_field` plus
+    the :func:`sublattice_exchange_field`, evaluated for the magnetization
+    :math:`\mathbf{m}_a = m_a(t)\,\mathbf{n}_a` with the amplitude :math:`m_a(t)`
+    from the inputs.
+
+    Args:
+        t (float): time [s].
+        y (ndarray[float]): flattened unit vectors :math:`N \times P \times 3`.
+        inputs (Inputs): time-dependent inputs.
+        mag (SimpleNamespace): stacked magnetic parameters, see
+            :func:`stack_magnetic_parameters`.
+        exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
+            upper and lower magnetic layer :math:`N \times 2` [J/m].
+        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
+
+    Returns:
+        dydt (ndarray[float]): flattened temporal derivative.
+
+    """
+    N, P = mag.active.shape
+    H_ext, amplitudes, _, strains = interpolate_inputs(t, inputs)
+    n = _normalize(y.reshape(N, P, 3))
+    m = amplitudes[..., np.newaxis] * n
+    B = effective_field(m, amplitudes, H_ext, strains, mag, exch_stiffnesses, thicknesses)
+    B += sublattice_exchange_field(m, mag)
+    alpha = mag.gilbert_damping
+    precession = np.cross(n, B)
+    damping = alpha[..., np.newaxis] * np.cross(n, precession)
+    dndt = (GAMMA_E * mag.active / (1 + alpha**2))[..., np.newaxis] * (precession + damping)
+    return dndt.ravel()
+
+
+def illg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
+    r"""illg_rhs
+
+    Right-hand side of the inertial Landau-Lifshitz-Gilbert equation
+
+    .. math::
+
+        \frac{d\mathbf{n}}{dt} = \gamma_e\, \mathbf{n} \times \mathbf{B}
+            + \alpha\, \mathbf{n} \times \left(\frac{d\mathbf{n}}{dt}
+            + \tau \frac{d^2\mathbf{n}}{dt^2}\right)
+
+    of :cite:t:`ciornei2011` with the inertial relaxation time :math:`\tau`,
+    split into two first-order equations for the unit vector
+    :math:`\mathbf{n}` and its velocity :math:`\mathbf{v} = d\mathbf{n}/dt`
+    of each sublattice:
+
+    .. math::
+
+        \frac{d\mathbf{n}}{dt} & = \mathbf{v} \\
+        \frac{d\mathbf{v}}{dt} & = \frac{1}{\alpha \tau}\left(
+            \gamma_e\, \mathbf{n} \times (\mathbf{n} \times \mathbf{B})
+            - \alpha \mathbf{v} - \mathbf{n} \times \mathbf{v}\right)
+            - \mathbf{n}\, |\mathbf{v}|^2
+
+    The last term keeps :math:`|\mathbf{n}| = 1`. For :math:`\tau \rightarrow
+    0` the velocity relaxes to the Landau-Lifshitz-Gilbert value, the free
+    nutation frequency is :math:`1/(\alpha\tau)`. The field is the same as in
+    :func:`llg_rhs`.
+
+    Args:
+        t (float): time [s].
+        y (ndarray[float]): flattened unit vectors and velocities
+            :math:`2 \times N \times P \times 3`.
+        inputs (Inputs): time-dependent inputs.
+        mag (SimpleNamespace): stacked magnetic parameters, see
+            :func:`stack_magnetic_parameters`.
+        exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
+            upper and lower magnetic layer :math:`N \times 2` [J/m].
+        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
+
+    Returns:
+        dydt (ndarray[float]): flattened temporal derivative.
+
+    """
+    N, P = mag.active.shape
+    H_ext, amplitudes, _, strains = interpolate_inputs(t, inputs)
+    state = y.reshape(2, N, P, 3)
+    n = _normalize(state[0])
+    v = state[1]
+    m = amplitudes[..., np.newaxis] * n
+    B = effective_field(m, amplitudes, H_ext, strains, mag, exch_stiffnesses, thicknesses)
+    B += sublattice_exchange_field(m, mag)
+    alpha = mag.gilbert_damping[..., np.newaxis]
+    # inactive sublattices have no damping or inertia, guard the division
+    inertia = np.where(mag.active > 0, mag.gilbert_damping * mag.inertial_time, 1.0)
+    torque = GAMMA_E * np.cross(n, np.cross(n, B))
+    dvdt = (torque - alpha * v - np.cross(n, v)) / inertia[..., np.newaxis] - n * np.sum(
+        v**2, axis=2
+    )[..., np.newaxis]
+    return (np.stack((v, dvdt)) * mag.active[np.newaxis, :, :, np.newaxis]).ravel()
 
 
 def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables):
@@ -562,7 +780,7 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
 
     """
     N, P = mag.active.shape
-    H_ext, temps = interpolate_inputs(t, inputs)
+    H_ext, _, temps, strains = interpolate_inputs(t, inputs)
     m = y.reshape(N, P, 3)
     eq = interpolate_tables(temp_grid, tables, temps)
     me = eq[..., TABLE["mag"]]
@@ -572,7 +790,7 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
     m_norm = np.sqrt(np.sum(m**2, axis=2))
     m_squared = np.maximum(m_norm, MIN_MAG) ** 2
 
-    B = effective_field(m, me, H_ext, mag, exch_stiffnesses, thicknesses)
+    B = effective_field(m, me, H_ext, strains, mag, exch_stiffnesses, thicknesses)
     B += transverse_sublattice_exchange_field(m, m_squared, mag)
     B += longitudinal_field(m, m_norm, me, chi, mag)
 
@@ -583,20 +801,36 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
     return (mag.active[..., np.newaxis] * dmdt).ravel()
 
 
+RHS = {"llg": llg_rhs, "illg": illg_rhs, "llb": llb_rhs}
+"""Right-hand sides of the models by their names."""
+
+
 # integration
 
 
 def solve(
-    init_state, inputs, layers, exch_stiffnesses, thicknesses, ode_options, progress_bar=False
+    model,
+    init_state,
+    inputs,
+    layers,
+    exch_stiffnesses,
+    thicknesses,
+    ode_options,
+    progress_bar=False,
 ):
     r"""solve
 
-    Solves the Landau-Lifshitz-Bloch equation :func:`llb_rhs` for all
-    magnetic layers and their sublattices by ``scipy.integrate.solve_ivp``.
+    Solves the magnetization dynamics of the given ``model`` for all magnetic
+    layers and their sublattices by ``scipy.integrate.solve_ivp``. The LLG and
+    iLLG integrate the unit vectors of the magnetization, which are scaled by
+    the prescribed amplitude of the ``inputs`` afterwards.
 
     Args:
-        init_state (ndarray[float]): initial cartesian magnetization
-            :math:`N \times P \times 3`.
+        model (str): one of ``llg``, ``illg`` or ``llb``, see :data:`RHS`.
+        init_state (ndarray[float]): initial state - cartesian
+            :math:`N \times P \times 3` magnetization for ``llg`` and ``llb``
+            and :math:`2 \times N \times P \times 3` for ``illg`` holding the
+            unit vectors and their velocities.
         inputs (Inputs): time-dependent inputs on the delay grid.
         layers (list[MagneticParameters]): magnetic parameters of the
             magnetic layers.
@@ -619,9 +853,11 @@ def solve(
     N, P = mag.active.shape
     if N == 0:
         return np.zeros((M, 0, P, 3))
-    temp_max = None if inputs.temp_map is None else np.max(inputs.temp_map)
-    temp_grid, tables = tabulate_equilibrium(layers, temp_max=temp_max)
-    args = (inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
+    rhs = RHS[model]
+    args = (inputs, mag, exch_stiffnesses, thicknesses)
+    if model == "llb":
+        temp_grid, tables = tabulate_equilibrium(layers, temp_max=np.max(inputs.temp_map))
+        args += (temp_grid, tables)
     init_state = np.asarray(init_state, dtype=float)
 
     if progress_bar:
@@ -635,11 +871,11 @@ def solve(
                 pbar.update(done - state["done"])
                 pbar.set_description(f"Delay = {t * 1e12:.3f} ps")
                 state["done"] = done
-            return llb_rhs(t, y, *args)
+            return rhs(t, y, *args)
 
     else:
         pbar = None
-        fun = llb_rhs
+        fun = rhs
 
     sol = solve_ivp(
         fun,
@@ -654,7 +890,16 @@ def solve(
     if not sol.success:
         raise RuntimeError("solve_ivp failed: " + sol.message)
 
-    magnetization_map = sol.y.T.reshape([M, N, P, 3])
+    y = sol.y.T
+    if model == "llb":
+        magnetization_map = y.reshape([M, N, P, 3])
+    else:
+        # the unit vectors of the llg and illg scaled by the prescribed amplitude
+        if model == "illg":
+            y = y.reshape([M, 2, N, P, 3])[:, 0]
+        magnetization_map = (
+            _normalize(y.reshape([M, N, P, 3])) * inputs.amplitude_map[..., np.newaxis]
+        )
     return magnetization_map * mag.active[np.newaxis, :, :, np.newaxis]
 
 
@@ -688,6 +933,14 @@ def _off_diagonal(matrices):
 
 
 def _scaling(ref_mags, exponents):
-    """temperature scaling m_ref^(beta-2) of the anisotropy field, with the
-    reference magnetization floored to avoid a division by zero for beta < 2"""
+    """temperature scaling m_ref^(beta-2) of the anisotropy and magnetoelastic
+    fields, with the reference magnetization floored to avoid a division by
+    zero for beta < 2"""
     return np.power(np.maximum(ref_mags, MIN_MAG), exponents - 2)
+
+
+def _normalize(n):
+    """unit vectors of the given vectors, leaving zero vectors untouched"""
+    norms = np.sqrt(np.sum(n**2, axis=-1))
+    norms[norms < MIN_MAG] = 1.0
+    return n / norms[..., np.newaxis]
