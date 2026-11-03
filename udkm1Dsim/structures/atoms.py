@@ -64,7 +64,8 @@ class Atom:
         atomic_form_factor_path (str): path to atomic form factor coeffs.
         atomic_form_factor_source (str): either _henke_ or default _chantler_
         magnetic_form_factor_path (str): path to magnetic form factor coeffs.
-        mag_amplitude (float): magnetization amplitude 0 .. 1.
+        mag_amplitude (float): magnetization amplitude, which is negative for
+            the reversed direction of the angles.
         mag_phi (Quantity): phi angle of magnetization.
         mag_gamma (Quantity): gamma angle of magnetization.
 
@@ -84,7 +85,8 @@ class Atom:
            angular-dependent atomic form factor.
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
-        mag_amplitude (float): magnetization amplitude 0 .. 1.
+        mag_amplitude (float): magnetization amplitude, which is negative for
+            the reversed direction of the angles.
         mag_phi (Quantity): phi angle of magnetization from the z-axis.
         mag_gamma (Quantity): gamma angle of magnetization in the xy-plane from the x-axis.
 
@@ -484,7 +486,8 @@ class AtomMixed(Atom):
         name (str): name of the mixed atom, default is symbol.
         atomic_form_factor_path (str): path to atomic form factor coeffs.
         magnetic_form_factor_path (str): path to magnetic form factor coeffs.
-        mag_amplitude (float): magnetization amplitude 0 .. 1.
+        mag_amplitude (float): magnetization amplitude, which is negative for
+            the reversed direction of the angles.
         mag_phi (Quantity): phi angle of magnetization.
         mag_gamma (Quantity): gamma angle of magnetization.
 
@@ -502,7 +505,8 @@ class AtomMixed(Atom):
            coefficients for energy-dependent atomic form factor.
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
-        mag_amplitude (float): magnetization amplitude 0 .. 1.
+        mag_amplitude (float): magnetization amplitude, which is negative for
+            the reversed direction of the angles.
         mag_phi (Quantity): phi angle of magnetization from the z-axis.
         mag_gamma (Quantity): gamma angle of magnetization in the xy-plane from the x-axis.
         atoms (list[Atoms]): list of Atoms.

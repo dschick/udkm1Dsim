@@ -225,8 +225,9 @@ class AtomParameters(_AtomParametersBase):
         ionicity (int): ionicity :math:`I`.
         magnetization (VectorParameter): magnetization :math:`\mathbf{m}` as
             for the :class:`.MagneticParameters` of a layer, given by its
-            amplitude :math:`r` 0 .. 1 and the angles :math:`\phi` from the
-            z-axis and :math:`\gamma` in the xy-plane from the x-axis.
+            amplitude :math:`r`, which is negative for the reversed direction,
+            and the angles :math:`\phi` from the z-axis and :math:`\gamma` in
+            the xy-plane from the x-axis.
         cromer_mann_a (ndarray[float]): Cromer-Mann coefficients :math:`a_1 .. a_4`.
         cromer_mann_b (ndarray[float]): Cromer-Mann coefficients :math:`b_1 .. b_4`
             [Å²].

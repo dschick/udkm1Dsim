@@ -286,12 +286,23 @@ def test_magnetization_of_atoms_and_layers_is_identical(cls):
     # the gamma angle is given in -180 .. 180 deg
     assert_allclose(group.magnetization.polar[2], -90 * u.deg)
     assert np.allclose(obj.magnetization.magnitude, [0, -1, 0])
-    with pytest.raises(ValueError):
-        group.magnetization.polar = (-1, 0 * u.deg, 0 * u.deg)
+    # a negative amplitude reverses the direction and keeps the angles
+    group.magnetization.polar = (-1, 0 * u.deg, 0 * u.deg)
+    assert np.allclose(obj.magnetization.magnitude, [0, 0, -1])
+    assert_allclose(group.magnetization.polar[1], 0 * u.deg)
     # the angles are given in deg in the tables
     rows = group.magnetization._table_rows("text")
     assert [row[0] for row in rows] == ["r", "φ", "γ"]
     assert [row[2] for row in rows] == ["", "deg", "deg"]
+
+
+def test_atom_negative_mag_amplitude():
+    atom = Atom("Fe", mag_amplitude=-0.5, mag_phi=90 * u.deg, mag_gamma=0 * u.deg)
+    assert atom.mag_amplitude == pytest.approx(-0.5)
+    assert_allclose(atom.mag_phi, 90 * u.deg)
+    np.testing.assert_array_equal(atom.magnetization.magnitude, [-0.5, 0, 0])
+    atom.mag_amplitude = 2
+    np.testing.assert_array_equal(atom.magnetization.magnitude, [2, 0, 0])
 
 
 def test_atom_magnetization_attributes():

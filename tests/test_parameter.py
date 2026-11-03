@@ -286,17 +286,56 @@ def test_vector_parameter_set_angle(vector_parameter, attribute, value, expected
 @pytest.mark.parametrize(
     "attribute, value",
     [
-        ("r", -1.0),
-        ("r", -1.0 * u.T),
-        ("polar", (-1.0, 0.0, 0.0)),
-        ("polar_rad", (-1.0, 0.0, 0.0)),
+        ("r", -2.0),
+        ("r", -2.0 * u.T),
+        ("polar", (-2.0, 90.0, 0.0)),
+        ("polar_rad", (-2.0, np.pi / 2, 0.0)),
     ],
 )
 def test_vector_parameter_negative_r(vector_parameter, attribute, value):
-    vector_parameter.magnitude = (1.0, 2.0, 3.0)
-    with pytest.raises(ValueError):
-        setattr(vector_parameter, attribute, value)
-    np.testing.assert_array_equal(vector_parameter.magnitude, [1.0, 2.0, 3.0])
+    vector_parameter.polar = (1.0, 90.0, 0.0)
+    setattr(vector_parameter, attribute, value)
+    # the negative radius reverses the direction and keeps the angles
+    assert_approx(vector_parameter.r, -2.0 * u.T)
+    assert_approx(vector_parameter.phi, 90 * u.deg)
+    assert_approx(vector_parameter.gamma, 0 * u.deg)
+    np.testing.assert_array_equal(vector_parameter.magnitude, [-2.0, 0.0, 0.0])
+
+
+@pytest.mark.parametrize("r", [-5.0, -1.0, -0.1, 0.1, 1.0, 5.0, 1e3])
+def test_vector_parameter_radius_keeps_angles(vector_parameter, r):
+    vector_parameter.polar = (1.0, 30.0, 60.0)
+    direction = vector_parameter.magnitude
+    vector_parameter.r = r
+    assert_approx(vector_parameter.phi, 30 * u.deg)
+    assert_approx(vector_parameter.gamma, 60 * u.deg)
+    np.testing.assert_allclose(vector_parameter.magnitude, r * direction)
+
+
+def test_vector_parameter_cartesian_gives_non_negative_r(vector_parameter):
+    vector_parameter.polar = (1.0, 90.0, 0.0)
+    # the reversed vector is given by the angles, not by a negative radius
+    vector_parameter.magnitude = (-1.0, 0.0, 0.0)
+    assert_approx(vector_parameter.r, 1.0 * u.T)
+    assert_approx(vector_parameter.phi, 90 * u.deg)
+    assert_approx(vector_parameter.gamma, 180 * u.deg)
+
+
+@pytest.mark.parametrize(
+    "polar, cartesian",
+    [
+        ((1.0, 90.0, 0.0), [1.0, 0.0, 0.0]),
+        ((1.0, 90.0, 90.0), [0.0, 1.0, 0.0]),
+        ((1.0, 0.0, 45.0), [0.0, 0.0, 1.0]),
+        ((-2.0, 180.0, 0.0), [0.0, 0.0, 2.0]),
+        ((1e-20, 90.0, 180.0), [-1e-20, 0.0, 0.0]),
+    ],
+)
+def test_vector_parameter_exact_cartesian(vector_parameter, polar, cartesian):
+    # components, which are zero within the numerical precision, are zero
+    vector_parameter.polar = polar
+    np.testing.assert_array_equal(vector_parameter.magnitude, cartesian)
+    assert repr(vector_parameter) == f"VectorParameter(B={cartesian} T)"
 
 
 def test_vector_parameter_polar_rad(vector_parameter):
@@ -386,7 +425,7 @@ def test_vector_parameter_failed_set_does_not_notify(vector_parameter):
     with pytest.raises(ValueError):
         vector_parameter.magnitude = (1.0, 2.0)
     with pytest.raises(ValueError):
-        vector_parameter.polar = (-1.0, 0.0, 0.0)
+        vector_parameter.polar_rad = (1.0, 0.0)
     assert caller.calls == 0
     np.testing.assert_array_equal(vector_parameter.magnitude, [1.0, 2.0, 3.0])
 
@@ -537,13 +576,49 @@ def test_vector_parameter_keeps_gamma_along_z_axis():
     assert np.allclose(v.magnitude, [-0.5, np.sqrt(3) / 2, 0])
 
 
-def test_vector_parameter_pickled_without_angles():
-    # vectors pickled by former versions have no _angles
-    v = VectorParameter("", (1.0, 0.0, 0.0))
-    del v.__dict__["_angles"]
+def test_vector_parameter_keeps_cartesian_components():
+    rng = np.random.default_rng(0)
+    v = VectorParameter("")
+    for scale in (1e-12, 1.0, 1e12):
+        for _ in range(100):
+            cartesian = rng.normal(size=3) * scale
+            cartesian[rng.random(3) < 0.2] = 0
+            v.magnitude = cartesian
+            np.testing.assert_array_equal(v.magnitude, cartesian)
+    # a change of the polar form calculates them from it
+    v.magnitude = (1.0, 2.0, 3.0)
+    v.r = 2 * v.r
+    np.testing.assert_allclose(v.magnitude, [2.0, 4.0, 6.0])
+
+
+def test_vector_parameter_pickle():
+    v = VectorParameter("", name="m")
+    v.polar = (-1, 90 * u.deg, 45 * u.deg)
     v = pickle.loads(pickle.dumps(v))
-    assert np.allclose(v.polar_rad, [1, np.pi / 2, 0])
-    v.r = 0
-    assert np.allclose(v.polar_rad, [0, np.pi / 2, 0])
-    # the class default is not changed
-    np.testing.assert_array_equal(VectorParameter._angles, [0, 0])
+    assert np.allclose(v.polar_rad, [-1, np.pi / 2, np.pi / 4])
+
+
+@pytest.mark.parametrize(
+    "state, polar_rad",
+    [
+        # cartesian components only
+        ({"_magnitude": np.array([1.0, 0.0, 0.0])}, [1, np.pi / 2, 0]),
+        # with the last defined angles of a zero vector
+        (
+            {"_magnitude": np.zeros(3), "_angles": np.array([np.pi / 2, np.pi])},
+            [0, np.pi / 2, np.pi],
+        ),
+        # with the last defined gamma of a vector along the z-axis
+        ({"_magnitude": np.array([0.0, 0.0, 2.0]), "_angles": np.array([0, 1.0])}, [2, 0, 1.0]),
+    ],
+)
+def test_vector_parameter_pickled_by_former_versions(state, polar_rad):
+    v = VectorParameter("", name="m")
+    former = {k: val for k, val in v.__dict__.items() if k != "_polar"}
+    v = VectorParameter.__new__(VectorParameter)
+    v.__setstate__({**former, **state})
+    assert "_magnitude" not in v.__dict__
+    assert "_angles" not in v.__dict__
+    assert np.allclose(v.polar_rad, polar_rad)
+    # the cartesian components are kept, e.g. for the hash of the structure
+    np.testing.assert_array_equal(v.magnitude, state["_magnitude"])
