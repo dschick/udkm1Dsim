@@ -229,8 +229,9 @@ class AtomParameters(_AtomParametersBase):
         ionicity (int): ionicity :math:`I`.
         magnetization (VectorParameter): magnetization :math:`\mathbf{m}` as
             for the :class:`.MagneticParameters` of a layer, given by its
-            amplitude :math:`r` 0 .. 1 and the angles :math:`\phi` from the
-            z-axis and :math:`\gamma` in the xy-plane from the x-axis.
+            amplitude :math:`r`, which is negative for the reversed direction,
+            and the angles :math:`\phi` from the z-axis and :math:`\gamma` in
+            the xy-plane from the x-axis, and given in the same forms.
         cromer_mann_a (ndarray[float]): Cromer-Mann coefficients :math:`a_1 .. a_4`.
         cromer_mann_b (ndarray[float]): Cromer-Mann coefficients :math:`b_1 .. b_4`
             [Å²].
@@ -541,8 +542,15 @@ class MagneticParameters(ParameterGroup):
             x,y,z component vector.
         exch_stiffness (float): exchange stiffness at T=0 K :math:`A_\mathrm{ex}` [J/m].
         mag_saturation (float): saturation magnetization at 0 K :math:`M_s` [J/T/m³].
-        magnetization (dict[float]): magnetization :math:`\mathbf{m}` given by
-            its amplitude, phi and gamma angle inherited from the atom.
+        magnetization (VectorParameter): magnetization :math:`\mathbf{m}`
+            given by its amplitude :math:`r`, which is negative for the reversed
+            direction, and the angles :math:`\phi` from the z-axis and
+            :math:`\gamma` in the xy-plane from the x-axis. It is given as
+            cartesian components, e.g. ``(0, 0, 1)``, or as dict of polar or
+            cartesian components, e.g. ``{"r": 1, "phi": 90 * u.deg,
+            "gamma": 0 * u.deg}`` or ``{"x": 0, "y": 0, "z": 1}``, see
+            :class:`.VectorParameter`. For an :class:`.AmorphousLayer` it is
+            inherited from its atom.
 
     """
 

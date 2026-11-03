@@ -64,16 +64,25 @@ class Atom:
         atomic_form_factor_path (str): path to atomic form factor coeffs.
         atomic_form_factor_source (str): either _henke_ or default _chantler_
         magnetic_form_factor_path (str): path to magnetic form factor coeffs.
-        mag_amplitude (float): magnetization amplitude 0 .. 1.
-        mag_phi (Quantity): phi angle of magnetization.
-        mag_gamma (Quantity): gamma angle of magnetization.
+        magnetization (tuple, dict, VectorParameter): magnetization as
+            cartesian components, e.g. ``(0, 0, 1)``, or as dict of polar or
+            cartesian components, e.g. ``{"r": 1, "phi": 90 * u.deg,
+            "gamma": 0 * u.deg}`` or ``{"x": 0, "y": 0, "z": 1}``, see
+            :class:`.VectorParameter`.
+        mag_amplitude (float): magnetization amplitude, shortcut for
+            ``magnetization={"r": ...}``.
+        mag_phi (Quantity): phi angle of magnetization, shortcut for
+            ``magnetization={"phi": ...}``.
+        mag_gamma (Quantity): gamma angle of magnetization, shortcut for
+            ``magnetization={"gamma": ...}``.
 
     Attributes:
         symbol (str): symbol of the element.
         id (str): id of the atom, may differ from symbol and/or name.
         name (str): name of the element (generic).
         atomic (AtomParameters): parameters of the atom.
-        magnetization (Quantity): cartesian magnetization as for a layer.
+        magnetization (Quantity): cartesian magnetization as for a layer,
+            which can be set as on initialization.
         atomic_number_z (int): Z atomic number.
         mass_number_a (float): A atomic mass number.
         ionicity (int): ionicity of the atom.
@@ -84,9 +93,12 @@ class Atom:
            angular-dependent atomic form factor.
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
-        mag_amplitude (float): magnetization amplitude 0 .. 1.
-        mag_phi (Quantity): phi angle of magnetization from the z-axis.
-        mag_gamma (Quantity): gamma angle of magnetization in the xy-plane from the x-axis.
+        mag_amplitude (float): magnetization amplitude, shortcut for
+            ``atom.atomic.magnetization.r``.
+        mag_phi (Quantity): phi angle of magnetization from the z-axis,
+            shortcut for ``atom.atomic.magnetization.phi``.
+        mag_gamma (Quantity): gamma angle of magnetization in the xy-plane
+            from the x-axis, shortcut for ``atom.atomic.magnetization.gamma``.
 
     """
 
@@ -110,11 +122,7 @@ class Atom:
             mass_number=element[2],
             ionicity=kwargs.get("ionicity", 0),
         )
-        self.atomic.magnetization.polar = (
-            kwargs.get("mag_amplitude", 0.0),
-            kwargs.get("mag_phi", 0.0 * u.deg),
-            kwargs.get("mag_gamma", 0.0 * u.deg),
-        )
+        self._init_magnetization(kwargs)
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
             filename=kwargs.get("atomic_form_factor_path", ""),
             source=kwargs.get("atomic_form_factor_source", "chantler"),
@@ -463,16 +471,41 @@ class Atom:
     def ionicity(self, value):
         self.atomic.ionicity.magnitude = value
 
+    # TODO: deprecate the polar shortcuts mag_amplitude, mag_phi, and mag_gamma
+    # as keyword arguments and attributes in favor of magnetization, e.g.
+    # magnetization={"r": ..., "phi": ..., "gamma": ...} and
+    # atom.atomic.magnetization.r, .phi, and .gamma.
+    _mag_shortcuts = {"mag_amplitude": "r", "mag_phi": "phi", "mag_gamma": "gamma"}
+
+    def _init_magnetization(self, kwargs):
+        """Set the magnetization from the keyword arguments, either by
+        `magnetization` or by the polar shortcuts."""
+        shortcuts = {key: kwargs[key] for key in self._mag_shortcuts if key in kwargs}
+        if not shortcuts:
+            self.atomic.magnetization.set(kwargs.get("magnetization", (0.0, 0.0, 0.0)))
+            return
+        if "magnetization" in kwargs:
+            raise ValueError(
+                f"{', '.join(repr(key) for key in shortcuts)} must not be given together "
+                "with 'magnetization'!"
+            )
+        self.atomic.magnetization.polar = (
+            shortcuts.get("mag_amplitude", 0.0),
+            shortcuts.get("mag_phi", 0.0 * u.deg),
+            shortcuts.get("mag_gamma", 0.0 * u.deg),
+        )
+
     @property
     def magnetization(self):
         return self.atomic.magnetization.quantity
 
     @magnetization.setter
     def magnetization(self, value):
-        self.atomic.magnetization.quantity = value
+        self.atomic.magnetization.set(value)
 
     @property
     def mag_amplitude(self):
+        """Shortcut for ``atom.atomic.magnetization.r``."""
         return self.atomic.magnetization.polar_rad[0]
 
     @mag_amplitude.setter
@@ -481,6 +514,7 @@ class Atom:
 
     @property
     def mag_phi(self):
+        """Shortcut for ``atom.atomic.magnetization.phi``."""
         return Q_(self._mag_phi, u.rad).to("deg")
 
     @mag_phi.setter
@@ -493,6 +527,7 @@ class Atom:
 
     @property
     def mag_gamma(self):
+        """Shortcut for ``atom.atomic.magnetization.gamma``."""
         return Q_(self._mag_gamma, u.rad).to("deg")
 
     @mag_gamma.setter
@@ -529,16 +564,25 @@ class AtomMixed(Atom):
         name (str): name of the mixed atom, default is symbol.
         atomic_form_factor_path (str): path to atomic form factor coeffs.
         magnetic_form_factor_path (str): path to magnetic form factor coeffs.
-        mag_amplitude (float): magnetization amplitude 0 .. 1.
-        mag_phi (Quantity): phi angle of magnetization.
-        mag_gamma (Quantity): gamma angle of magnetization.
+        magnetization (tuple, dict, VectorParameter): magnetization as
+            cartesian components, e.g. ``(0, 0, 1)``, or as dict of polar or
+            cartesian components, e.g. ``{"r": 1, "phi": 90 * u.deg,
+            "gamma": 0 * u.deg}`` or ``{"x": 0, "y": 0, "z": 1}``, see
+            :class:`.VectorParameter`.
+        mag_amplitude (float): magnetization amplitude, shortcut for
+            ``magnetization={"r": ...}``.
+        mag_phi (Quantity): phi angle of magnetization, shortcut for
+            ``magnetization={"phi": ...}``.
+        mag_gamma (Quantity): gamma angle of magnetization, shortcut for
+            ``magnetization={"gamma": ...}``.
 
     Attributes:
         symbol (str): symbol of the element.
         id (str): id of the atom, may differ from symbol and/or name.
         name (str): name of the mixed atom, default is symbol.
         atomic (AtomMixedParameters): parameters of the mixed atom.
-        magnetization (Quantity): cartesian magnetization as for a layer.
+        magnetization (Quantity): cartesian magnetization as for a layer,
+            which can be set as on initialization.
         atomic_number_z (int): Z atomic number.
         mass_number_a (float): A atomic mass number.
         ionicity (int): ionicity of the atom.
@@ -547,9 +591,12 @@ class AtomMixed(Atom):
            coefficients for energy-dependent atomic form factor.
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
-        mag_amplitude (float): magnetization amplitude 0 .. 1.
-        mag_phi (Quantity): phi angle of magnetization from the z-axis.
-        mag_gamma (Quantity): gamma angle of magnetization in the xy-plane from the x-axis.
+        mag_amplitude (float): magnetization amplitude, shortcut for
+            ``atom.atomic.magnetization.r``.
+        mag_phi (Quantity): phi angle of magnetization from the z-axis,
+            shortcut for ``atom.atomic.magnetization.phi``.
+        mag_gamma (Quantity): gamma angle of magnetization in the xy-plane
+            from the x-axis, shortcut for ``atom.atomic.magnetization.gamma``.
         atoms (list[Atoms]): list of Atoms.
         num_atoms (int): number of atoms.
 
@@ -560,11 +607,7 @@ class AtomMixed(Atom):
         self.id = kwargs.get("id", symbol)
         self.name = kwargs.get("name", symbol)
         self.atomic = AtomMixedParameters()
-        self.atomic.magnetization.polar = (
-            kwargs.get("mag_amplitude", 0.0),
-            kwargs.get("mag_phi", 0.0 * u.deg),
-            kwargs.get("mag_gamma", 0.0 * u.deg),
-        )
+        self._init_magnetization(kwargs)
         self.atoms = []
         self.num_atoms = 0
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(

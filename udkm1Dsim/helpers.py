@@ -229,9 +229,11 @@ def convert_polar_to_cartesian(polar):
         F_y & = r \sin(\phi)\sin(\gamma) \\
         F_z & = r \cos(\phi)
 
-    where :math:`r`, :math:`\phi`, :math:`\gamma` are the radius
-    (amplitude), azimuthal, and polar angles of vector field
-    :math:`\mathbf{F}`, respectively.
+    where :math:`r` is the radius (amplitude), :math:`\phi` the polar angle
+    from the :math:`z`-axis, and :math:`\gamma` the azimuthal angle in the
+    :math:`xy`-plane from the :math:`x`-axis of vector field
+    :math:`\mathbf{F}`. A negative radius reverses the direction given by
+    the angles.
 
     In case of multidimensional array as input, the relevant vector or
     field must be contained in its last dimension.
@@ -264,19 +266,22 @@ def convert_cartesian_to_polar(cartesian):
     .. math::
 
         F_r & = \sqrt{F_x^2 + F_y^2+F_z^2}\\
-        F_{\phi} & = \begin{cases}\\
+        F_{\phi} & = \arccos\left(\frac{F_z}{F_r} \right) \\
+        F_{\gamma} & = \begin{cases}\\
         \arctan\left(\frac{F_y}{F_x} \right) & \mathrm{for}\ F_x > 0 \\
         \pi + \arctan\left(\frac{F_y}{F_x}\right)
         & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y \geq 0 \\
         \arctan\left(\frac{F_y}{F_x}\right) - \pi
         & \mathrm{for}\ F_x < 0 \ \mathrm{and}\ F_y < 0 \\
+        \pm\frac{\pi}{2} & \mathrm{for}\ F_x = 0 \ \mathrm{and}\ F_y \gtrless 0 \\
         0 & \mathrm{for}\ F_x = F_y = 0
-        \end{cases} \\
-        F_{\gamma} & = \arccos\left(\frac{F_z}{F_r} \right)
+        \end{cases}
 
-    where :math:`F_r`, :math:`F_{\phi}`, :math:`F_{\gamma}` are the radial
-    (amplitude), azimuthal, and polar component of vector field
-    :math:`\mathbf{F}`, respectively.
+    where :math:`F_r` is the radial (amplitude) component, :math:`F_{\phi}`
+    the polar angle from the :math:`z`-axis, and :math:`F_{\gamma}` the
+    azimuthal angle in the :math:`xy`-plane from the :math:`x`-axis of vector
+    field :math:`\mathbf{F}`. Both angles are zero for a zero vector. The
+    radius is never negative.
 
     In case of multidimensional array as input, the relevant vector or
     field must be contained in its last dimension.

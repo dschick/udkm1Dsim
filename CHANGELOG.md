@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AtomParameters` and `AtomMixedParameters` organize the atomic number, mass number, mass, ionicity, magnetization, and, for `Atom` only, the Cromer-Mann coefficients `cromer_mann_a`, `cromer_mann_b`, and `cromer_mann_c` in their `atomic` parameter group, e.g. `atom.atomic.mass`, while the attributes of the atoms, e.g. `atom.mass`, are kept
 - `magnetization` property of `Atom` and `AtomMixed` with the cartesian magnetization as for layers
 - `VectorParameter` keeps its angles, when they are not defined by its cartesian components, e.g. for a zero amplitude, so that setting the amplitude to zero and back restores its direction
+- the magnetization of an `Atom`, `AtomMixed`, and `Layer` is given by `magnetization` on initialization and assignment, either as cartesian components, e.g. `(0, 0, 1)`, as dict of polar or cartesian components, e.g. `{"r": -1, "phi": 90 * u.deg, "gamma": 0 * u.deg}` or `{"x": 0, "y": 0, "z": 1}`, or as `VectorParameter`; components missing in a dict keep their values, e.g. `atom.magnetization = {"r": 0.5}` only changes the amplitude
+- `VectorParameter.set()` for all these inputs
 
 ### Changed
 
@@ -33,7 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the examples define their layers by parameter groups and label the sub-systems of the two- and three-temperature models, e.g. `sub_system_labels=["e", "p", "s"]`
 - the `mass` of an atom is derived from its mass number and cannot be set, and the atomic number, mass number, and ionicity of an `AtomMixed` are derived from its atoms
 - the table views of `Atom` and `AtomMixed` show their parameters as the parameter groups of layers
-- the magnetization of `Atom` and `AtomMixed` is a `VectorParameter` and behaves as for layers, i.e. its amplitude must be 0 .. 1 and its gamma angle is given in -180 .. 180 deg
+- the magnetization of `Atom` and `AtomMixed` is a `VectorParameter` and behaves as for layers, e.g. its gamma angle is given in -180 .. 180 deg
+- `VectorParameter` stores its polar form (r, phi, gamma), and its cartesian components are kept as given or calculated on demand, where components, which are zero within the numerical precision, are exactly zero
+- the radius of a `VectorParameter`, e.g. the magnetization amplitude, can be negative, which reverses the direction given by its angles, and is not limited in size, so that its magnitude can be changed while keeping its angles
+- the examples set the magnetization of atoms by `magnetization={"r": ..., "phi": ..., "gamma": ...}`
 - vector parameters, e.g. the magnetization, are shown by their amplitude and angles in deg in the table views
 - the symbols of the physical quantities in the docstrings are consistent across all simulations and parameter groups, e.g. the thickness is `d`, the thermal conductivity `κ`, and the anisotropy exponent `β`
 - the atomic number and mass number of an `Atom` are given by its symbol and cannot be set
@@ -49,6 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API documentation of the `parameters`, `parameter_groups`, and `solvers` modules was missing
 - `AtomMixed` had no `_mass`, which is used for the density of its unit cell by `XrayDynMag`
 - the gamma angle of zero vectors with signed zero components was -180 deg instead of 0 deg in `convert_cartesian_to_polar`
+- the angles phi and gamma were interchanged in the docstrings of `convert_cartesian_to_polar` and `convert_polar_to_cartesian`
+- the pdf documentation on Read the Docs failed, as pdflatex cannot handle the unicode characters of the notebook outputs; it is built with xelatex now
 - the Cromer-Mann atomic form factor of `XrayKin` and `XrayDyn` used wrong coefficients and converted `q_z` wrongly, so that its `q_z`-dependence was wrong; cached results require `force_recalc=True`, closing [#226]
 - Cromer-Mann coefficients of `Cs1+`, `Ba2+`, `Ru4+`, `Bi5+`, `Np3+`, `Np4+`, `Np6+`, and `Pu` corrected and 16 rounded coefficients completed according to the International Tables for Crystallography, Vol. C, Table 6.1.1.4
 - the Cromer-Mann coefficients of an `Atom` were not updated on a change of its ionicity

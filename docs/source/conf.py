@@ -60,6 +60,8 @@ extensions = [
 from pathlib import Path
 
 from myst_sphinx_gallery import GalleryConfig, ThumbnailConfig
+from PIL import Image
+from sphinx.transforms.post_transforms.images import ImageConverter
 
 myst_sphinx_gallery_config = GalleryConfig(
     examples_dirs="../../examples",
@@ -254,7 +256,39 @@ htmlhelp_basename = 'udkm1Dsimdoc'
 
 # -- Options for LaTeX output ------------------------------------------------
 
+# xelatex handles the unicode characters of the notebook outputs, e.g. the
+# box-drawing characters of the tables and the symbols of the parameters
+latex_engine = 'xelatex'
+# makeindex as for pdflatex, as xindy requires the options of the Makefile
+latex_use_xindy = False
+
 latex_elements = {
+    # DejaVu Sans Mono instead of FreeMono, which lacks some subscripts, e.g. ₚ
+    'fontpkg': r'''
+\setmainfont{FreeSerif}[
+  Extension      = .otf,
+  UprightFont    = *,
+  ItalicFont     = *Italic,
+  BoldFont       = *Bold,
+  BoldItalicFont = *BoldItalic
+]
+\setsansfont{FreeSans}[
+  Extension      = .otf,
+  UprightFont    = *,
+  ItalicFont     = *Oblique,
+  BoldFont       = *Bold,
+  BoldItalicFont = *BoldOblique,
+]
+\setmonofont{DejaVuSansMono}[
+  Extension      = .ttf,
+  UprightFont    = *,
+  ItalicFont     = *-Oblique,
+  BoldFont       = *-Bold,
+  BoldItalicFont = *-BoldOblique,
+  Scale          = MatchLowercase,
+]
+''',
+
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',
@@ -364,3 +398,29 @@ def patched_parse(self):
 
 GoogleDocstring._unpatched_parse = GoogleDocstring._parse
 GoogleDocstring._parse = patched_parse
+
+
+class WebPConverter(ImageConverter):
+    """Convert the webp thumbnails of the gallery to png via Pillow."""
+
+    conversion_rules = [('image/webp', 'image/png')]
+
+    def is_available(self):
+        return True
+
+    def convert(self, _from, _to):
+        with Image.open(_from) as image:
+            image.save(_to)
+        return True
+
+
+def _setup_latex_image_converters(app):
+    # convert the svg badges and the webp thumbnails for LaTeX only, as html
+    # supports them as they are
+    if app.builder.format == 'latex':
+        app.setup_extension('sphinxcontrib.cairosvgconverter')
+        app.add_post_transform(WebPConverter)
+
+
+def setup(app):
+    app.connect('builder-inited', _setup_latex_image_converters)

@@ -48,9 +48,7 @@ def vector_parameter():
 @pytest.fixture(scope="module")
 def atom_iron():
     atom_iron = Atom("Fe")
-    atom_iron.mag_amplitude = 0.5
-    atom_iron.mag_phi = 0 * u.deg
-    atom_iron.mag_gamma = 180 * u.deg
+    atom_iron.magnetization = {"r": 0.5, "phi": 0 * u.deg, "gamma": 180 * u.deg}
     return atom_iron
 
 
@@ -60,27 +58,21 @@ def atom_oxygen():
     # not tabulated for the Cromer-Mann coefficients, which fall back to ionicity 0
     with pytest.warns(UserWarning, match="closest ionicity 0"):
         atom_oxygen.ionicity = 1
-    atom_oxygen.mag_amplitude = 0.5
-    atom_oxygen.mag_phi = 0 * u.deg
-    atom_oxygen.mag_gamma = 180 * u.deg
+    atom_oxygen.magnetization = {"r": 0.5, "phi": 0 * u.deg, "gamma": 180 * u.deg}
     return atom_oxygen
 
 
 @pytest.fixture(scope="module")
 def atom_strontium():
     atom_strontium = Atom("Sr")
-    atom_strontium.mag_amplitude = 0.5
-    atom_strontium.mag_phi = 0 * u.deg
-    atom_strontium.mag_gamma = 180 * u.deg
+    atom_strontium.magnetization = {"r": 0.5, "phi": 0 * u.deg, "gamma": 180 * u.deg}
     return atom_strontium
 
 
 @pytest.fixture(scope="module")
 def atom_titanium():
     atom_titanium = Atom("Ti")
-    atom_titanium.mag_amplitude = 0.5
-    atom_titanium.mag_phi = 0 * u.deg
-    atom_titanium.mag_gamma = 180 * u.deg
+    atom_titanium.magnetization = {"r": 0.5, "phi": 0 * u.deg, "gamma": 180 * u.deg}
     return atom_titanium
 
 
@@ -90,9 +82,7 @@ def atom_dysprosium():
     # not tabulated for the Cromer-Mann coefficients, which fall back to ionicity 0
     with pytest.warns(UserWarning, match="closest ionicity 0"):
         atom_dysprosium.ionicity = 1
-    atom_dysprosium.mag_amplitude = 0.0
-    atom_dysprosium.mag_phi = 0.0 * u.deg
-    atom_dysprosium.mag_gamma = 0.0 * u.deg
+    atom_dysprosium.magnetization = {"r": 0.0, "phi": 0.0 * u.deg, "gamma": 0.0 * u.deg}
     return atom_dysprosium
 
 
@@ -101,9 +91,7 @@ def atom_mixed(atom_dysprosium, atom_iron):
     atom_mixed = AtomMixed("DyFe")
     atom_mixed.add_atom(atom_dysprosium, 0.4)
     atom_mixed.add_atom(atom_iron, 0.6)
-    atom_mixed.mag_amplitude = 0.0
-    atom_mixed.mag_phi = 0.0 * u.deg
-    atom_mixed.mag_gamma = 0.0 * u.deg
+    atom_mixed.magnetization = {"r": 0.0, "phi": 0.0 * u.deg, "gamma": 0.0 * u.deg}
     return atom_mixed
 
 
