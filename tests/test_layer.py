@@ -5,6 +5,7 @@ import pickle
 import warnings
 
 import numpy as np
+import pint
 import pytest
 import sympy as sp
 from pint.testing import assert_allclose as assert_approx
@@ -14,10 +15,11 @@ from udkm1Dsim import AmorphousLayer, Atom, Layer, UnitCell, u
 from udkm1Dsim.structures.parameter_groups import (
     ElasticParameters,
     LatticeParameters,
+    MagneticParameters,
     StructuralParameters,
     ThermalParameters,
 )
-from udkm1Dsim.structures.parameters import Parameter
+from udkm1Dsim.structures.parameters import Parameter, TemperatureParameter, VectorParameter
 
 # tests
 
@@ -726,3 +728,86 @@ def test_layer_symbol_is_editable(amorphous_layer):
     assert "C" in [row[0] for row in layer.thermal.heat_capacity._table_rows("text")]
     # the symbol is copied along with the group
     assert copy.deepcopy(layer).thermal.heat_capacity.symbol == "C"
+
+
+# assignments to parameters of a group
+
+
+def test_group_assignment_keeps_parameter_and_updates_depending():
+    magnetic = MagneticParameters(eff_spin=0.5, curie_temp=600 * u.K)
+    parameter = magnetic.curie_temp
+    magnetic.curie_temp = 400 * u.K
+    assert magnetic.curie_temp is parameter
+    assert magnetic.curie_temp.symbol == r"T_\mathrm{C}"
+    assert_approx(magnetic.mf_exch_coupling.quantity, u.boltzmann_constant * 400 * u.K)
+    magnetic.anisotropy = [1, 2, 3]
+    assert np.array_equal(magnetic.anisotropy.magnitude, [1, 2, 3])
+    magnetic.anisotropy = 5 * u.J / u.m**3
+    assert np.array_equal(magnetic.anisotropy.magnitude, [5, 5, 5])
+
+
+def test_group_assignment_updates_owner(amorphous_layer):
+    layer = copy.deepcopy(amorphous_layer)  # do not alter the module-scoped fixture
+    layer.elastic.sound_vel = 3 * u.nm / u.ps
+    assert_approx(layer.spring_const, [0.45] * u.kg / u.s**2)
+    layer.thermal.heat_capacity = "0.1*T"
+    assert isinstance(layer.thermal.heat_capacity, TemperatureParameter)
+    assert str(layer.thermal.heat_capacity.magnitude[0]) == "0.1*T"
+
+
+def test_group_assignment_of_vector_parameter():
+    magnetic = MagneticParameters()
+    magnetic.magnetization = {"r": -1, "phi": 90 * u.deg, "gamma": 0 * u.deg}
+    assert isinstance(magnetic.magnetization, VectorParameter)
+    assert np.allclose(magnetic.magnetization.magnitude, [-1, 0, 0])
+    magnetic.magnetization = (0, 0, 1)
+    assert np.allclose(magnetic.magnetization.magnitude, [0, 0, 1])
+
+
+def test_group_assignment_of_derived_parameter_raises():
+    with pytest.raises(AttributeError, match="derived"):
+        MagneticParameters().mf_exch_coupling = 1.0
+
+
+def test_group_assignment_replaces_parameter():
+    magnetic = MagneticParameters(eff_spin=0.5, curie_temp=600 * u.K)
+    given = Parameter("mK", 500e3, symbol="T_c")
+    magnetic.curie_temp = given
+    assert magnetic.curie_temp is not given
+    assert magnetic.curie_temp.unit == u.K
+    assert np.isclose(magnetic.curie_temp.magnitude, 500)
+    assert magnetic.curie_temp.symbol == "T_c"
+    assert magnetic.curie_temp.name == "curie_temp"
+    assert_approx(magnetic.mf_exch_coupling.quantity, u.boltzmann_constant * 500 * u.K)
+    # the copy is connected to the group, the given parameter is not
+    given.magnitude = 1
+    assert np.isclose(magnetic.curie_temp.magnitude, 500)
+    magnetic.curie_temp = 300 * u.K
+    assert_approx(magnetic.mf_exch_coupling.quantity, u.boltzmann_constant * 300 * u.K)
+
+
+def test_group_assignment_replaces_vector_parameter():
+    magnetic = MagneticParameters()
+    magnetic.magnetization = VectorParameter("", (0, 0, 2), symbol="M")
+    assert magnetic.magnetization.symbol == "M"
+    assert np.allclose(magnetic.magnetization.magnitude, [0, 0, 2])
+
+
+@pytest.mark.parametrize(
+    "parameter, error",
+    [
+        (Parameter("m", 1), pint.DimensionalityError),
+        (TemperatureParameter("K", 1), TypeError),
+    ],
+)
+def test_group_assignment_replaces_parameter_raises(parameter, error):
+    with pytest.raises(error):
+        MagneticParameters().curie_temp = parameter
+
+
+def test_group_assignment_replaces_temperature_parameter():
+    thermal = ThermalParameters(heat_capacity=100 * u.J / u.kg / u.K)
+    thermal.heat_capacity = TemperatureParameter("J/kg/K", "0.1*T", symbol="C")
+    assert thermal.heat_capacity.symbol == "C"
+    with pytest.raises(ValueError, match="must be given in"):
+        thermal.heat_capacity = TemperatureParameter("kJ/kg/K", 1)
