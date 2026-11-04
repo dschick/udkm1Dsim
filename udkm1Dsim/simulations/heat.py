@@ -477,7 +477,8 @@ class Heat(Simulation):
         else:
             d_start, d_end, _ = structure.get_distances_of_layers(False)
             if backside:
-                # np.clip() prevents negative distances after flipping due to floating point rounding errors
+                # np.clip() prevents negative distances after flipping
+                # due to floating point rounding errors
                 distances = np.clip(np.flip(d_end[-1] - distances), 0, d_end[-1])
 
         interfaces = structure.get_distances_of_interfaces(False)
@@ -561,7 +562,8 @@ class Heat(Simulation):
         else:
             d_start, d_end, _ = structure.get_distances_of_layers(False)
             if backside:
-                # np.clip() prevents negative distances after flipping due to floating point rounding errors
+                # np.clip() prevents negative distances after flipping
+                # due to floating point rounding errors
                 distances = np.clip(np.flip(d_end[-1] - distances), 0, d_end[-1])
 
         interfaces = structure.get_distances_of_interfaces(False)
