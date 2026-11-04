@@ -873,14 +873,16 @@ class LLG(Magnetization):
 
     .. math::
 
-        \frac{d\mathbf{n}}{dt} = \frac{\gamma_e}{1+\alpha^2}\left(
+        \frac{d\mathbf{n}}{dt} = \frac{\gamma}{1+\alpha^2}\left(
             \mathbf{n} \times \mathbf{B}
             + \alpha\, \mathbf{n} \times (\mathbf{n} \times
             \mathbf{B})\right)
 
     with the Gilbert damping :math:`\alpha` (``gilbert_damping`` of the
-    layers) and :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,
-    T^{-1}}` the gyromagnetic ratio of an electron, see
+    layers) and the gyromagnetic ratio :math:`\gamma` (``gyromagnetic_ratio``
+    of the layers), which defaults to the one of a free electron
+    :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,T^{-1}}`,
+    see
     :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.llg_rhs`. The
     amplitude :math:`m(t)` of the magnetization :math:`\mathbf{m} = m(t)\,
     \mathbf{n}`, i.e. the reduced magnetization :math:`m = |\mathbf{M}|/M_s`,
@@ -1133,7 +1135,7 @@ class iLLG(LLG):
 
     .. math::
 
-        \frac{d\mathbf{n}}{dt} = \gamma_e\, \mathbf{n} \times
+        \frac{d\mathbf{n}}{dt} = \gamma\, \mathbf{n} \times
             \mathbf{B} + \alpha\, \mathbf{n} \times \left(
             \frac{d\mathbf{n}}{dt} + \tau \frac{d^2\mathbf{n}}{dt^2}\right)
 
@@ -1341,7 +1343,7 @@ class LLB(Magnetization):
 
     .. math::
 
-        \frac{d\mathbf{m}}{dt}=\gamma_e \left(\mathbf{m} \times
+        \frac{d\mathbf{m}}{dt}=\gamma \left(\mathbf{m} \times
           \mathbf{B} + \frac{\alpha_{\perp}}{m^2}\mathbf{m}
           \times (\mathbf{m} \times \mathbf{B}) -
           \frac{\alpha_{\parallel}}{m^2}(\mathbf{m} \cdot
@@ -1359,8 +1361,9 @@ class LLB(Magnetization):
     :math:`\alpha_{\parallel}` and :math:`\alpha_{\perp}` are the longitudinal
     and transverse :func:`damping parameters
     <udkm1Dsim.simulations.solvers.mean_field.damping_parameters>` and
-    :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,T^{-1}}` is
-    the gyromagnetic ratio of an electron.
+    :math:`\gamma` is the gyromagnetic ratio (``gyromagnetic_ratio`` of the
+    layers), which defaults to the one of a free electron
+    :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,T^{-1}}`.
 
     The field :math:`\mathbf{B}` [T] is the sum of all relevant magnetic
     interactions:
