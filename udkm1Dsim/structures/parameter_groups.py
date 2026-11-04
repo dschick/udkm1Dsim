@@ -636,6 +636,11 @@ class MagneticParameters(ParameterGroup):
             per sublattice.
         gilbert_damping (float, ndarray[float]): Gilbert damping
             :math:`\alpha` of the LLG per sublattice.
+        gyromagnetic_ratio (float, ndarray[float]): gyromagnetic ratio
+            :math:`\gamma = -g \mu_B / \hbar` of the magnetization dynamics
+            per sublattice, including its negative sign [rad/(s T)]. Defaults
+            to the one of a free electron
+            :math:`\gamma_e = -1.761\times10^{11}` rad/(s T).
         inertial_time (float, ndarray[float]): inertial relaxation time
             :math:`\tau` of the inertial LLG per sublattice [s].
         magnetoelastic_coupling (float, ndarray[float]): magnetoelastic
@@ -662,6 +667,7 @@ class MagneticParameters(ParameterGroup):
         "aniso_exponent",
         "mag_saturation",
         "gilbert_damping",
+        "gyromagnetic_ratio",
         "inertial_time",
         "magnetoelastic_coupling",
         "concentration",
@@ -679,6 +685,7 @@ class MagneticParameters(ParameterGroup):
         mag_saturation=0.0,
         magnetization=np.array([0.0, 0.0, 0.0]),
         gilbert_damping=0.0,
+        gyromagnetic_ratio=-constants.physical_constants["electron gyromag. ratio"][0],
         inertial_time=0.0,
         magnetoelastic_coupling=0.0,
         mf_exch_coupling=None,
@@ -703,6 +710,7 @@ class MagneticParameters(ParameterGroup):
         self.mag_saturation = Parameter("J/T/m**3", mag_saturation, symbol="M_s")
         self.magnetization = self._make_magnetization(magnetization)
         self.gilbert_damping = Parameter("", gilbert_damping, symbol=r"\alpha")
+        self.gyromagnetic_ratio = Parameter("rad/(s*T)", gyromagnetic_ratio, symbol=r"\gamma")
         self.inertial_time = Parameter("s", inertial_time, symbol=r"\tau")
         self.magnetoelastic_coupling = Parameter("J/m**3", magnetoelastic_coupling, symbol="B_1")
         self.exch_relax_rate = Parameter("", exch_relax_rate, symbol=r"\lambda_\mathrm{ex}")

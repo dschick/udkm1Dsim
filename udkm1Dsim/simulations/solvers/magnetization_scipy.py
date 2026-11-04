@@ -83,13 +83,14 @@ from collections import namedtuple
 from types import SimpleNamespace
 
 import numpy as np
+import scipy.constants as constants
 from scipy.integrate import solve_ivp
 from tqdm.auto import tqdm
 
 from .mean_field import TABLE, equilibrium_tables, interpolate_tables, temperature_grid
 
-# gyromagnetic ratio of an electron [rad s^-1 T^-1], including its sign
-GAMMA_E = -1.761e11
+# gyromagnetic ratio of a free electron [rad s^-1 T^-1], including its sign
+GAMMA_E = -constants.physical_constants["electron gyromag. ratio"][0]
 
 # floor for magnetization norms that appear in denominators
 MIN_MAG = 1e-12
@@ -120,6 +121,7 @@ def stack_magnetic_parameters(layers):
     anisotropy as :math:`N \times P \times 3`, the mean-field exchange matrix
     as :math:`N \times P \times P`, and the Curie temperature as
     :math:`N \times 1`. Layers with fewer sublattices are padded with zeros.
+
     The mask ``active`` :math:`N \times P` is 1 for existing sublattices and
     0 for the padding. The numbers of sublattices of the layers are checked,
     see :meth:`~udkm1Dsim.structures.parameter_groups.MagneticParameters.check_sublattices`.
@@ -652,13 +654,15 @@ def llg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
 
     .. math::
 
-        \frac{d\mathbf{n}_a}{dt} = \frac{\gamma_e}{1+\alpha_a^2}\left(
+        \frac{d\mathbf{n}_a}{dt} = \frac{\gamma_a}{1+\alpha_a^2}\left(
             \mathbf{n}_a \times \mathbf{B}_a
             + \alpha_a\, \mathbf{n}_a \times (\mathbf{n}_a \times
             \mathbf{B}_a)\right)
 
-    with the Gilbert damping :math:`\alpha_a` and :math:`\gamma_e = -1.761
-    \times 10^{11}` rad/(s T). The field is the :func:`effective_field` plus
+    with the Gilbert damping :math:`\alpha_a` and the gyromagnetic ratio
+    :math:`\gamma_a`, which defaults to the one of a free electron
+    :math:`\gamma_e = -1.761 \times 10^{11}` rad/(s T).
+    The field is the :func:`effective_field` plus
     the :func:`sublattice_exchange_field`, evaluated for the magnetization
     :math:`\mathbf{m}_a = m_a(t)\,\mathbf{n}_a` with the amplitude :math:`m_a(t)`
     from the inputs.
@@ -686,7 +690,8 @@ def llg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
     alpha = mag.gilbert_damping
     precession = np.cross(n, B)
     damping = alpha[..., np.newaxis] * np.cross(n, precession)
-    dndt = (GAMMA_E * mag.active / (1 + alpha**2))[..., np.newaxis] * (precession + damping)
+    gamma = mag.gyromagnetic_ratio * mag.active / (1 + alpha**2)
+    dndt = gamma[..., np.newaxis] * (precession + damping)
     return dndt.ravel()
 
 
@@ -697,7 +702,7 @@ def illg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
 
     .. math::
 
-        \frac{d\mathbf{n}}{dt} = \gamma_e\, \mathbf{n} \times \mathbf{B}
+        \frac{d\mathbf{n}}{dt} = \gamma\, \mathbf{n} \times \mathbf{B}
             + \alpha\, \mathbf{n} \times \left(\frac{d\mathbf{n}}{dt}
             + \tau \frac{d^2\mathbf{n}}{dt^2}\right)
 
@@ -710,14 +715,14 @@ def illg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
 
         \frac{d\mathbf{n}}{dt} & = \mathbf{v} \\
         \frac{d\mathbf{v}}{dt} & = \frac{1}{\alpha \tau}\left(
-            \gamma_e\, \mathbf{n} \times (\mathbf{n} \times \mathbf{B})
+            \gamma\, \mathbf{n} \times (\mathbf{n} \times \mathbf{B})
             - \alpha \mathbf{v} - \mathbf{n} \times \mathbf{v}\right)
             - \mathbf{n}\, |\mathbf{v}|^2
 
     The last term keeps :math:`|\mathbf{n}| = 1`. For :math:`\tau \rightarrow
     0` the velocity relaxes to the Landau-Lifshitz-Gilbert value, the free
-    nutation frequency is :math:`1/(\alpha\tau)`. The field is the same as in
-    :func:`llg_rhs`.
+    nutation frequency is :math:`1/(\alpha\tau)`. The field and the
+    gyromagnetic ratio :math:`\gamma` are the same as in :func:`llg_rhs`.
 
     Args:
         t (float): time [s].
@@ -745,7 +750,7 @@ def illg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
     alpha = mag.gilbert_damping[..., np.newaxis]
     # inactive sublattices have no damping or inertia, guard the division
     inertia = np.where(mag.active > 0, mag.gilbert_damping * mag.inertial_time, 1.0)
-    torque = GAMMA_E * np.cross(n, np.cross(n, B))
+    torque = mag.gyromagnetic_ratio[..., np.newaxis] * np.cross(n, np.cross(n, B))
     dvdt = (torque - alpha * v - np.cross(n, v)) / inertia[..., np.newaxis] - n * np.sum(
         v**2, axis=2
     )[..., np.newaxis]
@@ -761,13 +766,14 @@ def exchange_relaxation_torque(m_norm, B_par, alpha_par, mag):
 
     .. math::
 
-        \boldsymbol{\tau}_i^\mathrm{NE} = |\gamma_e| \lambda_\mathrm{ex}
+        \boldsymbol{\tau}_i^\mathrm{NE} = |\gamma_i| \lambda_\mathrm{ex}
             \alpha_i^\parallel\, \frac{x_i \mu_i m_i + x_j \mu_j m_j}
             {\mu_i m_i\, \mu_j m_j}\,
             \left(\mu_i \mathbf{B}_i^\parallel - \mu_j \mathbf{B}_j^\parallel
             \right)
 
-    with the concentrations :math:`x_i`, the atomic moments :math:`\mu_i`,
+    with the gyromagnetic ratio :math:`\gamma_i`, see :func:`llg_rhs`, the
+    concentrations :math:`x_i`, the atomic moments :math:`\mu_i`,
     the longitudinal fields :math:`\mathbf{B}^\parallel`, see
     :func:`longitudinal_field`, and the exchange-relaxation rate
     :math:`\lambda_\mathrm{ex}` of the layer. It transfers angular momentum
@@ -810,9 +816,10 @@ def exchange_relaxation_torque(m_norm, B_par, alpha_par, mag):
     num = x[:, 0] * mu[:, 0] * m_safe[:, 0] + x[:, 1] * mu[:, 1] * m_safe[:, 1]
     den = np.maximum(mu[:, 0] * m_safe[:, 0] * mu[:, 1] * m_safe[:, 1], 1e-300)
     D = mu[:, 0, np.newaxis] * B_par[:, 0, :] - mu[:, 1, np.newaxis] * B_par[:, 1, :]
-    base = np.where(pair, abs(GAMMA_E) * rates * num / den, 0.0)
-    torque[:, 0, :] = (base * alpha_par[:, 0])[:, np.newaxis] * D
-    torque[:, 1, :] = -(base * alpha_par[:, 1])[:, np.newaxis] * D
+    base = np.where(pair, rates * num / den, 0.0)
+    gamma = np.abs(mag.gyromagnetic_ratio)
+    torque[:, 0, :] = (base * gamma[:, 0] * alpha_par[:, 0])[:, np.newaxis] * D
+    torque[:, 1, :] = -(base * gamma[:, 1] * alpha_par[:, 1])[:, np.newaxis] * D
     return torque
 
 
@@ -825,13 +832,14 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
 
     .. math::
 
-        \frac{d\mathbf{m}_a}{dt} = \gamma_e \left(\mathbf{m}_a \times
+        \frac{d\mathbf{m}_a}{dt} = \gamma_a \left(\mathbf{m}_a \times
             \mathbf{B}_a + \frac{\alpha_a^\perp}{m_a^2}\, \mathbf{m}_a \times
             (\mathbf{m}_a \times \mathbf{B}_a)
             - \frac{\alpha_a^\parallel}{m_a^2}\, (\mathbf{m}_a \cdot
             \mathbf{B}_a)\, \mathbf{m}_a\right)
 
-    with the precession, the transverse and the longitudinal relaxation. The
+    with the precession, the transverse and the longitudinal relaxation and
+    the gyromagnetic ratio :math:`\gamma_a`, see :func:`llg_rhs`. The
     field is the :func:`effective_field` plus the
     :func:`transverse_sublattice_exchange_field` and the
     :func:`longitudinal_field`. The equilibrium magnetizations, the damping
@@ -884,7 +892,7 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
     longitudinal = (alpha_par / m_squared * np.einsum("npi,npi->np", m, B + B_par))[
         ..., np.newaxis
     ] * m
-    dmdt = GAMMA_E * (precession + transverse - longitudinal)
+    dmdt = mag.gyromagnetic_ratio[..., np.newaxis] * (precession + transverse - longitudinal)
     dmdt += exchange_relaxation_torque(m_norm, B_par, alpha_par, mag)
     return (mag.active[..., np.newaxis] * dmdt).ravel()
 

@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Magnetization.temp_sub_system` to select the sub-system of the `temp_map` that drives the magnetization dynamics
 - `LLB.get_magnetization_map` accepts an external field `H_ext` per delay as `Mx3` array
 - `LLB` warns if a layer ends at a vanishing magnetization below its Curie temperature, since `m = 0` is a fixed point of the LLB
+- magnetic parameter `gyromagnetic_ratio` of layers per sublattice for `LLG`, `iLLG`, and `LLB`, which defaults to the one of a free electron `GAMMA_E`, now taken from `scipy.constants` (-1.76086e11 instead of -1.761e11 rad/(s T))
 
 ### Changed
 

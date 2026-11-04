@@ -292,6 +292,35 @@ def test_llb_larmor_precession(tmp_path):
     assert np.allclose(mag_map[:, 0, 0], norm)
 
 
+def test_gyromagnetic_ratio_default():
+    """the gyromagnetic ratio defaults to the one of a free electron"""
+    layer = make_layer("m")
+    assert np.isclose(layer.gyromagnetic_ratio.to("rad/(s*T)").magnitude, -1.76085963e11)
+    mag = magnetization_scipy.stack_magnetic_parameters([layer.magnetic])
+    assert np.allclose(mag.gyromagnetic_ratio, magnetization_scipy.GAMMA_E)
+
+
+@pytest.mark.parametrize("model", [LLG, LLB])
+def test_gyromagnetic_ratio_precession(model, tmp_path):
+    """without damping the magnetization precesses at the Larmor frequency
+    gamma B of the gyromagnetic ratio of the layer"""
+    gamma = -2 * np.pi * 30.8e9  # rad/(s T)
+    S = make_structure(
+        (make_layer("m", lamda=0.0, gilbert_damping=0.0, gyromagnetic_ratio=gamma), 1)
+    )
+    sim = simulation(model, S, tmp_path)
+    delays = np.r_[0:100:0.5] * u.ps
+    B = 0.5
+    temp_map = 300 * np.ones((len(delays), 1, 1))
+    mag_map = sim.get_magnetization_map(delays, temp_map=temp_map, H_ext=np.r_[0, 0, B])
+    m = convert_polar_to_cartesian(mag_map)[:, 0, :]
+    t = delays.to("s").magnitude
+    omega = gamma * B
+    norm = mag_map[0, 0, 0]
+    assert np.allclose(m[:, 0], norm * np.cos(omega * t), atol=1e-5)
+    assert np.allclose(m[:, 1], -norm * np.sin(omega * t), atol=1e-5)
+
+
 @pytest.mark.parametrize("eff_spin", [0.5, 3.5, np.inf])
 def test_llb_relaxes_to_mean_field(eff_spin, tmp_path):
     """the LLB norm relaxes to the mean-field magnetization of the
@@ -900,6 +929,7 @@ def test_exchange_relaxation_torque():
         exch_relax_rate=np.array([0.013, 0.0]),
         mag_moment=np.array([[2.0, 7.0], [2.0, 7.0]]) * 9.274e-24,
         concentration=np.array([[0.75, 0.25], [0.75, 0.25]]),
+        gyromagnetic_ratio=np.full((2, 2), magnetization_scipy.GAMMA_E),
     )
     m_norm = np.array([[0.4, 0.6], [0.4, 0.6]])
     B_par = np.array([[[0, 0, 3.0], [0, 0, -1.0]], [[0, 0, 3.0], [0, 0, -1.0]]])

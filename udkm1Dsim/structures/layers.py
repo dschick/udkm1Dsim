@@ -284,6 +284,7 @@ class Layer:
                 "magnetic.mag_saturation",
                 "magnetic.lamda",
                 "magnetic.gilbert_damping",
+                "magnetic.gyromagnetic_ratio",
                 "magnetic.inertial_time",
                 "magnetic.magnetoelastic_coupling",
                 "magnetic.exch_relax_rate",
@@ -664,6 +665,14 @@ class Layer:
     @gilbert_damping.setter
     def gilbert_damping(self, value):
         self.magnetic.gilbert_damping = value
+
+    @property
+    def gyromagnetic_ratio(self):
+        return self.magnetic.gyromagnetic_ratio.quantity
+
+    @gyromagnetic_ratio.setter
+    def gyromagnetic_ratio(self, value):
+        self.magnetic.gyromagnetic_ratio = value
 
     @property
     def inertial_time(self):
