@@ -887,3 +887,139 @@ def test_equilibrium_options(tmp_path):
     llg.equilibrium_options.update({"tol": 1e-9, "max_time": 1e-15})
     with pytest.warns(UserWarning, match="did not reach its equilibrium"):
         llg.get_equilibrium_magnetization(H_ext=H_ext, init_mag=NEAR_Z)
+
+
+# exchange relaxation
+
+
+def test_exchange_relaxation_torque():
+    """the torque of Raposo et al. transfers angular momentum between the two
+    sublattices of a layer and vanishes otherwise"""
+    mag = SimpleNamespace(
+        active=np.ones((2, 2)),
+        exch_relax_rate=np.array([0.013, 0.0]),
+        mag_moment=np.array([[2.0, 7.0], [2.0, 7.0]]) * 9.274e-24,
+        concentration=np.array([[0.75, 0.25], [0.75, 0.25]]),
+    )
+    m_norm = np.array([[0.4, 0.6], [0.4, 0.6]])
+    B_par = np.array([[[0, 0, 3.0], [0, 0, -1.0]], [[0, 0, 3.0], [0, 0, -1.0]]])
+    alpha_par = np.array([[0.01, 0.02], [0.01, 0.02]])
+    torque = magnetization_scipy.exchange_relaxation_torque(m_norm, B_par, alpha_par, mag)
+    mu, x = mag.mag_moment[0], mag.concentration[0]
+    base = abs(magnetization_scipy.GAMMA_E) * 0.013 * (x @ (mu * m_norm[0]))
+    base /= mu[0] * m_norm[0, 0] * mu[1] * m_norm[0, 1]
+    D = mu[0] * B_par[0, 0] - mu[1] * B_par[0, 1]
+    assert np.allclose(torque[0, 0], base * 0.01 * D)
+    assert np.allclose(torque[0, 1], -base * 0.02 * D)
+    # no torque for a zero rate, a padded sublattice, or a single sublattice
+    assert np.allclose(torque[1], 0)
+    mag.active[0, 1] = 0
+    assert np.allclose(
+        magnetization_scipy.exchange_relaxation_torque(m_norm, B_par, alpha_par, mag), 0
+    )
+    single = SimpleNamespace(
+        **{k: v[:, :1] if np.ndim(v) == 2 else v for k, v in vars(mag).items()}
+    )
+    torque = magnetization_scipy.exchange_relaxation_torque(
+        m_norm[:, :1], B_par[:, :1], alpha_par[:, :1], single
+    )
+    assert np.allclose(torque, 0)
+
+
+def test_concentration():
+    """the concentrations are equal unless they are given, e.g. as the
+    fractions of the constituents of a mixed atom"""
+    J = np.diag([mf_exchange(0.5, 630)] * 2)
+    magnetic = ud.MagneticParameters(eff_spin=[0.5, 0.5], mf_exch_coupling=J * u.J)
+    assert np.allclose(magnetic.sublattice_values("concentration"), [0.5, 0.5])
+    magnetic.concentration = [0.3, 0.7]
+    assert np.allclose(magnetic.sublattice_values("concentration"), [0.3, 0.7])
+    magnetic.concentration = [0.3, 0.3, 0.4]
+    with pytest.raises(ValueError, match="but there are 3 sublattices"):
+        magnetic.check_sublattices()
+    Fe, Gd = ud.Atom("Fe", magnetization=(0, 0, 1)), ud.Atom("Gd", magnetization=(0, 0, -1))
+    GdFe = ud.AtomMixed("GdFe")
+    GdFe.add_atom(Fe, 0.75)
+    GdFe.add_atom(Gd, 0.25)
+    layer = make_layer("GdFe", eff_spin=[0.5, 0.5], mf_exch_coupling=J * u.J)
+    layer.atom = GdFe
+    assert np.allclose(layer.magnetic.sublattice_values("concentration"), [0.75, 0.25])
+
+
+@pytest.fixture(scope="module")
+def gdfeco():
+    """a GdFeCo film of Raposo et al. 2022 and the electron temperature of
+    their two-temperature model for two absorbed power densities"""
+    x = np.array([0.75, 0.25])
+    J_TM, J_RE, J_TMRE = 2.59e-21, 1.35e-21, -1.13e-21
+    J0 = 12 * np.array([[x[0] * J_TM, x[1] * J_TMRE], [x[0] * J_TMRE, x[1] * J_RE]])
+    mu = np.array([1.92, 7.63])
+    Ms = x * mu * 9.2740100783e-24 / (0.74 * 0.35e-9**3)
+    FeCo = ud.Atom("Fe", magnetization=(0, 0, 1))
+    Gd = ud.Atom("Gd", magnetization=(0, 0, -1))
+    GdFeCo = ud.AtomMixed("GdFeCo")
+    GdFeCo.add_atom(FeCo, x[0])
+    GdFeCo.add_atom(Gd, x[1])
+    rho, gamma_e, C_l, g_el, tau_D, T_R = 8000, 1.8e5 / 300, 3.8e6, 7e17, 10e-12, 300
+    layer = ud.AmorphousLayer(
+        "GdFeCo",
+        "GdFeCo",
+        thickness=1 * u.nm,
+        density=rho * u.kg / u.m**3,
+        atom=GdFeCo,
+        heat_capacity=[f"{gamma_e / rho:g}*T", C_l / rho * u.J / u.kg / u.K],
+        therm_cond=[20 * u.W / (u.m * u.K), 1 * u.W / (u.m * u.K)],
+        sub_system_coupling=[
+            f"-{g_el:g}*(T_0-T_1) - {gamma_e / tau_D:g}*T_0*(T_0-{T_R:g})",
+            f"{g_el:g}*(T_0-T_1)",
+        ],
+        lin_therm_exp=[0, 1e-5],
+        opt_pen_depth=20 * u.nm,
+        eff_spin=[np.inf, np.inf],
+        mag_moment=mu * u.bohr_magneton,
+        lamda=0.02,
+        mf_exch_coupling=J0 * u.J,
+        mag_saturation=Ms * u.J / u.T / u.m**3,
+        anisotropy=[[0, 0, 1.87e6], [0, 0, 0.62e6]] * u.J / u.m**3,
+        aniso_exponent=2,
+        exch_relax_rate=0.013,
+    )
+    S = make_structure((layer, 4))
+    heat = ud.Heat(S, True, save_data=False, disp_messages=False, progress_bar=False)
+    heat.heat_diffusion = True
+    delays = np.r_[-0.5:6:0.01] * u.ps
+    temp_maps = []
+    for fluence in (0.81, 1.62):
+        heat.excitation = {
+            "fluence": [fluence] * u.mJ / u.cm**2,
+            "delay_pump": [0] * u.ps,
+            "pulse_width": [50] * u.fs,
+            "multilayer_absorption": False,
+        }
+        temp_map, _ = heat.get_temp_map(delays, T_R * u.K)
+        temp_maps.append(temp_map)
+    return S, delays, temp_maps
+
+
+def test_all_optical_switching(gdfeco, tmp_path):
+    """the exchange relaxation switches GdFeCo above a threshold fluence via
+    a transient ferromagnetic-like state, which the conventional LLB does
+    not, see Raposo et al. 2022"""
+    S, delays, (low, high) = gdfeco
+    assert S.get_layer_vectors()[2][0].curie_temp.magnitude == pytest.approx(603, abs=1)
+    llb = LLB(S, True, save_data=False, disp_messages=False, progress_bar=False)
+
+    def m_z(temp_map, **kwargs):
+        sub = llb.get_sublattice_magnetization_map(delays, temp_map=temp_map, **kwargs)
+        return np.mean(convert_polar_to_cartesian(sub)[..., 2], axis=1)
+
+    switched = m_z(high, exchange_relaxation=True)
+    # both sublattices are reversed, the RE still recovers at the end
+    assert switched[-1, 0] < -0.3 and switched[-1, 1] > 0.1
+    assert np.any((switched[:, 0] < -0.01) & (switched[:, 1] < -0.01))
+    assert m_z(low, exchange_relaxation=True)[-1, 0] > 0.3
+    assert m_z(high)[-1, 0] > 0
+    # the switching is converged with the default tolerances, which deviate
+    # by ~2e-3 from tight ones
+    llb.ode_options.update({"rtol": 1e-7, "atol": 1e-10})
+    assert np.allclose(m_z(high, exchange_relaxation=True), switched, atol=5e-3)

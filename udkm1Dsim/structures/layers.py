@@ -286,6 +286,8 @@ class Layer:
                 "magnetic.gilbert_damping",
                 "magnetic.inertial_time",
                 "magnetic.magnetoelastic_coupling",
+                "magnetic.exch_relax_rate",
+                "magnetic.concentration",
             ],
         }
 
@@ -680,6 +682,22 @@ class Layer:
         self.magnetic.magnetoelastic_coupling = value
 
     @property
+    def exch_relax_rate(self):
+        return self.magnetic.exch_relax_rate.quantity
+
+    @exch_relax_rate.setter
+    def exch_relax_rate(self, value):
+        self.magnetic.exch_relax_rate = value
+
+    @property
+    def concentration(self):
+        return self.magnetic.concentration.quantity
+
+    @concentration.setter
+    def concentration(self, value):
+        self.magnetic.concentration = value
+
+    @property
     def num_sublattices(self):
         """int: number of magnetic sublattices, see
         :attr:`.MagneticParameters.num_sublattices`."""
@@ -744,6 +762,8 @@ class AmorphousLayer(Layer):
             self.magnetic.magnetization = [
                 constituent.atomic.magnetization for constituent, _ in atom.atoms
             ]
+            if not self.magnetic._concentration_explicit:
+                self.magnetic.concentration = [fraction for _, fraction in atom.atoms]
         else:
             if isinstance(self.magnetic.magnetization, list):
                 self.magnetic.magnetization = (0.0, 0.0, 0.0)
