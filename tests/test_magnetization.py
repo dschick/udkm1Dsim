@@ -207,15 +207,15 @@ def test_llb_input_validation(llb, temp_map, delays, distances):
     with pytest.raises(TypeError):
         llb.get_magnetization_map(delays, temp_map=list(temp_map))
     with pytest.raises(ValueError):
-        llb.get_magnetization_map(delays, temp_map=temp_map, H_ext=np.zeros(2))
+        llb.get_magnetization_map(delays, temp_map=temp_map, B_ext=np.zeros(2))
     with pytest.raises(ValueError):
         llb.get_magnetization_map(delays, temp_map=temp_map, init_mag=np.zeros((2, 3)))
     with pytest.raises(ValueError):
         llb.get_magnetization_map(delays, temp_map=temp_map[:, 0:3, :])
     # an Nx3 initial magnetization and a per-delay external field are valid
     init_mag = np.tile(ALONG_X, (len(distances), 1))
-    H_ext = np.tile(np.r_[0, 0, 1.0], (len(delays), 1))
-    llb.get_magnetization_map(delays, temp_map=temp_map, init_mag=init_mag, H_ext=H_ext)
+    B_ext = np.tile(np.r_[0, 0, 1.0], (len(delays), 1))
+    llb.get_magnetization_map(delays, temp_map=temp_map, init_mag=init_mag, B_ext=B_ext)
 
 
 def test_llb_mean_field_mag_map(llb, temp_map):
@@ -282,7 +282,7 @@ def test_llb_larmor_precession(tmp_path):
     delays = np.r_[0:100:0.5] * u.ps
     B = 0.5
     temp_map = 300 * np.ones((len(delays), 1, 1))
-    mag_map = llb.get_magnetization_map(delays, temp_map=temp_map, H_ext=np.r_[0, 0, B])
+    mag_map = llb.get_magnetization_map(delays, temp_map=temp_map, B_ext=np.r_[0, 0, B])
     m = convert_polar_to_cartesian(mag_map)[:, 0, :]
     t = delays.to("s").magnitude
     omega = magnetization_scipy.GAMMA_E * B
@@ -312,7 +312,7 @@ def test_gyromagnetic_ratio_precession(model, tmp_path):
     delays = np.r_[0:100:0.5] * u.ps
     B = 0.5
     temp_map = 300 * np.ones((len(delays), 1, 1))
-    mag_map = sim.get_magnetization_map(delays, temp_map=temp_map, H_ext=np.r_[0, 0, B])
+    mag_map = sim.get_magnetization_map(delays, temp_map=temp_map, B_ext=np.r_[0, 0, B])
     m = convert_polar_to_cartesian(mag_map)[:, 0, :]
     t = delays.to("s").magnitude
     omega = gamma * B
@@ -331,7 +331,7 @@ def test_llb_relaxes_to_mean_field(eff_spin, tmp_path):
     delays = np.r_[0:20:0.2] * u.ps
     temp_map = 400 * np.ones((len(delays), 1, 1))
     mag_map = llb.get_magnetization_map(
-        delays, temp_map=temp_map, init_mag=ALONG_X, H_ext=np.r_[0, 0, 0.01]
+        delays, temp_map=temp_map, init_mag=ALONG_X, B_ext=np.r_[0, 0, 0.01]
     )
     mf = llb.calc_mean_field_mag_map(temp_map[:, :, 0])
     reference = mean_field.mean_field_magnetization(400 / 630, eff_spin)
@@ -410,7 +410,7 @@ def test_llg_damped_precession(alpha, tmp_path):
     llg = simulation(LLG, S, tmp_path)
     delays = np.r_[0:100:0.5] * u.ps
     B = 0.5
-    mag_map = llg.get_magnetization_map(delays, H_ext=np.r_[0, 0, B])
+    mag_map = llg.get_magnetization_map(delays, B_ext=np.r_[0, 0, B])
     t = delays.to("s").magnitude
     omega = magnetization_scipy.GAMMA_E * B / (1 + alpha**2)
     phi = 2 * np.arctan(np.exp(-alpha * abs(omega) * t))
@@ -455,7 +455,7 @@ def test_llg_non_magnetic_layers(tmp_path):
     spacer = make_layer("s", mag_saturation=0 * u.J / u.T / u.m**3)
     S = make_structure((make_layer("m", gilbert_damping=0.1), 1), (spacer, 1))
     llg = simulation(LLG, S, tmp_path)
-    mag_map = llg.get_magnetization_map(np.r_[0:5:1] * u.ps, H_ext=np.r_[0, 0, 1])
+    mag_map = llg.get_magnetization_map(np.r_[0:5:1] * u.ps, B_ext=np.r_[0, 0, 1])
     assert np.allclose(mag_map[:, 1], 0)
     assert np.all(mag_map[1:, 0, 1] < np.pi / 2)
 
@@ -501,12 +501,12 @@ def test_illg_approaches_llg(tmp_path):
     velocity of the LLG"""
     S = make_structure((make_layer("m", gilbert_damping=0.2, inertial_time=1 * u.fs), 1))
     delays = np.r_[0:20:0.5] * u.ps
-    H_ext = np.r_[0, 0, 1]
+    B_ext = np.r_[0, 0, 1]
     llg = simulation(LLG, S, tmp_path)
     illg = simulation(iLLG, S, tmp_path)
     assert illg.ode_options["method"] == "LSODA"
-    reference = convert_polar_to_cartesian(llg.get_magnetization_map(delays, H_ext=H_ext))
-    m = convert_polar_to_cartesian(illg.get_magnetization_map(delays, H_ext=H_ext))
+    reference = convert_polar_to_cartesian(llg.get_magnetization_map(delays, B_ext=B_ext))
+    m = convert_polar_to_cartesian(illg.get_magnetization_map(delays, B_ext=B_ext))
     assert np.allclose(np.sum(m**2, axis=2), 1)
     assert np.allclose(m, reference, atol=1e-2)
 
@@ -665,20 +665,20 @@ def test_uncoupled_sublattices_are_independent_layers(tmp_path):
         (make_layer("b", lamda=0.02, eff_spin=3.5, curie_temp=1000 * u.K, gilbert_damping=0.1), 1),
     )
     reference.get_layer_vectors()[2][1].magnetization = (0, 1, 0)
-    H_ext = np.r_[0, 0, 0.5]
+    B_ext = np.r_[0, 0, 0.5]
     temp_map = pulse(delays)
     # LLB
-    _, sub = sublattice_llb(make_structure((layer, 1)), tmp_path, temp_map, delays, H_ext=H_ext)
+    _, sub = sublattice_llb(make_structure((layer, 1)), tmp_path, temp_map, delays, B_ext=B_ext)
     ref_llb = simulation(LLB, reference, tmp_path)
     ref = ref_llb.get_magnetization_map(
-        delays, temp_map=np.repeat(temp_map, 2, axis=1), H_ext=H_ext
+        delays, temp_map=np.repeat(temp_map, 2, axis=1), B_ext=B_ext
     )
     assert sub.shape == (len(delays), 1, 2, 3)
     assert np.allclose(convert_polar_to_cartesian(sub[:, 0]), convert_polar_to_cartesian(ref))
     # LLG
     llg = simulation(LLG, make_structure((layer, 1)), tmp_path)
-    sub = llg.get_sublattice_magnetization_map(delays, H_ext=H_ext)
-    ref = simulation(LLG, reference, tmp_path).get_magnetization_map(delays, H_ext=H_ext)
+    sub = llg.get_sublattice_magnetization_map(delays, B_ext=B_ext)
+    ref = simulation(LLG, reference, tmp_path).get_magnetization_map(delays, B_ext=B_ext)
     assert np.allclose(convert_polar_to_cartesian(sub[:, 0]), convert_polar_to_cartesian(ref))
 
 
@@ -833,7 +833,7 @@ def test_llg_equilibrium_stoner_wohlfarth(B, theta_H, tmp_path):
     K, Ms = 2e5, 5e5
     S = make_structure((make_layer("m", anisotropy=[0, 0, K] * u.J / u.m**3), 2))
     llg = simulation(LLG, S, tmp_path)
-    eq = llg.get_equilibrium_magnetization(H_ext=field(B, theta_H), init_mag=NEAR_Z)
+    eq = llg.get_equilibrium_magnetization(B_ext=field(B, theta_H), init_mag=NEAR_Z)
     assert eq.shape == (2, 1, 3)
     assert np.allclose(eq[:, 0, 0], 1)
     assert np.allclose(eq[:, 0, 1], stoner_wohlfarth_angle(B, theta_H, 2 * K / Ms), atol=1e-6)
@@ -848,7 +848,7 @@ def test_llb_equilibrium_stoner_wohlfarth(tmp_path):
     layer = make_layer("m", anisotropy=[0, 0, K] * u.J / u.m**3, aniso_exponent=3)
     llb = simulation(LLB, make_structure((layer, 1)), tmp_path)
     eq = llb.get_equilibrium_magnetization(
-        H_ext=field(B, theta_H), init_mag=NEAR_Z, temp_map=np.array([T])
+        B_ext=field(B, theta_H), init_mag=NEAR_Z, temp_map=np.array([T])
     )
     me = mean_field.mean_field_magnetization(T / 630, 0.5)
     assert np.isclose(eq[0, 0, 0], me, atol=1e-4)
@@ -866,7 +866,7 @@ def test_equilibrium_of_canted_antiferromagnet(tmp_path):
     layer = make_sublattice_layer("ab", [(0, 0, 1), (0, 0, -1)], J)
     llg = simulation(LLG, make_structure((layer, 1)), tmp_path)
     init_mag = np.array([[1, 1e-3, 0], [1, np.pi - 1e-3, 0]])
-    eq = llg.get_equilibrium_magnetization(H_ext=np.r_[B, 0, 0], init_mag=init_mag)
+    eq = llg.get_equilibrium_magnetization(B_ext=np.r_[B, 0, 0], init_mag=init_mag)
     n = convert_polar_to_cartesian(eq[0])
     sin_theta = B / (2 * B_E)
     assert np.allclose(n[:, 0], sin_theta, atol=1e-6)
@@ -893,13 +893,13 @@ def test_start_in_equilibrium(cls, tmp_path):
         sim.ode_options.update({"rtol": 1e-3, "atol": 1e-6})
     delays = np.r_[0:50:0.5] * u.ps
     kwargs = {"temp_map": np.full((len(delays), 1), 300.0)} if cls is LLB else {}
-    H_ext = field(0.3, np.radians(60))
+    B_ext = field(0.3, np.radians(60))
     m = convert_polar_to_cartesian(
-        sim.get_magnetization_map(delays, H_ext=H_ext, init_mag=NEAR_Z, equilibrate=True, **kwargs)
+        sim.get_magnetization_map(delays, B_ext=B_ext, init_mag=NEAR_Z, equilibrate=True, **kwargs)
     )
     assert np.max(np.abs(m - m[0])) < (2e-4 if cls is LLB else 1e-5)
     m = convert_polar_to_cartesian(
-        sim.get_magnetization_map(delays, H_ext=H_ext, init_mag=NEAR_Z, **kwargs)
+        sim.get_magnetization_map(delays, B_ext=B_ext, init_mag=NEAR_Z, **kwargs)
     )
     assert np.max(np.abs(m - m[0])) > 1e-2
 
@@ -908,14 +908,14 @@ def test_equilibrium_options(tmp_path):
     S = make_structure((make_layer("m", anisotropy=[0, 0, 2e5] * u.J / u.m**3), 1))
     llg = simulation(LLG, S, tmp_path)
     delays = np.r_[0:2:1] * u.ps
-    H_ext = field(0.3, np.radians(60))
-    hash = llg.get_hash(delays=delays, H_ext=H_ext, equilibrate=True)
-    assert hash != llg.get_hash(delays=delays, H_ext=H_ext)
+    B_ext = field(0.3, np.radians(60))
+    hash = llg.get_hash(delays=delays, B_ext=B_ext, equilibrate=True)
+    assert hash != llg.get_hash(delays=delays, B_ext=B_ext)
     llg.equilibrium_options["tol"] = 1e-3
-    assert hash != llg.get_hash(delays=delays, H_ext=H_ext, equilibrate=True)
+    assert hash != llg.get_hash(delays=delays, B_ext=B_ext, equilibrate=True)
     llg.equilibrium_options.update({"tol": 1e-9, "max_time": 1e-15})
     with pytest.warns(UserWarning, match="did not reach its equilibrium"):
-        llg.get_equilibrium_magnetization(H_ext=H_ext, init_mag=NEAR_Z)
+        llg.get_equilibrium_magnetization(B_ext=B_ext, init_mag=NEAR_Z)
 
 
 # exchange relaxation

@@ -267,7 +267,7 @@ class Magnetization(Simulation):
         numpy arrays.
         The ``magnetization_map`` can depend on the ``temp_map`` and
         ``strain_map`` that can be also calculated for the sample structure.
-        More over an external magnetic field ``H_ext`` and initial magnetization
+        More over an external magnetic field ``B_ext`` and initial magnetization
         profile ``init_mag`` can be provided.
 
         Args:
@@ -336,12 +336,12 @@ class Magnetization(Simulation):
             for name in ("temp_map", "mag_amplitude_map"):
                 if kwargs.get(name) is not None and not isinstance(kwargs[name], np.ndarray):
                     raise TypeError(f"{name} must be a numpy ndarray!")
-            if "H_ext" in kwargs:
-                if not isinstance(kwargs["H_ext"], np.ndarray):
-                    raise TypeError("H_ext must be a numpy ndarray!")
-                elif kwargs["H_ext"].shape not in [(3,), (np.size(delays), 3)]:
+            if "B_ext" in kwargs:
+                if not isinstance(kwargs["B_ext"], np.ndarray):
+                    raise TypeError("B_ext must be a numpy ndarray!")
+                elif kwargs["B_ext"].shape not in [(3,), (np.size(delays), 3)]:
                     raise ValueError(
-                        "H_ext must be a vector with 3 components (H_x, H_y, H_z) or an "
+                        "B_ext must be a vector with 3 components (B_x, B_y, B_z) or an "
                         "array of Mx3 with M being the number of delays!"
                     )
             if "init_mag" in kwargs and len(kwargs["init_mag"]) > 0:
@@ -693,7 +693,7 @@ class Magnetization(Simulation):
             pass
         return np.asarray(delays, dtype=float)
 
-    def get_equilibrium_magnetization(self, H_ext=np.array([0, 0, 0]), init_mag=[], **profiles):
+    def get_equilibrium_magnetization(self, B_ext=np.array([0, 0, 0]), init_mag=[], **profiles):
         r"""get_equilibrium_magnetization
 
         Returns the magnetization of all sublattices of all layers in the
@@ -715,8 +715,8 @@ class Magnetization(Simulation):
         axis, is not left.
 
         Args:
-            H_ext (ndarray[float], optional): external magnetic field
-                (H_x, H_y, H_z) [T].
+            B_ext (ndarray[float], optional): external magnetic field
+                (B_x, B_y, B_z) [T].
             init_mag (ndarray[float], optional): initial magnetization in
                 polar coordinates, see :meth:`check_initial_magnetization`.
             **profiles (ndarray[float], optional): the spatial profiles of
@@ -736,7 +736,7 @@ class Magnetization(Simulation):
         }
         _, sublattice_map = self.calc_magnetization_map(
             np.zeros(1),
-            H_ext=np.asarray(H_ext, dtype=float),
+            B_ext=np.asarray(B_ext, dtype=float),
             init_mag=init_mag,
             equilibrate=True,
             **maps,
@@ -765,11 +765,11 @@ class Magnetization(Simulation):
             :math:`N \times P \times 3`.
 
         """
-        H_ext, _, _, strains = magnetization_scipy.interpolate_inputs(inputs.delays[0], inputs)
+        B_ext, _, _, strains = magnetization_scipy.interpolate_inputs(inputs.delays[0], inputs)
         directions, torque = magnetization_scipy.relax_directions(
             init_dir,
             amplitudes,
-            H_ext,
+            B_ext,
             strains,
             magnetization_scipy.stack_magnetic_parameters(
                 self.get_magnetic_parameters(is_magnetic)
@@ -902,7 +902,7 @@ class LLG(Magnetization):
     negative amplitude of the initial magnetization only.
 
     The field :math:`\mathbf{B}` [T] is the sum of the external field
-    ``H_ext``, the :func:`anisotropy field
+    ``B_ext``, the :func:`anisotropy field
     <udkm1Dsim.simulations.solvers.magnetization_scipy.anisotropy_field>`,
     the :func:`interlayer exchange field
     <udkm1Dsim.simulations.solvers.magnetization_scipy.interlayer_exchange_field>`
@@ -967,7 +967,7 @@ class LLG(Magnetization):
         delays,
         mag_amplitude_map=None,
         temp_map=None,
-        H_ext=np.array([0, 0, 0]),
+        B_ext=np.array([0, 0, 0]),
         init_mag=[],
         strain_map=None,
         equilibrate=False,
@@ -989,8 +989,8 @@ class LLG(Magnetization):
             temp_map (ndarray[float], optional): spatio-temporal temperature
                 map, used for the magnetization amplitude if no
                 ``mag_amplitude_map`` is given, see :class:`LLG`.
-            H_ext (ndarray[float], optional): external magnetic field
-                (H_x, H_y, H_z) [T], either constant or one vector per delay.
+            B_ext (ndarray[float], optional): external magnetic field
+                (B_x, B_y, B_z) [T], either constant or one vector per delay.
             init_mag (ndarray[float], optional): initial magnetization in
                 polar coordinates, see :meth:`check_initial_magnetization`.
                 Its amplitude is kept if neither ``mag_amplitude_map`` nor
@@ -1067,7 +1067,7 @@ class LLG(Magnetization):
         inputs = magnetization_scipy.prepare_inputs(
             delays,
             len(layers),
-            H_ext,
+            B_ext,
             amplitude_map=amplitude_map[:, is_magnetic, :P],
             strain_map=None if strain_map is None else strain_map[:, is_magnetic],
         )
@@ -1195,7 +1195,7 @@ class iLLG(LLG):
         delays,
         mag_amplitude_map=None,
         temp_map=None,
-        H_ext=np.array([0, 0, 0]),
+        B_ext=np.array([0, 0, 0]),
         init_mag=[],
         strain_map=None,
         equilibrate=False,
@@ -1217,8 +1217,8 @@ class iLLG(LLG):
             temp_map (ndarray[float], optional): spatio-temporal temperature
                 map, used for the magnetization amplitude if no
                 ``mag_amplitude_map`` is given, see :class:`LLG`.
-            H_ext (ndarray[float], optional): external magnetic field
-                (H_x, H_y, H_z) [T], either constant or one vector per delay.
+            B_ext (ndarray[float], optional): external magnetic field
+                (B_x, B_y, B_z) [T], either constant or one vector per delay.
             init_mag (ndarray[float], optional): initial magnetization in
                 polar coordinates.
             strain_map (ndarray[float], optional): spatio-temporal strain map
@@ -1243,7 +1243,7 @@ class iLLG(LLG):
             delays,
             mag_amplitude_map=mag_amplitude_map,
             temp_map=temp_map,
-            H_ext=H_ext,
+            B_ext=B_ext,
             init_mag=init_mag,
             strain_map=strain_map,
             equilibrate=equilibrate,
@@ -1368,7 +1368,7 @@ class LLB(Magnetization):
     The field :math:`\mathbf{B}` [T] is the sum of all relevant magnetic
     interactions:
 
-    * the external magnetic field ``H_ext``
+    * the external magnetic field ``B_ext``
     * the :func:`anisotropy field
       <udkm1Dsim.simulations.solvers.magnetization_scipy.anisotropy_field>`
     * the :func:`interlayer exchange field
@@ -1451,7 +1451,7 @@ class LLB(Magnetization):
         self,
         delays,
         temp_map,
-        H_ext=np.array([0, 0, 0]),
+        B_ext=np.array([0, 0, 0]),
         init_mag=[],
         strain_map=None,
         equilibrate=False,
@@ -1466,8 +1466,8 @@ class LLB(Magnetization):
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             temp_map (ndarray[float]): spatio-temporal temperature map.
-            H_ext (ndarray[float], optional): external magnetic field
-                (H_x, H_y, H_z) [T], either constant or one vector per delay.
+            B_ext (ndarray[float], optional): external magnetic field
+                (B_x, B_y, B_z) [T], either constant or one vector per delay.
             init_mag (ndarray[float], optional): initial magnetization in
                 polar coordinates, see :meth:`check_initial_magnetization`. If
                 none is given, the layers start in the equilibrium of their
@@ -1544,7 +1544,7 @@ class LLB(Magnetization):
         inputs = magnetization_scipy.prepare_inputs(
             delays,
             N,
-            H_ext,
+            B_ext,
             temp_map=temps[:, is_magnetic],
             strain_map=None if strain_map is None else strain_map[:, is_magnetic],
         )

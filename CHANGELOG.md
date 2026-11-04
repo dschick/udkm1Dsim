@@ -35,12 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Magnetization.get_equilibrium_magnetization` and the option `equilibrate` of `get_magnetization_map` relax the directions of the initial magnetization of `LLG`, `iLLG`, and `LLB` into the equilibrium of the external field, the anisotropy, the exchange, and the strain by an overdamped flow without precession, see `solvers.magnetization_scipy.relax_directions`, instead of simulating the precession for a long delay range before the excitation, closing [#139]
 - `Magnetization.get_magnetic_parameters` and `Magnetization.get_interlayer_exchange_stiffnesses` collect the inputs of the solver from the structure
 - `Magnetization.temp_sub_system` to select the sub-system of the `temp_map` that drives the magnetization dynamics
-- `LLB.get_magnetization_map` accepts an external field `H_ext` per delay as `Mx3` array
+- `LLB.get_magnetization_map` accepts an external field `B_ext` per delay as `Mx3` array
 - `LLB` warns if a layer ends at a vanishing magnetization below its Curie temperature, since `m = 0` is a fixed point of the LLB
 - magnetic parameter `gyromagnetic_ratio` of layers per sublattice for `LLG`, `iLLG`, and `LLB`, which defaults to the one of a free electron `GAMMA_E`, now taken from `scipy.constants` (-1.76086e11 instead of -1.761e11 rad/(s T))
 
 ### Changed
 
+- the external magnetic field of the magnetization simulations is given as `B_ext` in tesla instead of `H_ext`, consistent with the fields $\mathbf{B}$ in the equations and their units
 - the magnetization example `01-LLB` is replaced by `01-LLG` (precession, equilibrium, amplitude from the temperature or a map, magnetoelastic coupling), which reproduces the heterostructure-dependent precession of Jarecki et al. 2024, adapted from the examples of [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber)
 - the default integrator of the magnetization simulations is `LSODA` instead of `RK45`, which is much faster for the stiff equations of strongly coupled sublattices, the inertial LLG, and the LLB at low temperatures; with the default tolerances it is also more accurate, e.g. the largest deviation of the magnetization amplitude in the LLB example from a tightly converged solution drops from 0.03 to 0.004
 - `Magnetization.check_initial_magnetization` returns the initial magnetization of all sublattices as `NxPx3` array, and `calc_magnetization_map` of `LLG`, `iLLG`, and `LLB` returns the net and the sublattice magnetization maps
