@@ -773,3 +773,117 @@ def test_llg_sublattice_amplitudes(tmp_path):
     assert np.allclose(sub[..., 0], llg.get_sublattice_mean_field_mag_map(temp_map))
     with pytest.raises(ValueError, match="M x L x P"):
         llg.get_magnetization_map(delays, mag_amplitude_map=np.ones((M, 2, 3)))
+
+
+# equilibrium magnetization
+
+
+def stoner_wohlfarth_angle(B, theta_H, B_K):
+    """equilibrium angle from the easy axis z of a uniaxial anisotropy with
+    the anisotropy field B_K in a field B at the angle theta_H from z"""
+    from scipy.optimize import minimize_scalar
+
+    def energy(theta):
+        return -B_K / 2 * np.cos(theta) ** 2 - B * np.cos(theta - theta_H)
+
+    return minimize_scalar(
+        energy, bounds=(0, theta_H), method="bounded", options={"xatol": 1e-12}
+    ).x
+
+
+def field(B, theta_H):
+    return B * np.array([np.sin(theta_H), 0, np.cos(theta_H)])
+
+
+NEAR_Z = np.array([1.0, 1e-3, 0.0])
+
+
+@pytest.mark.parametrize("B, theta_H", [(0.3, np.radians(60)), (1.2, np.radians(45))])
+def test_llg_equilibrium_stoner_wohlfarth(B, theta_H, tmp_path):
+    """the equilibrium of a uniaxial anisotropy in a tilted field"""
+    K, Ms = 2e5, 5e5
+    S = make_structure((make_layer("m", anisotropy=[0, 0, K] * u.J / u.m**3), 2))
+    llg = simulation(LLG, S, tmp_path)
+    eq = llg.get_equilibrium_magnetization(H_ext=field(B, theta_H), init_mag=NEAR_Z)
+    assert eq.shape == (2, 1, 3)
+    assert np.allclose(eq[:, 0, 0], 1)
+    assert np.allclose(eq[:, 0, 1], stoner_wohlfarth_angle(B, theta_H, 2 * K / Ms), atol=1e-6)
+    assert np.allclose(eq[:, 0, 2], 0, atol=1e-6)
+
+
+def test_llb_equilibrium_stoner_wohlfarth(tmp_path):
+    """the LLB starts with the mean-field amplitude and the anisotropy field
+    is scaled by m_e**(beta - 1)"""
+    K, Ms, T = 2e5, 5e5, 400.0
+    B, theta_H = 0.3, np.radians(60)
+    layer = make_layer("m", anisotropy=[0, 0, K] * u.J / u.m**3, aniso_exponent=3)
+    llb = simulation(LLB, make_structure((layer, 1)), tmp_path)
+    eq = llb.get_equilibrium_magnetization(
+        H_ext=field(B, theta_H), init_mag=NEAR_Z, temp_map=np.array([T])
+    )
+    me = mean_field.mean_field_magnetization(T / 630, 0.5)
+    assert np.isclose(eq[0, 0, 0], me, atol=1e-4)
+    B_K = 2 * K / Ms * eq[0, 0, 0] ** 2
+    assert np.isclose(eq[0, 0, 1], stoner_wohlfarth_angle(B, theta_H, B_K), atol=1e-6)
+
+
+def test_equilibrium_of_canted_antiferromagnet(tmp_path):
+    """two antiferromagnetically coupled sublattices cant towards a field
+    perpendicular to them by sin(theta) = B / (2 B_E) with their exchange
+    field B_E"""
+    mu = 0.393 * 9.2740100783e-24
+    B_E, B = 5.0, 2.0
+    J = np.array([[mf_exchange(0.5, 630), -B_E * mu], [-B_E * mu, mf_exchange(0.5, 630)]])
+    layer = make_sublattice_layer("ab", [(0, 0, 1), (0, 0, -1)], J)
+    llg = simulation(LLG, make_structure((layer, 1)), tmp_path)
+    init_mag = np.array([[1, 1e-3, 0], [1, np.pi - 1e-3, 0]])
+    eq = llg.get_equilibrium_magnetization(H_ext=np.r_[B, 0, 0], init_mag=init_mag)
+    n = convert_polar_to_cartesian(eq[0])
+    sin_theta = B / (2 * B_E)
+    assert np.allclose(n[:, 0], sin_theta, atol=1e-6)
+    assert np.allclose(n[:, 2], [np.sqrt(1 - sin_theta**2), -np.sqrt(1 - sin_theta**2)], atol=1e-6)
+
+
+@pytest.mark.parametrize("cls", [LLG, iLLG, LLB])
+def test_start_in_equilibrium(cls, tmp_path):
+    """the magnetization started in equilibrium stays put, whereas the one
+    started along the easy axis precesses. The relaxation keeps the
+    amplitude, so that the LLB still relaxes it by the tiny amount, by which
+    the field and the anisotropy increase it beyond the mean field."""
+    K = 2e5
+    layer = make_layer(
+        "m",
+        anisotropy=[0, 0, K] * u.J / u.m**3,
+        aniso_exponent=3,
+        gilbert_damping=0.01,
+        inertial_time=1 * u.fs,
+    )
+    sim = simulation(cls, make_structure((layer, 1)), tmp_path)
+    if cls is iLLG:
+        # tight tolerances would resolve the weakly damped nutation at 1/(alpha tau)
+        sim.ode_options.update({"rtol": 1e-3, "atol": 1e-6})
+    delays = np.r_[0:50:0.5] * u.ps
+    kwargs = {"temp_map": np.full((len(delays), 1), 300.0)} if cls is LLB else {}
+    H_ext = field(0.3, np.radians(60))
+    m = convert_polar_to_cartesian(
+        sim.get_magnetization_map(delays, H_ext=H_ext, init_mag=NEAR_Z, equilibrate=True, **kwargs)
+    )
+    assert np.max(np.abs(m - m[0])) < (2e-4 if cls is LLB else 1e-5)
+    m = convert_polar_to_cartesian(
+        sim.get_magnetization_map(delays, H_ext=H_ext, init_mag=NEAR_Z, **kwargs)
+    )
+    assert np.max(np.abs(m - m[0])) > 1e-2
+
+
+def test_equilibrium_options(tmp_path):
+    S = make_structure((make_layer("m", anisotropy=[0, 0, 2e5] * u.J / u.m**3), 1))
+    llg = simulation(LLG, S, tmp_path)
+    delays = np.r_[0:2:1] * u.ps
+    H_ext = field(0.3, np.radians(60))
+    hash = llg.get_hash(delays=delays, H_ext=H_ext, equilibrate=True)
+    assert hash != llg.get_hash(delays=delays, H_ext=H_ext)
+    llg.equilibrium_options["tol"] = 1e-3
+    assert hash != llg.get_hash(delays=delays, H_ext=H_ext, equilibrate=True)
+    llg.equilibrium_options.update({"tol": 1e-9, "max_time": 1e-15})
+    with pytest.warns(UserWarning, match="did not reach its equilibrium"):
+        llg.get_equilibrium_magnetization(H_ext=H_ext, init_mag=NEAR_Z)
