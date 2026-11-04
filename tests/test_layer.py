@@ -11,7 +11,7 @@ import sympy as sp
 from pint.testing import assert_allclose as assert_approx
 from pint.testing import assert_equal
 
-from udkm1Dsim import AmorphousLayer, Atom, Layer, UnitCell, u
+from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Layer, UnitCell, u
 from udkm1Dsim.structures.parameter_groups import (
     ElasticParameters,
     LatticeParameters,
@@ -766,7 +766,7 @@ def test_group_assignment_of_vector_parameter():
 
 def test_group_assignment_of_derived_parameter_raises():
     with pytest.raises(AttributeError, match="derived"):
-        MagneticParameters().mf_exch_coupling = 1.0
+        StructuralParameters(thickness=1 * u.nm, density=1 * u.kg / u.m**3).mass = 1.0
 
 
 def test_group_assignment_replaces_parameter():
@@ -811,3 +811,96 @@ def test_group_assignment_replaces_temperature_parameter():
     assert thermal.heat_capacity.symbol == "C"
     with pytest.raises(ValueError, match="must be given in"):
         thermal.heat_capacity = TemperatureParameter("kJ/kg/K", 1)
+
+
+# sublattices
+
+K_B = 1.380649e-23
+EXCHANGE = np.array([[3 * K_B * 500, -K_B * 100], [-K_B * 100, 3 * K_B * 300]])
+
+
+def test_sublattice_parameters():
+    """scalars hold for all sublattices, whose number is given by the
+    parameter with the most values"""
+    magnetic = MagneticParameters(
+        eff_spin=[np.inf, np.inf],
+        lamda=0.01,
+        anisotropy=[[0, 0, 1], [0, 0, 2]] * u.J / u.m**3,
+        mf_exch_coupling=EXCHANGE * u.J,
+        magnetization=[(0, 0, 1), {"r": -0.5, "phi": 0, "gamma": 0}],
+    )
+    assert magnetic.num_sublattices == magnetic.check_sublattices() == 2
+    assert np.array_equal(magnetic.sublattice_values("lamda"), [0.01, 0.01])
+    assert np.array_equal(magnetic.sublattice_values("anisotropy"), [[0, 0, 1], [0, 0, 2]])
+    assert np.array_equal(magnetic.sublattice_values("mf_exch_coupling"), EXCHANGE)
+    assert [v.r.magnitude for v in magnetic.magnetization] == [1, -0.5]
+    copied = copy.deepcopy(magnetic)
+    assert all(v._caller is copied for v in copied.magnetization)
+    assert "magnetization_2" in repr(magnetic)
+
+
+def test_curie_temp_derived_from_exchange_matrix():
+    """the Curie temperature of several sublattices is the ordering temperature
+    of the exchange matrix, which is the input"""
+    magnetic = MagneticParameters(eff_spin=[np.inf, np.inf], mf_exch_coupling=EXCHANGE * u.J)
+    T_C = np.max(np.linalg.eigvalsh(EXCHANGE / 3)) / K_B
+    assert np.isclose(magnetic.curie_temp.magnitude, T_C)
+    magnetic.mf_exch_coupling = 2 * EXCHANGE * u.J
+    assert np.isclose(magnetic.curie_temp.magnitude, 2 * T_C)
+    with pytest.raises(AttributeError, match="derived from the mean-field exchange matrix"):
+        magnetic.curie_temp = 400 * u.K
+
+
+def test_curie_temp_and_exchange_switch_for_single_sublattice(layer):
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    J = layer.mf_exch_coupling
+    layer.mf_exch_coupling = 2 * J
+    assert_approx(layer.curie_temp, 200 * u.K)
+    layer.curie_temp = 100 * u.K
+    assert_approx(layer.mf_exch_coupling, J)
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        (
+            {"eff_spin": [1, 2], "lamda": [1, 2, 3], "mf_exch_coupling": EXCHANGE},
+            "eff_spin has 2 values",
+        ),
+        ({"eff_spin": [1, 2], "curie_temp": 500 * u.K}, "explicit 2x2"),
+        ({"eff_spin": [1, 2], "mf_exch_coupling": EXCHANGE, "magnetization": (0, 0, 1)}, "each"),
+        ({"eff_spin": [1, 2, 3], "mf_exch_coupling": EXCHANGE}, "explicit 3x3"),
+        (
+            {"anisotropy": np.ones((3, 3)), "eff_spin": [1, 2], "mf_exch_coupling": EXCHANGE},
+            "eff_spin has 2 values, but there are 3",
+        ),
+    ],
+)
+def test_inconsistent_sublattices_raise(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        MagneticParameters(**kwargs).check_sublattices()
+
+
+def test_layer_sublattices_from_mixed_atom():
+    """every constituent of a mixed atom forms a sublattice of the layer"""
+    Gd = Atom("Gd", magnetization=(0, 0, -1))
+    Fe = Atom("Fe", magnetization=(0, 0, 1))
+    GdFe = AtomMixed("GdFe")
+    GdFe.add_atom(Gd, 0.25)
+    GdFe.add_atom(Fe, 0.75)
+    layer = AmorphousLayer(
+        "GdFe",
+        "GdFe",
+        thickness=1 * u.nm,
+        density=7000 * u.kg / u.m**3,
+        atom=GdFe,
+        eff_spin=[3.5, 0.5],
+        mf_exch_coupling=EXCHANGE * u.J,
+    )
+    assert layer.num_sublattices == 2
+    assert_approx(layer.magnetization, [[0, 0, -1], [0, 0, 1]] * u.dimensionless)
+    layer.magnetization = [(1, 0, 0), (-1, 0, 0)]
+    assert_approx(layer.magnetization, [[1, 0, 0], [-1, 0, 0]] * u.dimensionless)
+    # a single constituent per layer keeps the magnetization of the mixed atom
+    single = AmorphousLayer("GdFe", "GdFe", thickness=1 * u.nm, atom=GdFe)
+    assert single.num_sublattices == 1

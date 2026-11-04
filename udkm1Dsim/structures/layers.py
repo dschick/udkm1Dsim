@@ -316,7 +316,7 @@ class Layer:
 
     @thickness.setter
     def thickness(self, value):
-        self.structural.thickness.quantity = value
+        self.structural.thickness = value
 
     @property
     def mass(self):
@@ -345,7 +345,7 @@ class Layer:
 
     @density.setter
     def density(self, value):
-        self.structural.density.quantity = value
+        self.structural.density = value
 
     @property
     def area(self):
@@ -371,7 +371,7 @@ class Layer:
 
     @roughness.setter
     def roughness(self, value):
-        self.structural.roughness.quantity = value
+        self.structural.roughness = value
 
     # ============================================================================
     # Thermal parameters
@@ -383,7 +383,7 @@ class Layer:
 
     @therm_cond.setter
     def therm_cond(self, value):
-        self.thermal.therm_cond.quantity = value
+        self.thermal.therm_cond = value
 
     @property
     def therm_cond_expr(self):
@@ -395,7 +395,7 @@ class Layer:
 
     @heat_capacity.setter
     def heat_capacity(self, value):
-        self.thermal.heat_capacity.quantity = value
+        self.thermal.heat_capacity = value
 
     @property
     def heat_capacity_expr(self):
@@ -407,7 +407,7 @@ class Layer:
 
     @lin_therm_exp.setter
     def lin_therm_exp(self, value):
-        self.thermal.lin_therm_exp.quantity = value
+        self.thermal.lin_therm_exp = value
 
     @property
     def lin_therm_exp_expr(self):
@@ -449,7 +449,7 @@ class Layer:
 
     @sub_system_coupling.setter
     def sub_system_coupling(self, value):
-        self.thermal.sub_system_coupling.quantity = value
+        self.thermal.sub_system_coupling = value
 
     @property
     def deb_wal_fac(self):
@@ -457,7 +457,7 @@ class Layer:
 
     @deb_wal_fac.setter
     def deb_wal_fac(self, value):
-        self.thermal.deb_wal_fac.quantity = value
+        self.thermal.deb_wal_fac = value
 
     @property
     def deb_wal_fac_expr(self):
@@ -484,7 +484,7 @@ class Layer:
 
     @sound_vel.setter
     def sound_vel(self, value):
-        self.elastic.sound_vel.quantity = value
+        self.elastic.sound_vel = value
 
     @property
     def spring_const(self):
@@ -524,7 +524,7 @@ class Layer:
 
     @phonon_damping.setter
     def phonon_damping(self, value):
-        self.elastic.phonon_damping.quantity = value
+        self.elastic.phonon_damping = value
 
     # ============================================================================
     # Optical parameters
@@ -536,7 +536,7 @@ class Layer:
 
     @opt_pen_depth.setter
     def opt_pen_depth(self, value):
-        self.optical.opt_pen_depth.quantity = value
+        self.optical.opt_pen_depth = value
 
     @property
     def opt_ref_index(self):
@@ -544,7 +544,7 @@ class Layer:
 
     @opt_ref_index.setter
     def opt_ref_index(self, value):
-        self.optical.opt_ref_index.quantity = value
+        self.optical.opt_ref_index = value
 
     @property
     def opt_ref_index_per_strain(self):
@@ -552,7 +552,7 @@ class Layer:
 
     @opt_ref_index_per_strain.setter
     def opt_ref_index_per_strain(self, value):
-        self.optical.opt_ref_index_per_strain.quantity = value
+        self.optical.opt_ref_index_per_strain = value
 
     def set_opt_pen_depth_from_ref_index(self, wavelength):
         """set_opt_pen_depth_from_ref_index
@@ -576,7 +576,7 @@ class Layer:
 
     @eff_spin.setter
     def eff_spin(self, value):
-        self.magnetic.eff_spin.quantity = value
+        self.magnetic.eff_spin = value
 
     @property
     def curie_temp(self):
@@ -584,7 +584,7 @@ class Layer:
 
     @curie_temp.setter
     def curie_temp(self, value):
-        self.magnetic.curie_temp.quantity = value
+        self.magnetic.curie_temp = value
 
     @property
     def mf_exch_coupling(self):
@@ -592,10 +592,7 @@ class Layer:
 
     @mf_exch_coupling.setter
     def mf_exch_coupling(self, value):
-        raise AttributeError(
-            "'mf_exch_coupling' is derived from other 'eff_spin' and 'curie_temp' "
-            " and cannot be set directly."
-        )
+        self.magnetic.mf_exch_coupling = value
 
     @property
     def lamda(self):
@@ -603,7 +600,7 @@ class Layer:
 
     @lamda.setter
     def lamda(self, value):
-        self.magnetic.lamda.quantity = value
+        self.magnetic.lamda = value
 
     @property
     def mag_moment(self):
@@ -611,7 +608,7 @@ class Layer:
 
     @mag_moment.setter
     def mag_moment(self, value):
-        self.magnetic.mag_moment.quantity = value
+        self.magnetic.mag_moment = value
 
     @property
     def aniso_exponent(self):
@@ -619,7 +616,7 @@ class Layer:
 
     @aniso_exponent.setter
     def aniso_exponent(self, value):
-        self.magnetic.aniso_exponent.quantity = value
+        self.magnetic.aniso_exponent = value
 
     @property
     def anisotropy(self):
@@ -627,7 +624,7 @@ class Layer:
 
     @anisotropy.setter
     def anisotropy(self, value):
-        self.magnetic.anisotropy.quantity = value
+        self.magnetic.anisotropy = value
 
     @property
     def exch_stiffness(self):
@@ -635,7 +632,7 @@ class Layer:
 
     @exch_stiffness.setter
     def exch_stiffness(self, value):
-        self.magnetic.exch_stiffness.quantity = value
+        self.magnetic.exch_stiffness = value
 
     @property
     def mag_saturation(self):
@@ -643,15 +640,20 @@ class Layer:
 
     @mag_saturation.setter
     def mag_saturation(self, value):
-        self.magnetic.mag_saturation.quantity = value
+        self.magnetic.mag_saturation = value
 
     @property
     def magnetization(self):
-        return self.magnetic.magnetization.quantity
+        """The cartesian magnetization, as :math:`P \\times 3` array for
+        several sublattices."""
+        magnetization = self.magnetic.magnetization
+        if isinstance(magnetization, list):
+            return np.array([vector.magnitude for vector in magnetization]) * u.dimensionless
+        return magnetization.quantity
 
     @magnetization.setter
     def magnetization(self, value):
-        self.magnetic.magnetization.set(value)
+        self.magnetic.magnetization = value
 
     @property
     def gilbert_damping(self):
@@ -659,7 +661,7 @@ class Layer:
 
     @gilbert_damping.setter
     def gilbert_damping(self, value):
-        self.magnetic.gilbert_damping.quantity = value
+        self.magnetic.gilbert_damping = value
 
     @property
     def inertial_time(self):
@@ -667,7 +669,7 @@ class Layer:
 
     @inertial_time.setter
     def inertial_time(self, value):
-        self.magnetic.inertial_time.quantity = value
+        self.magnetic.inertial_time = value
 
     @property
     def magnetoelastic_coupling(self):
@@ -675,7 +677,13 @@ class Layer:
 
     @magnetoelastic_coupling.setter
     def magnetoelastic_coupling(self, value):
-        self.magnetic.magnetoelastic_coupling.quantity = value
+        self.magnetic.magnetoelastic_coupling = value
+
+    @property
+    def num_sublattices(self):
+        """int: number of magnetic sublattices, see
+        :attr:`.MagneticParameters.num_sublattices`."""
+        return self.magnetic.num_sublattices
 
 
 class Vacuum(Layer):
@@ -731,7 +739,16 @@ class AmorphousLayer(Layer):
                 + "Only Atom and AtomMixed are allowed!"
             )
         self._atom = atom
-        self.magnetic.magnetization.set(atom.atomic.magnetization)
+        if isinstance(atom, AtomMixed) and atom.num_atoms == self.magnetic.num_sublattices > 1:
+            # every constituent of the mixed atom forms a sublattice
+            self.magnetic.magnetization = [
+                constituent.atomic.magnetization for constituent, _ in atom.atoms
+            ]
+        else:
+            if isinstance(self.magnetic.magnetization, list):
+                self.magnetic.magnetization = (0.0, 0.0, 0.0)
+            # keeps the angles of the atom, also for a zero amplitude
+            self.magnetic.magnetization.set(atom.atomic.magnetization)
 
 
 class UnitCell(Layer):
@@ -1028,7 +1045,7 @@ class UnitCell(Layer):
 
     @a_axis.setter
     def a_axis(self, value):
-        self.lattice.a_axis.quantity = value
+        self.lattice.a_axis = value
 
     @property
     def b_axis(self):
@@ -1036,7 +1053,7 @@ class UnitCell(Layer):
 
     @b_axis.setter
     def b_axis(self, value):
-        self.lattice.b_axis.quantity = value
+        self.lattice.b_axis = value
 
     @property
     def c_axis(self):
@@ -1044,7 +1061,7 @@ class UnitCell(Layer):
 
     @c_axis.setter
     def c_axis(self, value):
-        self.lattice.c_axis.quantity = value
+        self.lattice.c_axis = value
 
     @property
     def thickness(self):
@@ -1053,7 +1070,7 @@ class UnitCell(Layer):
     @thickness.setter
     def thickness(self, value):
         # the thickness of a unit cell is its c-axis
-        self.lattice.c_axis.quantity = value
+        self.lattice.c_axis = value
 
     @property
     def density(self):
@@ -1065,4 +1082,4 @@ class UnitCell(Layer):
             raise AttributeError(
                 "The density of a UnitCell with atoms is given by their mass and its volume."
             )
-        self.structural.density.quantity = value
+        self.structural.density = value

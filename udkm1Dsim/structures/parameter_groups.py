@@ -582,36 +582,81 @@ class OpticalParameters(ParameterGroup):
 class MagneticParameters(ParameterGroup):
     r"""Magnetic parameters of a layer.
 
+    A layer can consist of :math:`P` magnetic sublattices, e.g. the two
+    antiparallel sublattices of a ferrimagnet. The per-sublattice parameters
+    are given either as scalar, which holds for all sublattices, or as one
+    value per sublattice, and their numbers must be consistent, see
+    :meth:`check_sublattices`. The number of sublattices is given by the
+    per-sublattice parameter with the most values, see
+    :attr:`num_sublattices`.
+
+    The sublattices are coupled by the mean-field exchange matrix
+    :math:`J_{ab}` [J], whose row :math:`a` holds the coupling constants of
+    the field acting on sublattice :math:`a` due to sublattice :math:`b`, and
+    whose negative off-diagonal elements couple antiferromagnetically. It is
+    derived from the Curie temperature for a single sublattice, see
+    :meth:`calc_mf_exchange_coupling`, and must be given as
+    ``mf_exch_coupling`` for several sublattices, in which case the Curie
+    temperature is derived from it as the ordering temperature, see
+    :meth:`calc_curie_temp`. Setting one of both makes the other one the
+    derived parameter, where the Curie temperature can only be set for a
+    single sublattice.
+
     Attributes:
-        eff_spin (float): effective spin :math:`S`.
+        eff_spin (float, ndarray[float]): effective spin :math:`S` per
+            sublattice, which is infinite for the classical limit.
         curie_temp (float): Curie temperature :math:`T_\mathrm{C}` [K].
-        mf_exch_coupling (float): mean field exchange coupling constant :math:`J` [m²kg/s²].
-        lamda (float): intrinsic coupling to bath parameter :math:`\lambda`.
-        mag_moment (float): atomic magnetic moment :math:`\mu` [A m²].
-        aniso_exponent (ndarray[float]): exponent of T-dependence uniaxial
-            anisotropy :math:`\beta`.
+        mf_exch_coupling (float, ndarray[float]): mean-field exchange coupling
+            constant :math:`J` [m²kg/s²], a :math:`P \times P` matrix for
+            several sublattices.
+        lamda (float, ndarray[float]): intrinsic coupling to bath parameter
+            :math:`\lambda` per sublattice.
+        mag_moment (float, ndarray[float]): atomic magnetic moment
+            :math:`\mu` per sublattice [A m²].
+        aniso_exponent (float, ndarray[float]): exponent :math:`\beta` of the
+            temperature dependence of the anisotropy per sublattice.
         anisotropy (ndarray[float]): anisotropy :math:`K` at T=0 K [J/m³] as
-            x,y,z component vector.
-        exch_stiffness (float): exchange stiffness at T=0 K :math:`A_\mathrm{ex}` [J/m].
-        mag_saturation (float): saturation magnetization at 0 K :math:`M_s` [J/T/m³].
-        magnetization (VectorParameter): magnetization :math:`\mathbf{m}`
-            given by its amplitude :math:`r`, which is negative for the reversed
-            direction, and the angles :math:`\phi` from the z-axis and
-            :math:`\gamma` in the xy-plane from the x-axis. It is given as
-            cartesian components, e.g. ``(0, 0, 1)``, or as dict of polar or
-            cartesian components, e.g. ``{"r": 1, "phi": 90 * u.deg,
-            "gamma": 0 * u.deg}`` or ``{"x": 0, "y": 0, "z": 1}``, see
-            :class:`.VectorParameter`. For an :class:`.AmorphousLayer` it is
-            inherited from its atom.
-        gilbert_damping (float): Gilbert damping :math:`\alpha` of the LLG.
-        inertial_time (float): inertial relaxation time :math:`\tau` of the
-            inertial LLG [s].
-        magnetoelastic_coupling (float): magnetoelastic coupling constant
-            :math:`B_1` of the out-of-plane strain [J/m³].
+            x,y,z component vector, or one vector per sublattice as
+            :math:`P \times 3` array.
+        exch_stiffness (float): exchange stiffness at T=0 K
+            :math:`A_\mathrm{ex}` [J/m] towards the neighbouring layers.
+        mag_saturation (float, ndarray[float]): saturation magnetization at
+            0 K :math:`M_s` per sublattice [J/T/m³].
+        magnetization (VectorParameter, list[VectorParameter]): magnetization
+            :math:`\mathbf{m}` given by its amplitude :math:`r`, which is
+            negative for the reversed direction, and the angles :math:`\phi`
+            from the z-axis and :math:`\gamma` in the xy-plane from the
+            x-axis. It is given as cartesian components, e.g. ``(0, 0, 1)``,
+            or as dict of polar or cartesian components, e.g. ``{"r": 1,
+            "phi": 90 * u.deg, "gamma": 0 * u.deg}`` or ``{"x": 0, "y": 0,
+            "z": 1}``, see :class:`.VectorParameter`, and as list of such
+            inputs with one magnetization per sublattice. For an
+            :class:`.AmorphousLayer` it is inherited from its atom, i.e. from
+            the constituents of an :class:`.AtomMixed` with one constituent
+            per sublattice.
+        gilbert_damping (float, ndarray[float]): Gilbert damping
+            :math:`\alpha` of the LLG per sublattice.
+        inertial_time (float, ndarray[float]): inertial relaxation time
+            :math:`\tau` of the inertial LLG per sublattice [s].
+        magnetoelastic_coupling (float, ndarray[float]): magnetoelastic
+            coupling constant :math:`B_1` of the out-of-plane strain per
+            sublattice [J/m³].
 
     """
 
     _derived = ("mf_exch_coupling",)
+
+    # parameters with one scalar value per sublattice
+    _sublattice_scalars = (
+        "eff_spin",
+        "lamda",
+        "mag_moment",
+        "aniso_exponent",
+        "mag_saturation",
+        "gilbert_damping",
+        "inertial_time",
+        "magnetoelastic_coupling",
+    )
 
     def __init__(
         self,
@@ -627,17 +672,22 @@ class MagneticParameters(ParameterGroup):
         gilbert_damping=0.0,
         inertial_time=0.0,
         magnetoelastic_coupling=0.0,
+        mf_exch_coupling=None,
     ):
+        # the exchange matrix is given explicitly, the Curie temperature derived
+        self._derived = ("mf_exch_coupling",) if mf_exch_coupling is None else ("curie_temp",)
         self.eff_spin = Parameter("", eff_spin, symbol="S")
         self.curie_temp = Parameter("K", curie_temp, symbol=r"T_\mathrm{C}")
-        self.mf_exch_coupling = Parameter("m**2kg/s**2", 0.0, symbol="J")
+        self.mf_exch_coupling = Parameter(
+            "m**2kg/s**2", 0.0 if mf_exch_coupling is None else mf_exch_coupling, symbol="J"
+        )
         self.lamda = Parameter("", lamda, symbol=r"\lambda")
         self.mag_moment = Parameter("A*m**2", mag_moment, symbol=r"\mu")
         self.aniso_exponent = Parameter("", aniso_exponent, symbol=r"\beta")
         self.anisotropy = Parameter("J/m**3", anisotropy, symbol="K")
         self.exch_stiffness = Parameter("J/m", exch_stiffness, symbol=r"A_\mathrm{ex}")
         self.mag_saturation = Parameter("J/T/m**3", mag_saturation, symbol="M_s")
-        self.magnetization = VectorParameter("", magnetization, symbol=r"\mathbf{m}")
+        self.magnetization = self._make_magnetization(magnetization)
         self.gilbert_damping = Parameter("", gilbert_damping, symbol=r"\alpha")
         self.inertial_time = Parameter("s", inertial_time, symbol=r"\tau")
         self.magnetoelastic_coupling = Parameter("J/m**3", magnetoelastic_coupling, symbol="B_1")
@@ -645,10 +695,211 @@ class MagneticParameters(ParameterGroup):
         self._connect_parameters()
         self._update_group()
 
+    # the magnetization of several sublattices is a list of VectorParameters
+
+    @staticmethod
+    def _is_magnetization_list(value):
+        """A list of magnetizations is a list, tuple, or array whose elements
+        are vectors, dicts, or VectorParameters, in contrast to the
+        components of a single vector."""
+        if isinstance(value, np.ndarray):
+            return value.ndim == 2
+        if isinstance(value, (list, tuple)) and len(value) > 0:
+            return all(
+                isinstance(v, (list, tuple, dict, np.ndarray, VectorParameter)) for v in value
+            )
+        return False
+
+    def _make_magnetization(self, value):
+        """A VectorParameter or a list of VectorParameters, one per
+        sublattice, from the given input."""
+        if not self._is_magnetization_list(value):
+            return VectorParameter("", value, symbol=r"\mathbf{m}")
+        vectors = []
+        for a, v in enumerate(value):
+            vector = VectorParameter("", (0.0, 0.0, 0.0), symbol=rf"\mathbf{{m}}_{{{a + 1:d}}}")
+            vector.set(v)
+            vectors.append(vector)
+        return vectors
+
+    def _parameters(self):
+        """All parameters of the group by their names, where the
+        magnetizations of several sublattices are numbered from 1."""
+        parameters = {}
+        for name, p in vars(self).items():
+            if isinstance(p, Parameter):
+                parameters[name] = p
+            elif name == "magnetization" and isinstance(p, list):
+                for a, vector in enumerate(p):
+                    parameters[f"magnetization_{a + 1:d}"] = vector
+        return parameters
+
+    def __setattr__(self, name, value):
+        """Besides the assignments of :class:`ParameterGroup`, the
+        magnetization is set from a single or several vectors, and the Curie
+        temperature and the exchange coupling switch the derived one."""
+        initialized = "magnetoelastic_coupling" in self.__dict__
+        if not initialized or name.startswith("_"):
+            super().__setattr__(name, value)
+        elif name == "magnetization":
+            self._set_magnetization(value)
+        elif name == "mf_exch_coupling" and "mf_exch_coupling" in self._derived:
+            # an explicit exchange coupling makes the Curie temperature derived
+            self._switch_derived("curie_temp")
+            super().__setattr__(name, value)
+        elif name == "curie_temp" and "curie_temp" in self._derived:
+            if self.num_sublattices > 1:
+                raise AttributeError(
+                    "The Curie temperature of several sublattices is derived from the "
+                    "mean-field exchange matrix mf_exch_coupling and cannot be set!"
+                )
+            self._switch_derived("mf_exch_coupling")
+            super().__setattr__(name, value)
+        else:
+            super().__setattr__(name, value)
+
+    def _switch_derived(self, name):
+        """Make the given parameter the derived one and connect the other."""
+        self._derived = (name,)
+        self.curie_temp._caller = None if name == "curie_temp" else self
+        self.mf_exch_coupling._caller = None if name == "mf_exch_coupling" else self
+
+    def _set_magnetization(self, value):
+        """Set the magnetization from a single or several vectors, keeping
+        the existing VectorParameters for the same number of sublattices."""
+        current = self.magnetization
+        if isinstance(value, VectorParameter) and isinstance(current, VectorParameter):
+            # a VectorParameter replaces the current one, e.g. for its symbol
+            ParameterGroup.__setattr__(self, "magnetization", value)
+            return
+        if self._is_magnetization_list(value):
+            if isinstance(current, list) and len(current) == len(value):
+                for vector, v in zip(current, value):
+                    vector._caller = None
+                    vector.set(v)
+                    vector._caller = self
+            else:
+                object.__setattr__(self, "magnetization", self._make_magnetization(value))
+        elif isinstance(current, VectorParameter):
+            current.set(value)
+            return
+        else:
+            object.__setattr__(self, "magnetization", self._make_magnetization(value))
+        self._connect_parameters()
+        self._update_depending()
+
+    def _connect_parameters(self):
+        super()._connect_parameters()
+        # all magnetizations of the sublattices carry the name of the parameter
+        if isinstance(self.__dict__.get("magnetization"), list):
+            for vector in self.magnetization:
+                vector.name = "magnetization"
+
+    # number and consistency of the sublattices
+
+    @property
+    def num_sublattices(self):
+        """int: number of magnetic sublattices, the largest number of values of
+        any per-sublattice parameter."""
+        sizes = [np.size(getattr(self, name).magnitude) for name in self._sublattice_scalars]
+        anisotropy = np.asarray(self.anisotropy.magnitude)
+        sizes.append(anisotropy.shape[0] if anisotropy.ndim == 2 else 1)
+        if isinstance(self.magnetization, list):
+            sizes.append(len(self.magnetization))
+        exchange = np.asarray(self.mf_exch_coupling.magnitude)
+        if "curie_temp" in self._derived and exchange.ndim == 2:
+            sizes.append(exchange.shape[0])
+        return max(sizes)
+
+    def check_sublattices(self):
+        """check_sublattices
+
+        Checks that all per-sublattice parameters have either a single value,
+        which holds for all sublattices, or one value per sublattice, that
+        several sublattices have an explicit exchange matrix
+        ``mf_exch_coupling`` and a magnetization per sublattice, unless it is
+        zero. The parameters are not checked on every change, as they are
+        typically set one after another, but by the simulations.
+
+        Returns:
+            P (int): number of sublattices.
+
+        """
+        P = self.num_sublattices
+        for name in self._sublattice_scalars:
+            size = np.size(getattr(self, name).magnitude)
+            if size not in (1, P):
+                raise ValueError(
+                    f"The magnetic parameter {name} has {size:d} values, but there are "
+                    f"{P:d} sublattices!"
+                )
+        anisotropy = np.asarray(self.anisotropy.magnitude)
+        if anisotropy.shape not in ((3,), (P, 3)):
+            raise ValueError(
+                f"The anisotropy must be a vector or one vector for each of the {P:d} sublattices!"
+            )
+        if isinstance(self.magnetization, list):
+            if len(self.magnetization) != P:
+                raise ValueError(
+                    f"There are {len(self.magnetization):d} magnetizations, but {P:d} sublattices!"
+                )
+        elif P > 1 and np.any(self.magnetization.magnitude != 0):
+            raise ValueError(f"A magnetization must be given for each of the {P:d} sublattices!")
+        if P > 1:
+            exchange = np.asarray(self.mf_exch_coupling.magnitude)
+            if "curie_temp" not in self._derived or exchange.shape != (P, P):
+                raise ValueError(
+                    f"Several sublattices require an explicit {P:d}x{P:d} mean-field "
+                    "exchange matrix mf_exch_coupling!"
+                )
+        return P
+
+    def sublattice_values(self, name):
+        """sublattice_values
+
+        Returns the magnitudes of a per-sublattice parameter for all
+        sublattices, i.e. as array :math:`P` or :math:`P \times 3` for the
+        anisotropy, or the exchange matrix :math:`P \times P`.
+
+        Args:
+            name (str): name of the parameter.
+
+        Returns:
+            values (ndarray[float]): magnitudes for all sublattices.
+
+        """
+        P = self.num_sublattices
+        value = np.asarray(getattr(self, name).magnitude, dtype=float)
+        if name == "anisotropy":
+            return np.broadcast_to(value, (P, 3)).copy()
+        if name == "mf_exch_coupling":
+            return np.broadcast_to(value.reshape((1, 1)) if value.size == 1 else value, (P, P))
+        return np.broadcast_to(value.reshape(-1) if value.size == 1 else value, (P,)).copy()
+
+    def sublattice_magnetizations(self):
+        """sublattice_magnetizations
+
+        Returns the magnetizations of all sublattices as list of
+        :class:`.VectorParameter`, where a single zero magnetization holds for
+        all sublattices.
+
+        Returns:
+            magnetizations (list[VectorParameter]): magnetizations.
+
+        """
+        if isinstance(self.magnetization, list):
+            return list(self.magnetization)
+        return [self.magnetization] * self.num_sublattices
+
+    # update of the derived parameters
+
     def _update_group(self):
-        self.calc_mf_exchange_coupling()
+        if "curie_temp" in self._derived:
+            self.calc_curie_temp()
+        else:
+            self.calc_mf_exchange_coupling()
         self.check_array(self.exch_stiffness, "Exchange stiffness")
-        self.check_array(self.anisotropy, "Anisotropy")
+        self.check_anisotropy()
 
     def calc_mf_exchange_coupling(self):
         r"""calc_mf_exchange_coupling
@@ -661,9 +912,48 @@ class MagneticParameters(ParameterGroup):
         effective spin.
 
         """
-        eff_spin = self.eff_spin.magnitude
-        factor = 3.0 if np.isinf(eff_spin) else 3 * eff_spin / (eff_spin + 1)
-        self.mf_exch_coupling.magnitude = factor * constants.k * self.curie_temp.magnitude
+        eff_spin = np.asarray(self.eff_spin.magnitude, dtype=float)
+        with np.errstate(invalid="ignore"):
+            factor = np.where(np.isinf(eff_spin), 3.0, 3 * eff_spin / (eff_spin + 1))
+        J = factor * constants.k * self.curie_temp.magnitude
+        self.mf_exch_coupling.magnitude = float(J) if J.ndim == 0 else J
+
+    def calc_curie_temp(self):
+        r"""calc_curie_temp
+
+        Calculate the Curie temperature from the explicit mean-field exchange
+        matrix as the ordering temperature of the coupled sublattices, see
+        :func:`~udkm1Dsim.simulations.solvers.mean_field.ordering_temperature`
+
+        .. math:: k_B T_C = \max \mathrm{eig}\left(\frac{S_a+1}{3 S_a} J_{ab}\right)
+
+        which reduces to :math:`T_C = \frac{S+1}{3 S k_B} J` for one sublattice.
+
+        """
+        from ..simulations.solvers.mean_field import ordering_temperature
+
+        J = np.asarray(self.mf_exch_coupling.magnitude, dtype=float)
+        J = J.reshape((1, 1)) if J.size == 1 else J
+        eff_spins = np.asarray(self.eff_spin.magnitude, dtype=float).reshape(-1)
+        try:
+            eff_spins = np.broadcast_to(eff_spins, (J.shape[0],))
+            curie_temp = ordering_temperature(J, eff_spins) if J.ndim == 2 else 0.0
+        except ValueError:
+            # inconsistent numbers of sublattices, see check_sublattices
+            curie_temp = 0.0
+        self.curie_temp.magnitude = curie_temp
+
+    def check_anisotropy(self):
+        """check_anisotropy
+
+        A scalar anisotropy holds for all three axes, a vector of length 3 or
+        one vector per sublattice as :math:`P \times 3` array are kept.
+
+        """
+        value = np.asarray(self.anisotropy.magnitude)
+        if value.ndim == 2 and value.shape[1] == 3:
+            return
+        self.check_array(self.anisotropy, "Anisotropy")
 
     def check_array(self, parameter, name):
         value = np.asarray(parameter.magnitude)
