@@ -71,6 +71,7 @@ __all__ = [
     "longitudinal_field",
     "llg_rhs",
     "illg_rhs",
+    "exchange_relaxation_torque",
     "llb_rhs",
     "relax_directions",
     "solve",
@@ -151,6 +152,7 @@ def stack_magnetic_parameters(layers):
         mag.anisotropy[k, :p] = layer.sublattice_values("anisotropy")
         mag.mf_exch_coupling[k, :p, :p] = layer.sublattice_values("mf_exch_coupling")
     mag.curie_temp = np.array([[layer.curie_temp.magnitude] for layer in layers], dtype=float)
+    mag.exch_relax_rate = np.array([layer.exch_relax_rate.magnitude for layer in layers], float)
     return mag
 
 
@@ -750,6 +752,70 @@ def illg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
     return (np.stack((v, dvdt)) * mag.active[np.newaxis, :, :, np.newaxis]).ravel()
 
 
+def exchange_relaxation_torque(m_norm, B_par, alpha_par, mag):
+    r"""exchange_relaxation_torque
+
+    Exchange-relaxation torque of the extended LLB, :cite:t:`raposo2022`
+    Eqs. (5) and (eS21), between the two sublattices :math:`i` and :math:`j`
+    of a layer
+
+    .. math::
+
+        \boldsymbol{\tau}_i^\mathrm{NE} = |\gamma_e| \lambda_\mathrm{ex}
+            \alpha_i^\parallel\, \frac{x_i \mu_i m_i + x_j \mu_j m_j}
+            {\mu_i m_i\, \mu_j m_j}\,
+            \left(\mu_i \mathbf{B}_i^\parallel - \mu_j \mathbf{B}_j^\parallel
+            \right)
+
+    with the concentrations :math:`x_i`, the atomic moments :math:`\mu_i`,
+    the longitudinal fields :math:`\mathbf{B}^\parallel`, see
+    :func:`longitudinal_field`, and the exchange-relaxation rate
+    :math:`\lambda_\mathrm{ex}` of the layer. It transfers angular momentum
+    directly between the sublattices instead of to the bath
+    (:cite:t:`mentink2012`, :cite:t:`baryakhtar2013`), which reverses a
+    quenched sublattice in the all-optical switching of ferrimagnets. The
+    driving vector is the same for both sublattices up to its sign, the
+    prefactor carries the longitudinal damping of the respective sublattice,
+    so that the total moment is not exactly conserved, following the
+    reference. The bracket diverges as :math:`1/m_i` when a sublattice is
+    quenched and is only regularized by :data:`MIN_MAG` against a division
+    by zero. With the step of the solver limited to the delay grid, see
+    :func:`solve`, the adaptive integrators carry the switching of a
+    ferrimagnet through, which can be checked by tighter tolerances of the
+    ``ode_options``. The torque vanishes for layers without exactly two
+    sublattices or with a zero rate.
+
+    Args:
+        m_norm (ndarray[float]): norms :math:`N \times P`.
+        B_par (ndarray[float]): longitudinal fields
+            :math:`N \times P \times 3` [T].
+        alpha_par (ndarray[float]): longitudinal damping :math:`N \times P`.
+        mag (SimpleNamespace): stacked magnetic parameters, see
+            :func:`stack_magnetic_parameters`.
+
+    Returns:
+        torque (ndarray[float]): :math:`N \times P \times 3` [1/s].
+
+    """
+    torque = np.zeros_like(B_par)
+    N, P = m_norm.shape
+    rates = mag.exch_relax_rate
+    if P != 2 or not np.any(rates != 0.0):
+        return torque
+    # layers with two existing sublattices and a rate
+    pair = (mag.active[:, 0] > 0) & (mag.active[:, 1] > 0) & (rates != 0.0)
+    m_safe = np.maximum(m_norm, MIN_MAG)
+    mu = mag.mag_moment
+    x = mag.concentration
+    num = x[:, 0] * mu[:, 0] * m_safe[:, 0] + x[:, 1] * mu[:, 1] * m_safe[:, 1]
+    den = np.maximum(mu[:, 0] * m_safe[:, 0] * mu[:, 1] * m_safe[:, 1], 1e-300)
+    D = mu[:, 0, np.newaxis] * B_par[:, 0, :] - mu[:, 1, np.newaxis] * B_par[:, 1, :]
+    base = np.where(pair, abs(GAMMA_E) * rates * num / den, 0.0)
+    torque[:, 0, :] = (base * alpha_par[:, 0])[:, np.newaxis] * D
+    torque[:, 1, :] = -(base * alpha_par[:, 1])[:, np.newaxis] * D
+    return torque
+
+
 def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables):
     r"""llb_rhs
 
@@ -819,6 +885,7 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
         ..., np.newaxis
     ] * m
     dmdt = GAMMA_E * (precession + transverse - longitudinal)
+    dmdt += exchange_relaxation_torque(m_norm, B_par, alpha_par, mag)
     return (mag.active[..., np.newaxis] * dmdt).ravel()
 
 
@@ -932,6 +999,7 @@ def solve(
     thicknesses,
     ode_options,
     progress_bar=False,
+    exchange_relaxation=False,
 ):
     r"""solve
 
@@ -961,6 +1029,9 @@ def solve(
             ``max_step`` is only decreased by the shortest delay step.
         progress_bar (boolean, optional): enable tqdm progress bar. Defaults
             to False.
+        exchange_relaxation (boolean, optional): add the
+            :func:`exchange_relaxation_torque` with the ``exch_relax_rate`` of
+            the layers to the ``llb``. Defaults to False.
 
     Returns:
         magnetization_map (ndarray[float]): cartesian spatio-temporal
@@ -974,6 +1045,8 @@ def solve(
     N, P = mag.active.shape
     if N == 0:
         return np.zeros((M, 0, P, 3))
+    if not exchange_relaxation:
+        mag.exch_relax_rate = np.zeros(N)
     rhs = RHS[model]
     args = (inputs, mag, exch_stiffnesses, thicknesses)
     if model == "llb":

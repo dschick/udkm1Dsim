@@ -786,7 +786,7 @@ class Magnetization(Simulation):
             )
         return directions
 
-    def solve(self, model, init_state, inputs, is_magnetic):
+    def solve(self, model, init_state, inputs, is_magnetic, **kwargs):
         r"""solve
 
         Solves the ``model`` for the magnetic layers, see
@@ -797,6 +797,9 @@ class Magnetization(Simulation):
             init_state (ndarray[float]): initial state of the solver.
             inputs (Inputs): time-dependent inputs of the magnetic layers.
             is_magnetic (ndarray[boolean]): mask of the magnetic layers.
+            **kwargs: ``ode_options`` replacing the ones of the simulation and
+                ``exchange_relaxation`` of the LLB, see
+                :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.solve`.
 
         Returns:
             mag_map (ndarray[float]): cartesian magnetization map of the
@@ -810,8 +813,9 @@ class Magnetization(Simulation):
             self.get_magnetic_parameters(is_magnetic),
             self.get_interlayer_exchange_stiffnesses(is_magnetic),
             self.S.get_layer_property_vector("structural.thickness.magnitude")[is_magnetic],
-            self.ode_options,
+            kwargs.get("ode_options", self.ode_options),
             self.progress_bar,
+            exchange_relaxation=kwargs.get("exchange_relaxation", False),
         )
 
     def embed_magnetization(self, mag_map, is_magnetic):
@@ -1389,8 +1393,26 @@ class LLB(Magnetization):
     Layers with several sublattices, e.g. ferrimagnets, follow the LLB of
     :cite:t:`raposo2022` with the coupled mean-field equations of the
     sublattices, whose equilibrium magnetizations, damping parameters and
-    susceptibilities are those of the collinear ground state. Layers with an
-    anisotropy or a magnetoelastic coupling require an
+    susceptibilities are those of the collinear ground state.
+
+    **Exchange relaxation and all-optical switching.** The relaxation terms
+    above transfer angular momentum from every sublattice to the bath only
+    and relax each sublattice towards the mean field of the current direction
+    of the other sublattice. Hence, they can quench a sublattice of a
+    ferrimagnet under a strong excitation but never reverse it. The reversal
+    requires a transfer of angular momentum directly between the sublattices
+    (:cite:t:`mentink2012`, :cite:t:`baryakhtar2013`), the
+    :func:`exchange-relaxation torque
+    <udkm1Dsim.simulations.solvers.magnetization_scipy.exchange_relaxation_torque>`
+    of the extended LLB of :cite:t:`raposo2022`. It is added with
+    ``exchange_relaxation=True`` for layers with two sublattices and the
+    ``exch_relax_rate`` :math:`\lambda_\mathrm{ex}` of the layers, e.g. 0.013
+    for GdFeCo, using the ``concentration`` of the sublattices. The torque
+    diverges as :math:`1/m` for a quenched sublattice, which the adaptive
+    integrators carry through - tighter tolerances of the ``ode_options``
+    check the convergence of the switching.
+
+    Layers with an anisotropy or a magnetoelastic coupling require an
     ``aniso_exponent`` of at least 2, since these fields scale as
     :math:`m_\mathrm{eq}^{\beta-2}` and would diverge at the Curie temperature
     otherwise.
@@ -1430,6 +1452,7 @@ class LLB(Magnetization):
         init_mag=[],
         strain_map=None,
         equilibrate=False,
+        exchange_relaxation=False,
     ):
         r"""calc_magnetization_map
 
@@ -1453,6 +1476,10 @@ class LLB(Magnetization):
                 magnetization of the initial temperature and the directions
                 relaxed into the equilibrium, see
                 :meth:`get_equilibrium_magnetization`. Defaults to False.
+            exchange_relaxation (boolean, optional): add the
+                exchange-relaxation torque between two sublattices with the
+                ``exch_relax_rate`` of the layers, see :class:`LLB`. Defaults
+                to False.
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
@@ -1522,7 +1549,9 @@ class LLB(Magnetization):
             amplitudes = np.linalg.norm(init_state, axis=-1)
             directions = self.equilibrate_directions(init_state, amplitudes, inputs, is_magnetic)
             init_state = amplitudes[..., np.newaxis] * directions
-        mag_map = self.solve("llb", init_state, inputs, is_magnetic)
+        mag_map = self.solve(
+            "llb", init_state, inputs, is_magnetic, exchange_relaxation=exchange_relaxation
+        )
         self.check_demagnetization_collapse(mag_map, temps[:, is_magnetic], layers)
 
         # final magnetization maps are zero for all non-magnetic layers

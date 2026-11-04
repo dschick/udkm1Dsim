@@ -641,6 +641,14 @@ class MagneticParameters(ParameterGroup):
         magnetoelastic_coupling (float, ndarray[float]): magnetoelastic
             coupling constant :math:`B_1` of the out-of-plane strain per
             sublattice [J/m³].
+        exch_relax_rate (float): exchange-relaxation rate
+            :math:`\lambda_\mathrm{ex}` between two sublattices of the
+            extended LLB, see
+            :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.exchange_relaxation_torque`.
+        concentration (float, ndarray[float]): concentration :math:`x` per
+            sublattice for the exchange relaxation. It is derived as equal
+            concentrations :math:`1/P` unless it is given, e.g. as the
+            fractions of the constituents of an :class:`.AtomMixed`.
 
     """
 
@@ -656,6 +664,7 @@ class MagneticParameters(ParameterGroup):
         "gilbert_damping",
         "inertial_time",
         "magnetoelastic_coupling",
+        "concentration",
     )
 
     def __init__(
@@ -673,9 +682,14 @@ class MagneticParameters(ParameterGroup):
         inertial_time=0.0,
         magnetoelastic_coupling=0.0,
         mf_exch_coupling=None,
+        exch_relax_rate=0.0,
+        concentration=None,
     ):
         # the exchange matrix is given explicitly, the Curie temperature derived
-        self._derived = ("mf_exch_coupling",) if mf_exch_coupling is None else ("curie_temp",)
+        self._exchange_derived = "mf_exch_coupling" if mf_exch_coupling is None else "curie_temp"
+        # without explicit concentrations they are equal
+        self._concentration_explicit = concentration is not None
+        self._update_derived_names()
         self.eff_spin = Parameter("", eff_spin, symbol="S")
         self.curie_temp = Parameter("K", curie_temp, symbol=r"T_\mathrm{C}")
         self.mf_exch_coupling = Parameter(
@@ -691,9 +705,20 @@ class MagneticParameters(ParameterGroup):
         self.gilbert_damping = Parameter("", gilbert_damping, symbol=r"\alpha")
         self.inertial_time = Parameter("s", inertial_time, symbol=r"\tau")
         self.magnetoelastic_coupling = Parameter("J/m**3", magnetoelastic_coupling, symbol="B_1")
+        self.exch_relax_rate = Parameter("", exch_relax_rate, symbol=r"\lambda_\mathrm{ex}")
+        self.concentration = Parameter(
+            "", 1.0 if concentration is None else concentration, symbol="x"
+        )
 
         self._connect_parameters()
         self._update_group()
+        self._initialized = True
+
+    def _update_derived_names(self):
+        """the names of the derived parameters"""
+        self._derived = (self._exchange_derived,) + (
+            () if self._concentration_explicit else ("concentration",)
+        )
 
     # the magnetization of several sublattices is a list of VectorParameters
 
@@ -738,7 +763,7 @@ class MagneticParameters(ParameterGroup):
         """Besides the assignments of :class:`ParameterGroup`, the
         magnetization is set from a single or several vectors, and the Curie
         temperature and the exchange coupling switch the derived one."""
-        initialized = "magnetoelastic_coupling" in self.__dict__
+        initialized = self.__dict__.get("_initialized", False)
         if not initialized or name.startswith("_"):
             super().__setattr__(name, value)
         elif name == "magnetization":
@@ -755,12 +780,20 @@ class MagneticParameters(ParameterGroup):
                 )
             self._switch_derived("mf_exch_coupling")
             super().__setattr__(name, value)
+        elif name == "concentration" and not self._concentration_explicit:
+            # explicit concentrations are not derived anymore
+            self._concentration_explicit = True
+            self._update_derived_names()
+            self.concentration._caller = self
+            super().__setattr__(name, value)
         else:
             super().__setattr__(name, value)
 
     def _switch_derived(self, name):
-        """Make the given parameter the derived one and connect the other."""
-        self._derived = (name,)
+        """Make the given parameter of the exchange the derived one and
+        connect the other."""
+        self._exchange_derived = name
+        self._update_derived_names()
         self.curie_temp._caller = None if name == "curie_temp" else self
         self.mf_exch_coupling._caller = None if name == "mf_exch_coupling" else self
 
@@ -898,6 +931,9 @@ class MagneticParameters(ParameterGroup):
             self.calc_curie_temp()
         else:
             self.calc_mf_exchange_coupling()
+        if not self._concentration_explicit:
+            # equal concentrations, a scalar for all sublattices
+            self.concentration.magnitude = 1.0 / self.num_sublattices
         self.check_array(self.exch_stiffness, "Exchange stiffness")
         self.check_anisotropy()
 
