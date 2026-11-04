@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - an `AmorphousLayer` of an `AtomMixed` with one constituent per sublattice inherits the magnetizations of the constituents for its sublattices
 - `get_sublattice_magnetization_map` and `get_sublattice_mean_field_mag_map` of `Magnetization`, which are calculated and cached together with the net `get_magnetization_map` and `get_mean_field_mag_map`; `init_mag` of several sublattices is given as `Px3` or `LxPx3` array, `mag_amplitude_map` of the `LLG` and `init_velocity` of the `iLLG` also per sublattice
 - `mf_exch_coupling` of `MagneticParameters` and `Layer` can be set, which makes the `curie_temp` the derived parameter, and vice versa for a single sublattice
+- `Magnetization.get_equilibrium_magnetization` and the option `equilibrate` of `get_magnetization_map` relax the directions of the initial magnetization of `LLG`, `iLLG`, and `LLB` into the equilibrium of the external field, the anisotropy, the exchange, and the strain by an overdamped flow without precession, see `solvers.magnetization_scipy.relax_directions`, instead of simulating the precession for a long delay range before the excitation, closing [#139]
 - `Magnetization.get_magnetic_parameters` and `Magnetization.get_interlayer_exchange_stiffnesses` collect the inputs of the solver from the structure
 - `Magnetization.temp_sub_system` to select the sub-system of the `temp_map` that drives the magnetization dynamics
 - `LLB.get_magnetization_map` accepts an external field `H_ext` per delay as `Mx3` array
@@ -101,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+[#139]: https://github.com/dschick/udkm1Dsim/issues/139
 [#164]: https://github.com/dschick/udkm1Dsim/pull/164
 [#186]: https://github.com/dschick/udkm1Dsim/issues/186
 [#224]: https://github.com/dschick/udkm1Dsim/issues/224

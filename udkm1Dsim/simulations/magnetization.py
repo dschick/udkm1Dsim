@@ -85,6 +85,10 @@ class Magnetization(Simulation):
             equations stiff.
         temp_sub_system (int): index of the sub-system of the ``temp_map``
             whose temperature drives the magnetization dynamics.
+        equilibrium_options (dict): ``tol``, the largest remaining torque [T],
+            and ``max_time``, the largest time of the overdamped flow [s], of
+            the relaxation into the equilibrium, see
+            :meth:`get_equilibrium_magnetization`.
 
     """
 
@@ -100,6 +104,7 @@ class Magnetization(Simulation):
             "atol": 1e-6,
         }
         self.temp_sub_system = 0
+        self.equilibrium_options = {"tol": 1e-6, "max_time": 1e-6}
 
     def _property_rows(self):
         """extend the simulation properties by the temperature sub-system"""
@@ -127,6 +132,8 @@ class Magnetization(Simulation):
 
         """
         param = self._hash_params()
+        if kwargs.get("equilibrate"):
+            param.append(self.equilibrium_options)
 
         for name in ("strain_map", "temp_map", "mag_amplitude_map"):
             if name in kwargs:
@@ -686,6 +693,99 @@ class Magnetization(Simulation):
             pass
         return np.asarray(delays, dtype=float)
 
+    def get_equilibrium_magnetization(self, H_ext=np.array([0, 0, 0]), init_mag=[], **profiles):
+        r"""get_equilibrium_magnetization
+
+        Returns the magnetization of all sublattices of all layers in the
+        equilibrium of the given external field and spatial profiles, e.g. of
+        the temperature and strain before an excitation, as polar array
+        :math:`L \times P \times 3`, which can be used as ``init_mag`` of
+        :meth:`get_magnetization_map`. Starting from the initial magnetization
+        ``init_mag`` or the magnetization of the layers, the directions are
+        relaxed by an overdamped flow without precession into the nearest
+        equilibrium, see
+        :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.relax_directions`
+        and :attr:`equilibrium_options`. The amplitudes are those of the model
+        at the given profiles, i.e. the mean-field magnetization for the
+        :class:`LLB`, which neglects the tiny increase of the amplitude by
+        the longitudinal components of the field. The initial directions
+        select the equilibrium if there are several, e.g. the branch of a
+        hysteresis, and an unstable
+        equilibrium, e.g. a magnetization exactly perpendicular to an easy
+        axis, is not left.
+
+        Args:
+            H_ext (ndarray[float], optional): external magnetic field
+                (H_x, H_y, H_z) [T].
+            init_mag (ndarray[float], optional): initial magnetization in
+                polar coordinates, see :meth:`check_initial_magnetization`.
+            **profiles (ndarray[float], optional): the spatial profiles of
+                the maps of :meth:`get_magnetization_map` of the model at a
+                single time, e.g. ``temp_map`` of the layers :math:`L` or
+                :math:`L \times K`, ``strain_map`` :math:`L`, or
+                ``mag_amplitude_map`` :math:`L` or :math:`L \times P`.
+
+        Returns:
+            equilibrium_mag (ndarray[float]): polar magnetization of all
+            sublattices in equilibrium :math:`L \times P \times 3`.
+
+        """
+        maps = {
+            name: None if value is None else np.asarray(value, dtype=float)[np.newaxis, ...]
+            for name, value in profiles.items()
+        }
+        _, sublattice_map = self.calc_magnetization_map(
+            np.zeros(1),
+            H_ext=np.asarray(H_ext, dtype=float),
+            init_mag=init_mag,
+            equilibrate=True,
+            **maps,
+        )
+        return sublattice_map[0]
+
+    def equilibrate_directions(self, init_dir, amplitudes, inputs, is_magnetic):
+        r"""equilibrate_directions
+
+        Relaxes the directions of the magnetization of the magnetic layers into
+        the equilibrium of the inputs at the first delay, see
+        :meth:`get_equilibrium_magnetization`. Warns if the remaining torque
+        exceeds the ``tol`` of the :attr:`equilibrium_options` after their
+        ``max_time``.
+
+        Args:
+            init_dir (ndarray[float]): initial unit vectors of the magnetic
+                layers :math:`N \times P \times 3`.
+            amplitudes (ndarray[float]): magnetization amplitudes
+                :math:`N \times P`.
+            inputs (Inputs): time-dependent inputs of the magnetic layers.
+            is_magnetic (ndarray[boolean]): mask of the magnetic layers.
+
+        Returns:
+            directions (ndarray[float]): unit vectors in equilibrium
+            :math:`N \times P \times 3`.
+
+        """
+        H_ext, _, _, strains = magnetization_scipy.interpolate_inputs(inputs.delays[0], inputs)
+        directions, torque = magnetization_scipy.relax_directions(
+            init_dir,
+            amplitudes,
+            H_ext,
+            strains,
+            magnetization_scipy.stack_magnetic_parameters(
+                self.get_magnetic_parameters(is_magnetic)
+            ),
+            self.get_interlayer_exchange_stiffnesses(is_magnetic),
+            self.S.get_layer_property_vector("structural.thickness.magnitude")[is_magnetic],
+            **self.equilibrium_options,
+        )
+        if torque > self.equilibrium_options["tol"]:
+            warnings.warn(
+                f"The magnetization did not reach its equilibrium - the largest remaining "
+                f"torque is {torque:.3g} T. Consider a larger max_time or tol of the "
+                "equilibrium_options."
+            )
+        return directions
+
     def solve(self, model, init_state, inputs, is_magnetic):
         r"""solve
 
@@ -864,6 +964,7 @@ class LLG(Magnetization):
         H_ext=np.array([0, 0, 0]),
         init_mag=[],
         strain_map=None,
+        equilibrate=False,
         **kwargs,
     ):
         r"""calc_magnetization_map
@@ -890,6 +991,10 @@ class LLG(Magnetization):
                 ``temp_map`` are given, otherwise only its direction is used.
             strain_map (ndarray[float], optional): spatio-temporal strain map
                 :math:`M \times L` for the magnetoelastic field.
+            equilibrate (boolean, optional): relax the directions of the
+                initial magnetization into the equilibrium of the inputs at the
+                first delay, see :meth:`get_equilibrium_magnetization`.
+                Defaults to False.
             **kwargs: model-specific options, see :class:`iLLG`.
 
         Returns:
@@ -960,9 +1065,12 @@ class LLG(Magnetization):
             amplitude_map=amplitude_map[:, is_magnetic, :P],
             strain_map=None if strain_map is None else strain_map[:, is_magnetic],
         )
-        init_state = self.get_initial_state(
-            init_dir[is_magnetic, :P, :], inputs, is_magnetic, **kwargs
-        )
+        init_dir = init_dir[is_magnetic, :P, :]
+        if equilibrate:
+            init_dir = self.equilibrate_directions(
+                init_dir, inputs.amplitude_map[0], inputs, is_magnetic
+            )
+        init_state = self.get_initial_state(init_dir, inputs, is_magnetic, **kwargs)
         mag_map = self.solve(self.model, init_state, inputs, is_magnetic)
 
         maps = self.embed_magnetization(mag_map, is_magnetic)
@@ -1039,6 +1147,12 @@ class iLLG(LLG):
     which makes the equations stiff. The default ``method`` ``LSODA`` of the
     ``ode_options`` handles this, whereas the explicit ``RK45`` has to resolve
     the inertial time and is orders of magnitude slower.
+    For a small damping, the nutation at the frequency :math:`1/(\alpha\tau)`,
+    e.g. :math:`10^{17}\,\mathrm{s^{-1}}` for :math:`\alpha = 0.01` and
+    :math:`\tau = 1\,\mathrm{fs}`, is only weakly damped. Tight tolerances
+    ``rtol`` and ``atol`` of the ``ode_options`` require to resolve it, which
+    makes the simulation very slow, e.g. seconds per picosecond for
+    ``rtol=1e-8``, whereas the default tolerances are typically sufficient.
 
     Args:
         S (Structure): sample to do simulations with.
@@ -1078,6 +1192,7 @@ class iLLG(LLG):
         H_ext=np.array([0, 0, 0]),
         init_mag=[],
         strain_map=None,
+        equilibrate=False,
         init_velocity=None,
     ):
         r"""calc_magnetization_map
@@ -1102,6 +1217,10 @@ class iLLG(LLG):
                 polar coordinates.
             strain_map (ndarray[float], optional): spatio-temporal strain map
                 :math:`M \times L`.
+            equilibrate (boolean, optional): relax the directions of the
+                initial magnetization into the equilibrium of the inputs at the
+                first delay, see :meth:`get_equilibrium_magnetization`.
+                Defaults to False.
             init_velocity (ndarray[float], optional): initial velocity
                 :math:`d\mathbf{n}/dt` of the unit vectors [1/s], a single
                 vector, one per layer :math:`L \times 3`, or one per
@@ -1121,6 +1240,7 @@ class iLLG(LLG):
             H_ext=H_ext,
             init_mag=init_mag,
             strain_map=strain_map,
+            equilibrate=equilibrate,
             init_velocity=init_velocity,
         )
 
@@ -1303,7 +1423,13 @@ class LLB(Magnetization):
         super().__init__(S, force_recalc, **kwargs)
 
     def calc_magnetization_map(
-        self, delays, temp_map, H_ext=np.array([0, 0, 0]), init_mag=[], strain_map=None
+        self,
+        delays,
+        temp_map,
+        H_ext=np.array([0, 0, 0]),
+        init_mag=[],
+        strain_map=None,
+        equilibrate=False,
     ):
         r"""calc_magnetization_map
 
@@ -1322,6 +1448,11 @@ class LLB(Magnetization):
                 initial temperature along the magnetization of the layers.
             strain_map (ndarray[float], optional): spatio-temporal strain map
                 :math:`M \times L` for the magnetoelastic field.
+            equilibrate (boolean, optional): start in the equilibrium of the
+                inputs at the first delay, i.e. with the mean-field
+                magnetization of the initial temperature and the directions
+                relaxed into the equilibrium, see
+                :meth:`get_equilibrium_magnetization`. Defaults to False.
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
@@ -1362,7 +1493,7 @@ class LLB(Magnetization):
                     "the Callen-Callen law!"
                 )
 
-        if implicit_init_mag and N > 0:
+        if (implicit_init_mag or equilibrate) and N > 0:
             # start in the equilibrium of the initial temperature, tabulated
             # on the same grid as by the solver
             temp_grid, tables = magnetization_scipy.tabulate_equilibrium(
@@ -1371,7 +1502,13 @@ class LLB(Magnetization):
             mean_mags = interpolate_tables_map(temp_grid, tables, temps[:1, is_magnetic])[
                 0, ..., TABLE["mag"]
             ]
-            init_mag[is_magnetic, :P, 0] *= mean_mags
+            if equilibrate:
+                # the mean-field amplitude, keeping a reversed direction
+                init_mag[is_magnetic, :P, 0] = np.where(
+                    init_mag[is_magnetic, :P, 0] < 0, -mean_mags, mean_mags
+                )
+            else:
+                init_mag[is_magnetic, :P, 0] *= mean_mags
         init_state = convert_polar_to_cartesian(init_mag)[is_magnetic, :P, :]
 
         inputs = magnetization_scipy.prepare_inputs(
@@ -1381,6 +1518,10 @@ class LLB(Magnetization):
             temp_map=temps[:, is_magnetic],
             strain_map=None if strain_map is None else strain_map[:, is_magnetic],
         )
+        if equilibrate and N > 0:
+            amplitudes = np.linalg.norm(init_state, axis=-1)
+            directions = self.equilibrate_directions(init_state, amplitudes, inputs, is_magnetic)
+            init_state = amplitudes[..., np.newaxis] * directions
         mag_map = self.solve("llb", init_state, inputs, is_magnetic)
         self.check_demagnetization_collapse(mag_map, temps[:, is_magnetic], layers)
 

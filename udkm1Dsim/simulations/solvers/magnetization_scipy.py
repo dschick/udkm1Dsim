@@ -72,6 +72,7 @@ __all__ = [
     "llg_rhs",
     "illg_rhs",
     "llb_rhs",
+    "relax_directions",
     "solve",
 ]
 
@@ -823,6 +824,100 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
 
 RHS = {"llg": llg_rhs, "illg": illg_rhs, "llb": llb_rhs}
 """Right-hand sides of the models by their names."""
+
+
+# equilibrium
+
+
+def relax_directions(
+    init_dir,
+    amplitudes,
+    H_ext,
+    strains,
+    mag,
+    exch_stiffnesses,
+    thicknesses,
+    tol=1e-6,
+    max_time=1e-6,
+):
+    r"""relax_directions
+
+    Relaxes the unit vectors :math:`\mathbf{n}_a` of the magnetization of all
+    sublattices of all magnetic layers into the nearest equilibrium for
+    constant inputs by the overdamped flow
+
+    .. math::
+
+        \frac{d\mathbf{n}_a}{dt} = -|\gamma_e|\, \mathbf{n}_a \times
+            (\mathbf{n}_a \times \mathbf{B}_a)
+
+    i.e. the limit of an infinite damping of the LLG without precession, which
+    descends along the steepest gradient of the magnetic energy on the unit
+    sphere. The field is the :func:`effective_field` plus the
+    :func:`sublattice_exchange_field` for the magnetization
+    :math:`\mathbf{m}_a = m_a \mathbf{n}_a` with the given amplitudes, which
+    are kept. The integration by ``scipy.integrate.solve_ivp`` stops as soon
+    as the torques :math:`|\mathbf{n}_a \times \mathbf{B}_a|` of all
+    sublattices are below ``tol``. The flow does not leave an unstable
+    equilibrium, e.g. a magnetization exactly perpendicular to an easy axis,
+    and the equilibrium depends on the initial directions for several minima,
+    e.g. on the branch of a hysteresis.
+
+    Args:
+        init_dir (ndarray[float]): initial unit vectors
+            :math:`N \times P \times 3`.
+        amplitudes (ndarray[float]): magnetization amplitudes
+            :math:`N \times P`.
+        H_ext (ndarray[float]): external field [T].
+        strains (ndarray[float]): strains of the layers :math:`N`.
+        mag (SimpleNamespace): stacked magnetic parameters, see
+            :func:`stack_magnetic_parameters`.
+        exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
+            upper and lower magnetic layer :math:`N \times 2` [J/m].
+        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
+        tol (float, optional): largest remaining torque [T]. Defaults to 1e-6.
+        max_time (float, optional): largest time of the overdamped flow [s].
+            Defaults to 1e-6.
+
+    Returns:
+        (tuple):
+        - *directions (ndarray[float])* - relaxed unit vectors
+          :math:`N \times P \times 3`.
+        - *torque (float)* - largest remaining torque [T].
+
+    """
+    init_dir = np.asarray(init_dir, dtype=float)
+    N, P = mag.active.shape
+    if N == 0:
+        return init_dir, 0.0
+    amplitudes = np.asarray(amplitudes, dtype=float)
+
+    def torques(n):
+        m = amplitudes[..., np.newaxis] * n
+        B = effective_field(m, amplitudes, H_ext, strains, mag, exch_stiffnesses, thicknesses)
+        B += sublattice_exchange_field(m, mag)
+        return mag.active[..., np.newaxis] * np.cross(n, B)
+
+    def fun(t, y):
+        n = _normalize(y.reshape(N, P, 3))
+        # -n x (n x B) is the component of B perpendicular to n
+        return (-abs(GAMMA_E) * np.cross(n, torques(n))).ravel()
+
+    def converged(t, y):
+        # half the tolerance, as the event stops at its root
+        torque = np.max(np.linalg.norm(torques(_normalize(y.reshape(N, P, 3))), axis=-1))
+        return torque - tol / 2
+
+    converged.terminal = True
+    n = _normalize(init_dir)
+    torque = np.max(np.linalg.norm(torques(n), axis=-1))
+    if torque > tol:
+        sol = solve_ivp(
+            fun, [0, max_time], n.ravel(), method="LSODA", events=converged, rtol=1e-8, atol=1e-10
+        )
+        n = _normalize(sol.y[:, -1].reshape(N, P, 3))
+        torque = np.max(np.linalg.norm(torques(n), axis=-1))
+    return n, float(torque)
 
 
 # integration
