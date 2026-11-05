@@ -79,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- the header of the HTML table of a `Structure`, e.g. in the representation of the simulations, is styled as the headers of the other tables
 - assigning a value to a parameter of a group, e.g. `layer.magnetic.curie_temp = 500 * u.K`, replaced the `Parameter` by the value, so that depending parameters were not updated anymore; it sets the value of the parameter now, a `Parameter` of the same type replaces it after its conversion to the unit of the group, and derived parameters raise an `AttributeError`, closing [#234]
 - `Parameter` accepts lists and numpy scalars as magnitude
 - changing parameters directly via their group, e.g. `layer.structural.thickness`, did not update depending parameters of other groups, e.g. the spring constant

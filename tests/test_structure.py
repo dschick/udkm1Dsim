@@ -19,7 +19,10 @@ u.formatter.default_format = ".4g~P"
 def test_structure_repr(structure):
     assert repr(structure).startswith("Structure properties:")
     assert str(structure) == repr(structure)
-    assert structure._repr_html_().startswith("<h2>Structure: structure mixed</h2>")
+    html = structure._repr_html_()
+    assert html.startswith("<h2>Structure: structure mixed</h2>")
+    # the header is styled as the headers of the other tables
+    assert "<thead><tr><th>times</th>" in html
 
 
 def test_thickness(structure):
