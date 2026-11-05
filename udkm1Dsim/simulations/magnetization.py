@@ -39,6 +39,7 @@ from ..helpers import (
     make_hash_md5,
 )
 from ..structures.layers import UnitCell
+from ..structures.parameters import VectorParameter
 from .simulation import Simulation
 from .solvers import magnetization_scipy
 from .solvers.mean_field import TABLE, interpolate_tables_map, sublattice_signs
@@ -153,7 +154,7 @@ class Magnetization(Simulation):
         layers = self.S.get_unique_layers()[1]
         return max((layer.magnetic.num_sublattices for layer in layers), default=1)
 
-    def check_initial_magnetization(self, init_mag, distances=[]):
+    def check_initial_magnetization(self, init_magnetization, distances=[]):
         r"""check_initial_magnetization
 
         Check if a given initial magnetization profile is valid and return it
@@ -165,7 +166,9 @@ class Magnetization(Simulation):
         padded with zeros.
 
         If no initial magnetization is given, the profile is determined from
-        the magnetization of the layers. Otherwise it is either a single
+        the magnetization of the layers. Otherwise it is given in any form of
+        :meth:`parse_initial_magnetization`, i.e. in cartesian coordinates by
+        default, and is either a single
         vector or an :math:`N \times 3` array with one vector per layer for
         structures with a single sublattice, and a :math:`P \times 3` array
         with one vector per sublattice for all layers or the full
@@ -177,8 +180,9 @@ class Magnetization(Simulation):
         spatial grid can be provided.
 
         Args:
-            init_mag (ndarray[float]): initial global or local magnetization
-                profile.
+            init_magnetization (ndarray[float], dict, VectorParameter): initial
+                global or local magnetization profile, see
+                :meth:`parse_initial_magnetization`.
             distances (ndarray[float, Quantity], optional): spatial grid of the
                 initial magnetization.
 
@@ -212,6 +216,7 @@ class Magnetization(Simulation):
         sizes = np.array([handles[i].magnetic.num_sublattices for i in idx])
         P = int(np.max(sizes, initial=1))
 
+        init_mag = self.parse_initial_magnetization(init_magnetization)
         if len(init_mag) == 0:
             self.disp_message(
                 "No explicit initial magnetization given - use magnetization of layers instead."
@@ -267,13 +272,14 @@ class Magnetization(Simulation):
         numpy arrays.
         The ``magnetization_map`` can depend on the ``temp_map`` and
         ``strain_map`` that can be also calculated for the sample structure.
-        More over an external magnetic field ``H_ext`` and initial magnetization
-        profile ``init_mag`` can be provided.
+        More over an external magnetic field ``B_ext`` and initial magnetization
+        profile ``init_magnetization`` can be provided.
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile as well external magnetic field in [T],
+                temperature profile as well external magnetic field in [T]
+                also as quantity,
                 either constant or one vector per delay, and initial
                 magnetization.
 
@@ -297,7 +303,8 @@ class Magnetization(Simulation):
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile as well external magnetic field in [T],
+                temperature profile as well external magnetic field in [T]
+                also as quantity,
                 either constant or one vector per delay, and initial
                 magnetization.
 
@@ -311,8 +318,22 @@ class Magnetization(Simulation):
     def _get_magnetization_maps(self, delays, **kwargs):
         """the net and the sublattice magnetization maps, which are calculated
         and cached together, see :meth:`get_magnetization_map`"""
-        # create a hash of all simulation parameters
-        filename = "magnetization_map_" + self.get_hash(delays=delays, **kwargs) + ".npz"
+        if "init_mag" in kwargs:
+            raise TypeError(
+                "init_mag is replaced by init_magnetization, which is given in cartesian "
+                "coordinates (x, y, z), or as dict or VectorParameter in polar coordinates, "
+                "see parse_initial_magnetization!"
+            )
+        if kwargs.get("B_ext") is not None:
+            kwargs["B_ext"] = self.parse_field(kwargs["B_ext"])
+        # create a hash of all simulation parameters with the initial
+        # magnetization in a unique form
+        hash_kwargs = dict(kwargs)
+        if "init_magnetization" in kwargs:
+            hash_kwargs["init_magnetization"] = self.parse_initial_magnetization(
+                kwargs["init_magnetization"]
+            )
+        filename = "magnetization_map_" + self.get_hash(delays=delays, **hash_kwargs) + ".npz"
         full_filename = path.abspath(path.join(self.cache_dir, filename))
         # check if we find some corresponding data in the cache dir
         cached = path.exists(full_filename) and not self.force_recalc
@@ -336,21 +357,17 @@ class Magnetization(Simulation):
             for name in ("temp_map", "mag_amplitude_map"):
                 if kwargs.get(name) is not None and not isinstance(kwargs[name], np.ndarray):
                     raise TypeError(f"{name} must be a numpy ndarray!")
-            if "H_ext" in kwargs:
-                if not isinstance(kwargs["H_ext"], np.ndarray):
-                    raise TypeError("H_ext must be a numpy ndarray!")
-                elif kwargs["H_ext"].shape not in [(3,), (np.size(delays), 3)]:
+            if "B_ext" in kwargs:
+                if not isinstance(kwargs["B_ext"], np.ndarray):
+                    raise TypeError("B_ext must be a numpy ndarray!")
+                elif kwargs["B_ext"].shape not in [(3,), (np.size(delays), 3)]:
                     raise ValueError(
-                        "H_ext must be a vector with 3 components (H_x, H_y, H_z) or an "
+                        "B_ext must be a vector with 3 components (B_x, B_y, B_z) or an "
                         "array of Mx3 with M being the number of delays!"
                     )
-            if "init_mag" in kwargs and len(kwargs["init_mag"]) > 0:
-                if not isinstance(kwargs["init_mag"], np.ndarray):
-                    raise TypeError(
-                        "init_mag must be a numpy ndarray with all in radians without units!"
-                    )
+            if len(hash_kwargs.get("init_magnetization", [])) > 0:
                 # the shape is checked by check_initial_magnetization
-                self.check_initial_magnetization(kwargs["init_mag"])
+                self.check_initial_magnetization(kwargs["init_magnetization"])
 
             maps = self.calc_magnetization_map(delays, **kwargs)
             if isinstance(maps, tuple):
@@ -693,15 +710,119 @@ class Magnetization(Simulation):
             pass
         return np.asarray(delays, dtype=float)
 
-    def get_equilibrium_magnetization(self, H_ext=np.array([0, 0, 0]), init_mag=[], **profiles):
+    @staticmethod
+    def parse_field(B_ext):
+        """parse_field
+
+        Returns the external magnetic field as plain array in tesla, if it is
+        given as quantity, otherwise unchanged.
+
+        Args:
+            B_ext (ndarray[Quantity, float]): external magnetic field [T].
+
+        Returns:
+            B_ext (ndarray[float]): external magnetic field [T].
+
+        """
+        if isinstance(B_ext, u.Quantity):
+            return np.asarray(B_ext.to("T").magnitude, dtype=float)
+        return B_ext
+
+    @staticmethod
+    def parse_initial_magnetization(init_magnetization):
+        r"""parse_initial_magnetization
+
+        Returns the initial magnetization as plain polar array
+        ``[amplitude, phi, gamma]`` in radians, with the vectors in its last
+        dimension. As for the ``magnetization`` of the layers, see
+        :class:`~udkm1Dsim.structures.parameters.VectorParameter`, it can be
+        given as
+
+        - cartesian components ``(x, y, z)``, e.g. ``(1, 0, 0)`` or an array
+          of them with the components in its last dimension,
+        - dict of the polar components ``{"r": ..., "phi": ..., "gamma": ...}``
+          with angles as quantities or bare numbers in degrees, where a
+          negative ``r`` reverses the direction given by the angles,
+        - dict of the cartesian components ``{"x": ..., "y": ..., "z": ...}``,
+        - :class:`~udkm1Dsim.structures.parameters.VectorParameter` or
+          (nested) lists of them, e.g. one per sublattice.
+
+        The components of the dicts can be arrays of the same shape, e.g.
+        of a polar ``magnetization_map`` at a single delay. An empty input
+        gives an empty list, i.e. the magnetization of the layers is used.
+
+        Args:
+            init_magnetization (ndarray[float], dict, VectorParameter):
+                initial magnetization.
+
+        Returns:
+            init_mag (ndarray[float]): initial magnetization in polar
+            coordinates in radians.
+
+        """
+        if init_magnetization is None:
+            return []
+        if isinstance(init_magnetization, VectorParameter):
+            return np.array(init_magnetization.polar_rad, dtype=float)
+        if isinstance(init_magnetization, dict):
+            keys = set(init_magnetization)
+            if keys == {"r", "phi", "gamma"}:
+                r = init_magnetization["r"]
+                r = r.m_as("") if isinstance(r, u.Quantity) else r
+                angles = [
+                    value.m_as("rad") if isinstance(value, u.Quantity) else np.radians(value)
+                    for value in (init_magnetization["phi"], init_magnetization["gamma"])
+                ]
+                return np.stack(np.broadcast_arrays(r, *angles), axis=-1).astype(float)
+            if keys == {"x", "y", "z"}:
+                components = [
+                    value.m_as("") if isinstance(value, u.Quantity) else value
+                    for value in (init_magnetization[k] for k in "xyz")
+                ]
+                cartesian = np.stack(np.broadcast_arrays(*components), axis=-1)
+                return convert_cartesian_to_polar(cartesian.astype(float))
+            raise ValueError(
+                "A dict of the initial magnetization must hold either the polar components "
+                "r, phi, and gamma or the cartesian components x, y, and z!"
+            )
+
+        def contains_vectors(value):
+            return isinstance(value, VectorParameter) or (
+                isinstance(value, (list, tuple)) and any(contains_vectors(v) for v in value)
+            )
+
+        def polar_of_vectors(value):
+            if isinstance(value, VectorParameter):
+                return value.polar_rad
+            return [polar_of_vectors(v) for v in value]
+
+        if isinstance(init_magnetization, (list, tuple)) and contains_vectors(init_magnetization):
+            return np.array(polar_of_vectors(init_magnetization), dtype=float)
+        if isinstance(init_magnetization, u.Quantity):
+            init_magnetization = init_magnetization.m_as("")
+        cartesian = np.asarray(init_magnetization, dtype=float)
+        if cartesian.size == 0:
+            return []
+        if cartesian.shape[-1] != 3:
+            raise ValueError(
+                "The initial magnetization must be given with the 3 cartesian components "
+                "(x, y, z) in its last dimension!"
+            )
+        return convert_cartesian_to_polar(cartesian)
+
+    def get_equilibrium_magnetization(
+        self, B_ext=np.array([0, 0, 0]), init_magnetization=None, **profiles
+    ):
         r"""get_equilibrium_magnetization
 
         Returns the magnetization of all sublattices of all layers in the
         equilibrium of the given external field and spatial profiles, e.g. of
         the temperature and strain before an excitation, as polar array
-        :math:`L \times P \times 3`, which can be used as ``init_mag`` of
-        :meth:`get_magnetization_map`. Starting from the initial magnetization
-        ``init_mag`` or the magnetization of the layers, the directions are
+        :math:`L \times P \times 3`, which can be used as polar dict
+        ``init_magnetization`` of :meth:`get_magnetization_map`, see
+        :meth:`parse_initial_magnetization`. Starting from the initial
+        magnetization ``init_magnetization`` or the magnetization of the
+        layers, the directions are
         relaxed by an overdamped flow without precession into the nearest
         equilibrium, see
         :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.relax_directions`
@@ -715,10 +836,11 @@ class Magnetization(Simulation):
         axis, is not left.
 
         Args:
-            H_ext (ndarray[float], optional): external magnetic field
-                (H_x, H_y, H_z) [T].
-            init_mag (ndarray[float], optional): initial magnetization in
-                polar coordinates, see :meth:`check_initial_magnetization`.
+            B_ext (ndarray[Quantity, float], optional): external magnetic
+                field (B_x, B_y, B_z) [T].
+            init_magnetization (ndarray[float], dict, VectorParameter,
+                optional): initial magnetization, see
+                :meth:`check_initial_magnetization`.
             **profiles (ndarray[float], optional): the spatial profiles of
                 the maps of :meth:`get_magnetization_map` of the model at a
                 single time, e.g. ``temp_map`` of the layers :math:`L` or
@@ -730,14 +852,20 @@ class Magnetization(Simulation):
             sublattices in equilibrium :math:`L \times P \times 3`.
 
         """
+        if "init_mag" in profiles:
+            raise TypeError(
+                "init_mag is replaced by init_magnetization, which is given in cartesian "
+                "coordinates (x, y, z), or as dict or VectorParameter in polar coordinates, "
+                "see parse_initial_magnetization!"
+            )
         maps = {
             name: None if value is None else np.asarray(value, dtype=float)[np.newaxis, ...]
             for name, value in profiles.items()
         }
         _, sublattice_map = self.calc_magnetization_map(
             np.zeros(1),
-            H_ext=np.asarray(H_ext, dtype=float),
-            init_mag=init_mag,
+            B_ext=np.asarray(self.parse_field(B_ext), dtype=float),
+            init_magnetization=init_magnetization,
             equilibrate=True,
             **maps,
         )
@@ -765,11 +893,11 @@ class Magnetization(Simulation):
             :math:`N \times P \times 3`.
 
         """
-        H_ext, _, _, strains = magnetization_scipy.interpolate_inputs(inputs.delays[0], inputs)
+        B_ext, _, _, strains = magnetization_scipy.interpolate_inputs(inputs.delays[0], inputs)
         directions, torque = magnetization_scipy.relax_directions(
             init_dir,
             amplitudes,
-            H_ext,
+            B_ext,
             strains,
             magnetization_scipy.stack_magnetic_parameters(
                 self.get_magnetic_parameters(is_magnetic)
@@ -902,7 +1030,7 @@ class LLG(Magnetization):
     negative amplitude of the initial magnetization only.
 
     The field :math:`\mathbf{B}` [T] is the sum of the external field
-    ``H_ext``, the :func:`anisotropy field
+    ``B_ext``, the :func:`anisotropy field
     <udkm1Dsim.simulations.solvers.magnetization_scipy.anisotropy_field>`,
     the :func:`interlayer exchange field
     <udkm1Dsim.simulations.solvers.magnetization_scipy.interlayer_exchange_field>`
@@ -967,8 +1095,8 @@ class LLG(Magnetization):
         delays,
         mag_amplitude_map=None,
         temp_map=None,
-        H_ext=np.array([0, 0, 0]),
-        init_mag=[],
+        B_ext=np.array([0, 0, 0]),
+        init_magnetization=None,
         strain_map=None,
         equilibrate=False,
         **kwargs,
@@ -989,10 +1117,12 @@ class LLG(Magnetization):
             temp_map (ndarray[float], optional): spatio-temporal temperature
                 map, used for the magnetization amplitude if no
                 ``mag_amplitude_map`` is given, see :class:`LLG`.
-            H_ext (ndarray[float], optional): external magnetic field
-                (H_x, H_y, H_z) [T], either constant or one vector per delay.
-            init_mag (ndarray[float], optional): initial magnetization in
-                polar coordinates, see :meth:`check_initial_magnetization`.
+            B_ext (ndarray[Quantity, float], optional): external magnetic
+                field (B_x, B_y, B_z) [T], either constant or one vector per
+                delay.
+            init_magnetization (ndarray[float], dict, VectorParameter,
+                optional): initial magnetization in cartesian coordinates by
+                default, see :meth:`check_initial_magnetization`.
                 Its amplitude is kept if neither ``mag_amplitude_map`` nor
                 ``temp_map`` are given, otherwise only its direction is used.
             strain_map (ndarray[float], optional): spatio-temporal strain map
@@ -1013,7 +1143,7 @@ class LLG(Magnetization):
         M = len(delays)
         L = self.S.get_number_of_layers()
 
-        init_mag = self.check_initial_magnetization(init_mag)
+        init_mag = self.check_initial_magnetization(init_magnetization)
         P = init_mag.shape[1]
         # the directions of the initial magnetization, a negative amplitude
         # reverses the direction
@@ -1049,7 +1179,7 @@ class LLG(Magnetization):
         if np.any(amplitude_map < 0):
             raise ValueError(
                 "The magnetization amplitude must not be negative - a reversed direction "
-                "is given by a negative amplitude of init_mag only!"
+                "is given by the direction of init_magnetization only!"
             )
         if strain_map is not None:
             strain_map = self.check_map("strain_map", strain_map, M, L)
@@ -1067,7 +1197,7 @@ class LLG(Magnetization):
         inputs = magnetization_scipy.prepare_inputs(
             delays,
             len(layers),
-            H_ext,
+            B_ext,
             amplitude_map=amplitude_map[:, is_magnetic, :P],
             strain_map=None if strain_map is None else strain_map[:, is_magnetic],
         )
@@ -1195,8 +1325,8 @@ class iLLG(LLG):
         delays,
         mag_amplitude_map=None,
         temp_map=None,
-        H_ext=np.array([0, 0, 0]),
-        init_mag=[],
+        B_ext=np.array([0, 0, 0]),
+        init_magnetization=None,
         strain_map=None,
         equilibrate=False,
         init_velocity=None,
@@ -1217,10 +1347,12 @@ class iLLG(LLG):
             temp_map (ndarray[float], optional): spatio-temporal temperature
                 map, used for the magnetization amplitude if no
                 ``mag_amplitude_map`` is given, see :class:`LLG`.
-            H_ext (ndarray[float], optional): external magnetic field
-                (H_x, H_y, H_z) [T], either constant or one vector per delay.
-            init_mag (ndarray[float], optional): initial magnetization in
-                polar coordinates.
+            B_ext (ndarray[Quantity, float], optional): external magnetic
+                field (B_x, B_y, B_z) [T], either constant or one vector per
+                delay.
+            init_magnetization (ndarray[float], dict, VectorParameter,
+                optional): initial magnetization in cartesian coordinates by
+                default, see :meth:`check_initial_magnetization`.
             strain_map (ndarray[float], optional): spatio-temporal strain map
                 :math:`M \times L`.
             equilibrate (boolean, optional): relax the directions of the
@@ -1243,8 +1375,8 @@ class iLLG(LLG):
             delays,
             mag_amplitude_map=mag_amplitude_map,
             temp_map=temp_map,
-            H_ext=H_ext,
-            init_mag=init_mag,
+            B_ext=B_ext,
+            init_magnetization=init_magnetization,
             strain_map=strain_map,
             equilibrate=equilibrate,
             init_velocity=init_velocity,
@@ -1368,7 +1500,7 @@ class LLB(Magnetization):
     The field :math:`\mathbf{B}` [T] is the sum of all relevant magnetic
     interactions:
 
-    * the external magnetic field ``H_ext``
+    * the external magnetic field ``B_ext``
     * the :func:`anisotropy field
       <udkm1Dsim.simulations.solvers.magnetization_scipy.anisotropy_field>`
     * the :func:`interlayer exchange field
@@ -1451,8 +1583,8 @@ class LLB(Magnetization):
         self,
         delays,
         temp_map,
-        H_ext=np.array([0, 0, 0]),
-        init_mag=[],
+        B_ext=np.array([0, 0, 0]),
+        init_magnetization=None,
         strain_map=None,
         equilibrate=False,
         exchange_relaxation=False,
@@ -1466,11 +1598,13 @@ class LLB(Magnetization):
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
             temp_map (ndarray[float]): spatio-temporal temperature map.
-            H_ext (ndarray[float], optional): external magnetic field
-                (H_x, H_y, H_z) [T], either constant or one vector per delay.
-            init_mag (ndarray[float], optional): initial magnetization in
-                polar coordinates, see :meth:`check_initial_magnetization`. If
-                none is given, the layers start in the equilibrium of their
+            B_ext (ndarray[Quantity, float], optional): external magnetic
+                field (B_x, B_y, B_z) [T], either constant or one vector per
+                delay.
+            init_magnetization (ndarray[float], dict, VectorParameter,
+                optional): initial magnetization in cartesian coordinates by
+                default, see :meth:`check_initial_magnetization`. If none is
+                given, the layers start in the equilibrium of their
                 initial temperature along the magnetization of the layers.
             strain_map (ndarray[float], optional): spatio-temporal strain map
                 :math:`M \times L` for the magnetoelastic field.
@@ -1498,8 +1632,8 @@ class LLB(Magnetization):
         if strain_map is not None:
             strain_map = self.check_map("strain_map", strain_map, M, L)
 
-        implicit_init_mag = len(init_mag) == 0
-        init_mag = self.check_initial_magnetization(init_mag)
+        implicit_init_mag = len(self.parse_initial_magnetization(init_magnetization)) == 0
+        init_mag = self.check_initial_magnetization(init_magnetization)
 
         # magnetic layers carry a Curie temperature
         is_magnetic = self.S.get_layer_property_vector("magnetic.curie_temp.magnitude") > 0
@@ -1544,7 +1678,7 @@ class LLB(Magnetization):
         inputs = magnetization_scipy.prepare_inputs(
             delays,
             N,
-            H_ext,
+            B_ext,
             temp_map=temps[:, is_magnetic],
             strain_map=None if strain_map is None else strain_map[:, is_magnetic],
         )

@@ -158,8 +158,8 @@ class Structure:
             return class_str + "Structure is empty"
 
         class_str += f"<b>Thickness:</b> {self.thickness.to('nm'):.4g~P}"
-        header = "<tr><th>times</th><th>sub-structure</th><th>thickness</th></tr>"
-        class_str += f"<table>{header}{self._html_rows()}</table>"
+        header = "<thead><tr><th>times</th><th>sub-structure</th><th>thickness</th></tr></thead>"
+        class_str += f"<table>{header}<tbody>{self._html_rows()}</tbody></table>"
 
         for label, (layer, repetitions) in [
             ("Superstrate", self.superstrate),

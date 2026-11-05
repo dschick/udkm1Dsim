@@ -95,12 +95,12 @@ GAMMA_E = -constants.physical_constants["electron gyromag. ratio"][0]
 # floor for magnetization norms that appear in denominators
 MIN_MAG = 1e-12
 
-Inputs = namedtuple("Inputs", ["delays", "H_ext", "amplitude_map", "temp_map", "strain_map"])
+Inputs = namedtuple("Inputs", ["delays", "B_ext", "amplitude_map", "temp_map", "strain_map"])
 Inputs.__doc__ = r"""Time-dependent inputs of the solver on the delay grid.
 
 Attributes:
     delays (ndarray[float]): delays :math:`M` [s].
-    H_ext (ndarray[float]): external magnetic field :math:`M \times 3` [T].
+    B_ext (ndarray[float]): external magnetic field :math:`M \times 3` [T].
     amplitude_map (ndarray[float]): magnetization amplitude :math:`M \times N \times P`
         of the LLG and iLLG, ones for the LLB.
     temp_map (ndarray[float]): temperature :math:`M \times N` [K] of the
@@ -202,7 +202,7 @@ def tabulate_equilibrium(layers, temp_max=None):
     return temp_grid, tables
 
 
-def prepare_inputs(delays, N, H_ext, amplitude_map=None, temp_map=None, strain_map=None):
+def prepare_inputs(delays, N, B_ext, amplitude_map=None, temp_map=None, strain_map=None):
     r"""prepare_inputs
 
     Brings all time-dependent inputs onto their canonical shapes on the
@@ -212,7 +212,7 @@ def prepare_inputs(delays, N, H_ext, amplitude_map=None, temp_map=None, strain_m
     Args:
         delays (ndarray[float]): delays range of simulation [s].
         N (int): number of magnetic layers.
-        H_ext (ndarray[float]): external magnetic field [T], a single vector
+        B_ext (ndarray[float]): external magnetic field [T], a single vector
             or one vector per delay :math:`M \times 3`.
         amplitude_map (ndarray[float], optional): magnetization amplitude map
             :math:`M \times N` or :math:`M \times N \times P` or None for
@@ -228,11 +228,11 @@ def prepare_inputs(delays, N, H_ext, amplitude_map=None, temp_map=None, strain_m
     """
     delays = np.ascontiguousarray(np.asarray(delays, dtype=float))
     M = len(delays)
-    H_ext = np.asarray(H_ext, dtype=float)
-    if H_ext.shape == (3,):
-        H_ext = np.tile(H_ext, (M, 1))
-    elif H_ext.shape != (M, 3):
-        raise ValueError("H_ext must have the shape (3,) or (M, 3)!")
+    B_ext = np.asarray(B_ext, dtype=float)
+    if B_ext.shape == (3,):
+        B_ext = np.tile(B_ext, (M, 1))
+    elif B_ext.shape != (M, 3):
+        raise ValueError("B_ext must have the shape (3,) or (M, 3)!")
 
     def as_map(values, default):
         if values is None:
@@ -247,7 +247,7 @@ def prepare_inputs(delays, N, H_ext, amplitude_map=None, temp_map=None, strain_m
 
     return Inputs(
         delays,
-        np.ascontiguousarray(H_ext),
+        np.ascontiguousarray(B_ext),
         np.ascontiguousarray(amplitude_map.reshape(M, N, amplitude_map.shape[-1])),
         as_map(temp_map, 0.0),
         as_map(strain_map, 0.0),
@@ -290,7 +290,7 @@ def interpolate_inputs(t, inputs):
 
     Returns:
         (tuple):
-        - *H_ext (ndarray[float])* - external field [T].
+        - *B_ext (ndarray[float])* - external field [T].
         - *amplitudes (ndarray[float])* - magnetization amplitudes
           :math:`N \\times P`.
         - *temps (ndarray[float])* - temperatures :math:`N` [K].
@@ -305,7 +305,7 @@ def interpolate_inputs(t, inputs):
         return values[idx]
 
     return (
-        interpolate(inputs.H_ext),
+        interpolate(inputs.B_ext),
         interpolate(inputs.amplitude_map),
         interpolate(inputs.temp_map),
         interpolate(inputs.strain_map),
@@ -315,13 +315,13 @@ def interpolate_inputs(t, inputs):
 # effective field, term by term
 
 
-def external_field(H_ext, N, P):
+def external_field(B_ext, N, P):
     """external_field
 
     The external magnetic field, the same for all layers and sublattices.
 
     Args:
-        H_ext (ndarray[float]): external field [T].
+        B_ext (ndarray[float]): external field [T].
         N (int): number of magnetic layers.
         P (int): number of sublattices.
 
@@ -329,7 +329,7 @@ def external_field(H_ext, N, P):
         B (ndarray[float]): field :math:`N \\times P \\times 3` [T].
 
     """
-    return np.tile(np.asarray(H_ext, dtype=float), (N, P, 1))
+    return np.tile(np.asarray(B_ext, dtype=float), (N, P, 1))
 
 
 def anisotropy_field(m, ref_mags, mag):
@@ -442,7 +442,7 @@ def magnetoelastic_field(m, ref_mags, strains, mag):
     return B
 
 
-def effective_field(m, ref_mags, H_ext, strains, mag, exch_stiffnesses, thicknesses):
+def effective_field(m, ref_mags, B_ext, strains, mag, exch_stiffnesses, thicknesses):
     r"""effective_field
 
     Static effective field common to all models
@@ -460,7 +460,7 @@ def effective_field(m, ref_mags, H_ext, strains, mag, exch_stiffnesses, thicknes
     Args:
         m (ndarray[float]): magnetization vectors :math:`N \times P \times 3`.
         ref_mags (ndarray[float]): reference magnetization :math:`N \times P`.
-        H_ext (ndarray[float]): external field [T].
+        B_ext (ndarray[float]): external field [T].
         strains (ndarray[float]): strains of the layers :math:`N`.
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
@@ -474,7 +474,7 @@ def effective_field(m, ref_mags, H_ext, strains, mag, exch_stiffnesses, thicknes
     """
     N, P = m.shape[0:2]
     return (
-        external_field(H_ext, N, P)
+        external_field(B_ext, N, P)
         + anisotropy_field(m, ref_mags, mag)
         + interlayer_exchange_field(m, mag, exch_stiffnesses, thicknesses)
         + magnetoelastic_field(m, ref_mags, strains, mag)
@@ -682,10 +682,10 @@ def llg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
 
     """
     N, P = mag.active.shape
-    H_ext, amplitudes, _, strains = interpolate_inputs(t, inputs)
+    B_ext, amplitudes, _, strains = interpolate_inputs(t, inputs)
     n = _normalize(y.reshape(N, P, 3))
     m = amplitudes[..., np.newaxis] * n
-    B = effective_field(m, amplitudes, H_ext, strains, mag, exch_stiffnesses, thicknesses)
+    B = effective_field(m, amplitudes, B_ext, strains, mag, exch_stiffnesses, thicknesses)
     B += sublattice_exchange_field(m, mag)
     alpha = mag.gilbert_damping
     precession = np.cross(n, B)
@@ -740,12 +740,12 @@ def illg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
 
     """
     N, P = mag.active.shape
-    H_ext, amplitudes, _, strains = interpolate_inputs(t, inputs)
+    B_ext, amplitudes, _, strains = interpolate_inputs(t, inputs)
     state = y.reshape(2, N, P, 3)
     n = _normalize(state[0])
     v = state[1]
     m = amplitudes[..., np.newaxis] * n
-    B = effective_field(m, amplitudes, H_ext, strains, mag, exch_stiffnesses, thicknesses)
+    B = effective_field(m, amplitudes, B_ext, strains, mag, exch_stiffnesses, thicknesses)
     B += sublattice_exchange_field(m, mag)
     alpha = mag.gilbert_damping[..., np.newaxis]
     # inactive sublattices have no damping or inertia, guard the division
@@ -869,7 +869,7 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
 
     """
     N, P = mag.active.shape
-    H_ext, _, temps, strains = interpolate_inputs(t, inputs)
+    B_ext, _, temps, strains = interpolate_inputs(t, inputs)
     m = y.reshape(N, P, 3)
     eq = interpolate_tables(temp_grid, tables, temps)
     me = eq[..., TABLE["mag"]]
@@ -879,7 +879,7 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
     m_norm = np.sqrt(np.sum(m**2, axis=2))
     m_squared = np.maximum(m_norm, MIN_MAG) ** 2
 
-    B = effective_field(m, me, H_ext, strains, mag, exch_stiffnesses, thicknesses)
+    B = effective_field(m, me, B_ext, strains, mag, exch_stiffnesses, thicknesses)
     B += transverse_sublattice_exchange_field(m, m_squared, mag)
     # the longitudinal field is parallel to m and exerts no torque - it only
     # enters the longitudinal term, since it is huge at low temperatures, where
@@ -907,7 +907,7 @@ RHS = {"llg": llg_rhs, "illg": illg_rhs, "llb": llb_rhs}
 def relax_directions(
     init_dir,
     amplitudes,
-    H_ext,
+    B_ext,
     strains,
     mag,
     exch_stiffnesses,
@@ -943,7 +943,7 @@ def relax_directions(
             :math:`N \times P \times 3`.
         amplitudes (ndarray[float]): magnetization amplitudes
             :math:`N \times P`.
-        H_ext (ndarray[float]): external field [T].
+        B_ext (ndarray[float]): external field [T].
         strains (ndarray[float]): strains of the layers :math:`N`.
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
@@ -969,7 +969,7 @@ def relax_directions(
 
     def torques(n):
         m = amplitudes[..., np.newaxis] * n
-        B = effective_field(m, amplitudes, H_ext, strains, mag, exch_stiffnesses, thicknesses)
+        B = effective_field(m, amplitudes, B_ext, strains, mag, exch_stiffnesses, thicknesses)
         B += sublattice_exchange_field(m, mag)
         return mag.active[..., np.newaxis] * np.cross(n, B)
 
