@@ -491,7 +491,9 @@ class Heat(Simulation):
             # find the first layer and get properties
             index = finderb(interfaces[i], d_start)
             layer = structure.get_layer_handle(index[0])
-            opt_pen_depth = layer.optical.opt_pen_depth.magnitude
+            opt_pen_depth = (
+                layer.get_opt_pen_depth(self._excitation["wavelength"] * u.m).to("m").magnitude
+            )
 
             # get all distances in the current layer we have to
             # calculate the absorption profile for
@@ -571,6 +573,8 @@ class Heat(Simulation):
 
         opt_ref_indices = np.empty(N + 1, dtype=np.complex128)
         thicknesses = np.empty(N + 1, dtype=float)
+        # the refractive indices follow from the dielectrics for the wavelength
+        wavelength = self._excitation["wavelength"] * u.m
 
         # add superstrate
         if isinstance(structure.superstrate[0], Layer):
@@ -578,14 +582,14 @@ class Heat(Simulation):
         else:
             raise TypeError("Superstrate must be of type Layer or its sub-classes!")
 
-        opt_ref_indices[0] = superstrate_layer.optical.opt_ref_index.magnitude
+        opt_ref_indices[0] = superstrate_layer.get_ref_index(wavelength)
         thicknesses[0] = superstrate_layer.structural.thickness.magnitude
 
         # iterate actual sampel structure
         for i in range(N - 1):
             index = finderb(interfaces[i], d_start)
             layer = structure.get_layer_handle(index[0])
-            opt_ref_indices[i + 1] = layer.optical.opt_ref_index.magnitude
+            opt_ref_indices[i + 1] = layer.get_ref_index(wavelength)
             thicknesses[i + 1] = interfaces[i + 1] - interfaces[i]
 
         # add substrate
@@ -594,7 +598,7 @@ class Heat(Simulation):
         else:
             raise TypeError("Substrate must be of type Layer or its sub-classes!")
 
-        opt_ref_indices[N] = substrate_layer.optical.opt_ref_index.magnitude
+        opt_ref_indices[N] = substrate_layer.get_ref_index(wavelength)
         thicknesses[N] = substrate_layer.structural.thickness.magnitude
 
         # Snell laws
