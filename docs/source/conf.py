@@ -29,7 +29,7 @@ copyright = '2014-{:d}, Daniel Schick'.format(current_year)
 author = 'Daniel Schick'
 
 # The short X.Y version
-version = '2.5.0'
+version = '2.6.0'
 # The full version, including alpha/beta/rc tags
 release = version
 
