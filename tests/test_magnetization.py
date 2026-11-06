@@ -1092,7 +1092,7 @@ def gdfeco():
             f"{g_el:g}*(T_0-T_1)",
         ],
         lin_therm_exp=[0, 1e-5],
-        opt_pen_depth=20 * u.nm,
+        dielectric=ud.Dispersion.from_opt_pen_depth(20 * u.nm),
         eff_spin=[np.inf, np.inf],
         mag_moment=mu * u.bohr_magneton,
         lamda=0.02,

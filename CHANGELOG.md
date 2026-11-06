@@ -39,8 +39,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LLB` warns if a layer ends at a vanishing magnetization below its Curie temperature, since `m = 0` is a fixed point of the LLB
 - magnetic parameter `gyromagnetic_ratio` of layers per sublattice for `LLG`, `iLLG`, and `LLB`, which defaults to the one of a free electron `GAMMA_E`, now taken from `scipy.constants` (-1.76086e11 instead of -1.761e11 rad/(s T))
 
+- `Dispersion` for energy-dependent dielectric quantities, evaluated as dielectric function `eps()` or susceptibility `chi()`, from constants or tables by `from_array()`, `from_ref_index()`, and `from_file()`, e.g. for `.nk` files, with photon energies, wavelengths, frequencies, or wavenumbers as spectral axis; dispersions are isotropic, uniaxial, diagonal, or full tensors, are combined by `a | b` for the fallback to `b` outside the energy range of `a` and by `a + b` for the sum of their contributions, and raise an error outside their energy range instead of an extrapolation, which gives the defined ranges in the quantity and unit of the input, e.g. as wavelengths in nm
+- `Dielectric` parameter `dielectric` of `OpticalParameters` with the non-magnetic dispersion `eps0`, the gyrotropic dispersion `eps_mag`, also as Voigt constant, and the `strain_model` `none`, `density` for the scaling of the susceptibilities with the density, or `photoelastic` for a measured, total change per strain `deps_dstrain` of the non-magnetic part with the density scaling of the gyrotropic part, from which `get_tensor()`, `get_ref_index()`, and `get_opt_pen_depth()` follow
+- `dispersion_from_atoms()`, `dielectric_from_atoms()`, and `set_dielectric_from_atoms()` of `AmorphousLayer` and `UnitCell` from the atomic and magnetic form factors of their atoms with an optional `fallback` dispersion, e.g. a refractive index in the optical range, closing [#112]
+- methods of `Layer` for the optical quantities of its dielectric for its density: `get_dielectric_tensor()`, `get_ref_index()`, `get_delta_beta()`, `get_opt_pen_depth()`, `get_absorption_coefficient()`, `get_mass_attenuation_coefficient()`, `get_critical_angle()`, and the effective atomic form factor `get_form_factor()`, which are also available for a `Dielectric`
+- `Dispersion.from_opt_pen_depth()` with a constant optical penetration depth at all wavelengths and `Layer.set_opt_pen_depth()`, which only changes the extinction coefficient of the dielectric of a layer with a warning, e.g. for the Lambert-Beer absorption
+- dispersions from $\delta + i\beta$ of X-ray tables by `kind="delta_beta"`, also for the magnetic optical constants $\Delta\delta + i\Delta\beta$ of the magnetic part, and from tabulated mass attenuation coefficients by `Dispersion.from_mass_attenuation()`
+- `get_delta_beta_mag()` of `Dielectric` and `Layer` with the magnetic optical constants $\Delta\delta$ and $\Delta\beta$ of the refractive indices $n_\pm = 1 - (\delta \pm \Delta\delta) + i (\beta \pm \Delta\beta)$ of the circular modes
+- `a - b` and `c * a` for the difference and scaling of the contributions of dispersions
+- dispersions from tabulated atomic and magnetic form factors per formula unit, e.g. of `.cf`, `.nff`, or `.mf` files, with their molar mass by `Dispersion.from_form_factors()` or `kind="f"` and `kind="m"`
+- `helpers.read_columns()` and `helpers.SpectralTable`, which read and interpolate the tabulated spectral data of the dispersions and of the form factors of the atoms
+- `euler_angles` of a `Dielectric` rotate its non-magnetic part from the frame of the crystal into the frame of the sample by z-x-z Euler angles as in PyGTM, see `euler_matrix()`, while its magnetization and photoelastic change are given in the frame of the sample
+- `Dispersion.from_refractiveindex()` loads the optical constants of a page of the [refractiveindex.info](https://refractiveindex.info) database by its shelf, book, and page or its url with the optional package [refractiveindex](https://github.com/toftul/refractiveindex), installed by `pip install udkm1Dsim[refractiveindex]`, following the discussion [#192]
+- `Atom.get_susceptibility()` with the non-magnetic and gyrotropic susceptibility from the atomic and magnetic form factors
+- `atomic_form_factor_range`, `magnetic_form_factor_range`, `has_magnetic_form_factor`, and `form_factor_source()` of `Atom` and `AtomMixed`, whose display shows the sources and energy ranges of their form factors, e.g. `Atomic form factors: Chantler from 10.69 eV to 30.01 keV`
+- example of the atomic form factors and dielectric functions with a short introduction in the structure example
+- `print()` and `display()` of a `Dielectric` describe its dispersions, e.g. `table of n: 49 values from 0.64 eV to 6.6 eV (Cr.nk) | n = 2.87 + 3.36i`, or show their values for its `display_energy`, e.g. `ε⁰(800 nm) = −3.053 + 19.29i`, with values close to 1 as deviation from 1 for X-rays
 ### Changed
 
+- `get_atomic_form_factor()` and `get_magnetic_form_factor()` of `Atom` and `AtomMixed` accept wavelengths, frequencies, and wavenumbers as pint Quantity and raise a `ValueError` outside of the tabulated energy range in the quantity and unit of the input instead of extrapolating, also skipping the invalid entries of Henke et al.
+- an `Atom` without tabulated magnetic form factors has `magnetic_form_factor_coeff = None` instead of zeros and does not print a message anymore, while a missing file given by `magnetic_form_factor_path` raises a `FileNotFoundError`
+- `XrayDynMag` and the multilayer absorption of `Heat` use the `dielectric` of the layers, which must be set explicitly, e.g. by `layer.set_dielectric_from_atoms()` for the previous behavior of `XrayDynMag` for an `AmorphousLayer`, while `UnitCell`s still use their atoms; any homogeneous `Layer` with an isotropic dielectric can be used by `XrayDynMag`
+- the optical properties of a layer are only given by its `dielectric`, from which the refractive index and the optical penetration depth follow for the wavelength of the excitation
 - the external magnetic field of the magnetization simulations is given as `B_ext` in tesla instead of `H_ext`, consistent with the fields $\mathbf{B}$ in the equations and their units, also as `pint` quantity in any unit of the field
 - the initial magnetization of the magnetization simulations is given as `init_magnetization` in cartesian coordinates instead of `init_mag` in polar coordinates, consistent with `B_ext` and the `magnetization` of the layers; it can also be given in polar coordinates as dict `{"r": ..., "phi": ..., "gamma": ...}` or as `VectorParameter`, see `Magnetization.parse_initial_magnetization`, and the former `init_mag` raises a `TypeError`
 - the magnetization examples are replaced by `01-LLG` (precession, equilibrium, amplitude from the temperature or a map, magnetoelastic coupling, reproducing the heterostructure-dependent precession of Jarecki et al. 2024), `02-iLLG` (susceptibility with the ferromagnetic resonance and the nutation, THz-driven nutation resonance after Neeraj et al. 2021, nutation after an optical excitation after De et al. 2025), `03-LLB` (longitudinal dynamics, comparison with the LLG, a simple antiferromagnet), and `04-eLLB` (all-optical switching of GdFeCo after Raposo et al. 2022, switching diagram of fluence and pulse duration compared with Davies et al. 2020 and Jakobs and Atxitia 2022), adapted from the examples of [friweber/udkm1Dsim_LLG-LLB](https://github.com/friweber/udkm1Dsim_LLG-LLB) by [@friweber](https://github.com/friweber)
@@ -75,10 +95,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `opt_ref_index`, `opt_pen_depth`, `opt_ref_index_per_strain`, and `set_opt_pen_depth_from_ref_index()` of layers and `OpticalParameters`, which raise an error with their replacement, see `Dispersion.from_ref_index()`, `Dispersion.from_opt_pen_depth()`, `Layer.set_opt_pen_depth()`, the `strain_model` of `Dielectric`, and `Layer.get_opt_pen_depth()` instead
 - the static methods `LLB.odefunc`, `calc_uniaxial_anisotropy_field`, `calc_exchange_field`, `calc_thermal_field`, `calc_Brillouin`, `calc_dBrillouin_dx`, `calc_transverse_damping`, `calc_longitudinal_damping`, `calc_qs`, and `calc_long_susceptibility`, see `simulations.solvers.magnetization_scipy` and `simulations.solvers.mean_field` instead
 
 ### Fixed
 
+- the homogeneous reflectivity of `XrayDynMag` includes the thickness of `Vacuum` layers and scales the density of strained amorphous layers by `1/(1+strain)` as the inhomogeneous reflectivity
 - the header of the HTML table of a `Structure`, e.g. in the representation of the simulations, is styled as the headers of the other tables
 - assigning a value to a parameter of a group, e.g. `layer.magnetic.curie_temp = 500 * u.K`, replaced the `Parameter` by the value, so that depending parameters were not updated anymore; it sets the value of the parameter now, a `Parameter` of the same type replaces it after its conversion to the unit of the group, and derived parameters raise an `AttributeError`, closing [#234]
 - `Parameter` accepts lists and numpy scalars as magnitude
@@ -108,9 +130,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+[#112]: https://github.com/dschick/udkm1Dsim/issues/112
 [#139]: https://github.com/dschick/udkm1Dsim/issues/139
 [#164]: https://github.com/dschick/udkm1Dsim/pull/164
 [#186]: https://github.com/dschick/udkm1Dsim/issues/186
+[#192]: https://github.com/dschick/udkm1Dsim/discussions/192
 [#224]: https://github.com/dschick/udkm1Dsim/issues/224
 [#226]: https://github.com/dschick/udkm1Dsim/issues/226
 [#234]: https://github.com/dschick/udkm1Dsim/issues/234

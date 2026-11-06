@@ -6,6 +6,7 @@ from udkm1Dsim import (
     AmorphousLayer,
     Atom,
     AtomMixed,
+    Dispersion,
     Layer,
     Parameter,
     Structure,
@@ -19,6 +20,17 @@ from udkm1Dsim import (
 # fixtures
 
 # parameters
+
+
+# refractive index of the layers for the optical excitation
+REF_INDEX = 5 - 3j
+
+
+def _dielectric_from_atoms_and_optics(layer):
+    """Dielectric from the atoms in the X-ray range and a constant refractive
+    index at all other energies, e.g. for the optical excitation."""
+    layer.set_dielectric_from_atoms(fallback=Dispersion.from_ref_index(REF_INDEX))
+    return layer
 
 
 @pytest.fixture(scope="module")
@@ -105,9 +117,7 @@ def properties():
         "deb_wal_fac": 1 * u.angstrom**2,
         "sound_vel": 6 * u.nm / u.ps,
         "phonon_damping": 1 * u.kg / u.s,
-        "opt_pen_depth": 10.0 * u.nm,
-        "opt_ref_index": 5 - 3j,
-        "opt_ref_index_per_strain": 1 - 1j,
+        "dielectric": Dispersion.from_ref_index(REF_INDEX),
         "therm_cond": 1 * u.W / (u.m * u.K),
         "lin_therm_exp": 1e-5,
         "heat_capacity": 10 * (u.J / u.kg / u.K),
@@ -157,7 +167,7 @@ def unit_cell(atom_strontium, atom_oxygen, atom_titanium, properties):
 
 @pytest.fixture(scope="module")
 def amorphous_layer_iron(atom_iron, properties):
-    return AmorphousLayer(
+    layer = AmorphousLayer(
         id="amorphous_layer_Fe",
         name="amorphous layer iron",
         thickness=1 * u.nm,
@@ -165,11 +175,12 @@ def amorphous_layer_iron(atom_iron, properties):
         atom=atom_iron,
         **properties,
     )
+    return _dielectric_from_atoms_and_optics(layer)
 
 
 @pytest.fixture(scope="module")
 def amorphous_layer_oxygen(atom_oxygen, properties):
-    return AmorphousLayer(
+    layer = AmorphousLayer(
         id="amorphous_layer_O",
         name="amorphous layer oxygen",
         thickness=1 * u.nm,
@@ -177,6 +188,7 @@ def amorphous_layer_oxygen(atom_oxygen, properties):
         atom=atom_oxygen,
         **properties,
     )
+    return _dielectric_from_atoms_and_optics(layer)
 
 
 @pytest.fixture(scope="module")

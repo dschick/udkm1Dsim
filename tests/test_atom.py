@@ -259,7 +259,8 @@ def test_atom_read_magnetic_form_factor_coeff_from_file(request, fixture_name):
     mag_coeff = atom.read_magnetic_form_factor_coeff(filename=filename)
     atom.magnetic_form_factor_coeff = mag_coeff
     atom.get_magnetic_form_factor(700)
-    atom.read_magnetic_form_factor_coeff(filename="wrong")
+    with pytest.raises(FileNotFoundError):
+        atom.read_magnetic_form_factor_coeff(filename="wrong")
 
 
 # ============================================================================
@@ -524,3 +525,75 @@ def test_atom_cromer_mann_coeff_of_closest_ionicity(symbol, ionicity, closest):
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         atom.mag_amplitude = 0.5
+
+
+# ============================================================================
+# form factors: spectral inputs, ranges, sources, and errors
+# ============================================================================
+
+
+def test_atom_form_factor_spectral_input():
+    atom = Atom("Fe")
+    # the wavelength of 700 eV
+    np.testing.assert_allclose(
+        atom.get_atomic_form_factor((700 * u.eV).to("nm", "sp")), atom.get_atomic_form_factor(700)
+    )
+    assert np.shape(atom.get_atomic_form_factor([700, 710])) == (2,)
+    assert np.ndim(atom.get_atomic_form_factor(700)) == 0
+
+
+def test_atom_form_factor_out_of_range():
+    atom = Atom("Fe")
+    lo, hi = atom.atomic_form_factor_range
+    assert lo == pytest.approx(10.69, abs=0.01)
+    with pytest.raises(
+        ValueError, match=r"Fe \(Chantler\)\nis not defined for the photon energy 5 eV"
+    ):
+        atom.get_atomic_form_factor(5)
+    with pytest.raises(ValueError, match="for the wavelength 200 nm,\nbut only from 0.04131 nm"):
+        atom.get_atomic_form_factor(200 * u.nm)
+    # invalid entries of Henke et al. are not interpolated
+    henke = Atom("Fe", atomic_form_factor_source="henke")
+    assert henke.form_factor_source() == "Henke"
+    assert henke.atomic_form_factor_range[0] > 10
+    with pytest.raises(ValueError, match=r"\(Henke\)"):
+        henke.get_atomic_form_factor(20)
+
+
+def test_atom_form_factor_sources_and_display():
+    atom = Atom("Fe")
+    assert atom.form_factor_source() == "Chantler"
+    assert atom.form_factor_source(magnetic=True) == "Fe.mf"
+    assert atom.has_magnetic_form_factor
+    text = repr(atom)
+    assert "Atomic form factors: Chantler from 10.69 eV to 30.01 keV" in text
+    assert "Magnetic form factors: Fe.mf from" in text
+    assert "Atomic form factors: Chantler" in atom._repr_html_()
+    # custom tables
+    atom.atomic_form_factor_coeff = np.array([[700, 1, 2], [710, 3, 4]])
+    assert atom.form_factor_source() == "custom"
+    assert atom.get_atomic_form_factor(705) == pytest.approx(2 - 3j)
+    # without magnetic form factors
+    atom.magnetic_form_factor_coeff = None
+    assert atom.form_factor_source(magnetic=True) is None
+    assert not atom.has_magnetic_form_factor
+    assert atom.get_magnetic_form_factor(1e6) == 0
+    assert atom.magnetic_form_factor_range == (-np.inf, np.inf)
+    assert "Magnetic form factors: not tabulated" in repr(atom)
+
+
+def test_atom_mixed_form_factor_ranges():
+    iron = Atom("Fe")
+    rhodium = Atom("Rh")
+    mixed = AtomMixed("FeRh")
+    mixed.add_atom(iron, 0.5)
+    mixed.add_atom(rhodium, 0.5)
+    assert mixed.form_factor_source() == "averaged from the constituents"
+    assert mixed.atomic_form_factor_range == (
+        max(iron.atomic_form_factor_range[0], rhodium.atomic_form_factor_range[0]),
+        min(iron.atomic_form_factor_range[1], rhodium.atomic_form_factor_range[1]),
+    )
+    assert mixed.has_magnetic_form_factor
+    # the error is raised by the constituent in the unit of the input
+    with pytest.raises(ValueError, match="for the wavelength 200 nm"):
+        mixed.get_atomic_form_factor(200 * u.nm)

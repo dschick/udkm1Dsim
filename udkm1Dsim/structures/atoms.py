@@ -32,10 +32,36 @@ import numpy as np
 import pint
 from tabulate import tabulate
 
+from ..helpers import SpectralTable, _format_energy, read_columns, to_energy, undefined_error
+from .dielectric import atoms_susceptibility
 from .parameter_groups import AtomMixedParameters, AtomParameters
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
+
+# invalid values in the tables of Henke et al.
+_INVALID_FORM_FACTOR = -9000
+
+
+def form_factor_table(coeff, source=""):
+    """form_factor_table
+
+    Table of the complex form factors :math:`f_1 - i f_2` from coefficients
+    with the columns of the photon energy [eV], :math:`f_1`, and :math:`f_2`,
+    e.g. of ``.cf``, ``.nff``, or ``.mf`` files, where invalid entries, e.g.
+    the -9999 of the tables of Henke et al., are NaN.
+
+    Args:
+        coeff (ndarray[float]): coefficients of shape (N, 3).
+        source (str, optional): source of the table.
+
+    Returns:
+        table (SpectralTable): table of the form factors.
+
+    """
+    return SpectralTable.from_columns(
+        coeff, imaginary_sign=-1, invalid_below=_INVALID_FORM_FACTOR, source=source
+    )
 
 
 class Atom:
@@ -123,12 +149,20 @@ class Atom:
             ionicity=kwargs.get("ionicity", 0),
         )
         self._init_magnetization(kwargs)
+        atomic_path = kwargs.get("atomic_form_factor_path", "")
+        source = kwargs.get("atomic_form_factor_source", "chantler")
         self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
-            filename=kwargs.get("atomic_form_factor_path", ""),
-            source=kwargs.get("atomic_form_factor_source", "chantler"),
+            filename=atomic_path, source=source
         )
+        self._atomic_form_factor_source = (
+            os.path.basename(atomic_path) if atomic_path else source.capitalize()
+        )
+        magnetic_path = kwargs.get("magnetic_form_factor_path", "")
         self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
-            filename=kwargs.get("magnetic_form_factor_path", "")
+            filename=magnetic_path
+        )
+        self._magnetic_form_factor_source = (
+            os.path.basename(magnetic_path) if magnetic_path else f"{self.symbol}.mf"
         )
         self._read_cromer_mann_coeff()
         # changes of the parameters, e.g. of the ionicity, are notified to the atom
@@ -177,17 +211,136 @@ class Atom:
             + "\n"
         )
 
+    def _form_factor_lines(self):
+        """Sources and energy ranges of the atomic and magnetic form factors."""
+        lines = []
+        for kind, magnetic in (("Atomic", False), ("Magnetic", True)):
+            source = self.form_factor_source(magnetic)
+            if source is None:
+                lines.append(f"{kind} form factors: not tabulated")
+                continue
+            lo, hi = self.magnetic_form_factor_range if magnetic else self.atomic_form_factor_range
+            lines.append(
+                f"{kind} form factors: {source} from {_format_energy(lo)} to {_format_energy(hi)}"
+            )
+        return lines
+
     def __repr__(self):
         """String representation of this class"""
-        return self._header() + self.atomic._table_representation()
+        return (
+            self._header()
+            + "\n".join(self._form_factor_lines())
+            + "\n"
+            + self.atomic._table_representation()
+        )
 
     def _repr_html_(self):
         """HTML representation of this class"""
         return (
             f"<h3>{type(self).__name__}: {self.name}</h3>"
             f"<b>ID:</b> <i>{self.id}</i>, <b>Symbol:</b> <i>{self.symbol}</i><br>"
+            + "".join(f"{line}<br>" for line in self._form_factor_lines())
             + self.atomic._html_table()
         )
+
+    # ============================================================================
+    # form factors
+    # ============================================================================
+
+    @property
+    def atomic_form_factor_coeff(self):
+        """ndarray[float]: tabulated atomic form factors with the columns of
+        the photon energy [eV], :math:`f_1`, and :math:`f_2`. Setting it,
+        e.g. to experimental data, changes their source to ``custom``."""
+        return self._atomic_form_factor_coeff
+
+    @atomic_form_factor_coeff.setter
+    def atomic_form_factor_coeff(self, coeff):
+        self._atomic_form_factor_coeff = coeff
+        self._atomic_form_factor_source = "custom"
+
+    @property
+    def magnetic_form_factor_coeff(self):
+        """ndarray[float]: tabulated magnetic form factors with the columns of
+        the photon energy [eV], :math:`m_1`, and :math:`m_2`, or None if not
+        tabulated. Setting it, e.g. to experimental data, changes their source
+        to ``custom``."""
+        return self._magnetic_form_factor_coeff
+
+    @magnetic_form_factor_coeff.setter
+    def magnetic_form_factor_coeff(self, coeff):
+        self._magnetic_form_factor_coeff = coeff
+        self._magnetic_form_factor_source = "custom"
+
+    def form_factor_source(self, magnetic=False):
+        """form_factor_source
+
+        Source of the atomic or magnetic form factors, e.g. ``Chantler``,
+        ``Henke``, the name of the file, or ``custom``.
+
+        Args:
+            magnetic (bool, optional): magnetic instead of atomic form factors.
+                Defaults to False.
+
+        Returns:
+            source (str, None): source, or None if not tabulated.
+
+        """
+        if magnetic:
+            if self.magnetic_form_factor_coeff is None:
+                return None
+            return self._magnetic_form_factor_source
+        return self._atomic_form_factor_source
+
+    @property
+    def atomic_form_factor_range(self):
+        """tuple[float]: lowest and highest photon energy [eV] of the tabulated
+        atomic form factors."""
+        return form_factor_table(self.atomic_form_factor_coeff).energy_range
+
+    @property
+    def magnetic_form_factor_range(self):
+        """tuple[float]: lowest and highest photon energy [eV] of the tabulated
+        magnetic form factors, which are zero at all energies if not
+        tabulated."""
+        if self.magnetic_form_factor_coeff is None:
+            return -np.inf, np.inf
+        return form_factor_table(self.magnetic_form_factor_coeff).energy_range
+
+    @property
+    def has_magnetic_form_factor(self):
+        """bool: true if magnetic form factors are tabulated."""
+        coeff = self.magnetic_form_factor_coeff
+        return coeff is not None and bool(np.any(np.atleast_2d(coeff)[:, 1:]))
+
+    def _get_form_factor(self, energy, magnetic):
+        """Interpolated atomic or magnetic form factors for photon energies,
+        wavelengths, frequencies, or wavenumbers, which raise an error outside
+        of the tabulated energy range in the quantity and unit of the input."""
+        spectral = energy
+        energy = np.asarray(to_energy(energy), dtype=float)
+        shape = energy.shape
+        energy = energy.reshape(-1)
+        coeff = self.magnetic_form_factor_coeff if magnetic else self.atomic_form_factor_coeff
+        if coeff is None:
+            # no magnetic form factors are tabulated
+            f = np.zeros(energy.shape, dtype=complex)
+        else:
+            f = form_factor_table(coeff)(energy)
+            invalid = np.isnan(f.real) | np.isnan(f.imag)
+            if np.any(invalid):
+                kind = "magnetic" if magnetic else "atomic"
+                energy_range = (
+                    self.magnetic_form_factor_range if magnetic else self.atomic_form_factor_range
+                )
+                raise undefined_error(
+                    f"The {kind} form factor of {self.id} ({self.form_factor_source(magnetic)})",
+                    energy,
+                    invalid,
+                    [energy_range],
+                    spectral,
+                )
+        return f.reshape(shape) if shape else f[0]
 
     def read_atomic_form_factor_coeff(self, source="chantler", filename=""):
         """read_atomic_form_factor_coeff
@@ -220,42 +373,31 @@ class Atom:
             filename = os.path.join(
                 os.path.dirname(__file__), f"../parameters/atomic_form_factors/{sub_path:s}"
             )
-        try:
-            f = np.genfromtxt(filename, skip_header=0)
-        except FileNotFoundError:
-            print(f"Atomic form factor file {filename:s} not found!")
-            raise
+        return read_columns(filename)
 
-        return f
-
-    @u.wraps(None, (None, "eV"), strict=False)
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
-        The complex atomic form factor for the photon energy :math:`E` [eV] is
-        calculated by:
+        The complex atomic form factor for the photon energy :math:`E` is
+        linearly interpolated from its table:
 
         .. math:: f(E)=f_1 - i f_2
 
         Convention of Ref. :cite:t:`alsnielsen2011` (p. 11, footnote) is a negative :math:`f_2`.
 
+        Outside of the tabulated energy range, a ``ValueError`` is raised
+        instead of an extrapolation.
+
         Args:
-            energy (Quantity, ndarray[float]): photon energy, where floats
-                are taken in [eV].
+            energy (float, ndarray[float], Quantity): photon energy, where
+                floats are taken in [eV], or other spectral Quantities, e.g. the
+                wavelength.
 
         Returns:
-            f (ndarray[complex]): energy-dependent atomic form factors.
+            f (complex, ndarray[complex]): energy-dependent atomic form factors.
 
         """
-        # interpolate the real and imaginary part in dependence of E
-        f1 = np.interp(
-            energy, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 1]
-        )
-        f2 = np.interp(
-            energy, self.atomic_form_factor_coeff[:, 0], self.atomic_form_factor_coeff[:, 2]
-        )
-
-        return f1 - f2 * 1j
+        return self._get_form_factor(energy, magnetic=False)
 
     def read_cromer_mann_coeff(self):
         r"""read_cromer_mann_coeff
@@ -384,7 +526,8 @@ class Atom:
                 form factor coefficients.
 
         Returns:
-            m (ndarray[float]): magnetic form factor coefficients.
+            m (ndarray[float], None): magnetic form factor coefficients, or None
+            if no file is given and none is tabulated for the element.
 
         """
         if not filename:
@@ -392,44 +535,68 @@ class Atom:
                 os.path.dirname(__file__),
                 f"../parameters/magnetic_form_factors/{self.symbol:s}.mf",
             )
-        try:
-            m = np.genfromtxt(filename)
-        except FileNotFoundError:
-            print(f"Magnetic form factor file {filename:s} not found!")
-            # return zero array
-            m = np.zeros([1, 3])
+            if not os.path.isfile(filename):
+                # no magnetic form factors are tabulated for this element
+                return None
+        return read_columns(filename)
 
-        return m
-
-    @u.wraps(None, (None, "eV"), strict=False)
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
-        The complex magnetic form factor is claculated by:
+        The complex magnetic form factor for the photon energy :math:`E` is
+        linearly interpolated from its table:
 
         .. math:: m(E) = m_1 - i m_2
 
-        for the photon energy :math:`E` [eV].
+        Convention of Ref. :cite:t:`alsnielsen2011` (p. 11, footnote) is a negative :math:`m_2`.
 
-        Convention of Ref. :cite:t:`alsnielsen2011` (p. 11, footnote) is a negative :math:`m_2`
+        It is zero at all energies, if no magnetic form factors are tabulated,
+        and raises a ``ValueError`` outside of the tabulated energy range.
 
         Args:
-            energy (Quantity, ndarray[float]): photon energy, where floats
-                are taken in [eV].
+            energy (float, ndarray[float], Quantity): photon energy, where
+                floats are taken in [eV], or other spectral Quantities, e.g. the
+                wavelength.
 
         Returns:
-            m (ndarray[complex]): energy-dependent magnetic form factors.
+            m (complex, ndarray[complex]): energy-dependent magnetic form factors.
 
         """
-        # interpolate the real and imaginary part in dependence of E
-        m1 = np.interp(
-            energy, self.magnetic_form_factor_coeff[:, 0], self.magnetic_form_factor_coeff[:, 1]
-        )
-        m2 = np.interp(
-            energy, self.magnetic_form_factor_coeff[:, 0], self.magnetic_form_factor_coeff[:, 2]
-        )
+        return self._get_form_factor(energy, magnetic=True)
 
-        return m1 - m2 * 1j
+    @u.wraps(None, (None, None, "kg/m**3"), strict=False)
+    def get_susceptibility(self, energy, density):
+        r"""get_susceptibility
+
+        Non-magnetic and gyrotropic susceptibility :math:`\chi^0` and
+        :math:`\chi^m` of the atom for the photon energy :math:`E` [eV] and
+        the mass density :math:`\rho` around it following :cite:t:`elzo2012`:
+
+        .. math::
+
+            \chi^0 = -\frac{r_e \lambda^2}{\pi} n_a f(E), \quad
+            \chi^m = \frac{r_e \lambda^2}{\pi} n_a m(E)
+
+        with the number density :math:`n_a = \rho / m_a` of the atoms and
+        their atomic and magnetic form factors :math:`f` and :math:`m`, see
+        :class:`.Dielectric`.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energy, where
+                floats are taken in [eV], or other spectral Quantities.
+            density (Quantity, float): mass density, where floats are taken
+                in [kg/m³].
+
+        Returns:
+            (tuple):
+            - *chi0 (ndarray[complex])* - non-magnetic susceptibility.
+            - *chim (ndarray[complex])* - gyrotropic susceptibility.
+
+        """
+        energy = np.atleast_1d(to_energy(energy))
+        chi0 = atoms_susceptibility([(self, 1)], energy, density)
+        chim = atoms_susceptibility([(self, 1)], energy, density, magnetic=True)
+        return chi0, chim
 
     # ============================================================================
     # properties of the atomic parameters
@@ -610,12 +777,75 @@ class AtomMixed(Atom):
         self._init_magnetization(kwargs)
         self.atoms = []
         self.num_atoms = 0
-        self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(
-            filename=kwargs.get("atomic_form_factor_path", "")
-        )
+        atomic_path = kwargs.get("atomic_form_factor_path", "")
+        self.atomic_form_factor_coeff = self.read_atomic_form_factor_coeff(filename=atomic_path)
+        self._atomic_form_factor_source = os.path.basename(atomic_path)
+        magnetic_path = kwargs.get("magnetic_form_factor_path", "")
         self.magnetic_form_factor_coeff = self.read_magnetic_form_factor_coeff(
-            filename=kwargs.get("magnetic_form_factor_path", "")
+            filename=magnetic_path
         )
+        self._magnetic_form_factor_source = os.path.basename(magnetic_path)
+
+    def form_factor_source(self, magnetic=False):
+        """form_factor_source
+
+        Source of the atomic or magnetic form factors, which are averaged from
+        the constituents without own table.
+
+        Args:
+            magnetic (bool, optional): magnetic instead of atomic form factors.
+                Defaults to False.
+
+        Returns:
+            source (str, None): source, or None if not tabulated.
+
+        """
+        coeff = self.magnetic_form_factor_coeff if magnetic else self.atomic_form_factor_coeff
+        if coeff is not None:
+            return (
+                self._magnetic_form_factor_source
+                if magnetic
+                else (self._atomic_form_factor_source)
+            )
+        if magnetic and not self.has_magnetic_form_factor:
+            return None
+        return "averaged from the constituents"
+
+    def _constituent_range(self, magnetic):
+        """Common energy range [eV] of the form factors of the constituents."""
+        lo, hi = -np.inf, np.inf
+        for atom, _ in self.atoms:
+            a_lo, a_hi = (
+                atom.magnetic_form_factor_range if magnetic else (atom.atomic_form_factor_range)
+            )
+            lo, hi = max(lo, a_lo), min(hi, a_hi)
+        return lo, hi
+
+    @property
+    def atomic_form_factor_range(self):
+        """tuple[float]: lowest and highest photon energy [eV] of the atomic
+        form factors, which is the common range of the constituents without
+        own table."""
+        if self.atomic_form_factor_coeff is None:
+            return self._constituent_range(magnetic=False)
+        return super().atomic_form_factor_range
+
+    @property
+    def magnetic_form_factor_range(self):
+        """tuple[float]: lowest and highest photon energy [eV] of the magnetic
+        form factors, which is the common range of the constituents without
+        own table."""
+        if self.magnetic_form_factor_coeff is None:
+            return self._constituent_range(magnetic=True)
+        return super().magnetic_form_factor_range
+
+    @property
+    def has_magnetic_form_factor(self):
+        """bool: true if magnetic form factors are tabulated for the mixed atom
+        or for any of its constituents."""
+        if self.magnetic_form_factor_coeff is None:
+            return any(atom.has_magnetic_form_factor for atom, _ in self.atoms)
+        return super().has_magnetic_form_factor
 
     def _constituents_table(self):
         """Name/fraction table of the constituent atoms"""
@@ -625,6 +855,8 @@ class AtomMixed(Atom):
         """String representation of this class"""
         return (
             self._header()
+            + "\n".join(self._form_factor_lines())
+            + "\n"
             + self.atomic._table_representation()
             + f"\n{self.num_atoms:d} Constituents\n"
             + tabulate(
@@ -637,6 +869,7 @@ class AtomMixed(Atom):
         return (
             f"<h3>{type(self).__name__}: {self.name}</h3>"
             f"<b>ID:</b> <i>{self.id}</i>, <b>Symbol:</b> <i>{self.symbol}</i><br>"
+            + "".join(f"{line}<br>" for line in self._form_factor_lines())
             + self.atomic._html_table()
             + f"<h4>{self.num_atoms:d} Constituents</h4>"
             + tabulate(
@@ -688,15 +921,8 @@ class AtomMixed(Atom):
         """
         if not filename:
             return None
-        try:
-            f = np.genfromtxt(filename, skip_header=0)
-        except FileNotFoundError:
-            print(f"Atomic form factor file {filename:s} not found!")
-            raise
+        return read_columns(filename)
 
-        return f
-
-    @u.wraps(None, (None, "eV"), strict=False)
     def get_atomic_form_factor(self, energy):
         """get_atomic_form_factor
 
@@ -705,8 +931,8 @@ class AtomMixed(Atom):
         will be used instead.
 
         Args:
-            energy (Quantity, ndarray[float]): photon energy, where floats
-                are taken in [eV].
+            energy (float, ndarray[float], Quantity): photon energy, where
+                floats are taken in [eV], or other spectral Quantities.
 
         Returns:
             f (ndarray[complex]): energy-dependent atomic form factors.
@@ -773,24 +999,16 @@ class AtomMixed(Atom):
         """
         if not filename:
             return None
-        try:
-            m = np.genfromtxt(filename)
-        except FileNotFoundError:
-            print(f"Magnetic form factor file {filename:s} not found!")
-            # return zero array
-            m = np.zeros([1, 3])
+        return read_columns(filename)
 
-        return m
-
-    @u.wraps(None, (None, "eV"), strict=False)
     def get_magnetic_form_factor(self, energy):
         """get_magnetic_form_factor
 
         Mixed energy dependent magnetic form factors.
 
         Args:
-            energy (Quantity, ndarray[float]): photon energy, where floats
-                are taken in [eV].
+            energy (float, ndarray[float], Quantity): photon energy, where
+                floats are taken in [eV], or other spectral Quantities.
 
         Returns:
             f (ndarray[complex]): energy-dependent magnetic form factors.

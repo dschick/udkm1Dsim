@@ -6,6 +6,7 @@ from .simulations.phonons import Phonon, PhononAna, PhononNum
 from .simulations.simulation import Simulation
 from .simulations.xrays import Xray, XrayDyn, XrayDynMag, XrayKin
 from .structures.atoms import Atom, AtomMixed
+from .structures.dielectric import Dielectric, Dispersion
 from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
 from .structures.parameter_groups import (
     AtomMixedParameters,
@@ -39,6 +40,8 @@ __all__ = [
     "Vacuum",
     "AmorphousLayer",
     "UnitCell",
+    "Dielectric",
+    "Dispersion",
     "Structure",
     "Simulation",
     "Heat",

@@ -45,6 +45,7 @@ import scipy.constants as constants
 import tabulate as tabulate_module
 from tabulate import tabulate
 
+from .dielectric import Dielectric
 from .parameters import Parameter, TemperatureParameter, VectorParameter
 
 u = pint.get_application_registry()
@@ -541,42 +542,30 @@ class ElasticParameters(ParameterGroup):
 class OpticalParameters(ParameterGroup):
     r"""Optical and X-ray parameters of a layer.
 
+    The only parameter is the energy-dependent :class:`.Dielectric`, i.e. the
+    relative permittivity, of the layer, from which the refractive index, the
+    optical penetration depth, and the dielectric tensor for all light and
+    X-ray scattering formalisms follow, see e.g.
+    :meth:`.Layer.get_ref_index` and :meth:`.Layer.get_opt_pen_depth`. It is
+    given by a :class:`.Dispersion` or a :class:`.Dielectric`, e.g.
+
+    .. code-block:: python
+
+        optical = OpticalParameters(dielectric=Dispersion.from_ref_index(3.7 + 0.01j))
+        layer.optical.dielectric = Dispersion.from_file("Si.nk") | layer.dispersion_from_atoms()
+        layer.set_dielectric_from_atoms(fallback=Dispersion.from_ref_index(3.7 + 0.01j))
+
     Attributes:
-        opt_pen_depth (float): optical penetration depth of the layer :math:`\zeta` [m].
-        opt_ref_index (complex): complex optical refractive index :math:`n`.
-        opt_ref_index_per_strain (complex): change of the complex optical
-            refractive index per strain :math:`\mathrm{d}n/\mathrm{d}\epsilon`.
+        dielectric (Dielectric): dielectric function :math:`\varepsilon` of
+            the layer.
 
     """
 
-    def __init__(
-        self, opt_pen_depth=0.0, opt_ref_index=0.0 + 0.0j, opt_ref_index_per_strain=0.0 + 0.0j
-    ):
-        self.opt_pen_depth = Parameter("m", opt_pen_depth, symbol=r"\zeta")
-        self.opt_ref_index = Parameter("", opt_ref_index, symbol="n")
-        self.opt_ref_index_per_strain = Parameter(
-            "", opt_ref_index_per_strain, symbol=r"\mathrm{d}n/\mathrm{d}\epsilon"
-        )
-
+    def __init__(self, dielectric=None):
+        self.dielectric = Dielectric()
         self._connect_parameters()
-
-    def set_opt_pen_depth_from_ref_index(self, wavelength):
-        r"""set_opt_pen_depth_from_ref_index
-
-        Set the optical penetration depth from the optical refractive index
-        for a given wavelength:
-
-        .. math:: \zeta = \frac{\lambda}{4 \pi |\mathrm{Im}(n)|}
-
-        Args:
-            wavelength (Quantity): wavelength as Pint Quantity.
-
-        """
-        kappa = np.abs(np.imag(self.opt_ref_index.magnitude))
-        if kappa == 0:
-            self.opt_pen_depth.magnitude = np.inf
-        else:
-            self.opt_pen_depth.quantity = wavelength / (4 * np.pi * kappa)
+        if dielectric is not None:
+            self.dielectric = dielectric
 
 
 class MagneticParameters(ParameterGroup):
