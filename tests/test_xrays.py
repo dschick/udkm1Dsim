@@ -5,6 +5,7 @@ import pytest
 from pint.testing import assert_allclose
 
 from udkm1Dsim import XrayDyn, XrayDynMag, XrayKin, u
+from udkm1Dsim.helpers import convert_polar_to_cartesian
 
 # fixtures
 
@@ -307,6 +308,39 @@ def test_xray_dyn_mag_inhomogeneous_reflectivity_polarization(
     )
     assert R_single.ndim == 3
     np.testing.assert_allclose(R_single, R[..., 1])
+
+
+def test_xray_dyn_mag_polar_magnetization_map(xray_dyn_mag, strain_map_mixed):
+    """the magnetization_map is cartesian by default and polar for
+    polar=True, which give the same results"""
+    xray_dyn_mag.energy = 700 * u.eV
+    xray_dyn_mag.theta = np.r_[1:10] * u.deg
+    xray_dyn_mag.set_polarization(3, 0)
+    M, L = strain_map_mixed.shape
+    polar = np.zeros([M, L, 3])
+    polar[..., 0] = np.linspace(0.2, 1, L)
+    polar[..., 1] = np.pi / 3
+    polar[..., 2] = np.pi / 4
+    cartesian = convert_polar_to_cartesian(polar)
+    R, R_phi, _, _ = xray_dyn_mag.inhomogeneous_reflectivity(
+        strain_map=strain_map_mixed, magnetization_map=cartesian
+    )
+    R_polar, R_phi_polar, _, _ = xray_dyn_mag.inhomogeneous_reflectivity(
+        strain_map=strain_map_mixed, magnetization_map=polar, polar=True
+    )
+    np.testing.assert_allclose(R_polar, R)
+    np.testing.assert_allclose(R_phi_polar, R_phi)
+    # the magnetization matters for circular polarization
+    R_zero, _, _, _ = xray_dyn_mag.inhomogeneous_reflectivity(
+        strain_map=strain_map_mixed, magnetization_map=np.zeros([M, L, 3])
+    )
+    assert not np.allclose(R, R_zero)
+    # the homogeneous reflectivity of the sub-structures
+    N = xray_dyn_mag.S.get_number_of_sub_structures()
+    strains = np.zeros(N)
+    R_hom, _, _, _ = xray_dyn_mag.homogeneous_reflectivity(strains, cartesian[0, :N])
+    R_hom_polar, _, _, _ = xray_dyn_mag.homogeneous_reflectivity(strains, polar[0, :N], polar=True)
+    np.testing.assert_allclose(R_hom_polar, R_hom)
 
 
 def test_xray_dyn_mag_set_polarization_consistency(xray_dyn_mag):
