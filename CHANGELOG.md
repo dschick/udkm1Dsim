@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `calc_magnetization_map` of custom `Magnetization` simulations must return cartesian maps, e.g. converted by `helpers.convert_polar_to_cartesian`
 - the magnetization maps are cached in cartesian coordinates, so that caches of former versions are recalculated
 - `XrayDynMag` uses the cartesian magnetization of the atoms internally, which gives the same results as the former polar implementation
+- the resonant magnetic X-ray example sets the magnetization of the atoms in cartesian coordinates, uses a two-temperature model of the electrons and phonons, and derives the magnetization amplitude from the mean-field magnetization of the electron temperature
+- the LLB example gives the electronic heat capacities directly as mass-specific values
 
 ## [2.6.0] 2026-11-06
 
