@@ -663,7 +663,7 @@ class Layer:
 
         Args:
             opt_pen_depth (float, Quantity): optical penetration depth, where
-                floats are taken in [m].
+                floats are taken in m.
 
         """
         dielectric = self.optical.dielectric
@@ -705,11 +705,11 @@ class Layer:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain. Defaults to 0.
             magnetization (tuple[float], optional): cartesian magnetization
                 ``(x, y, z)``, or its amplitude, polar angle, and azimuth
-                [rad] for ``polar=True``. Defaults to the magnetization of
+                (rad) for ``polar=True``. Defaults to the magnetization of
                 the layer.
             polar (bool, optional): the magnetization is given in polar
                 coordinates. Defaults to False.
@@ -758,7 +758,7 @@ class Layer:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities, e.g.
+                floats are taken in eV, or other spectral Quantities, e.g.
                 the wavelength.
             strain (float, optional): strain. Defaults to 0.
 
@@ -777,7 +777,7 @@ class Layer:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain. Defaults to 0.
 
         Returns:
@@ -797,7 +797,7 @@ class Layer:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain. Defaults to 0.
 
         Returns:
@@ -817,7 +817,7 @@ class Layer:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities, e.g.
+                floats are taken in eV, or other spectral Quantities, e.g.
                 the wavelength.
             strain (float, optional): strain. Defaults to 0.
 
@@ -836,7 +836,7 @@ class Layer:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain. Defaults to 0.
 
         Returns:
@@ -853,7 +853,7 @@ class Layer:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain. Defaults to 0.
 
         Returns:
@@ -870,7 +870,7 @@ class Layer:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain. Defaults to 0.
 
         Returns:
@@ -893,7 +893,7 @@ class Layer:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain. Defaults to 0.
 
         Returns:

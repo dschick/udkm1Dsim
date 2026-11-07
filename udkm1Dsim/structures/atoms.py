@@ -47,7 +47,7 @@ def form_factor_table(coeff, source=""):
     """form_factor_table
 
     Table of the complex form factors :math:`f_1 - i f_2` from coefficients
-    with the columns of the photon energy [eV], :math:`f_1`, and :math:`f_2`,
+    with the columns of the photon energy (eV), :math:`f_1`, and :math:`f_2`,
     e.g. of ``.cf``, ``.nff``, or ``.mf`` files, where invalid entries, e.g.
     the -9999 of the tables of Henke et al., are NaN.
 
@@ -250,7 +250,7 @@ class Atom:
     @property
     def atomic_form_factor_coeff(self):
         """ndarray[float]: tabulated atomic form factors with the columns of
-        the photon energy [eV], :math:`f_1`, and :math:`f_2`. Setting it,
+        the photon energy (eV), :math:`f_1`, and :math:`f_2`. Setting it,
         e.g. to experimental data, changes their source to ``custom``."""
         return self._atomic_form_factor_coeff
 
@@ -262,7 +262,7 @@ class Atom:
     @property
     def magnetic_form_factor_coeff(self):
         """ndarray[float]: tabulated magnetic form factors with the columns of
-        the photon energy [eV], :math:`m_1`, and :math:`m_2`, or None if not
+        the photon energy (eV), :math:`m_1`, and :math:`m_2`, or None if not
         tabulated. Setting it, e.g. to experimental data, changes their source
         to ``custom``."""
         return self._magnetic_form_factor_coeff
@@ -294,13 +294,13 @@ class Atom:
 
     @property
     def atomic_form_factor_range(self):
-        """tuple[float]: lowest and highest photon energy [eV] of the tabulated
+        """tuple[float]: lowest and highest photon energy (eV) of the tabulated
         atomic form factors."""
         return form_factor_table(self.atomic_form_factor_coeff).energy_range
 
     @property
     def magnetic_form_factor_range(self):
-        """tuple[float]: lowest and highest photon energy [eV] of the tabulated
+        """tuple[float]: lowest and highest photon energy (eV) of the tabulated
         magnetic form factors, which are zero at all energies if not
         tabulated."""
         if self.magnetic_form_factor_coeff is None:
@@ -390,7 +390,7 @@ class Atom:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energy, where
-                floats are taken in [eV], or other spectral Quantities, e.g. the
+                floats are taken in eV, or other spectral Quantities, e.g. the
                 wavelength.
 
         Returns:
@@ -555,7 +555,7 @@ class Atom:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energy, where
-                floats are taken in [eV], or other spectral Quantities, e.g. the
+                floats are taken in eV, or other spectral Quantities, e.g. the
                 wavelength.
 
         Returns:
@@ -569,7 +569,7 @@ class Atom:
         r"""get_susceptibility
 
         Non-magnetic and gyrotropic susceptibility :math:`\chi^0` and
-        :math:`\chi^m` of the atom for the photon energy :math:`E` [eV] and
+        :math:`\chi^m` of the atom for the photon energy :math:`E` (eV) and
         the mass density :math:`\rho` around it following :cite:t:`elzo2012`:
 
         .. math::
@@ -583,9 +583,9 @@ class Atom:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energy, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             density (Quantity, float): mass density, where floats are taken
-                in [kg/m³].
+                in kg/m³.
 
         Returns:
             (tuple):
@@ -812,7 +812,7 @@ class AtomMixed(Atom):
         return "averaged from the constituents"
 
     def _constituent_range(self, magnetic):
-        """Common energy range [eV] of the form factors of the constituents."""
+        """Common energy range (eV) of the form factors of the constituents."""
         lo, hi = -np.inf, np.inf
         for atom, _ in self.atoms:
             a_lo, a_hi = (
@@ -823,7 +823,7 @@ class AtomMixed(Atom):
 
     @property
     def atomic_form_factor_range(self):
-        """tuple[float]: lowest and highest photon energy [eV] of the atomic
+        """tuple[float]: lowest and highest photon energy (eV) of the atomic
         form factors, which is the common range of the constituents without
         own table."""
         if self.atomic_form_factor_coeff is None:
@@ -832,7 +832,7 @@ class AtomMixed(Atom):
 
     @property
     def magnetic_form_factor_range(self):
-        """tuple[float]: lowest and highest photon energy [eV] of the magnetic
+        """tuple[float]: lowest and highest photon energy (eV) of the magnetic
         form factors, which is the common range of the constituents without
         own table."""
         if self.magnetic_form_factor_coeff is None:
@@ -932,7 +932,7 @@ class AtomMixed(Atom):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energy, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
 
         Returns:
             f (ndarray[complex]): energy-dependent atomic form factors.
@@ -1008,7 +1008,7 @@ class AtomMixed(Atom):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energy, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
 
         Returns:
             f (ndarray[complex]): energy-dependent magnetic form factors.

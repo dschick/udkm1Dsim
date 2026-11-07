@@ -647,7 +647,7 @@ def to_energy(value):
         value (float, ndarray[float], Quantity): spectral value(s).
 
     Returns:
-        energy (ndarray[float]): photon energies [eV].
+        energy (ndarray[float]): photon energies (eV).
 
     """
     if isinstance(value, u.Quantity):
@@ -667,14 +667,14 @@ def interpolate_table(x, values, energy):
     """interpolate_table
 
     Linear interpolation of complex values, which are tabulated for the
-    photon energies ``x`` [eV] in ascending order, e.g. of a
+    photon energies ``x`` (eV) in ascending order, e.g. of a
     :class:`Dispersion` or of the form factors of an :class:`.Atom`. The
     values are NaN outside of the table and between NaN entries of the table.
 
     Args:
-        x (ndarray[float]): tabulated photon energies [eV] in ascending order.
+        x (ndarray[float]): tabulated photon energies (eV) in ascending order.
         values (ndarray[complex]): tabulated values of shape (K,) or (K, ...).
-        energy (ndarray[float]): photon energies [eV] of shape (M,).
+        energy (ndarray[float]): photon energies (eV) of shape (M,).
 
     Returns:
         values (ndarray[complex]): interpolated values of shape (M,) or (M, ...).
@@ -691,7 +691,7 @@ def interpolate_table(x, values, energy):
 
 
 def defined_range(x, values):
-    """Lowest and highest photon energy [eV] with defined, i.e. not NaN,
+    """Lowest and highest photon energy (eV) with defined, i.e. not NaN,
     tabulated values."""
     values = np.asarray(values, dtype=complex)
     valid = ~(np.isnan(values.real) | np.isnan(values.imag))
@@ -703,7 +703,7 @@ def defined_range(x, values):
 
 
 def undefined_error(description, energy, invalid, energy_ranges, spectral=None, hint=""):
-    """ValueError for the photon energies [eV] for which a tabulated quantity
+    """ValueError for the photon energies (eV) for which a tabulated quantity
     is not defined. The requested and the defined ranges are given in the
     quantity and unit of the ``spectral`` input of the user."""
     invalid_energies = np.asarray(energy)[invalid]
@@ -719,7 +719,7 @@ def undefined_error(description, energy, invalid, energy_ranges, spectral=None, 
 
 
 def _format_energy(energy):
-    """Short text of a photon energy [eV]."""
+    """Short text of a photon energy (eV)."""
     if not np.isfinite(energy):
         return "∞"
     if energy >= 1000:
@@ -736,7 +736,7 @@ _SPECTRAL_NAMES = {
 
 
 def _spectral_texts(energies, spectral=None):
-    """Name of the spectral quantity and texts of photon energies [eV] in the
+    """Name of the spectral quantity and texts of photon energies (eV) in the
     quantity and unit of the ``spectral`` input of the user, e.g. as
     wavelengths in nm, sorted in ascending order. Without a pint Quantity as
     input, the photon energies are given in eV."""
@@ -751,7 +751,7 @@ def _spectral_texts(energies, spectral=None):
 
 
 def _range_text(energy_ranges, spectral=None, separator=" and "):
-    """Text of energy ranges [eV] in the quantity and unit of the ``spectral``
+    """Text of energy ranges (eV) in the quantity and unit of the ``spectral``
     input of the user, e.g. ``from 400 nm to 1000 nm and from ...``."""
     texts = []
     for energy_range in energy_ranges:
@@ -770,7 +770,7 @@ class SpectralTable:
 
     Args:
         x (ndarray[float], Quantity): photon energies, where floats are taken in
-            [eV], or wavelengths, frequencies, or wavenumbers as pint Quantity.
+            (eV), or wavelengths, frequencies, or wavenumbers as pint Quantity.
         values (ndarray[complex]): tabulated values of shape (N,) or (N, ...).
         source (str, optional): source of the table, e.g. its file name.
 
@@ -853,7 +853,7 @@ class SpectralTable:
 
     @property
     def energy_range(self):
-        """tuple[float]: lowest and highest photon energy [eV] with defined
+        """tuple[float]: lowest and highest photon energy (eV) with defined
         values."""
         return defined_range(self.energy, self.values)
 
@@ -864,7 +864,7 @@ class SpectralTable:
 
     def __call__(self, energy):
         """Interpolated values of shape (M,) or (M, ...) for photon energies,
-        where floats are taken in [eV], or other spectral Quantities, which are
+        where floats are taken in eV, or other spectral Quantities, which are
         NaN outside of the table."""
         return interpolate_table(self.energy, self.values, np.atleast_1d(to_energy(energy)))
 

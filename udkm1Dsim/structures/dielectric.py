@@ -138,9 +138,9 @@ def euler_matrix(theta, phi, psi):
     sample, i.e. :math:`\varepsilon = R \varepsilon' R^T`.
 
     Args:
-        theta (float): rotation about the x-axis [rad].
-        phi (float): rotation about the z-axis after the rotation by theta [rad].
-        psi (float): rotation about the z-axis before the rotation by theta [rad].
+        theta (float): rotation about the x-axis (rad).
+        phi (float): rotation about the z-axis after the rotation by theta (rad).
+        psi (float): rotation about the z-axis before the rotation by theta (rad).
 
     Returns:
         R (ndarray[float]): rotation matrix.
@@ -175,7 +175,7 @@ def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
             shape (M,).
         magnetization (tuple[float], VectorParameter): cartesian
             magnetization :math:`(m_x, m_y, m_z)`, or its amplitude, polar
-            angle :math:`\phi`, and azimuth :math:`\gamma` [rad] for
+            angle :math:`\phi`, and azimuth :math:`\gamma` (rad) for
             ``polar=True``.
         polar (bool, optional): the magnetization is given in polar
             coordinates. Defaults to False.
@@ -209,8 +209,8 @@ def atoms_susceptibility(atoms, energy, density, magnetic=False):
 
     Args:
         atoms (list[tuple[Atom, float]]): atoms and their number fractions.
-        energy (ndarray[float]): photon energies [eV].
-        density (float): mass density [kg/m³].
+        energy (ndarray[float]): photon energies (eV).
+        density (float): mass density (kg/m³).
         magnetic (bool, optional): gyrotropic instead of the non-magnetic
             susceptibility. Defaults to False.
 
@@ -270,12 +270,12 @@ class Dispersion:
 
     @property
     def energy_range(self):
-        """tuple[float]: lowest and highest photon energy [eV] of the dispersion."""
+        """tuple[float]: lowest and highest photon energy (eV) of the dispersion."""
         return -np.inf, np.inf
 
     @property
     def energy_ranges(self):
-        """list[tuple[float]]: intervals of photon energies [eV], in which the
+        """list[tuple[float]]: intervals of photon energies (eV), in which the
         dispersion is defined, e.g. with a gap between an optical table and
         the atomic form factors."""
         return [self.energy_range]
@@ -286,7 +286,7 @@ class Dispersion:
         return False
 
     def _eps(self, energy, density, vacuum, eps_xx):
-        """Dielectric function for the photon energies [eV] and the vacuum
+        """Dielectric function for the photon energies (eV) and the vacuum
         contribution of its part, which is NaN for energies outside the
         dispersion."""
         raise NotImplementedError
@@ -299,8 +299,8 @@ class Dispersion:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
-            density (float, optional): mass density of the layer [kg/m³],
+                floats are taken in eV, or other spectral Quantities.
+            density (float, optional): mass density of the layer (kg/m³),
                 which is required by dispersions from atoms.
             vacuum (float, optional): vacuum contribution, which is 1 for the
                 non-magnetic and 0 for the gyrotropic part. Defaults to 1.
@@ -335,8 +335,8 @@ class Dispersion:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
-            density (float, optional): mass density of the layer [kg/m³],
+                floats are taken in eV, or other spectral Quantities.
+            density (float, optional): mass density of the layer (kg/m³),
                 which is required by dispersions from atoms.
             eps_xx (ndarray[complex], optional): diagonal dielectric function,
                 which is required by a Voigt constant.
@@ -356,8 +356,8 @@ class Dispersion:
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
-            density (float, optional): mass density of the layer [kg/m³],
+                floats are taken in eV, or other spectral Quantities.
+            density (float, optional): mass density of the layer (kg/m³),
                 which is required by dispersions from atoms.
             eps_xx (ndarray[complex], optional): diagonal dielectric function,
                 which is required by a Voigt constant.
@@ -414,7 +414,7 @@ class Dispersion:
 
         Args:
             x (None, float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or wavelengths, frequencies, or
+                floats are taken in eV, or wavelengths, frequencies, or
                 wavenumbers as pint Quantity. ``None`` for a constant.
             values (complex, ndarray[complex]): tabulated values.
             kind (str, optional): ``eps`` for the dielectric function, ``n``
@@ -435,7 +435,7 @@ class Dispersion:
                 Defaults to ``eps``.
             molar_mass (float, Quantity, optional): molar mass of a formula
                 unit for the kinds ``f`` and ``m``, where floats are taken in
-                [g/mol].
+                (g/mol).
 
         Returns:
             dispersion (Dispersion): dispersion.
@@ -534,7 +534,7 @@ class Dispersion:
                 space or a comma.
             molar_mass (float, Quantity, optional): molar mass of a formula
                 unit for the kinds ``f`` and ``m``, where floats are taken in
-                [g/mol].
+                (g/mol).
 
         Returns:
             dispersion (Dispersion): dispersion.
@@ -583,7 +583,7 @@ class Dispersion:
                 energy, :math:`f_1`, and :math:`f_2` or :math:`m_1` and
                 :math:`m_2`.
             molar_mass (float, Quantity): molar mass of a formula unit, where
-                floats are taken in [g/mol].
+                floats are taken in g/mol.
             magnetic (bool, optional): magnetic instead of atomic form factors.
                 Defaults to False.
             x_unit (str, optional): unit of the spectral axis. Defaults to eV.
@@ -684,7 +684,7 @@ class Dispersion:
 
         Args:
             opt_pen_depth (float, Quantity): optical penetration depth
-                :math:`\zeta`, where floats are taken in [m].
+                :math:`\zeta`, where floats are taken in m.
             n (float, optional): real part :math:`n'` of the refractive
                 index. Defaults to 1.
 
@@ -711,10 +711,10 @@ class Dispersion:
 
         Args:
             x (ndarray[float], Quantity): photon energies, where floats are
-                taken in [eV], or wavelengths, frequencies, or wavenumbers as
+                taken in eV, or wavelengths, frequencies, or wavenumbers as
                 pint Quantity.
             mass_attenuation (ndarray[float], Quantity): mass attenuation
-                coefficients, where floats are taken in [cm²/g].
+                coefficients, where floats are taken in cm²/g.
 
         Returns:
             dispersion (Dispersion): dispersion.
@@ -1125,7 +1125,7 @@ class _Scaled(Dispersion):
 
 
 def _format_length(length):
-    """Short text of a length [m]."""
+    """Short text of a length (m)."""
     return f"{(length * u.m).to_compact():.4g~P}"
 
 
@@ -1330,7 +1330,7 @@ class Dielectric(Parameter):
             Defaults to 0.
         euler_angles (tuple[float, Quantity], optional): z-x-z Euler angles
             :math:`(\theta, \phi, \psi)` of the crystal, where floats are taken
-            in [deg]. Defaults to no rotation.
+            in deg. Defaults to no rotation.
 
     """
 
@@ -1364,7 +1364,7 @@ class Dielectric(Parameter):
 
     @staticmethod
     def _check_euler_angles(value):
-        """Euler angles in [rad], where floats are taken in [deg]."""
+        """Euler angles in rad, where floats are taken in deg."""
         if value is None:
             return None
         if isinstance(value, u.Quantity):
@@ -1515,7 +1515,7 @@ class Dielectric(Parameter):
     @property
     def euler_angles(self):
         """Quantity: z-x-z Euler angles :math:`(\\theta, \\phi, \\psi)` of the
-        crystal in [deg], or None without rotation."""
+        crystal in deg, or None without rotation."""
         if self._euler_angles is None:
             return None
         return (np.rad2deg(self._euler_angles) * u.deg).to("deg")
@@ -1541,13 +1541,13 @@ class Dielectric(Parameter):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain :math:`\\eta`. Defaults to 0.
             magnetization (tuple[float], VectorParameter, optional): cartesian
                 magnetization :math:`(m_x, m_y, m_z)`, or its amplitude, polar
-                angle :math:`\\phi`, and azimuth :math:`\\gamma` [rad] for
+                angle :math:`\\phi`, and azimuth :math:`\\gamma` (rad) for
                 ``polar=True``. Defaults to none.
-            density (float, optional): mass density of the layer [kg/m³],
+            density (float, optional): mass density of the layer (kg/m³),
                 which is required by dispersions from atoms.
             polar (bool, optional): the magnetization is given in polar
                 coordinates. Defaults to False.
@@ -1606,9 +1606,9 @@ class Dielectric(Parameter):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain :math:`\\eta`. Defaults to 0.
-            density (float, optional): mass density of the layer [kg/m³].
+            density (float, optional): mass density of the layer (kg/m³).
 
         Returns:
             n (ndarray[complex]): refractive index.
@@ -1631,9 +1631,9 @@ class Dielectric(Parameter):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain :math:`\eta`. Defaults to 0.
-            density (float, optional): mass density of the layer [kg/m³].
+            density (float, optional): mass density of the layer (kg/m³).
 
         Returns:
             zeta (Quantity): penetration depth.
@@ -1655,9 +1655,9 @@ class Dielectric(Parameter):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain :math:`\eta`. Defaults to 0.
-            density (float, optional): mass density of the layer [kg/m³].
+            density (float, optional): mass density of the layer (kg/m³).
 
         Returns:
             (tuple):
@@ -1686,9 +1686,9 @@ class Dielectric(Parameter):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain :math:`\eta`. Defaults to 0.
-            density (float, optional): mass density of the layer [kg/m³].
+            density (float, optional): mass density of the layer (kg/m³).
 
         Returns:
             (tuple):
@@ -1716,9 +1716,9 @@ class Dielectric(Parameter):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain :math:`\eta`. Defaults to 0.
-            density (float, optional): mass density of the layer [kg/m³].
+            density (float, optional): mass density of the layer (kg/m³).
 
         Returns:
             mu (Quantity): attenuation coefficient.
@@ -1735,8 +1735,8 @@ class Dielectric(Parameter):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
-            density (float): mass density of the layer [kg/m³].
+                floats are taken in eV, or other spectral Quantities.
+            density (float): mass density of the layer (kg/m³).
             strain (float, optional): strain :math:`\eta`. Defaults to 0.
 
         Returns:
@@ -1759,9 +1759,9 @@ class Dielectric(Parameter):
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
-                floats are taken in [eV], or other spectral Quantities.
+                floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain :math:`\eta`. Defaults to 0.
-            density (float, optional): mass density of the layer [kg/m³].
+            density (float, optional): mass density of the layer (kg/m³).
 
         Returns:
             theta_c (Quantity): critical angle.
@@ -1795,7 +1795,7 @@ class Dielectric(Parameter):
 
     @property
     def display_energy(self):
-        """float, Quantity: photon energy, where floats are taken in [eV], or
+        """float, Quantity: photon energy, where floats are taken in eV, or
         other spectral Quantity, e.g. the wavelength, for which the values of
         the dielectric are displayed, e.g. by ``print()`` or ``display()``.
         Without, the dispersions are described. It does not change any
@@ -1809,7 +1809,7 @@ class Dielectric(Parameter):
         self._display_energy = value
 
     def _display_density(self):
-        """Density of the layer of the dielectric [kg/m³] for its display."""
+        """Density of the layer of the dielectric (kg/m³) for its display."""
         owner = getattr(self._caller, "_owner", None)
         try:
             return owner.structural.density.magnitude

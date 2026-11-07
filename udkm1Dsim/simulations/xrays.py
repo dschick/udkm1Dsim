@@ -3124,7 +3124,7 @@ class XrayDynMag(Xray):
         Args:
             eps (ndarray[complex]): dielectric tensor per energy of shape
                 (M, 3, 3).
-            distance (float): thickness of the slab [m].
+            distance (float): thickness of the slab (m).
 
         Returns:
             (tuple):
