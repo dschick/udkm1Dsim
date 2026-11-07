@@ -167,7 +167,8 @@ class VectorParameter(Parameter):
     the xy-plane from +x, which is given in -180 .. 180 deg. The radius r can
     be negative, which reverses the direction given by the angles, and is not
     limited in size. Hence, e.g. the magnitude of a magnetization can be
-    changed by r while keeping its direction.
+    changed by r while keeping its direction. The read-only `norm` is the
+    non-negative length of the vector, i.e. the absolute value of r.
 
     `magnitude` and `cartesian` give the cartesian components (x, y, z) in
     `self.unit`. They are kept as given, e.g. (1, 2, 3) instead of
@@ -360,6 +361,12 @@ class VectorParameter(Parameter):
     @r.setter
     def r(self, value):
         self._set_component(0, value)
+
+    @property
+    def norm(self):
+        """Non-negative length of the vector, i.e. the absolute value of the
+        radius r, which is negative for the reversed direction of the angles."""
+        return abs(self._polar[0]) * self.unit
 
     @property
     def phi(self):

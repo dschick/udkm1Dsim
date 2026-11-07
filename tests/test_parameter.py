@@ -312,6 +312,29 @@ def test_vector_parameter_radius_keeps_angles(vector_parameter, r):
     np.testing.assert_allclose(vector_parameter.magnitude, r * direction)
 
 
+@pytest.mark.parametrize(
+    "polar, norm",
+    [
+        ((2.0, 90.0, 0.0), 2.0),
+        ((-2.0, 90.0, 0.0), 2.0),
+        ((0.0, 30.0, 60.0), 0.0),
+    ],
+)
+def test_vector_parameter_norm(vector_parameter, polar, norm):
+    vector_parameter.polar = polar
+    # the norm is the non-negative length of the vector also for a negative r
+    assert_approx(vector_parameter.norm, norm * u.T)
+    assert_approx(vector_parameter.norm, np.linalg.norm(vector_parameter.quantity))
+
+
+def test_vector_parameter_norm_of_cartesian(vector_parameter):
+    vector_parameter.magnitude = (0.0, -3.0, 4.0)
+    assert_approx(vector_parameter.norm, 5.0 * u.T)
+    # the norm is read-only, the length is changed by r
+    with pytest.raises(AttributeError):
+        vector_parameter.norm = 1.0
+
+
 def test_vector_parameter_cartesian_gives_non_negative_r(vector_parameter):
     vector_parameter.polar = (1.0, 90.0, 0.0)
     # the reversed vector is given by the angles, not by a negative radius
