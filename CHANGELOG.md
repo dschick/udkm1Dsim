@@ -5,6 +5,23 @@ All notable changes to the **udkm1Dsim** project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `polar` switch of `get_magnetization_map`, `get_sublattice_magnetization_map`, and `get_equilibrium_magnetization` of `Magnetization` and of `inhomogeneous_reflectivity` and `homogeneous_reflectivity` of `XrayDynMag` for magnetization maps in polar coordinates `(amplitude, phi, gamma)` with the angles in rad
+- `XrayDynMag.parse_magnetization_map` returns a magnetization map given in cartesian or polar coordinates as cartesian array
+
+### Changed
+
+- **breaking:** the magnetization maps of `Magnetization`, `LLG`, `iLLG`, and `LLB` and the `magnetization_map` input of `XrayDynMag` are given in cartesian coordinates `(x, y, z)` by default, as the `magnetization` of layers and atoms and the `init_magnetization`, instead of polar coordinates; use `polar=True` for the former polar coordinates
+- the cartesian result of `get_equilibrium_magnetization` can be used directly as `init_magnetization`
+- `calc_magnetization_map` of custom `Magnetization` simulations must return cartesian maps, e.g. converted by `helpers.convert_polar_to_cartesian`
+- the magnetization maps are cached in cartesian coordinates, so that caches of former versions are recalculated
+- `XrayDynMag` uses the cartesian magnetization of the atoms internally, which gives the same results as the former polar implementation
+- the resonant magnetic X-ray example sets the magnetization of the atoms in cartesian coordinates, uses a two-temperature model of the electrons and phonons, and derives the magnetization amplitude from the mean-field magnetization of the electron temperature
+- the LLB example gives the electronic heat capacities directly as mass-specific values
+
 ## [2.6.0] 2026-11-06
 
 ### Added

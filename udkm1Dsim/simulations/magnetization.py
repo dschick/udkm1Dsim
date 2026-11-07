@@ -52,8 +52,10 @@ class Magnetization(Simulation):
     """Magnetization
 
     Base class for all magnetization simulations. It prepares the inputs and
-    the material parameters of the magnetic layers, caches the results and
-    converts them to polar coordinates. The physics - the right-hand sides
+    the material parameters of the magnetic layers and caches the results.
+    The magnetization maps are given in cartesian coordinates ``(x, y, z)``
+    by default and in polar coordinates ``(amplitude, phi, gamma)`` for
+    ``polar=True``, see :meth:`get_magnetization_map`. The physics - the right-hand sides
     and the time integration - lives in
     :mod:`~udkm1Dsim.simulations.solvers.magnetization_scipy` and the
     equilibrium quantities of the mean-field model in
@@ -255,21 +257,33 @@ class Magnetization(Simulation):
         result[np.arange(P)[np.newaxis, :] >= sizes[:, np.newaxis]] = 0.0
         return result
 
-    def get_magnetization_map(self, delays, **kwargs):
+    def get_magnetization_map(self, delays, polar=False, **kwargs):
         r"""get_magnetization_map
 
         Returns an absolute ``magnetization_map`` for the sample structure with
         the dimension :math:`M \times N \times 3` with :math:`M` being the
         number of delays and :math:`N` the number of layers in the structure or
         the length of the given spatial grid. Each element of the map contains
-        the three magnetization components ``[amplitude, phi, gamma]``. For
-        layers with several sublattices it is the net magnetization, i.e. the
-        sum of the sublattice magnetizations weighted by their saturation
+        the three components of the magnetization as plain numpy array
+
+        - in cartesian coordinates ``(x, y, z)`` by default, as the
+          ``magnetization`` of the layers, or
+        - in polar coordinates ``(amplitude, phi, gamma)`` for ``polar=True``
+          with the polar angle ``phi`` from the :math:`z`-axis and the
+          azimuthal angle ``gamma`` in the :math:`xy`-plane from the
+          :math:`x`-axis in radians, see
+          :func:`~udkm1Dsim.helpers.convert_cartesian_to_polar`.
+
+        The default changed from polar to cartesian coordinates in version
+        2.6.1. Both forms are calculated from the same cached results and are
+        accepted by :class:`~udkm1Dsim.simulations.xrays.XrayDynMag` with the
+        same ``polar`` switch.
+
+        For layers with several sublattices it is the net magnetization, i.e.
+        the sum of the sublattice magnetizations weighted by their saturation
         magnetizations :math:`M_{s,a}` and normalized to their sum
         :math:`\sum_a M_{s,a}\mathbf{m}_a / \sum_a M_{s,a}`, see
         :meth:`get_sublattice_magnetization_map` for the sublattices.
-        The angles ``phi`` and ``gamma`` must be returned in radians as pure
-        numpy arrays.
         The ``magnetization_map`` can depend on the ``temp_map`` and
         ``strain_map`` that can be also calculated for the sample structure.
         More over an external magnetic field ``B_ext`` and initial magnetization
@@ -277,6 +291,8 @@ class Magnetization(Simulation):
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
+            polar (bool, optional): return the map in polar instead of
+                cartesian coordinates. Defaults to False.
             **kwargs (ndarray[float], optional): optional strain and
                 temperature profile as well external magnetic field in [T]
                 also as quantity,
@@ -288,20 +304,23 @@ class Magnetization(Simulation):
                magnetization profile.
 
         """
-        return self._get_magnetization_maps(delays, **kwargs)[0]
+        return self._to_coordinates(self._get_magnetization_maps(delays, **kwargs)[0], polar)
 
-    def get_sublattice_magnetization_map(self, delays, **kwargs):
+    def get_sublattice_magnetization_map(self, delays, polar=False, **kwargs):
         r"""get_sublattice_magnetization_map
 
         Returns the ``sublattice_magnetization_map`` of all sublattices of the
         layers with the dimension :math:`M \times N \times P \times 3`, with
         :math:`P` being the largest number of sublattices, see
-        :meth:`get_magnetization_map` for the arguments. The sublattices of
-        layers with fewer sublattices are zero. It is calculated and cached
-        together with the net ``magnetization_map``.
+        :meth:`get_magnetization_map` for the arguments and the cartesian or
+        polar coordinates. The sublattices of layers with fewer sublattices are
+        zero. It is calculated and cached together with the net
+        ``magnetization_map``.
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
+            polar (bool, optional): return the map in polar instead of
+                cartesian coordinates. Defaults to False.
             **kwargs (ndarray[float], optional): optional strain and
                 temperature profile as well external magnetic field in [T]
                 also as quantity,
@@ -313,11 +332,17 @@ class Magnetization(Simulation):
             absolute magnetization profile of the sublattices.
 
         """
-        return self._get_magnetization_maps(delays, **kwargs)[1]
+        return self._to_coordinates(self._get_magnetization_maps(delays, **kwargs)[1], polar)
+
+    @staticmethod
+    def _to_coordinates(magnetization_map, polar):
+        """the cartesian magnetization map in polar coordinates for
+        ``polar=True``"""
+        return convert_cartesian_to_polar(magnetization_map) if polar else magnetization_map
 
     def _get_magnetization_maps(self, delays, **kwargs):
-        """the net and the sublattice magnetization maps, which are calculated
-        and cached together, see :meth:`get_magnetization_map`"""
+        """the cartesian net and sublattice magnetization maps, which are
+        calculated and cached together, see :meth:`get_magnetization_map`"""
         if "init_mag" in kwargs:
             raise TypeError(
                 "init_mag is replaced by init_magnetization, which is given in cartesian "
@@ -339,8 +364,8 @@ class Magnetization(Simulation):
         cached = path.exists(full_filename) and not self.force_recalc
         if cached:
             tmp = np.load(full_filename)
-            # caches of former versions hold no sublattice map
-            cached = "sublattice_magnetization_map" in tmp
+            # caches of former versions hold no sublattice map or polar maps
+            cached = "sublattice_magnetization_map" in tmp and "cartesian" in tmp
         if cached:
             # found something so load it
             magnetization_map = tmp["magnetization_map"]
@@ -383,6 +408,7 @@ class Magnetization(Simulation):
                 {
                     "magnetization_map": magnetization_map,
                     "sublattice_magnetization_map": sublattice_map,
+                    "cartesian": True,
                 },
                 "_magnetization_map_",
             )
@@ -391,11 +417,13 @@ class Magnetization(Simulation):
     def calc_magnetization_map(self, delays, **kwargs):
         """calc_magnetization_map
 
-        Calculates an absolute ``magnetization_map`` - see
-        :meth:`get_magnetization_map` for details.
+        Calculates an absolute ``magnetization_map`` in cartesian coordinates
+        ``(x, y, z)`` - see :meth:`get_magnetization_map` for details.
 
         This method is just an interface and should be overwritten for the
-        actual simulations.
+        actual simulations. Since version 2.6.1 it must return cartesian
+        maps, which can be converted from polar coordinates by
+        :func:`~udkm1Dsim.helpers.convert_polar_to_cartesian`.
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation [s].
@@ -406,9 +434,9 @@ class Magnetization(Simulation):
         Returns:
             (tuple):
             - *magnetization_map (ndarray[float])* - spatio-temporal absolute
-              net magnetization profile :math:`M \times N \times 3`.
+              cartesian net magnetization profile :math:`M \times N \times 3`.
             - *sublattice_magnetization_map (ndarray[float])* - spatio-temporal
-              absolute magnetization profile of the sublattices
+              absolute cartesian magnetization profile of the sublattices
               :math:`M \times N \times P \times 3`.
 
             Simulations without sublattices may only return the net map.
@@ -747,8 +775,9 @@ class Magnetization(Simulation):
         - :class:`~udkm1Dsim.structures.parameters.VectorParameter` or
           (nested) lists of them, e.g. one per sublattice.
 
-        The components of the dicts can be arrays of the same shape, e.g.
-        of a polar ``magnetization_map`` at a single delay. An empty input
+        The components of the dicts can be arrays of the same shape. A
+        cartesian ``magnetization_map`` at a single delay, e.g. of
+        :meth:`get_equilibrium_magnetization`, can be used directly as array. An empty input
         gives an empty list, i.e. the magnetization of the layers is used.
 
         Args:
@@ -811,15 +840,17 @@ class Magnetization(Simulation):
         return convert_cartesian_to_polar(cartesian)
 
     def get_equilibrium_magnetization(
-        self, B_ext=np.array([0, 0, 0]), init_magnetization=None, **profiles
+        self, B_ext=np.array([0, 0, 0]), init_magnetization=None, polar=False, **profiles
     ):
         r"""get_equilibrium_magnetization
 
         Returns the magnetization of all sublattices of all layers in the
         equilibrium of the given external field and spatial profiles, e.g. of
-        the temperature and strain before an excitation, as polar array
-        :math:`L \times P \times 3`, which can be used as polar dict
-        ``init_magnetization`` of :meth:`get_magnetization_map`, see
+        the temperature and strain before an excitation, as cartesian array
+        :math:`L \times P \times 3` (or polar for ``polar=True``, as before
+        version 2.6.1), see :meth:`get_magnetization_map`. The cartesian array
+        can be used directly as ``init_magnetization`` of
+        :meth:`get_magnetization_map`, see
         :meth:`parse_initial_magnetization`. Starting from the initial
         magnetization ``init_magnetization`` or the magnetization of the
         layers, the directions are
@@ -841,6 +872,8 @@ class Magnetization(Simulation):
             init_magnetization (ndarray[float], dict, VectorParameter,
                 optional): initial magnetization, see
                 :meth:`check_initial_magnetization`.
+            polar (bool, optional): return the magnetization in polar instead
+                of cartesian coordinates. Defaults to False.
             **profiles (ndarray[float], optional): the spatial profiles of
                 the maps of :meth:`get_magnetization_map` of the model at a
                 single time, e.g. ``temp_map`` of the layers :math:`L` or
@@ -848,7 +881,7 @@ class Magnetization(Simulation):
                 ``mag_amplitude_map`` :math:`L` or :math:`L \times P`.
 
         Returns:
-            equilibrium_mag (ndarray[float]): polar magnetization of all
+            equilibrium_mag (ndarray[float]): magnetization of all
             sublattices in equilibrium :math:`L \times P \times 3`.
 
         """
@@ -869,7 +902,7 @@ class Magnetization(Simulation):
             equilibrate=True,
             **maps,
         )
-        return sublattice_map[0]
+        return self._to_coordinates(sublattice_map[0], polar)
 
     def equilibrate_directions(self, init_dir, amplitudes, inputs, is_magnetic):
         r"""equilibrate_directions
@@ -950,7 +983,7 @@ class Magnetization(Simulation):
         r"""embed_magnetization
 
         Embeds the cartesian magnetization of the magnetic layers into the
-        polar magnetization maps of all layers, which are zero for the
+        cartesian magnetization maps of all layers, which are zero for the
         non-magnetic layers. The net magnetization of a layer is the sum of its
         sublattice magnetizations weighted by their saturation magnetizations
         and normalized to their sum, see :meth:`get_magnetization_map`.
@@ -962,9 +995,9 @@ class Magnetization(Simulation):
 
         Returns:
             (tuple):
-            - *magnetization_map (ndarray[float])* - polar net magnetization
-              map :math:`M \times L \times 3`.
-            - *sublattice_magnetization_map (ndarray[float])* - polar
+            - *magnetization_map (ndarray[float])* - cartesian net
+              magnetization map :math:`M \times L \times 3`.
+            - *sublattice_magnetization_map (ndarray[float])* - cartesian
               magnetization map of the sublattices
               :math:`M \times L \times P \times 3`.
 
@@ -981,10 +1014,7 @@ class Magnetization(Simulation):
             )
             weights = self._net_weights(mag)
             magnetization_map[:, is_magnetic, :] = np.einsum("mnpc,np->mnc", mag_map, weights)
-        return (
-            convert_cartesian_to_polar(magnetization_map),
-            convert_cartesian_to_polar(sublattice_map),
-        )
+        return magnetization_map, sublattice_map
 
 
 class LLG(Magnetization):
@@ -1135,7 +1165,7 @@ class LLG(Magnetization):
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
-            magnetization profile.
+            cartesian magnetization profile.
 
         """
         t1 = time()
@@ -1368,7 +1398,7 @@ class iLLG(LLG):
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
-            magnetization profile.
+            cartesian magnetization profile.
 
         """
         return super().calc_magnetization_map(
@@ -1620,7 +1650,7 @@ class LLB(Magnetization):
 
         Returns:
             magnetization_map (ndarray[float]): spatio-temporal absolute
-            magnetization profile.
+            cartesian magnetization profile.
 
         """
         t1 = time()

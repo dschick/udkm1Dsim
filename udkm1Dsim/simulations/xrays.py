@@ -35,7 +35,7 @@ import pint
 import scipy.constants as constants
 from tqdm.auto import trange
 
-from ..helpers import finderb, m_power_x, m_times_n, make_hash_md5
+from ..helpers import convert_polar_to_cartesian, finderb, m_power_x, m_times_n, make_hash_md5
 from ..structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
 from ..structures.structure import Structure
 from .simulation import Simulation
@@ -1802,6 +1802,8 @@ class XrayDynMag(Xray):
             magnetization_map = kwargs.get("magnetization_map")
             if np.size(magnetization_map) > 1e6:
                 magnetization_map = magnetization_map.flatten()[0:1000000]
+            # cartesian magnetization maps since version 2.6.1
+            param.append("cartesian")
             param.append(magnetization_map)
 
         return self.S.get_hash(types=["xray", "magnetic"]) + "_" + make_hash_md5(param)
@@ -2077,7 +2079,7 @@ class XrayDynMag(Xray):
         """int: number of incoming/outgoing polarization pairs."""
         return self.match_polarizations(self.pol_in, self.pol_out)[2]
 
-    def homogeneous_reflectivity(self, *args):
+    def homogeneous_reflectivity(self, *args, polar=False):
         r"""homogeneous_reflectivity
 
         Calculates the reflectivity :math:`R` of the whole sample structure
@@ -2093,7 +2095,12 @@ class XrayDynMag(Xray):
 
         Args:
             args (ndarray[float], optional): strains and magnetization for each
-                sub-structure.
+                sub-structure. The magnetization is given as :math:`L \times 3`
+                array in cartesian coordinates ``(x, y, z)`` by default, see
+                :meth:`inhomogeneous_reflectivity`.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad.
+                Defaults to False.
 
         Returns:
             (tuple):
@@ -2104,6 +2111,8 @@ class XrayDynMag(Xray):
         """
         t1 = time()
         self.disp_message("Calculating _homogeneous_reflectivity_ ...")
+        if len(args) > 1:
+            args = (args[0], self.parse_magnetization_map(args[1], polar), *args[2:])
 
         # add superstrate
         if isinstance(self.S.superstrate[0], Vacuum):
@@ -2345,10 +2354,39 @@ class XrayDynMag(Xray):
 
         return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
+    @staticmethod
+    def parse_magnetization_map(magnetization_map, polar=False):
+        r"""parse_magnetization_map
+
+        Returns the magnetization as plain cartesian array, which is used
+        internally. The ``magnetization_map`` is given in cartesian
+        coordinates ``(x, y, z)`` by default or in polar coordinates
+        ``(amplitude, phi, gamma)`` with the angles in rad for ``polar=True``
+        in its last dimension, see :meth:`inhomogeneous_reflectivity`. Maps
+        with only a single component in the last dimension or empty maps are
+        returned unchanged, since the magnetization of the atoms is used for
+        them.
+
+        Args:
+            magnetization_map (ndarray[float]): magnetization map.
+            polar (bool, optional): the magnetization map is given in polar
+                coordinates. Defaults to False.
+
+        Returns:
+            magnetization_map (ndarray[float]): cartesian magnetization map.
+
+        """
+        if not polar:
+            return magnetization_map
+        magnetization_map = np.asarray(magnetization_map, dtype=float)
+        if magnetization_map.ndim == 0 or magnetization_map.shape[-1] != 3:
+            return magnetization_map
+        return convert_polar_to_cartesian(magnetization_map)
+
     def inhomogeneous_reflectivity(
-        self, strain_map=np.array([]), magnetization_map=np.array([]), **kwargs
+        self, strain_map=np.array([]), magnetization_map=np.array([]), polar=False, **kwargs
     ):
-        """inhomogeneous_reflectivity
+        r"""inhomogeneous_reflectivity
 
         Returns the reflectivity and transmissivity of an inhomogeneously
         strained and magnetized sample structure for a given _strain_map_
@@ -2368,7 +2406,15 @@ class XrayDynMag(Xray):
             strain_map (ndarray[float], optional): spatio-temporal strain
                 profile.
             magnetization_map (ndarray[float], optional): spatio-temporal
-                magnetization profile.
+                magnetization profile :math:`M \times N \times 3` with
+                :math:`M` delays and :math:`N` layers. The magnetization is
+                given in cartesian coordinates ``(x, y, z)`` by default, as
+                returned by
+                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
+                Its amplitude scales the magnetic form factor of the atoms.
+            polar (bool, optional): the ``magnetization_map`` is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
+                as before version 2.6.1. Defaults to False.
             **kwargs:
                 - *calc_type (str)* - type of calculation.
                 - *dask_client (Dask.Client)* - Dask client.
@@ -2385,6 +2431,9 @@ class XrayDynMag(Xray):
               magnetization.
 
         """
+        if not isinstance(magnetization_map, np.ndarray):
+            raise TypeError("magnetization_map must be a numpy ndarray!")
+        magnetization_map = self.parse_magnetization_map(magnetization_map, polar)
         # create a hash of all simulation parameters
         filename = (
             "inhomogeneous_reflectivity_dynMag_"
@@ -2407,8 +2456,6 @@ class XrayDynMag(Xray):
             # parse the input arguments
             if not isinstance(strain_map, np.ndarray):
                 raise TypeError("strain_map must be a numpy ndarray!")
-            if not isinstance(magnetization_map, np.ndarray):
-                raise TypeError("magnetization_map must be a numpy ndarray!")
 
             dask_client = kwargs.get("dask_client", [])
             calc_type = kwargs.get("calc_type", "sequential")
@@ -2469,8 +2516,8 @@ class XrayDynMag(Xray):
 
         Args:
             strain_map (ndarray[float]): spatio-temporal strain profile.
-            magnetization_map (ndarray[float]): spatio-temporal magnetization
-                profile.
+            magnetization_map (ndarray[float]): cartesian spatio-temporal
+                magnetization profile.
 
         Returns:
             (tuple):
@@ -2556,8 +2603,8 @@ class XrayDynMag(Xray):
 
         Args:
             strain_map (ndarray[float]): spatio-temporal strain profile.
-            magnetization_map (ndarray[float]): spatio-temporal magnetization
-                profile.
+            magnetization_map (ndarray[float]): cartesian spatio-temporal
+                magnetization profile.
             dask_client (Dask.Client): Dask client.
 
         Returns:
@@ -2679,8 +2726,8 @@ class XrayDynMag(Xray):
 
         Args:
             strain_map (ndarray[float]): spatio-temporal strain profile.
-            magnetization_map (ndarray[float]): spatio-temporal magnetization
-                profile.
+            magnetization_map (ndarray[float]): cartesian spatio-temporal
+                magnetization profile.
             job (Dask.job): Dask job.
             num_workers (int): Dask number of workers.
 
@@ -2708,8 +2755,8 @@ class XrayDynMag(Xray):
             last_k_z (ndarray[float]): last internal wave vector
             strains (ndarray[float]): spatial strain profile for single time
                 step.
-            magnetizations (ndarray[float]): spatial magnetization profile for
-                single time step.
+            magnetizations (ndarray[float]): cartesian spatial magnetization
+                profile for single time step.
 
         Returns:
             (tuple):
@@ -2805,8 +2852,8 @@ class XrayDynMag(Xray):
             last_k_z (ndarray[float]): last internal wave vector
             strain (float): strain of unit cell for a single time
                 step.
-            magnetization (ndarray[float]): magnetization of unit cell for
-                a single time step.
+            magnetization (ndarray[float]): cartesian magnetization of unit
+                cell for a single time step.
             force_recalc (boolean, optional): force recalculation of boundary
                 phase matrix if True. Defaults to False.
 
@@ -2883,7 +2930,8 @@ class XrayDynMag(Xray):
             distance (float): distance towards the next atomic [m].
             force_recalc (boolean, optional): force recalculation of boundary
                 phase matrix if True. Defaults to False.
-            args (ndarray[float]): magnetization vector.
+            args (ndarray[float]): cartesian magnetization vector
+                ``(x, y, z)``.
 
         Returns:
             (tuple):
@@ -2926,7 +2974,7 @@ class XrayDynMag(Xray):
                     self.pol_out,
                     density,
                     distance,
-                    *atom.atomic.magnetization.polar_rad,
+                    *atom.atomic.magnetization.magnitude,
                     *args,
                 ]
             )
@@ -2982,7 +3030,8 @@ class XrayDynMag(Xray):
             atom (Atom, AtomMixed): atom or mixed atom.
             density (float): density around the atom [kg/m³].
             distance (float): distance towards the next atomic [m].
-            args (ndarray[float]): magnetization vector.
+            args (ndarray[float]): cartesian magnetization vector
+                ``(x, y, z)``.
 
         Returns:
             (tuple):
@@ -2999,26 +3048,19 @@ class XrayDynMag(Xray):
 
         """
         try:
-            magnetization = args[0]
-            mag_amplitude = magnetization[0]
-            mag_phi = magnetization[1]
-            mag_gamma = magnetization[2]
+            # the cartesian magnetization (m_x, m_y, m_z)
+            magnetization = np.asarray(args[0], dtype=float)
+            U = [magnetization[0], magnetization[1], magnetization[2]]
         except IndexError:
             # here we catch magnetizations with only one instead of three
             # elements
             try:
-                mag_amplitude, mag_phi, mag_gamma = atom.atomic.magnetization.polar_rad
+                U = list(atom.atomic.magnetization.magnitude)
             except AttributeError:
-                mag_amplitude, mag_phi, mag_gamma = 0, 0, 0
+                U = [0, 0, 0]
 
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
-
-        U = [
-            np.sin(mag_phi) * np.cos(mag_gamma),
-            np.sin(mag_phi) * np.sin(mag_gamma),
-            np.cos(mag_phi),
-        ]
 
         eps = np.zeros([M, N, 3, 3], dtype=np.complex128)
         A = np.zeros([M, N, 4, 4], dtype=np.complex128)
@@ -3044,7 +3086,7 @@ class XrayDynMag(Xray):
         except AttributeError:
             mf = np.zeros_like(energy, dtype=np.complex128)
 
-        mag = factor * molar_density * mag_amplitude * mf
+        mag = factor * molar_density * mf
         mag = np.tile(mag[:, np.newaxis], [1, N])
         eps0 = 1 - factor * molar_density * cf
         eps0 = np.tile(eps0[:, np.newaxis], [1, N])

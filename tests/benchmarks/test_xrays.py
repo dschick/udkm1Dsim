@@ -73,8 +73,7 @@ def magnetization_map(structure):
     L = structure.get_number_of_layers()
     M = 1  # delay steps
     magnetization_map = np.zeros((M, L, 3))
-    magnetization_map[:, :, 0] = 0.5  # amplitude
-    magnetization_map[:, :, 2] = np.pi  # gamma
+    magnetization_map[:, :, 2] = 0.5  # cartesian m_z
     return magnetization_map
 
 
