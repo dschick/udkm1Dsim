@@ -566,7 +566,7 @@ class Layer:
         """Atoms of the layer and their number fractions, see
         :meth:`dispersion_from_atoms`."""
         raise TypeError(
-            f"The {type(self).__name__} '{self.id}' has no atoms. Set its dielectric "
+            f"The {type(self).__name__} '{self.id}' has no atoms. Set its dielectric tensor "
             "by a Dispersion, e.g. Dispersion.from_ref_index(n)!"
         )
 
@@ -579,7 +579,7 @@ class Layer:
         range of the tabulated form factors, e.g. in the X-ray range.
 
         The dispersion is never set automatically, but must be assigned to
-        the dielectric of the layer, e.g. combined with an optical table:
+        the dielectric tensor of the layer, e.g. combined with an optical table:
 
         .. code-block:: python
 
@@ -631,7 +631,7 @@ class Layer:
     def set_dielectric_from_atoms(self, fallback=None):
         """set_dielectric_from_atoms
 
-        Set the dielectric of the layer from its atoms, see
+        Set the dielectric tensor of the layer from its atoms, see
         :meth:`dielectric_from_atoms`, e.g. with a refractive index in the
         optical range for the excitation:
 
@@ -656,10 +656,10 @@ class Layer:
         :meth:`.Dispersion.from_opt_pen_depth`.
 
         Only :math:`\kappa` is changed, while the real part :math:`n'` of the
-        refractive index of the dielectric is kept, which is 1 at energies
-        without a dielectric. Hence, a warning is raised, as this is probably
+        refractive index of the dielectric function is kept, which is 1 at energies
+        without a dielectric function. Hence, a warning is raised, as this is probably
         only useful for the Lambert-Beer absorption. The magnetic part and the
-        strain model of the dielectric are kept.
+        strain model of the dielectric tensor are kept.
 
         Args:
             opt_pen_depth (float, Quantity): optical penetration depth, where
@@ -732,12 +732,12 @@ class Layer:
             raise ValueError(f"Layer '{self.id}': {e}") from None
 
     def _dielectric_output(self, method, energy, strain):
-        """Output of the dielectric of the layer for its density, where errors
+        """Output of the dielectric tensor of the layer for its density, where errors
         are given with the id of the layer, and a scalar for a scalar energy."""
         dielectric = self.optical.dielectric
         try:
             if not dielectric.is_set:
-                # raises the error of the dielectric
+                # raises the error of the dielectric tensor
                 dielectric.get_tensor(energy)
             result = getattr(dielectric, method)(
                 energy, strain=strain, density=self.structural.density.magnitude
@@ -754,7 +754,7 @@ class Layer:
         """get_ref_index
 
         Complex refractive index :math:`n = n' + i\\kappa` of the layer with
-        an isotropic dielectric, see :meth:`.Dielectric.get_ref_index`.
+        an isotropic dielectric function, see :meth:`.Dielectric.get_ref_index`.
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where

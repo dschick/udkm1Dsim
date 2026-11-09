@@ -253,7 +253,8 @@ def test_dielectric_eps_mag_kinds():
 
 def test_dielectric_strain_models():
     eps0 = Dispersion.from_array(None, 1 + 0.2j, kind="chi")
-    none = Dielectric(eps0=eps0)
+    assert Dielectric(eps0=eps0).strain_model == "density"
+    none = Dielectric(eps0=eps0, strain_model="none")
     density = Dielectric(eps0=eps0, strain_model="density")
     photoelastic = Dielectric(eps0=eps0, strain_model="photoelastic", deps_dstrain=0.5)
     np.testing.assert_allclose(none.get_tensor(1, 0.1)[0, 0, 0], 2 + 0.2j)
@@ -509,7 +510,7 @@ def test_dielectric_display(iron):
     dielectric = layer.optical.dielectric
     dielectric.eps0 = layer.dispersion_from_atoms() | Dispersion.from_ref_index(2.87 + 3.36j)
     text = str(dielectric)
-    assert "ε⁰ = atomic form factors of Fe" in text
+    assert "ε⁰: atomic form factors of Fe" in text
     assert "| n = 2.87 + 3.36i" in text
     assert "magnetic form factors of Fe" in text
     assert "s(η) = 1/(1+η) for ε⁰ and εᵐ" in text
@@ -525,7 +526,7 @@ def test_dielectric_display(iron):
     html = layer.optical._html_table()
     assert '<td rowspan="4">dielectric</td>' in html
     assert "<sup>0</sup>(707 eV)" in html
-    assert dielectric._repr_latex_().startswith(r"$\begin{aligned}\epsilon^0(\text{707 eV})")
+    assert dielectric._repr_latex_().startswith(r"$\begin{aligned}\varepsilon^0(\text{707 eV})")
     with pytest.raises(pint.DimensionalityError):
         dielectric.display_energy = 1 * u.kg
 
@@ -573,7 +574,7 @@ def test_dispersion_from_opt_pen_depth():
     for wavelength in (400, 800, 1600) * u.nm:
         assert_allclose(dielectric.get_opt_pen_depth(wavelength)[0], 10 * u.nm)
         np.testing.assert_allclose(dielectric.get_ref_index(wavelength).real, 2)
-    assert d._label() == "ζ = 10 nm, n' = 2"
+    assert d._label() == "ζ = 10 nm (κ = λ/4πζ), n' = 2"
     with pytest.raises(ValueError, match="positive"):
         Dispersion.from_opt_pen_depth(0)
     with pytest.raises(ValueError, match="cannot be given"):

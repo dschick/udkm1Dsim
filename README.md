@@ -53,41 +53,46 @@ You can also cite the original publication if appropriate:
 
 You can either install directly from pypi.org using the command
 
-    > pip install udkm1Dsim
+    pip install udkm1Dsim
 
 or if you want to work on the latest develop release you can clone 
 udkm1Dsim from the main git repository:
 
-    > git clone https://github.com/dschick/udkm1Dsim.git udkm1Dsim
+    git clone https://github.com/dschick/udkm1Dsim.git udkm1Dsim
 
 To work in editable mode (source is only linked 
 but not copied to the python site-packages), just do:
 
-    > pip install -e ./udkm1Dsim
+    pip install -e ./udkm1Dsim
 
 Or to do a normal install with
 
-    > pip install ./udkm1Dsim
+    pip install ./udkm1Dsim
 
 Optionally, you can also let pip install directly from the repository: 
 
-    > pip install git+https://github.com/dschick/udkm1Dsim.git
+    pip install git+https://github.com/dschick/udkm1Dsim.git
 
 You can have the following optional installation to enable parallel
-computations, unit tests, as well as building the documentation:
+computations as well as building the documentation:
 
-    > pip install udkm1Dsim[parallel]
-    > pip install udkm1Dsim[testing]
+    pip install "udkm1Dsim[parallel]"
+    pip install "udkm1Dsim[docs]"
+
+The dependencies of the unit tests are installed from the cloned repository
+with pip 25.1 or newer:
+
+    pip install ./udkm1Dsim --group ./udkm1Dsim/pyproject.toml:test
 
 ### Installing with conda
 
 You can install directly from conda-forge using `conda`:
 
-    > conda install -c conda-forge udkm1dsim
+    conda install -c conda-forge udkm1dsim
 
 or using `mamba`:
 
-    > mamba install udkm1dsim
+    mamba install udkm1dsim
 
 See [udkm1dsim-feedstock](https://github.com/conda-forge/udkm1dsim-feedstock) for more details
 

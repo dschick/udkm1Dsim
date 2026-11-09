@@ -68,7 +68,7 @@ refractiveindex = [
 [project.urls]
 homepage = "https://github.com/dschick/udkm1Dsim"
 repository = "https://github.com/dschick/udkm1Dsim.git"
-documentation = "https://https://udkm1dsim.readthedocs.io"
+documentation = "https://udkm1dsim.readthedocs.io"
 
 [tool.hatch.build.targets.wheel]
 packages = ["udkm1Dsim"]

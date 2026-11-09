@@ -1046,7 +1046,7 @@ class XrayDyn(Xray):
                 if len(strain_vectors) > 0:
                     warnings.warn(
                         "strain_vectors and temp_map are not compatible "
-                        "with each other!\nstrain_vectors takes over."
+                        "with each other! strain_vectors takes over."
                     )
 
             dask_client = kwargs.get("dask_client", [])
@@ -2892,7 +2892,7 @@ class XrayDynMag(Xray):
         stored to RAM to avoid recalculation.
 
         Args:
-            layer (Layer): homogeneous layer with an isotropic dielectric.
+            layer (Layer): homogeneous layer with an isotropic dielectric tensor.
             strain (float, optional): strain of the layer. Defaults to 0.
             magnetization (ndarray[float], optional): cartesian
                 magnetization ``(x, y, z)``. Defaults to the magnetization of
@@ -2917,7 +2917,7 @@ class XrayDynMag(Xray):
         dielectric = layer.optical.dielectric
         if dielectric.is_set and not dielectric.is_isotropic:
             raise ValueError(
-                f"The formalism of XrayDynMag requires an isotropic dielectric, but the "
+                f"The formalism of XrayDynMag requires an isotropic dielectric tensor, but the "
                 f"layer '{layer.id}' is anisotropic!"
             )
         strain = float(np.asarray(strain).item())

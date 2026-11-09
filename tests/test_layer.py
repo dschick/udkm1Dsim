@@ -679,7 +679,7 @@ def test_unit_cell_without_c_axis_raises():
         ("thermal.therm_cond", r"\kappa"),
         ("thermal.heat_capacity", "c"),
         ("elastic.spring_const", "k"),
-        ("optical.dielectric", r"\epsilon"),
+        ("optical.dielectric", r"\varepsilon"),
         ("magnetic.aniso_exponent", r"\beta"),
         ("magnetic.exch_stiffness", r"A_\mathrm{ex}"),
     ],

@@ -348,7 +348,14 @@ def convert_cartesian_to_polar(cartesian):
 
 _SUB = dict(zip("0123456789+-=()aehijklmnoprstuvx", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ"))
 _SUP = dict(zip("0123456789+-=()in", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁱⁿ"))
-_COMMANDS = {"langle": "⟨", "rangle": "⟩", "partial": "∂", "cdot": "·", "times": "×"}
+_COMMANDS = {
+    "varepsilon": "ε",
+    "langle": "⟨",
+    "rangle": "⟩",
+    "partial": "∂",
+    "cdot": "·",
+    "times": "×",
+}
 _TOKENS = re.compile(r"\\[A-Za-z]+|\\.|[{}_^]|\s+|.")
 
 

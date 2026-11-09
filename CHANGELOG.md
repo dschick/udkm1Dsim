@@ -11,12 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - read-only `norm` property of `VectorParameter`, the non-negative length of the vector, e.g. of `atom.atomic.magnetization.norm`, whereas its radius `r` is negative for the reversed direction of the angles
 - `Dispersion` for energy-dependent dielectric quantities, evaluated as dielectric function `eps()` or susceptibility `chi()`, from constants or tables by `from_array()`, `from_ref_index()`, and `from_file()`, e.g. for `.nk` files, with photon energies, wavelengths, frequencies, or wavenumbers as spectral axis; dispersions are isotropic, uniaxial, diagonal, or full tensors, are combined by `a | b` for the fallback to `b` outside the energy range of `a` and by `a + b` for the sum of their contributions, and raise an error outside their energy range instead of an extrapolation, which gives the defined ranges in the quantity and unit of the input, e.g. as wavelengths in nm
-- `Dielectric` parameter `dielectric` of `OpticalParameters` with the non-magnetic dispersion `eps0`, the gyrotropic dispersion `eps_mag`, also as Voigt constant, and the `strain_model` `none`, `density` for the scaling of the susceptibilities with the density, or `photoelastic` for a measured, total change per strain `deps_dstrain` of the non-magnetic part with the density scaling of the gyrotropic part, from which `get_tensor()`, `get_ref_index()`, and `get_opt_pen_depth()` follow
+- `Dielectric` parameter `dielectric` of `OpticalParameters` with the non-magnetic dispersion `eps0`, the gyrotropic dispersion `eps_mag`, also as Voigt constant, and the `strain_model` `none`, `density` (default) for the scaling of the susceptibilities with the density, or `photoelastic` for a measured, total change per strain `deps_dstrain` of the non-magnetic part with the density scaling of the gyrotropic part, from which `get_tensor()`, `get_ref_index()`, and `get_opt_pen_depth()` follow
 - `dispersion_from_atoms()`, `dielectric_from_atoms()`, and `set_dielectric_from_atoms()` of `AmorphousLayer` and `UnitCell` from the atomic and magnetic form factors of their atoms with an optional `fallback` dispersion, e.g. a refractive index in the optical range, closing [#112]
-- methods of `Layer` for the optical quantities of its dielectric for its density: `get_dielectric_tensor()`, `get_ref_index()`, `get_delta_beta()`, `get_opt_pen_depth()`, `get_absorption_coefficient()`, `get_mass_attenuation_coefficient()`, `get_critical_angle()`, and the effective atomic form factor `get_form_factor()`, which are also available for a `Dielectric`
-- `Dispersion.from_opt_pen_depth()` with a constant optical penetration depth at all wavelengths and `Layer.set_opt_pen_depth()`, which only changes the extinction coefficient of the dielectric of a layer with a warning, e.g. for the Lambert-Beer absorption
+- methods of `Layer` for the optical quantities of its dielectric tensor for its density: `get_dielectric_tensor()`, `get_ref_index()`, `get_delta_beta()`, `get_opt_pen_depth()`, `get_absorption_coefficient()`, `get_mass_attenuation_coefficient()`, `get_critical_angle()`, and the effective atomic form factor `get_form_factor()`, which are also available for a `Dielectric`
+- `Dispersion.from_opt_pen_depth()` with a constant optical penetration depth at all wavelengths and `Layer.set_opt_pen_depth()`, which only changes the extinction coefficient of the dielectric function of a layer with a warning, e.g. for the Lambert-Beer absorption
 - dispersions from $\delta + i\beta$ of X-ray tables by `kind="delta_beta"`, also for the magnetic optical constants $\Delta\delta + i\Delta\beta$ of the magnetic part, and from tabulated mass attenuation coefficients by `Dispersion.from_mass_attenuation()`
-- `get_delta_beta_mag()` of `Dielectric` and `Layer` with the magnetic optical constants $\Delta\delta$ and $\Delta\beta$ of the refractive indices $n_\pm = 1 - (\delta \pm \Delta\delta) + i (\beta \pm \Delta\beta)$ of the circular modes
+- `get_delta_beta_mag()` of `Dielectric` and `Layer` with the magnetic optical constants $\Delta\delta$ and $\Delta\beta$ of the magnetic part $\varepsilon^m = 2 (\Delta\delta - i\Delta\beta)$
 - `a - b` and `c * a` for the difference and scaling of the contributions of dispersions
 - dispersions from tabulated atomic and magnetic form factors per formula unit, e.g. of `.cf`, `.nff`, or `.mf` files, with their molar mass by `Dispersion.from_form_factors()` or `kind="f"` and `kind="m"`
 - `helpers.read_columns()` and `helpers.SpectralTable`, which read and interpolate the tabulated spectral data of the dispersions and of the form factors of the atoms
@@ -30,18 +30,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `get_atomic_form_factor()` and `get_magnetic_form_factor()` of `Atom` and `AtomMixed` accept wavelengths, frequencies, and wavenumbers as pint Quantity and raise a `ValueError` outside of the tabulated energy range in the quantity and unit of the input instead of extrapolating, also skipping the invalid entries of Henke et al.
-- an `Atom` without tabulated magnetic form factors has `magnetic_form_factor_coeff = None` instead of zeros and does not print a message anymore, while a missing file given by `magnetic_form_factor_path` raises a `FileNotFoundError`
-- `XrayDynMag` and the multilayer absorption of `Heat` use the `dielectric` of the layers, which must be set explicitly, e.g. by `layer.set_dielectric_from_atoms()` for the previous behavior of `XrayDynMag` for an `AmorphousLayer`, while `UnitCell`s still use their atoms; any homogeneous `Layer` with an isotropic dielectric can be used by `XrayDynMag`
-- the optical properties of a layer are only given by its `dielectric`, from which the refractive index and the optical penetration depth follow for the wavelength of the excitation
+- the tables of atoms, layers, and parameter groups show a `VectorParameter`, e.g. the magnetization, by its cartesian components instead of its polar components
+- **breaking:** `get_atomic_form_factor()` and `get_magnetic_form_factor()` of `Atom` and `AtomMixed` accept wavelengths, frequencies, and wavenumbers as pint Quantity and raise a `ValueError` outside of the tabulated energy range in the quantity and unit of the input instead of extrapolating, also skipping the invalid entries of Henke et al.
+- **breaking:** an `Atom` without tabulated magnetic form factors has `magnetic_form_factor_coeff = None` instead of zeros and does not print a message anymore, while a missing file given by `magnetic_form_factor_path` raises a `FileNotFoundError`
+- **breaking:** `XrayDynMag` and the multilayer absorption of `Heat` use the `dielectric` of the layers, which must be set explicitly, e.g. by `layer.set_dielectric_from_atoms()` for the previous behavior of `XrayDynMag` for an `AmorphousLayer`, while `UnitCell`s still use their atoms; any homogeneous `Layer` with an isotropic dielectric tensor can be used by `XrayDynMag`
+- **breaking:** the optical properties of a layer are only given by its `dielectric`, from which the refractive index and the optical penetration depth follow for the wavelength of the excitation
 
 ### Removed
 
-- `opt_ref_index`, `opt_pen_depth`, `opt_ref_index_per_strain`, and `set_opt_pen_depth_from_ref_index()` of layers and `OpticalParameters`, which raise an error with their replacement, see `Dispersion.from_ref_index()`, `Dispersion.from_opt_pen_depth()`, `Layer.set_opt_pen_depth()`, the `strain_model` of `Dielectric`, and `Layer.get_opt_pen_depth()` instead
+- **breaking:** `opt_ref_index`, `opt_pen_depth`, `opt_ref_index_per_strain`, and `set_opt_pen_depth_from_ref_index()` of layers and `OpticalParameters`, which raise an error with their replacement, see `Dispersion.from_ref_index()`, `Dispersion.from_opt_pen_depth()`, `Layer.set_opt_pen_depth()`, the `strain_model` of `Dielectric`, and `Layer.get_opt_pen_depth()` instead
 
 ### Fixed
 
-- the homogeneous reflectivity of `XrayDynMag` includes the thickness of `Vacuum` layers and scales the density of strained amorphous layers by `1/(1+strain)` as the inhomogeneous reflectivity
+- the homogeneous reflectivity of `XrayDynMag` includes the thickness of `Vacuum` layers and scales the density of strained amorphous layers by `1/(1+strain)` instead of `(1+strain)` as the inhomogeneous reflectivity
 
 ### Security
 

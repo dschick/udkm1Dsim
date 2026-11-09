@@ -573,7 +573,7 @@ class Heat(Simulation):
 
         opt_ref_indices = np.empty(N + 1, dtype=np.complex128)
         thicknesses = np.empty(N + 1, dtype=float)
-        # the refractive indices follow from the dielectrics for the wavelength
+        # the refractive indices follow from the dielectric functions for the wavelength
         wavelength = self._excitation["wavelength"] * u.m
 
         # add superstrate

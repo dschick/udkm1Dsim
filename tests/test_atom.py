@@ -311,10 +311,12 @@ def test_magnetization_of_atoms_and_layers_is_identical(cls):
     group.magnetization.polar = (-1, 0 * u.deg, 0 * u.deg)
     assert np.allclose(obj.magnetization.magnitude, [0, 0, -1])
     assert_allclose(group.magnetization.polar[1], 0 * u.deg)
-    # the angles are given in deg in the tables
+    # the tables show the cartesian components
+    group.magnetization.set((0, 1, 2))
     rows = group.magnetization._table_rows("text")
-    assert [row[0] for row in rows] == ["r", "φ", "γ"]
-    assert [row[2] for row in rows] == ["", "deg", "deg"]
+    assert [row[0] for row in rows] == ["x", "y", "z"]
+    assert [row[1] for row in rows] == ["0", "1", "2"]
+    assert [row[2] for row in rows] == ["", "", ""]
 
 
 def test_atom_negative_mag_amplitude():

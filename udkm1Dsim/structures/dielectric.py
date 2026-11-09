@@ -54,7 +54,7 @@ the refractive index is :math:`n = n' + i\\kappa` with :math:`\\kappa > 0` and
 
 """
 
-__all__ = ["Dispersion", "Dielectric"]
+__all__ = ["Dispersion", "Dielectric", "gyrotropic_tensor", "euler_matrix"]
 
 __docformat__ = "restructuredtext"
 
@@ -87,9 +87,10 @@ u = pint.get_application_registry()
 _ATOMIC_SUSCEPTIBILITY_FACTOR = 830.9471
 # invalid values in the tables of Henke et al.
 _INVALID_FORM_FACTOR = -9000
-# vacuum contributions of the non-magnetic and gyrotropic part
-_DIAGONAL = 1.0
-_GYROTROPIC = 0.0
+# vacuum contributions of a dispersion: 1 for the non-magnetic part and
+# 0 for the magnetic part and the change per strain
+_VACUUM_UNITY = 1.0
+_VACUUM_ZERO = 0.0
 
 
 def _to_tensor(eps):
@@ -130,7 +131,8 @@ def euler_matrix(theta, phi, psi):
     r"""euler_matrix
 
     Rotation matrix of the z-x-z Euler angles :math:`(\theta, \phi, \psi)` as in
-    PyGTM, which implements the formalism of :cite:t:`passler2017`,
+    `PyGTM <https://pygtm.readthedocs.io>`_, which implements the formalism
+    of :cite:t:`passler2017,passler2020`,
 
     .. math:: R = R_z(\phi) R_x(\theta) R_z(\psi)
 
@@ -293,7 +295,7 @@ class Dispersion:
         dispersion."""
         raise NotImplementedError
 
-    def evaluate(self, energy, density=None, vacuum=_DIAGONAL, eps_xx=None):
+    def evaluate(self, energy, density=None, vacuum=_VACUUM_UNITY, eps_xx=None):
         """evaluate
 
         Dielectric function of the dispersion for the vacuum contribution of
@@ -348,7 +350,7 @@ class Dispersion:
             (M, 3, 3).
 
         """
-        return self.evaluate(energy, density, _DIAGONAL, eps_xx)
+        return self.evaluate(energy, density, _VACUUM_UNITY, eps_xx)
 
     def chi(self, energy, density=None, eps_xx=None):
         """chi
@@ -369,7 +371,7 @@ class Dispersion:
 
         """
         eps = self.eps(energy, density, eps_xx)
-        return eps - _vacuum(_DIAGONAL, eps.ndim == 1)
+        return eps - _vacuum(_VACUUM_UNITY, eps.ndim == 1)
 
     def _label(self):
         """Short text of the dispersion for its display."""
@@ -423,8 +425,9 @@ class Dispersion:
                 for the refractive index, ``delta_beta`` for
                 :math:`\\delta + i\\beta` of the refractive index
                 :math:`n = 1 - \\delta + i\\beta`, e.g. of X-ray tables, or
-                for the magnetic part for :math:`\\Delta\\delta + i\\Delta\\beta`
-                with :math:`\\varepsilon^m = 2 (\\Delta\\delta - i\\Delta\\beta)`, see
+                for the magnetic part for :math:`\\Delta\\delta + i\\Delta\\beta`,
+                which are defined by
+                :math:`\\varepsilon^m = 2 (\\Delta\\delta - i\\Delta\\beta)`, see
                 :meth:`Dielectric.get_delta_beta_mag`,
                 ``chi`` for the susceptibility
                 :math:`\\chi = \\varepsilon - 1`, or ``voigt`` for the Voigt
@@ -771,10 +774,12 @@ def _convert(values, kind, scalar, vacuum, eps_xx):
     if kind == "chi":
         return values + _vacuum(vacuum, scalar)
     if kind == "delta_beta":
-        if vacuum == _DIAGONAL:
-            # n = 1 - delta + i beta
+        # the vacuum contribution tells the part of the dielectric tensor
+        if vacuum == _VACUUM_UNITY:
+            # non-magnetic part: n = 1 - delta + i beta
             return (1 - values.real + 1j * values.imag) ** 2
-        # eps_mag = 2 (Delta delta - i Delta beta) of the gyrotropic part
+        # gyrotropic part: definition of Delta delta and Delta beta as scaled
+        # magnetic form factors, which holds for any n
         return 2 * (values.real - 1j * values.imag)
     if kind == "voigt":
         if eps_xx is None:
@@ -995,6 +1000,125 @@ class _Atoms(Dispersion):
         return f"{kind} of {', '.join(names)}{energies}"
 
 
+def _format_length(length):
+    """Short text of a length (m)."""
+    return f"{(length * u.m).to_compact():.4g~P}"
+
+
+class _OptPenDepth(Dispersion):
+    """Isotropic dispersion with a constant optical penetration depth, i.e. an
+    extinction coefficient proportional to the wavelength, and the real part
+    of the refractive index of a constant or of another dispersion."""
+
+    def __init__(self, opt_pen_depth, n=1.0, base=None):
+        if isinstance(opt_pen_depth, u.Quantity):
+            opt_pen_depth = opt_pen_depth.to("m").magnitude
+        self._opt_pen_depth = float(opt_pen_depth)
+        if not self._opt_pen_depth > 0:
+            raise ValueError("The optical penetration depth must be positive!")
+        self._n = float(np.real(n))
+        if base is not None and not base.scalar:
+            raise ValueError("The optical penetration depth requires an isotropic dispersion!")
+        self._base = base
+
+    @property
+    def opt_pen_depth(self):
+        """Quantity: optical penetration depth of the intensity."""
+        return (self._opt_pen_depth * u.m).to_compact()
+
+    @property
+    def kinds(self):
+        return {"opt_pen_depth"} | (self._base.kinds if self._base is not None else set())
+
+    @property
+    def needs_density(self):
+        return self._base is not None and self._base.needs_density
+
+    def _eps(self, energy, density, vacuum, eps_xx):
+        if vacuum != _VACUUM_UNITY:
+            raise ValueError("An optical penetration depth is only defined for eps0!")
+        n_real = np.full(energy.shape, self._n)
+        if self._base is not None:
+            # the real part of the base, which is n' at energies without base
+            base = np.sqrt(self._base._eps(energy, density, vacuum, eps_xx)).real
+            n_real = np.where(np.isnan(base), n_real, base)
+        with np.errstate(divide="ignore"):
+            wavelength = (energy * u.eV).to("m", "sp").magnitude
+        kappa = wavelength / (4 * np.pi * self._opt_pen_depth)
+        return (n_real + 1j * kappa) ** 2
+
+    def __repr__(self):
+        base = f"n={self._n}" if self._base is None else f"n={self._base!r}"
+        return f"Dispersion(opt_pen_depth={self._opt_pen_depth} m, {base})"
+
+    def _label(self):
+        zeta = f"ζ = {_format_length(self._opt_pen_depth)} (κ = λ/4πζ)"
+        if self._base is None:
+            return f"{zeta}, n' = {format_number(self._n)}"
+        text = f"{zeta}, n' from ({self._base._label()})"
+        if np.isfinite(self._base.energy_range).all():
+            text += f", else n' = {format_number(self._n)}"
+        return text
+
+
+class _MassAttenuation(Dispersion):
+    """Isotropic dispersion from tabulated mass attenuation coefficients,
+    which give the imaginary part of the refractive index for the density of
+    the layer, while its real part is 1."""
+
+    def __init__(self, x, mass_attenuation):
+        energy = np.atleast_1d(to_energy(x))
+        if isinstance(mass_attenuation, u.Quantity):
+            mass_attenuation = mass_attenuation.to("m**2/kg").magnitude
+        else:
+            mass_attenuation = (
+                (np.asarray(mass_attenuation) * u.cm**2 / u.g).to("m**2/kg").magnitude
+            )
+        mass_attenuation = np.atleast_1d(np.asarray(mass_attenuation, dtype=float))
+        if mass_attenuation.shape != energy.shape or len(energy) < 2:
+            raise ValueError("The mass attenuation must be tabulated for at least two energies!")
+        order = np.argsort(energy)
+        self._energy = energy[order]
+        self._values = mass_attenuation[order]
+
+    @property
+    def kinds(self):
+        return {"mass_attenuation"}
+
+    @property
+    def needs_density(self):
+        return True
+
+    @property
+    def energy_range(self):
+        return self._energy[0], self._energy[-1]
+
+    def _eps(self, energy, density, vacuum, eps_xx):
+        if density is None:
+            raise ValueError(
+                "A Dispersion from the mass attenuation requires the density of its "
+                "layer, e.g. by Layer.get_dielectric_tensor()!"
+            )
+        mass_attenuation = interpolate_table(self._energy, self._values, energy).real
+        wavelength = (energy * u.eV).to("m", "sp").magnitude
+        beta = wavelength / (4 * np.pi) * mass_attenuation * density
+        return (1 + 1j * beta) ** 2
+
+    def __repr__(self):
+        lo, hi = self.energy_range
+        return (
+            f"Dispersion(mass_attenuation: {len(self._energy)} values from {lo:.4g} eV to "
+            f"{hi:.4g} eV, md5={_md5(self._energy, self._values)})"
+        )
+
+    def _label(self):
+        lo, hi = self.energy_range
+        return (
+            f"table of μ/ρ: {len(self._energy)} values from {_format_energy(lo)} "
+            f"to {_format_energy(hi)}, δ = 0"
+        )
+
+
 class _Fallback(Dispersion):
     """Dispersion a, else b at the energies not defined by a."""
 
@@ -1126,122 +1250,6 @@ class _Scaled(Dispersion):
         return f"{format_number(self._factor)} × ({self._a._label()})"
 
 
-def _format_length(length):
-    """Short text of a length (m)."""
-    return f"{(length * u.m).to_compact():.4g~P}"
-
-
-class _OptPenDepth(Dispersion):
-    """Isotropic dispersion with a constant optical penetration depth, i.e. an
-    extinction coefficient proportional to the wavelength, and the real part
-    of the refractive index of a constant or of another dispersion."""
-
-    def __init__(self, opt_pen_depth, n=1.0, base=None):
-        if isinstance(opt_pen_depth, u.Quantity):
-            opt_pen_depth = opt_pen_depth.to("m").magnitude
-        self._opt_pen_depth = float(opt_pen_depth)
-        if not self._opt_pen_depth > 0:
-            raise ValueError("The optical penetration depth must be positive!")
-        self._n = float(np.real(n))
-        if base is not None and not base.scalar:
-            raise ValueError("The optical penetration depth requires an isotropic dispersion!")
-        self._base = base
-
-    @property
-    def opt_pen_depth(self):
-        """Quantity: optical penetration depth of the intensity."""
-        return (self._opt_pen_depth * u.m).to_compact()
-
-    @property
-    def kinds(self):
-        return {"opt_pen_depth"} | (self._base.kinds if self._base is not None else set())
-
-    @property
-    def needs_density(self):
-        return self._base is not None and self._base.needs_density
-
-    def _eps(self, energy, density, vacuum, eps_xx):
-        if vacuum != _DIAGONAL:
-            raise ValueError("An optical penetration depth is only defined for eps0!")
-        n_real = np.full(energy.shape, self._n)
-        if self._base is not None:
-            # the real part of the base, which is n' at energies without base
-            base = np.sqrt(self._base._eps(energy, density, vacuum, eps_xx)).real
-            n_real = np.where(np.isnan(base), n_real, base)
-        with np.errstate(divide="ignore"):
-            wavelength = (energy * u.eV).to("m", "sp").magnitude
-        kappa = wavelength / (4 * np.pi * self._opt_pen_depth)
-        return (n_real + 1j * kappa) ** 2
-
-    def __repr__(self):
-        base = f"n={self._n}" if self._base is None else f"n={self._base!r}"
-        return f"Dispersion(opt_pen_depth={self._opt_pen_depth} m, {base})"
-
-    def _label(self):
-        zeta = _format_length(self._opt_pen_depth)
-        if self._base is None:
-            return f"ζ = {zeta}, n' = {format_number(self._n)}"
-        return f"ζ = {zeta}, n' of ({self._base._label()}), else n' = {format_number(self._n)}"
-
-
-class _MassAttenuation(Dispersion):
-    """Isotropic dispersion from tabulated mass attenuation coefficients,
-    which give the imaginary part of the refractive index for the density of
-    the layer, while its real part is 1."""
-
-    def __init__(self, x, mass_attenuation):
-        energy = np.atleast_1d(to_energy(x))
-        if isinstance(mass_attenuation, u.Quantity):
-            mass_attenuation = mass_attenuation.to("m**2/kg").magnitude
-        else:
-            mass_attenuation = (
-                (np.asarray(mass_attenuation) * u.cm**2 / u.g).to("m**2/kg").magnitude
-            )
-        mass_attenuation = np.atleast_1d(np.asarray(mass_attenuation, dtype=float))
-        if mass_attenuation.shape != energy.shape or len(energy) < 2:
-            raise ValueError("The mass attenuation must be tabulated for at least two energies!")
-        order = np.argsort(energy)
-        self._energy = energy[order]
-        self._values = mass_attenuation[order]
-
-    @property
-    def kinds(self):
-        return {"mass_attenuation"}
-
-    @property
-    def needs_density(self):
-        return True
-
-    @property
-    def energy_range(self):
-        return self._energy[0], self._energy[-1]
-
-    def _eps(self, energy, density, vacuum, eps_xx):
-        if density is None:
-            raise ValueError(
-                "A Dispersion from the mass attenuation requires the density of its "
-                "layer, e.g. by Layer.get_dielectric_tensor()!"
-            )
-        mass_attenuation = interpolate_table(self._energy, self._values, energy).real
-        wavelength = (energy * u.eV).to("m", "sp").magnitude
-        beta = wavelength / (4 * np.pi) * mass_attenuation * density
-        return (1 + 1j * beta) ** 2
-
-    def __repr__(self):
-        lo, hi = self.energy_range
-        return (
-            f"Dispersion(mass_attenuation: {len(self._energy)} values from {lo:.4g} eV to "
-            f"{hi:.4g} eV, md5={_md5(self._energy, self._values)})"
-        )
-
-    def _label(self):
-        lo, hi = self.energy_range
-        return (
-            f"table of μ/ρ: {len(self._energy)} values from {_format_energy(lo)} "
-            f"to {_format_energy(hi)}, δ = 0"
-        )
-
-
 def _cartesian_magnetization(magnetization, polar=False):
     """Cartesian magnetization (m_x, m_y, m_z) of a magnetization, given as
     VectorParameter, as cartesian components, or for ``polar=True`` as
@@ -1297,7 +1305,7 @@ class Dielectric(Parameter):
       :math:`\varepsilon^0_{ij}(E, \eta) = \delta_{ij}
       + s(\eta) (\varepsilon^0_{ij}(E) - \delta_{ij})` and
       :math:`\varepsilon^m(E, \eta) = s(\eta) \varepsilon^m(E)`, without
-      photoelastic term, e.g. for the dielectric from the atomic form factors.
+      photoelastic term, e.g. for the dielectric tensor from the atomic form factors.
     * ``photoelastic``: the photoelastic term is added with the measured,
       total change per strain ``deps_dstrain``, e.g. given by the
       photoelastic coefficients, which already includes the change of the
@@ -1325,7 +1333,11 @@ class Dielectric(Parameter):
             off-diagonal element of the dielectric tensor, of kind ``eps``,
             ``chi``, or ``voigt``.
         strain_model (str, optional): ``none``, ``density``, or
-            ``photoelastic``. Defaults to ``none``.
+            ``photoelastic``. The default ``density`` scales the
+            susceptibilities with the density of the layer by
+            :math:`1/(1+\eta)`, which holds for X-rays and is an estimate
+            in the optical range, where the strain also shifts the bands.
+            Defaults to ``density``.
         deps_dstrain (complex, ndarray[complex], Dispersion, optional):
             measured, total change of the dielectric function per strain for
             the strain model ``photoelastic`` in the frame of the sample.
@@ -1342,15 +1354,15 @@ class Dielectric(Parameter):
         self,
         eps0=None,
         eps_mag=None,
-        strain_model="none",
+        strain_model="density",
         deps_dstrain=0.0,
         euler_angles=None,
         name="",
-        symbol=r"\epsilon",
+        symbol=r"\varepsilon",
     ):
         self._eps0 = None
         self._eps_mag = None
-        self._strain_model = "none"
+        self._strain_model = "density"
         self._deps_dstrain = 0.0
         self._euler_angles = None
         self._display_energy = None
@@ -1560,7 +1572,7 @@ class Dielectric(Parameter):
         """
         if self._eps0 is None:
             raise ValueError(
-                "The dielectric is not set. Set it by a Dispersion, e.g. "
+                "The dielectric tensor is not set. Set it by a Dispersion, e.g. "
                 "layer.optical.dielectric = Dispersion.from_ref_index(n), or from "
                 "the atoms of the layer by layer.optical.dielectric = "
                 "layer.dielectric_from_atoms()!"
@@ -1576,7 +1588,7 @@ class Dielectric(Parameter):
         scale = 1 / (1 + strain) if self._strain_model != "none" else 1.0
         identity = np.eye(3)
 
-        eps0 = _to_tensor(self._eps0.evaluate(spectral, density, _DIAGONAL))
+        eps0 = _to_tensor(self._eps0.evaluate(spectral, density, _VACUUM_UNITY))
         if self._euler_angles is not None:
             # from the frame of the crystal to the frame of the sample
             R = euler_matrix(*self._euler_angles)
@@ -1586,7 +1598,7 @@ class Dielectric(Parameter):
         elif self._strain_model == "photoelastic":
             deps = self._deps_dstrain
             if isinstance(deps, Dispersion):
-                deps = _to_tensor(deps.evaluate(spectral, density, _GYROTROPIC))
+                deps = _to_tensor(deps.evaluate(spectral, density, _VACUUM_ZERO))
             else:
                 deps = _to_tensor(np.broadcast_to(deps, energy.shape + deps.shape).copy())
             eps0 = eps0 + deps * strain
@@ -1595,7 +1607,7 @@ class Dielectric(Parameter):
         eps_mag = None
         if self._eps_mag is not None and np.any(magnetization):
             eps_mag = (
-                self._eps_mag.evaluate(spectral, density, _GYROTROPIC, eps_xx=eps0[:, 0, 0])
+                self._eps_mag.evaluate(spectral, density, _VACUUM_ZERO, eps_xx=eps0[:, 0, 0])
                 * scale
             )
         return gyrotropic_tensor(eps0, eps_mag, magnetization)
@@ -1618,7 +1630,7 @@ class Dielectric(Parameter):
         """
         if self.is_set and not self.is_isotropic:
             raise ValueError(
-                "The dielectric is anisotropic and has no single "
+                "The dielectric tensor is anisotropic and has no single "
                 "refractive index. Use get_tensor() instead!"
             )
         eps = self.get_tensor(energy, strain, density=density)
@@ -1627,7 +1639,7 @@ class Dielectric(Parameter):
     def get_opt_pen_depth(self, energy, strain=0.0, density=None):
         r"""get_opt_pen_depth
 
-        Optical penetration depth of the intensity of an isotropic dielectric
+        Optical penetration depth of the intensity of an isotropic dielectric function
 
         .. math:: \zeta = \frac{\lambda}{4 \pi |\kappa|}
 
@@ -1652,7 +1664,7 @@ class Dielectric(Parameter):
         r"""get_delta_beta
 
         Real and imaginary part of the refractive index
-        :math:`n = 1 - \delta + i\beta` of an isotropic dielectric, as usual
+        :math:`n = 1 - \delta + i\beta` of an isotropic dielectric function, as usual
         for X-rays.
 
         Args:
@@ -1675,16 +1687,17 @@ class Dielectric(Parameter):
 
         Magnetic optical constants :math:`\Delta\delta` and :math:`\Delta\beta`
         of the gyrotropic part per unit magnetization, as usual for X-rays,
-        with the refractive indices
+        which are defined by
 
-        .. math:: n_\pm = 1 - (\delta \pm \Delta\delta) + i (\beta \pm \Delta\beta)
+        .. math:: \varepsilon^m = 2 (\Delta\delta - i\Delta\beta)
 
-        of the two circular modes along the magnetization for :math:`n \approx 1`,
-        i.e. :math:`\varepsilon^m = 2 (\Delta\delta - i\Delta\beta)`. As
-        :math:`\delta` and :math:`\beta` are proportional to the atomic form
-        factors :math:`f_1` and :math:`f_2`, :math:`\Delta\delta` and
-        :math:`\Delta\beta` are proportional to the magnetic form factors
-        :math:`m_1` and :math:`m_2`. Without magnetic part, both are zero.
+        and thus proportional to the magnetic form factors :math:`m_1` and
+        :math:`m_2` for any refractive index. The refractive indices of the two
+        circular modes along the magnetization follow from
+        :math:`n_\pm^2 = \varepsilon^0 \mp \varepsilon^m`, which is only for
+        :math:`n \approx 1` approximately
+        :math:`n_\pm = 1 - (\delta \pm \Delta\delta) + i (\beta \pm \Delta\beta)`.
+        Without magnetic part, both are zero.
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
@@ -1710,7 +1723,7 @@ class Dielectric(Parameter):
     def get_absorption_coefficient(self, energy, strain=0.0, density=None):
         r"""get_absorption_coefficient
 
-        Attenuation coefficient of the intensity of an isotropic dielectric,
+        Attenuation coefficient of the intensity of an isotropic dielectric function,
         which is the inverse of the optical penetration depth or absorption
         length :math:`\zeta`:
 
@@ -1799,7 +1812,7 @@ class Dielectric(Parameter):
     def display_energy(self):
         """float, Quantity: photon energy, where floats are taken in eV, or
         other spectral Quantity, e.g. the wavelength, for which the values of
-        the dielectric are displayed, e.g. by ``print()`` or ``display()``.
+        the dielectric tensor are displayed, e.g. by ``print()`` or ``display()``.
         Without, the dispersions are described. It does not change any
         calculation."""
         return self._display_energy
@@ -1811,7 +1824,7 @@ class Dielectric(Parameter):
         self._display_energy = value
 
     def _display_density(self):
-        """Density of the layer of the dielectric (kg/m³) for its display."""
+        """Density of the layer of the dielectric tensor (kg/m³) for its display."""
         owner = getattr(self._caller, "_owner", None)
         try:
             return owner.structural.density.magnitude
@@ -1842,7 +1855,7 @@ class Dielectric(Parameter):
             if deps.ndim == 2 and np.allclose(deps, np.diag(np.diagonal(deps))):
                 deps = np.diagonal(deps)
             deps = _format_values(deps)
-        entries = [(r"\mathrm{d}\epsilon/\mathrm{d}\eta", f"{deps} for ε⁰")]
+        entries = [(r"\mathrm{d}\varepsilon/\mathrm{d}\eta", f"{deps} for ε⁰")]
         if self._eps_mag is not None:
             entries.append((r"s(\eta)", "1/(1+η) for εᵐ"))
         return entries
@@ -1854,34 +1867,34 @@ class Dielectric(Parameter):
         return f"not defined, only {_range_text(dispersion.energy_ranges, self._display_energy)}"
 
     def _value_entries(self):
-        """Symbols and values of the dielectric at the display energy."""
+        """Symbols and values of the dielectric tensor at the display energy."""
         energy = self._display_energy
         density = self._display_density()
         try:
             eps0 = self.get_tensor(energy, magnetization=(0, 0, 0), density=density)[0]
         except ValueError as e:
-            return [(r"\epsilon^0", self._not_defined(self._eps0, e))]
+            return [(r"\varepsilon^0", self._not_defined(self._eps0, e))]
         diagonal = np.diagonal(eps0)
         entries = []
         if np.allclose(eps0, diagonal[0] * np.eye(3)):
-            entries.append((r"\epsilon^0", diagonal[0]))
+            entries.append((r"\varepsilon^0", diagonal[0]))
             entries.append(("n", np.sqrt(diagonal[0])))
         elif np.allclose(eps0, np.diag(diagonal)):
             for axis, value in zip(("xx", "yy", "zz"), diagonal):
-                entries.append((r"\epsilon^0_{" + axis + "}", value))
+                entries.append((r"\varepsilon^0_{" + axis + "}", value))
         else:
             for i, row in enumerate("xyz"):
                 for j, column in enumerate("xyz"):
                     if eps0[i, j] != 0:
-                        entries.append((r"\epsilon^0_{" + row + column + "}", eps0[i, j]))
+                        entries.append((r"\varepsilon^0_{" + row + column + "}", eps0[i, j]))
         if self._eps_mag is not None:
             try:
                 eps_mag = self._eps_mag.evaluate(
-                    energy, density, _GYROTROPIC, eps_xx=np.array([eps0[0, 0]])
+                    energy, density, _VACUUM_ZERO, eps_xx=np.array([eps0[0, 0]])
                 )[0]
-                entries.append((r"\epsilon^\mathrm{m}", eps_mag))
+                entries.append((r"\varepsilon^\mathrm{m}", eps_mag))
             except ValueError as e:
-                entries.append((r"\epsilon^\mathrm{m}", self._not_defined(self._eps_mag, e)))
+                entries.append((r"\varepsilon^\mathrm{m}", self._not_defined(self._eps_mag, e)))
         return entries
 
     def _format_symbol(self, symbol, mode):
@@ -1892,13 +1905,19 @@ class Dielectric(Parameter):
             text = text.replace("^m", "ᵐ").replace("_{", "_").replace("}", "")
         return text
 
+    def _relation(self, index):
+        """The dispersions are only described without a display energy."""
+        if self._eps0 is None or self._display_energy is not None:
+            return "="
+        return ":" if index < (1 if self._eps_mag is None else 2) else "="
+
     def _entries(self, mode):
         if self._eps0 is None:
             entries = [(self._latex_symbol(), "", "not set")]
         elif self._display_energy is None:
-            entries = [(r"\epsilon^0", "", self._eps0._label())]
+            entries = [(r"\varepsilon^0", "", self._eps0._label())]
             if self._eps_mag is not None:
-                entries.append((r"\epsilon^\mathrm{m}", "", self._eps_mag._label()))
+                entries.append((r"\varepsilon^\mathrm{m}", "", self._eps_mag._label()))
         else:
             energy = self._display_energy
             energy = f"{energy:~P}" if isinstance(energy, u.Quantity) else f"{energy:g} eV"
@@ -1917,7 +1936,7 @@ class Dielectric(Parameter):
                 self._format_text(value, mode)
                 if isinstance(value, str)
                 else _format_value(
-                    value, mode, near_one=not symbol.startswith(r"\epsilon^\mathrm{m}")
+                    value, mode, near_one=not symbol.startswith(r"\varepsilon^\mathrm{m}")
                 ),
                 "",
             )
