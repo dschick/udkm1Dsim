@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0a1] 2026-11-09
+
 ### Added
 
 - read-only `norm` property of `VectorParameter`, the non-negative length of the vector, e.g. of `atom.atomic.magnetization.norm`, whereas its radius `r` is negative for the reversed direction of the angles
