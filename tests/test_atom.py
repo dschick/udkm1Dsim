@@ -388,24 +388,11 @@ def test_magnetization_partial_polar_input_keeps_angles(cls):
 
 
 @pytest.mark.parametrize("cls", [Atom, AtomMixed])
-def test_atom_magnetization_shortcuts(cls):
+@pytest.mark.parametrize("key", ["mag_amplitude", "mag_phi", "mag_gamma"])
+def test_atom_removed_magnetization_shortcuts(cls, key):
     symbol = "Fe" if cls is Atom else "FeCr"
-    atom = cls(symbol, mag_amplitude=1, mag_phi=90 * u.deg, mag_gamma=45 * u.deg)
-    np.testing.assert_allclose(atom.magnetization.magnitude, [np.sqrt(0.5), np.sqrt(0.5), 0])
-    assert atom.mag_amplitude == pytest.approx(1)
-    assert_allclose(atom.mag_phi, 90 * u.deg)
-    assert_allclose(atom.mag_gamma, 45 * u.deg)
-    atom.mag_gamma = 0 * u.deg
-    atom.mag_phi = 0 * u.deg
-    atom.mag_amplitude = -1
-    np.testing.assert_allclose(atom.magnetization.magnitude, [0, 0, -1])
-
-
-@pytest.mark.parametrize("cls", [Atom, AtomMixed])
-def test_atom_magnetization_given_twice(cls):
-    symbol = "Fe" if cls is Atom else "FeCr"
-    with pytest.raises(ValueError, match="'mag_phi' must not be given together"):
-        cls(symbol, magnetization=(0, 0, 1), mag_phi=90 * u.deg)
+    with pytest.raises(TypeError, match=f"'{key}' were removed in version 3.0.0"):
+        cls(symbol, **{key: 1})
 
 
 @pytest.mark.parametrize(
@@ -526,7 +513,7 @@ def test_atom_cromer_mann_coeff_of_closest_ionicity(symbol, ionicity, closest):
     # the coefficients are only read again on a change of the ionicity
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        atom.mag_amplitude = 0.5
+        atom.atomic.magnetization.r = 0.5
 
 
 # ============================================================================
@@ -599,3 +586,12 @@ def test_atom_mixed_form_factor_ranges():
     # the error is raised by the constituent in the unit of the input
     with pytest.raises(ValueError, match="for the wavelength 200 nm"):
         mixed.get_atomic_form_factor(200 * u.nm)
+
+
+def test_atom_form_factor_table_follows_the_coefficients():
+    atom = Atom("Fe")
+    energy = np.array([700.0])
+    reference = atom.get_atomic_form_factor(energy)
+    assert atom._cached_form_factor_table(False) is atom._cached_form_factor_table(False)
+    atom.atomic_form_factor_coeff[:, 1] *= 2  # changed in place
+    assert not np.allclose(atom.get_atomic_form_factor(energy), reference)

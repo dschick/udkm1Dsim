@@ -81,6 +81,11 @@ class Atom:
         to it, e.g. its mass for the density of a unit cell. Hence, changing
         an atom afterwards does not update the layers it was already added to.
 
+    .. deprecated:: 3.0.0
+        The polar shortcuts ``mag_amplitude``, ``mag_phi``, and ``mag_gamma``
+        were removed. Use ``magnetization={"r": ..., "phi": ..., "gamma": ...}``
+        on initialization and ``atom.atomic.magnetization`` afterwards.
+
     Args:
         symbol (str): symbol of the atom.
 
@@ -95,12 +100,6 @@ class Atom:
             cartesian components, e.g. ``{"r": 1, "phi": 90 * u.deg,
             "gamma": 0 * u.deg}`` or ``{"x": 0, "y": 0, "z": 1}``, see
             :class:`.VectorParameter`.
-        mag_amplitude (float): magnetization amplitude, shortcut for
-            ``magnetization={"r": ...}``.
-        mag_phi (Quantity): phi angle of magnetization, shortcut for
-            ``magnetization={"phi": ...}``.
-        mag_gamma (Quantity): gamma angle of magnetization, shortcut for
-            ``magnetization={"gamma": ...}``.
 
     Attributes:
         symbol (str): symbol of the element.
@@ -119,12 +118,6 @@ class Atom:
            angular-dependent atomic form factor.
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
-        mag_amplitude (float): magnetization amplitude, shortcut for
-            ``atom.atomic.magnetization.r``.
-        mag_phi (Quantity): phi angle of magnetization from the z-axis,
-            shortcut for ``atom.atomic.magnetization.phi``.
-        mag_gamma (Quantity): gamma angle of magnetization in the xy-plane
-            from the x-axis, shortcut for ``atom.atomic.magnetization.gamma``.
 
     """
 
@@ -296,7 +289,7 @@ class Atom:
     def atomic_form_factor_range(self):
         """tuple[float]: lowest and highest photon energy (eV) of the tabulated
         atomic form factors."""
-        return form_factor_table(self.atomic_form_factor_coeff).energy_range
+        return self._cached_form_factor_table(False).energy_range
 
     @property
     def magnetic_form_factor_range(self):
@@ -305,13 +298,24 @@ class Atom:
         tabulated."""
         if self.magnetic_form_factor_coeff is None:
             return -np.inf, np.inf
-        return form_factor_table(self.magnetic_form_factor_coeff).energy_range
+        return self._cached_form_factor_table(True).energy_range
 
     @property
     def has_magnetic_form_factor(self):
         """bool: true if magnetic form factors are tabulated."""
         coeff = self.magnetic_form_factor_coeff
         return coeff is not None and bool(np.any(np.atleast_2d(coeff)[:, 1:]))
+
+    def _cached_form_factor_table(self, magnetic):
+        """Table of the atomic or magnetic form factors, which is only built
+        again if their coefficients have changed."""
+        coeff = self.magnetic_form_factor_coeff if magnetic else self.atomic_form_factor_coeff
+        tables = self.__dict__.setdefault("_form_factor_tables", {})
+        cached = tables.get(magnetic)
+        if cached is None or not np.array_equal(cached[0], coeff, equal_nan=True):
+            cached = (np.array(coeff, dtype=float), form_factor_table(coeff))
+            tables[magnetic] = cached
+        return cached[1]
 
     def _get_form_factor(self, energy, magnetic):
         """Interpolated atomic or magnetic form factors for photon energies,
@@ -326,7 +330,7 @@ class Atom:
             # no magnetic form factors are tabulated
             f = np.zeros(energy.shape, dtype=complex)
         else:
-            f = form_factor_table(coeff)(energy)
+            f = self._cached_form_factor_table(magnetic)(energy)
             invalid = np.isnan(f.real) | np.isnan(f.imag)
             if np.any(invalid):
                 kind = "magnetic" if magnetic else "atomic"
@@ -638,29 +642,15 @@ class Atom:
     def ionicity(self, value):
         self.atomic.ionicity.magnitude = value
 
-    # TODO: deprecate the polar shortcuts mag_amplitude, mag_phi, and mag_gamma
-    # as keyword arguments and attributes in favor of magnetization, e.g.
-    # magnetization={"r": ..., "phi": ..., "gamma": ...} and
-    # atom.atomic.magnetization.r, .phi, and .gamma.
-    _mag_shortcuts = {"mag_amplitude": "r", "mag_phi": "phi", "mag_gamma": "gamma"}
-
     def _init_magnetization(self, kwargs):
-        """Set the magnetization from the keyword arguments, either by
-        `magnetization` or by the polar shortcuts."""
-        shortcuts = {key: kwargs[key] for key in self._mag_shortcuts if key in kwargs}
-        if not shortcuts:
-            self.atomic.magnetization.set(kwargs.get("magnetization", (0.0, 0.0, 0.0)))
-            return
-        if "magnetization" in kwargs:
-            raise ValueError(
-                f"{', '.join(repr(key) for key in shortcuts)} must not be given together "
-                "with 'magnetization'!"
+        """Set the magnetization from the keyword arguments."""
+        removed = [key for key in ("mag_amplitude", "mag_phi", "mag_gamma") if key in kwargs]
+        if removed:
+            raise TypeError(
+                f"{', '.join(repr(key) for key in removed)} were removed in version 3.0.0, "
+                'use magnetization={"r": ..., "phi": ..., "gamma": ...} instead!'
             )
-        self.atomic.magnetization.polar = (
-            shortcuts.get("mag_amplitude", 0.0),
-            shortcuts.get("mag_phi", 0.0 * u.deg),
-            shortcuts.get("mag_gamma", 0.0 * u.deg),
-        )
+        self.atomic.magnetization.set(kwargs.get("magnetization", (0.0, 0.0, 0.0)))
 
     @property
     def magnetization(self):
@@ -669,41 +659,6 @@ class Atom:
     @magnetization.setter
     def magnetization(self, value):
         self.atomic.magnetization.set(value)
-
-    @property
-    def mag_amplitude(self):
-        """Shortcut for ``atom.atomic.magnetization.r``."""
-        return self.atomic.magnetization.polar_rad[0]
-
-    @mag_amplitude.setter
-    def mag_amplitude(self, value):
-        self.atomic.magnetization.r = value
-
-    @property
-    def mag_phi(self):
-        """Shortcut for ``atom.atomic.magnetization.phi``."""
-        return Q_(self._mag_phi, u.rad).to("deg")
-
-    @mag_phi.setter
-    def mag_phi(self, mag_phi):
-        self.atomic.magnetization.phi = mag_phi
-
-    @property
-    def _mag_phi(self):
-        return self.atomic.magnetization.polar_rad[1]
-
-    @property
-    def mag_gamma(self):
-        """Shortcut for ``atom.atomic.magnetization.gamma``."""
-        return Q_(self._mag_gamma, u.rad).to("deg")
-
-    @mag_gamma.setter
-    def mag_gamma(self, mag_gamma):
-        self.atomic.magnetization.gamma = mag_gamma
-
-    @property
-    def _mag_gamma(self):
-        return self.atomic.magnetization.polar_rad[2]
 
 
 class AtomMixed(Atom):
@@ -723,6 +678,11 @@ class AtomMixed(Atom):
         Hence, changing an atom afterwards does not update the mixed atoms
         and layers it was already added to.
 
+    .. deprecated:: 3.0.0
+        The polar shortcuts ``mag_amplitude``, ``mag_phi``, and ``mag_gamma``
+        were removed. Use ``magnetization={"r": ..., "phi": ..., "gamma": ...}``
+        on initialization and ``atom.atomic.magnetization`` afterwards.
+
     Args:
         symbol (str): symbol of the atom.
 
@@ -736,12 +696,6 @@ class AtomMixed(Atom):
             cartesian components, e.g. ``{"r": 1, "phi": 90 * u.deg,
             "gamma": 0 * u.deg}`` or ``{"x": 0, "y": 0, "z": 1}``, see
             :class:`.VectorParameter`.
-        mag_amplitude (float): magnetization amplitude, shortcut for
-            ``magnetization={"r": ...}``.
-        mag_phi (Quantity): phi angle of magnetization, shortcut for
-            ``magnetization={"phi": ...}``.
-        mag_gamma (Quantity): gamma angle of magnetization, shortcut for
-            ``magnetization={"gamma": ...}``.
 
     Attributes:
         symbol (str): symbol of the element.
@@ -758,14 +712,6 @@ class AtomMixed(Atom):
            coefficients for energy-dependent atomic form factor.
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
            coefficients for energy-dependent magnetic form factor.
-        mag_amplitude (float): magnetization amplitude, shortcut for
-            ``atom.atomic.magnetization.r``.
-        mag_phi (Quantity): phi angle of magnetization from the z-axis,
-            shortcut for ``atom.atomic.magnetization.phi``.
-        mag_gamma (Quantity): gamma angle of magnetization in the xy-plane
-            from the x-axis, shortcut for ``atom.atomic.magnetization.gamma``.
-        atoms (list[Atoms]): list of Atoms.
-        num_atoms (int): number of atoms.
 
     """
 
