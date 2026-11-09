@@ -139,6 +139,13 @@ def euler_matrix(theta, phi, psi):
     which rotates a tensor from the frame of the crystal to the frame of the
     sample, i.e. :math:`\varepsilon = R \varepsilon' R^T`.
 
+    The frame of the sample is the one of :cite:t:`elzo2012`: :math:`z` is the
+    surface normal pointing out of the sample towards the superstrate,
+    :math:`yz` is the plane of incidence and :math:`x` is along
+    :math:`\sigma`. In contrast to PyGTM, whose :math:`z` axis points into the
+    sample, a rotation by :math:`\theta` thus tilts out-of-plane axes the
+    opposite way, while in-plane rotations are the same.
+
     Args:
         theta (float): rotation about the x-axis (rad).
         phi (float): rotation about the z-axis after the rotation by theta (rad).
@@ -173,10 +180,10 @@ def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
 
     Args:
         eps0 (ndarray[complex]): non-magnetic dielectric function of shape
-            (M,) or (M, 3, 3).
+            (M,) or (..., M, 3, 3).
         eps_mag (ndarray[complex], None): gyrotropic dielectric function
             :math:`\varepsilon^m` per unit magnetization, i.e. the scalar
-            strength of the magnetic part, of shape (M,).
+            strength of the magnetic part, of shape (M,) or (..., M).
         magnetization (tuple[float], VectorParameter): cartesian
             magnetization :math:`(m_x, m_y, m_z)`, or its amplitude, polar
             angle :math:`\phi`, and azimuth :math:`\gamma` (rad) for
@@ -185,7 +192,7 @@ def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
             coordinates. Defaults to False.
 
     Returns:
-        eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
+        eps (ndarray[complex]): dielectric tensor of shape (..., M, 3, 3).
 
     """
     eps = _to_tensor(np.asarray(eps0, dtype=complex)).copy()
@@ -193,12 +200,13 @@ def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
     if eps_mag is None or not np.any(U):
         return eps
     mag = np.asarray(eps_mag, dtype=complex)
-    eps[:, 0, 1] += -1j * U[2] * mag
-    eps[:, 0, 2] += 1j * U[1] * mag
-    eps[:, 1, 0] += 1j * U[2] * mag
-    eps[:, 1, 2] += -1j * U[0] * mag
-    eps[:, 2, 0] += -1j * U[1] * mag
-    eps[:, 2, 1] += 1j * U[0] * mag
+    eps = np.broadcast_to(eps, np.broadcast_shapes(eps.shape, mag.shape + (3, 3))).copy()
+    eps[..., 0, 1] += -1j * U[2] * mag
+    eps[..., 0, 2] += 1j * U[1] * mag
+    eps[..., 1, 0] += 1j * U[2] * mag
+    eps[..., 1, 2] += -1j * U[0] * mag
+    eps[..., 2, 0] += -1j * U[1] * mag
+    eps[..., 2, 1] += 1j * U[0] * mag
     return eps
 
 
@@ -1556,7 +1564,9 @@ class Dielectric(Parameter):
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
                 floats are taken in eV, or other spectral Quantities.
-            strain (float, optional): strain :math:`\\eta`. Defaults to 0.
+            strain (float, ndarray[float], optional): strain :math:`\\eta`,
+                or an array of strains of shape S, e.g. of a layer for all
+                delays. Defaults to 0.
             magnetization (tuple[float], VectorParameter, optional): cartesian
                 magnetization :math:`(m_x, m_y, m_z)`, or its amplitude, polar
                 angle :math:`\\phi`, and azimuth :math:`\\gamma` (rad) for
@@ -1567,7 +1577,8 @@ class Dielectric(Parameter):
                 coordinates. Defaults to False.
 
         Returns:
-            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
+            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3), or
+            (S, M, 3, 3) for an array of strains.
 
         """
         if self._eps0 is None:
@@ -1582,10 +1593,16 @@ class Dielectric(Parameter):
         energy = np.atleast_1d(to_energy(energy))
         if spectral is None:
             spectral = energy
-        strain = float(np.asarray(strain).item()) if np.size(strain) == 1 else strain
+        strain = np.asarray(strain, dtype=float)
+        if strain.ndim == 0:
+            strain = float(strain)
+            strain_t = strain
+        else:
+            # strains of shape S for the tensors of shape (S, M, 3, 3)
+            strain_t = strain[..., np.newaxis, np.newaxis, np.newaxis]
         # the susceptibilities scale with the density, while a measured, total
         # change per strain of the non-magnetic part already includes it
-        scale = 1 / (1 + strain) if self._strain_model != "none" else 1.0
+        scale = 1 / (1 + strain_t) if self._strain_model != "none" else 1.0
         identity = np.eye(3)
 
         eps0 = _to_tensor(self._eps0.evaluate(spectral, density, _VACUUM_UNITY))
@@ -1601,15 +1618,16 @@ class Dielectric(Parameter):
                 deps = _to_tensor(deps.evaluate(spectral, density, _VACUUM_ZERO))
             else:
                 deps = _to_tensor(np.broadcast_to(deps, energy.shape + deps.shape).copy())
-            eps0 = eps0 + deps * strain
+            eps0 = eps0 + deps * strain_t
+        if np.ndim(strain) > 0:
+            eps0 = np.broadcast_to(eps0, np.shape(strain) + eps0.shape[-3:])
 
         magnetization = _cartesian_magnetization(magnetization, polar)
         eps_mag = None
         if self._eps_mag is not None and np.any(magnetization):
-            eps_mag = (
-                self._eps_mag.evaluate(spectral, density, _VACUUM_ZERO, eps_xx=eps0[:, 0, 0])
-                * scale
-            )
+            eps_mag = self._eps_mag.evaluate(
+                spectral, density, _VACUUM_ZERO, eps_xx=eps0[..., 0, 0]
+            ) * (scale if np.ndim(scale) == 0 else scale[..., 0, 0])
         return gyrotropic_tensor(eps0, eps_mag, magnetization)
 
     def get_ref_index(self, energy, strain=0.0, density=None):
