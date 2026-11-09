@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- polarizations can be given by their names, e.g. `set_polarization("sigma", "none")`, as well as by their ids
+- `simulations.scattering` package with the X-ray and light scattering formalisms, which are named by their method, restructuring the former `simulations.xrays` module, see [#136]
+- multilayer formalisms from the X-ray to the optical range, which take the dielectric tensor of the layers and share the polarizations, `homogeneous_reflectivity()`, `inhomogeneous_reflectivity()`, and the new `homogeneous_jones_matrices()` with the Jones matrices of the reflection and transmission in the linear (σ, π) basis in their base class `MultilayerScattering`, ported from [Dyna](https://gitlab.com/dynadevgroup/Dyna):
+  - `Parratt` for isotropic layers by the scalar recursion of Parratt (1954) with the roughness of Névot and Croce (1980), neglecting the magnetization
+  - `Stepanov` with the analytical eigenmodes of `Elzo` and the numerically stable scattering-matrix recursion of Stepanov and Sinha (2000), e.g. for thick, strongly absorbing, or highly repeated stacks
+  - `BerremanElzo` and `BerremanStepanov` with the exact eigenmodes of an arbitrary dielectric tensor (Berreman 1972), e.g. of anisotropic, birefringent, or strongly magnetic layers, with the transfer matrices or the scattering-matrix recursion
+- `calc_kerr_angles()` of the multilayer formalisms with the exact Kerr or Faraday rotation and ellipticity of a Jones matrix, and the former stub `calc_kerr_effect_from_matrix()` of `Elzo` is implemented
+- examples of the multilayer formalisms for the W/Fe/W trilayer of Elzo et al. (2012), of the magneto-optical Kerr and Faraday effect of a TbFeCo film (Mansuripur 2000), of birefringent quartz wave plates, of the polar Kerr effect of a Co/Ni/Cu multilayer probed from both sides compared to the data of Anadón et al. (2025), and of the Brillouin scattering of white light from nonlinearly propagating strain pulses in SrTiO3 after Bojahr et al. (2012) in the new gallery section of light scattering
+- `Parratt` calculates the `inhomogeneous_reflectivity()` for blocks of delays at once, where its recursion runs over the layers for all delays, photon energies, and angles in parallel, e.g. for the Brillouin scattering from strain pulses in thousands of layers; other formalisms can do the same by `calc_inhomogeneous_reflectivities()`
+- `Dielectric.get_tensor()` and `Layer.get_dielectric_tensor()` accept an array of strains, e.g. of a layer for all delays
+
+- `ExperimentParameters` as `experiment` of all scattering simulations, a `ParameterGroup` of the photon energy, wavelength, wavenumber, incidence angle, and scattering vector in eV and SI units; `sim.energy`, `sim.wl`, `sim.k`, `sim.theta`, and `sim.qz` remain as shortcuts in their units
+
+### Changed
+
+- **breaking:** unknown polarization states and those not supported by a formalism, e.g. circular polarization for `XrayKin` and `XrayDyn`, raise a `ValueError` instead of falling back to sigma, unpolarized, or no analyzer
+- **breaking:** `pol_in_state` and `pol_out_state` are read-only, use `set_polarization()`, and `calc_incoming_polarization()` and `calc_outgoing_polarization()` only return the polarization factor
+- the default polarizations of scattering simulations are set without a message on initialization
+- the incidence angle or scattering vector, whichever was set last, is kept for changes of the photon energy, and two-dimensional inputs per photon energy are used for all of them
+- `update_experiment()` and the private attributes `_energy`, `_wl`, `_k`, `_theta`, and `_qz` of the scattering simulations are replaced by `experiment`
+- `euler_angles` of a `Dielectric` are given in the sample frame of Elzo (z pointing out of the sample), see `euler_matrix()`, so that out-of-plane tilts have the opposite sign compared to PyGTM
+- `XrayDynMag` is renamed to `Elzo` after the authors of its formalism, and `Xray` to `Scattering` as base class of all scattering simulations, without aliases of the former names; the title of `Elzo` is "Elzo multilayer scattering simulation"
+- the transmission of `Elzo` is given for the electric field in the last layer of the substrate per incident electric field in the superstrate, i.e. multiplied by the non-magnetic dielectric function of the superstrate and divided by the one of the substrate, as for the other multilayer formalisms; it is unchanged for a superstrate and substrate of vacuum
+- the magnetization of an `AmorphousLayer` is taken from its atom only on initialization, and its dielectric tensor uses the magnetization of the layer, as `Heat`, `LLG`, `iLLG`, and `LLB` do; a later change of the magnetization of the atom does not affect the layer, so set `layer.magnetization` instead
+
+### Deprecated
+
+- the module `simulations.xrays`, which will be removed in a future version, see `simulations.scattering` instead
+
+### Removed
+
+- **breaking:** the special treatment of `UnitCell`s in `Elzo` by the slabs of its atoms, `calc_uc_boundary_phase_matrix()`, `get_atom_boundary_phase_matrix()`, and `calc_atom_boundary_phase_matrix()`, see [#201]; a `UnitCell` is treated as all other layers with its dielectric tensor, which must be set, e.g. by `set_dielectric_from_atoms()`, and its magnetization, so that it shows no Bragg peaks anymore, for which `XrayDyn` is available
+- **breaking:** the former names `XrayDynMag` and `Xray`, see `Elzo` and `Scattering` instead
+- **breaking:** the polar shortcuts `mag_amplitude`, `mag_phi`, and `mag_gamma` of `Atom` and `AtomMixed`, as keyword arguments, which now raise a `TypeError`, and as attributes, see `magnetization={"r": ..., "phi": ..., "gamma": ...}` and `atom.atomic.magnetization` instead
+
+### Fixed
+
+- the inhomogeneous reflectivity of `Elzo` for layers does not calculate hashes of its unused cache anymore, and atoms only build the tables of their form factors once, which recovers the speed before the dielectric tensor of the layers
+- scattering simulations can be displayed before their photon energy is set
+- the scattering vector and the incidence angle of the scattering simulations are consistent for several photon energies after changing the energy, wavelength, or wavenumber
+- the `phonon_damping` of `PhononNum` acts as dashpot on the rate of deformation between neighbouring layers, as described in its documentation and by Bojahr et al. (2012), instead of the velocity of each layer, so that the damping rate of a phonon grows with the square of its wave vector; the damping in kg/s must be positive, negative values raise an error, and the time step of the explicit solvers accounts for the damping
+- the analytical eigenmodes of `Elzo` divide the gyrotropic part of the dielectric tensor by its diagonal in the first-order inverse permittivity, which Eq. (20) of Elzo et al. (2012) omits, as corrected in Dyna after version 6.13.1; it changes the conversion between σ and π polarization by about 1-2 % at soft X-ray resonances and by orders of magnitude for visible light, which now agree with the exact Berreman eigenmodes
+
+[#136]: https://github.com/dschick/udkm1Dsim/issues/136
+[#201]: https://github.com/dschick/udkm1Dsim/issues/201
+
 ## [3.0.0a1] 2026-11-09
 
 ### Added
