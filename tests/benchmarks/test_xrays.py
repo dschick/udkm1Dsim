@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from udkm1Dsim import XrayDyn, XrayDynMag, XrayKin, u
+from udkm1Dsim import Elzo, XrayDyn, XrayKin, u
 
 # fixtures
 
@@ -40,7 +40,7 @@ def xray_dyn(structure_crystalline, tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def xray_dyn_mag(structure, tmp_path_factory):
-    xray_dyn_mag = XrayDynMag(
+    xray_dyn_mag = Elzo(
         structure,
         force_recalc=True,
         cache_dir=tmp_path_factory.mktemp("cache"),
@@ -79,7 +79,9 @@ def magnetization_map(structure):
 
 @pytest.fixture(scope="module")
 def ref_trans_matrix(xray_dyn_mag):
-    A0, A0_phi, _, _, _, _, k_z_0 = xray_dyn_mag.get_atom_boundary_phase_matrix([], 0, 0)
+    A0, A0_phi, _, _, _, _, k_z_0 = xray_dyn_mag.get_layer_boundary_phase_matrix(
+        xray_dyn_mag.S.superstrate[0]
+    )
     RT, *_ = xray_dyn_mag.calc_homogeneous_matrix(xray_dyn_mag.S, A0, A0_phi, k_z_0)
     return RT
 
@@ -120,7 +122,7 @@ def test_xray_dyn_inhomogeneous_reflectivity_strain_vectors(xray_dyn, strain_map
     xray_dyn.inhomogeneous_reflectivity(strain_map_crystalline, strain_vectors=strain_vectors)
 
 
-# XrayDynMag
+# Elzo
 
 
 @pytest.mark.benchmark
@@ -148,8 +150,6 @@ def test_xray_dyn_mag_homogeneous_reflectivity_elliptical(xray_dyn_mag, polariza
 def test_xray_dyn_mag_calc_reflectivity_transmissivity_from_matrix(
     benchmark, ref_trans_matrix, polarizations
 ):
-    pol_in = XrayDynMag.calc_elliptical_polarization(polarizations)
+    pol_in = Elzo.calc_elliptical_polarization(polarizations)
     pol_out = np.array([], dtype=np.complex128)  # no analyzer
-    benchmark(
-        XrayDynMag.calc_reflectivity_transmissivity_from_matrix, ref_trans_matrix, pol_in, pol_out
-    )
+    benchmark(Elzo.calc_reflectivity_transmissivity_from_matrix, ref_trans_matrix, pol_in, pol_out)

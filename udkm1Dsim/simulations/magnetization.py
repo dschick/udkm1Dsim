@@ -276,7 +276,7 @@ class Magnetization(Simulation):
 
         The default changed from polar to cartesian coordinates in version
         2.6.1. Both forms are calculated from the same cached results and are
-        accepted by :class:`~udkm1Dsim.simulations.xrays.XrayDynMag` with the
+        accepted by :class:`~udkm1Dsim.simulations.scattering.elzo.Elzo` with the
         same ``polar`` switch.
 
         For layers with several sublattices it is the net magnetization, i.e.

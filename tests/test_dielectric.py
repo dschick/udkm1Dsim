@@ -12,11 +12,11 @@ from udkm1Dsim import (
     Atom,
     Dielectric,
     Dispersion,
+    Elzo,
     Layer,
     Structure,
     UnitCell,
     Vacuum,
-    XrayDynMag,
     u,
 )
 from udkm1Dsim.structures.dielectric import euler_matrix, gyrotropic_tensor, to_energy
@@ -450,7 +450,7 @@ def test_layer_without_atoms():
 
 
 # ============================================================================
-# XrayDynMag
+# Elzo
 # ============================================================================
 
 
@@ -467,7 +467,7 @@ def magnetic_structure(iron):
 
 
 def _xray_dyn_mag(S):
-    x = XrayDynMag(S, True, disp_messages=False, progress_bar=False, save_data=False)
+    x = Elzo(S, True, disp_messages=False, progress_bar=False, save_data=False)
     x.energy = np.r_[700, 707] * u.eV
     x.theta = np.r_[1:20:4] * u.deg
     x.set_polarization(3, 0)
@@ -720,3 +720,27 @@ def test_delta_beta_mag(iron):
         None, 1e-3 + 2e-3j, kind="delta_beta"
     )
     np.testing.assert_allclose(rotated.get_delta_beta_mag(1.0), (1e-3, 2e-3))
+
+
+@pytest.mark.parametrize(
+    "strain_model, kwargs",
+    [("none", {}), ("density", {}), ("photoelastic", {"deps_dstrain": 0.3 + 0.01j})],
+)
+def test_dielectric_tensor_for_array_of_strains(strain_model, kwargs):
+    """an array of strains yields the tensors of the single strains, e.g. of
+    a layer for all delays"""
+    dielectric = Dielectric(
+        eps0=Dispersion.from_ref_index(2.4 + 0.1j),
+        eps_mag=Dispersion.from_array(None, 0.02j, kind="voigt"),
+        strain_model=strain_model,
+        **kwargs,
+    )
+    energy = np.r_[1.8, 2.0, 2.5]
+    strains = np.array([[-1e-3, 0.0], [2e-3, 5e-3]])
+    magnetization = (1.0, np.pi / 3, np.pi / 4)
+    eps = dielectric.get_tensor(energy, strains, magnetization)
+    assert eps.shape == strains.shape + (3, 3, 3)
+    for index in np.ndindex(strains.shape):
+        np.testing.assert_allclose(
+            eps[index], dielectric.get_tensor(energy, strains[index], magnetization), rtol=1e-14
+        )
