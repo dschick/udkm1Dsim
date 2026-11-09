@@ -161,9 +161,10 @@ def euler_matrix(theta, phi, psi):
 def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
     r"""gyrotropic_tensor
 
-    Dielectric tensor from the non-magnetic and gyrotropic dielectric
-    functions :math:`\varepsilon^0` and :math:`\varepsilon^m` and the
-    magnetization :math:`\mathbf{m}` following :cite:t:`elzo2012`:
+    Complete dielectric tensor of a gyrotropic medium, i.e. the sum of the
+    non-magnetic part :math:`\varepsilon^0` and the antisymmetric magnetic part
+    of the strength :math:`\varepsilon^m`, which is linear in the magnetization
+    :math:`\mathbf{m}`, following :cite:t:`elzo2012`:
 
     .. math:: \varepsilon_{ij} = \varepsilon^0_{ij}
         - i \varepsilon^m \epsilon_{ijk} m_k
@@ -171,8 +172,9 @@ def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
     Args:
         eps0 (ndarray[complex]): non-magnetic dielectric function of shape
             (M,) or (M, 3, 3).
-        eps_mag (ndarray[complex], None): gyrotropic dielectric function of
-            shape (M,).
+        eps_mag (ndarray[complex], None): gyrotropic dielectric function
+            :math:`\varepsilon^m` per unit magnetization, i.e. the scalar
+            strength of the magnetic part, of shape (M,).
         magnetization (tuple[float], VectorParameter): cartesian
             magnetization :math:`(m_x, m_y, m_z)`, or its amplitude, polar
             angle :math:`\phi`, and azimuth :math:`\gamma` (rad) for

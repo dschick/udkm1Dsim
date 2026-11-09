@@ -1513,7 +1513,7 @@ class XrayDyn(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom
-            area (float): area of the unit cell [m²]
+            area (float): area of the unit cell (m²)
             deb_wal_fac (float): Debye-Waller factor for unit cell
 
         Returns:
@@ -1576,7 +1576,7 @@ class XrayDyn(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom
-            area (float): area of the unit cell [m²]
+            area (float): area of the unit cell (m²)
             deb_wal_fac (float): Debye-Waller factor for unit cell
 
         Returns:
@@ -1611,7 +1611,7 @@ class XrayDyn(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom
-            area (float): area of the unit cell [m²]
+            area (float): area of the unit cell (m²)
             deb_wal_fac (float): Debye-Waller factor for unit cell
 
         Returns:
@@ -1862,7 +1862,7 @@ class XrayDynMag(Xray):
         Args:
             pol_in_state (int): incoming polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> p) [deg]
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
@@ -1893,7 +1893,7 @@ class XrayDynMag(Xray):
         Args:
             pol_out_state (int): outgoing polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> p) [deg]
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
@@ -1979,7 +1979,7 @@ class XrayDynMag(Xray):
 
         Args:
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> p) [deg]
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         Returns:
@@ -2972,8 +2972,8 @@ class XrayDynMag(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
-            density (float): density around the atom [kg/m³].
-            distance (float): distance towards the next atomic [m].
+            density (float): density around the atom (kg/m³).
+            distance (float): distance towards the next atomic (m).
             force_recalc (boolean, optional): force recalculation of boundary
                 phase matrix if True. Defaults to False.
             args (ndarray[float]): cartesian magnetization vector
@@ -3074,8 +3074,8 @@ class XrayDynMag(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
-            density (float): density around the atom [kg/m³].
-            distance (float): distance towards the next atomic [m].
+            density (float): density around the atom (kg/m³).
+            distance (float): distance towards the next atomic (m).
             args (ndarray[float]): cartesian magnetization vector
                 ``(x, y, z)``.
 
@@ -3401,7 +3401,7 @@ class XrayDynMag(Xray):
         roughness for the :cite:t:`elzo2012`.
 
         Args:
-            roughness (float): gaussian roughness of the interface [m].
+            roughness (float): gaussian roughness of the interface (m).
             k_z (ndarray[float)]: internal wave vector.
             last_k_z (ndarray[float)]: last internal wave vector.
 

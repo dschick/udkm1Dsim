@@ -1230,8 +1230,8 @@ class UnitCell(Layer):
                 "position function",
                 "magn.",
                 "amplitude",
-                "phi [°]",
-                "gamma [°]",
+                "phi (°)",
+                "gamma (°)",
             ],
             tablefmt=style,
         )

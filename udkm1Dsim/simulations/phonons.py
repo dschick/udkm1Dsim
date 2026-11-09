@@ -381,7 +381,7 @@ class PhononNum(Phonon):
         and the simulation parameters in order to reuse it.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             temp_map (ndarray[float]): spatio-temporal temperature map.
             delta_temp_map (ndarray[float]): spatio-temporal differential
             temperature map.
@@ -448,7 +448,7 @@ class PhononNum(Phonon):
             k_i(x_i-x_{i-1}) = \sum_{j=1}^{M-1} k_i^j (x_i-x_{i-1})^j
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             temp_map (ndarray[float]): spatio-temporal temperature map.
             delta_temp_map (ndarray[float]): spatio-temporal differential
                 temperature map.
@@ -584,7 +584,7 @@ class PhononAna(Phonon):
         and the simulation parameters in order to reuse it.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             temp_map (ndarray[float]): spatio-temporal temperature map.
             delta_temp_map (ndarray[float]): spatio-temporal differential
             temperature map.
@@ -720,7 +720,7 @@ class PhononAna(Phonon):
         coordinate system :math:`x_i^\infty`.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             temp_map (ndarray[float]): spatio-temporal temperature map.
             delta_temp_map (ndarray[float]): spatio-temporal differential
               temperature map.

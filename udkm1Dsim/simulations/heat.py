@@ -92,7 +92,7 @@ class Heat(Simulation):
             * temperature
             * flux
 
-        distances (ndarray[float, Quantity]): spatial grid for heat diffusion [m]
+        distances (ndarray[float, Quantity]): spatial grid for heat diffusion (m)
         ode_options (dict): options for scipy solve_ivp ode solver
 
     """
@@ -231,7 +231,7 @@ class Heat(Simulation):
 
         Args:
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
-                temperature scalar or array [K].
+                temperature scalar or array (K).
             distances (ndarray[float, Quantity], optional): spatial grid of the
                 initial temperatrue.
 
@@ -269,8 +269,8 @@ class Heat(Simulation):
         r"""check_excitation
 
         The optical excitation is a dictionary with fluence
-        :math:`F` [J/m²], delays :math:`t` [s] of the pump events, and pulse
-        width :math:`\tau` [s]. :math:`N` is the number of pump events.
+        :math:`F` (J/m²), delays :math:`t` (s) of the pump events, and pulse
+        width :math:`\tau` (s). :math:`N` is the number of pump events.
 
         Traverse excitation vector to update the ``delay_pump`` :math:`t_p`
         vector for finite pulse durations :math:`w(i)` as follows
@@ -287,7 +287,7 @@ class Heat(Simulation):
         footprint onto the sample surface.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
 
         Returns:
             (tuple):
@@ -753,13 +753,13 @@ class Heat(Simulation):
 
         Calculate the final temperature and temperature change for each layer
         of the sample structure after an optical excitation with a fluence
-        :math:`F` [J/m^2] and an initial temperature :math:`T_1` [K]:
+        :math:`F` (J/m^2) and an initial temperature :math:`T_1` (K):
 
         .. math:: \Delta E = \int_{T_1}^{T_2} m \, c(T)\, \mbox{d}T
 
         where :math:`\Delta E` is the absorbed energy in each layer and
-        :math:`c(T)` is the temperature-dependent heat capacity [J/kg K] and
-        :math:`m` is the mass [kg].
+        :math:`c(T)` is the temperature-dependent heat capacity (J/kg K) and
+        :math:`m` is the mass (kg).
 
         The absorbed energy per layer can be linearized from the absorption
         profile :math:`\mbox{d} \alpha / \mbox{d}z` as
@@ -779,9 +779,9 @@ class Heat(Simulation):
              {\mbox{d}z} E_0 \Delta z \right| \stackrel{!}{=} 0
 
         Args:
-            fluence (float, Quantity): incident fluence [J/m²].
+            fluence (float, Quantity): incident fluence (J/m²).
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
-                temperature scalar or array [K].
+                temperature scalar or array (K).
             distances (ndarray[float], optional): spatial grid for calculation.
 
         Returns:
@@ -856,9 +856,9 @@ class Heat(Simulation):
         and the simulation parameters in order to reuse it.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
-                temperature scalar or array [K].
+                temperature scalar or array (K).
 
         Returns:
             (tuple):
@@ -893,9 +893,9 @@ class Heat(Simulation):
         excitation. Heat diffusion can be included if ``heat_diffusion = true``.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             input_init_temp (float, Quantity, ndarray[float, Quantity]): initial
-                temperature scalar or array [K].
+                temperature scalar or array (K).
 
         Returns:
             (tuple):
@@ -1084,20 +1084,20 @@ class Heat(Simulation):
             c_N(T_N) \rho \frac{\partial T_N}{\partial t} & = & \frac{\partial}{\partial z}
               \left( \kappa_N(T_N) \frac{\partial T_N}{\partial z} \right) + G_N(T_1,...,T_N)
 
-        where :math:`T_i` is the temperature [K], :math:`z` the distance [m],
-        :math:`t` the delay [s], :math:`c_i(T)` the temperature dependent heat
-        capacity [J/kg K], :math:`\rho` the density [kg/m³] and :math:`\kappa_i(T)`
-        is the temperature-dependent thermal conductivity [W/m K] and
-        :math:`S(z,t)` is a source term [W/m³].
+        where :math:`T_i` is the temperature (K), :math:`z` the distance (m),
+        :math:`t` the delay (s), :math:`c_i(T)` the temperature dependent heat
+        capacity (J/kg K), :math:`\rho` the density (kg/m³) and :math:`\kappa_i(T)`
+        is the temperature-dependent thermal conductivity (W/m K) and
+        :math:`S(z,t)` is a source term (W/m³).
         The energy flow between the subsystems is given by the ``sub_system_coupling``
         parameter :math:`G_i(T_1,...,T_N)` of the individual layers.
         The index :math:`i` refers to the :math:`i`-th subsystem.
 
         Args:
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
-                temperature scalar or array [K].
+                temperature scalar or array (K).
             distances (ndarray[float]): spatial grid for calculation.
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             delay_pump (ndarray[float]): delays of the excitations.
             pulse_width (ndarray[float]): pulse widths of the excitations.
             fluence (ndarray[float]): excitation fluences.
@@ -1174,7 +1174,7 @@ class Heat(Simulation):
         Args:
             temp_map (ndarray[float]): spatio-temporal temperature map.
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
-                temperature scalar or array [K].
+                temperature scalar or array (K).
 
         Returns:
             energy_map (ndarray[float]): spatio-temporal energy map.
@@ -1218,11 +1218,11 @@ class Heat(Simulation):
 
         Args:
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
-                temperature scalar or array [K].
+                temperature scalar or array (K).
             temp_map (ndarray[float]): spatio-temporal temperature map.
             delta_temp_map (ndarray[float]): spatio-temporal differential
               temperature map.
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
 
         Returns:
             energy_flux_map (ndarray[float]): spatio-temporal energy flux map.

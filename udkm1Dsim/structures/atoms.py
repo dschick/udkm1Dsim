@@ -112,7 +112,7 @@ class Atom:
         atomic_number_z (int): Z atomic number.
         mass_number_a (float): A atomic mass number.
         ionicity (int): ionicity of the atom.
-        mass (float): mass of the atom [kg].
+        mass (float): mass of the atom (kg).
         atomic_form_factor_coeff (ndarray[float]): atomic form factor.
            coefficients for energy-dependent atomic form factor.
         cromer_mann_coeff (ndarray[float]): cromer-mann coefficients for
@@ -457,7 +457,7 @@ class Atom:
         The atomic form factor :math:`f` is calculated in dependence of the
         photon energy :math:`E` and the :math:`z`-component of the scattering
         vector :math:`q_z` (see :cite:t:`cromermann1968`), which are given as
-        Quantities or as floats in [eV] and [1/m], respectively.
+        Quantities or as floats in eV and (1/m), respectively.
         Note that the Cromer-Mann coefficients are fitted for :math:`q_z` in
         [Å :math:`^{-1}`], to which :math:`q_z` is converted internally!
 
@@ -488,9 +488,9 @@ class Atom:
 
         Args:
             energy (Quantity, ndarray[float]): photon energy, where floats
-                are taken in [eV].
+                are taken in eV.
             qz (Quantity, ndarray[float]): scattering vector, where floats
-                are taken in [1/m].
+                are taken in 1/m.
 
         Returns:
             f (ndarray[complex]): energy- and qz-dependent Cromer-Mann atomic form
@@ -753,7 +753,7 @@ class AtomMixed(Atom):
         atomic_number_z (int): Z atomic number.
         mass_number_a (float): A atomic mass number.
         ionicity (int): ionicity of the atom.
-        mass (float): mass of the atom [kg].
+        mass (float): mass of the atom (kg).
         atomic_form_factor_coeff (ndarray[float]): atomic form factor.
            coefficients for energy-dependent atomic form factor.
         magnetic_form_factor_coeff (ndarray[float]): magnetic form factor
@@ -957,9 +957,9 @@ class AtomMixed(Atom):
 
         Args:
             energy (Quantity, ndarray[float]): photon energy, where floats
-                are taken in [eV].
+                are taken in eV.
             qz (Quantity, ndarray[float]): scattering vector, where floats
-                are taken in [1/m].
+                are taken in 1/m.
 
         Returns:
             f (ndarray[complex]): energy- and qz-dependent Cromer-Mann atomic

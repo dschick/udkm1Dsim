@@ -56,7 +56,7 @@ class Structure:
 
     Attributes:
         name (str): name of sample.
-        thickness (float): thickness of the structure [m].
+        thickness (float): thickness of the structure (m).
         sub_structures (list[Layer, Structure]): list of sub-structures in sample.
         superstrate (Layer): Layer or its sub-classes forming the superstrate.
         substrate (Layer): Layer or its sub-classes forming the substrate.

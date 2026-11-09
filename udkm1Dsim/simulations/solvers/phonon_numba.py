@@ -93,12 +93,12 @@ def solve(
     Args:
         x0 (ndarray[float]): initial shifts and velocities of all :math:`L`
             layers of shape (2L) [m, m/s].
-        delays (ndarray[float]): delays range of simulation [s].
+        delays (ndarray[float]): delays range of simulation (s).
         force_from_heat (ndarray[float]): force due to thermal expansion of
-            shape (L, M) for M delays [N].
+            shape (L, M) for M delays (N).
         damping (ndarray[float]): phonon damping of all layers.
         spring_consts (ndarray[float]): spring constants of all layers.
-        masses (ndarray[float]): masses of all layers [kg].
+        masses (ndarray[float]): masses of all layers (kg).
         ode_options (dict): options of scipy's ``solve_ivp``, of which
             ``rtol``, ``atol``, ``max_step`` and ``first_step`` are used by the
             adaptive integrator.
@@ -194,15 +194,15 @@ def rhs(t, y, dydt, delays, force_from_heat, damping, spring_consts, masses):
     delay, divided by its mass.
 
     Args:
-        t (float): time [s].
+        t (float): time (s).
         y (ndarray[float]): shifts followed by velocities :math:`2L`.
         dydt (ndarray[float]): output, velocities followed by accelerations.
-        delays (ndarray[float]): delays range of simulation [s].
+        delays (ndarray[float]): delays range of simulation (s).
         force_from_heat (ndarray[float]): forces of the thermal expansion
-            :math:`L \times M` [N].
+            :math:`L \times M` (N).
         damping (ndarray[float]): phonon damping of the layers.
         spring_consts (ndarray[float]): spring constants :math:`L \times J`.
-        masses (ndarray[float]): masses of the layers [kg].
+        masses (ndarray[float]): masses of the layers (kg).
 
     """
     L = len(masses)
@@ -247,7 +247,7 @@ def integrate_rk45(
         rtol (float): relative tolerance.
         atol (float): absolute tolerance.
         max_step (float): maximum step size.
-        delays (ndarray[float]): delays range of simulation [s].
+        delays (ndarray[float]): delays range of simulation (s).
         force_from_heat (ndarray[float]): forces of the thermal expansion.
         damping (ndarray[float]): phonon damping of the layers.
         spring_consts (ndarray[float]): spring constants.

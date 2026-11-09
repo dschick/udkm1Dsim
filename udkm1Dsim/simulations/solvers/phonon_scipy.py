@@ -69,12 +69,12 @@ def solve(
     Args:
         x0 (ndarray[float]): initial shifts and velocities of all :math:`L`
             layers of shape (2L) [m, m/s].
-        delays (ndarray[float]): delays range of simulation [s].
+        delays (ndarray[float]): delays range of simulation (s).
         force_from_heat (ndarray[float]): force due to thermal expansion of
-            shape (L, M) for M delays [N].
+            shape (L, M) for M delays (N).
         damping (ndarray[float]): phonon damping of all layers.
         spring_consts (ndarray[float]): spring constants of all layers.
-        masses (ndarray[float]): masses of all layers [kg].
+        masses (ndarray[float]): masses of all layers (kg).
         ode_options (dict): options passed to scipy's ``solve_ivp``. A
             given ``max_step`` is only decreased by the stability time step.
         progress_bar (bool, optional): enable tqdm progress bar. Defaults
@@ -133,9 +133,9 @@ def odefunc(
     :math:`x(t)` is the actual shift of each layer.
 
     Args:
-        t (float): internal time step of the ode solver [s].
+        t (float): internal time step of the ode solver (s).
         X (ndarray[float]): internal variable of the ode solver.
-        delays (ndarray[float]): delays range of simulation [s].
+        delays (ndarray[float]): delays range of simulation (s).
         force_from_heat (ndarray[float]): force due to thermal expansion.
         damping (ndarray[float]): phonon damping.
         spring_consts (ndarray[float]): spring constants of masses.
@@ -302,12 +302,12 @@ def stability_time_step(spring_consts, masses, fraction=1.0):
     Args:
         spring_consts (ndarray[float]): spring constants :math:`L \times J`,
             only the harmonic order is used.
-        masses (ndarray[float]): masses of the layers [kg].
+        masses (ndarray[float]): masses of the layers (kg).
         fraction (float, optional): fraction :math:`f` of the stability
             limit. Defaults to 1.0.
 
     Returns:
-        max_step (float): largest stable time step [s].
+        max_step (float): largest stable time step (s).
 
     """
     k = np.reshape(np.asarray(spring_consts, dtype=float), (len(masses), -1))[:, 0]
