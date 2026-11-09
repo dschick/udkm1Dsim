@@ -415,13 +415,17 @@ class PhononNum(Phonon):
         .. math::
 
             m_i\ddot{x}_i = & -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1}) \\
-            & + m_i\gamma_i(\dot{x}_i-\dot{x}_{i-1}) + F_i^{heat}(t)
+            & -\gamma_i(\dot{x}_i-\dot{x}_{i-1})-\gamma_{i+1}(\dot{x}_i-\dot{x}_{i+1})
+            + F_i^{heat}(t)
 
         where :math:`x_i(t) = z_{i}(t) - z_i^0` is the shift of each layer.
         :math:`m_i` is the mass and :math:`k_i = m_i\, v_i^2/d_i^2` is the
-        spring constant of each layer. Furthermore an empirical damping term
-        :math:`F_i^{damp} = \gamma_i(\dot{x}_i-\dot{x}_{i-1})` is introduced
-        and the external force (thermal stress) :math:`F_i^{heat}(t)`.
+        spring constant of each layer. Furthermore an empirical damping
+        :math:`\gamma_i` (kg/s) of the springs is introduced, which act as
+        dashpots with a force proportional to the rate of their deformation,
+        so that the damping rate :math:`\gamma_i q^2 d_i^2 / 2 m_i` of a
+        phonon grows with the square of its wave vector :math:`q`, and the
+        external force (thermal stress) :math:`F_i^{heat}(t)`.
         The thermal stresses are modelled as spacer sticks which are
         calculated from the linear thermal expansion coefficients. The
         equation of motion can be reformulated as:
@@ -493,6 +497,11 @@ class PhononNum(Phonon):
             thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
             spring_consts = self.S.get_layer_property_vector("elastic.spring_const.magnitude")
             damping = self.S.get_layer_property_vector("elastic.phonon_damping.magnitude")
+            if np.any(damping < 0):
+                raise ValueError(
+                    "The phonon_damping of the layers must not be negative, as it acts as "
+                    "dashpot on the rate of deformation between neighbouring layers!"
+                )
             force_from_heat = phonon_scipy.force_from_heat(sticks, spring_consts)
 
             if self.backend == "numba":

@@ -130,7 +130,7 @@ def solve(
     atol = float(ode_options.get("atol", 1e-6))
     max_step = ode_options.get("max_step", np.inf)
     max_step = np.inf if max_step is None else float(max_step)
-    max_step = min(max_step, stability_time_step(spring_consts, masses))
+    max_step = min(max_step, stability_time_step(spring_consts, masses, damping=damping))
     first_step = ode_options.get("first_step", None)
     h = 0.0 if first_step is None else float(first_step)
 
@@ -190,8 +190,8 @@ def rhs(t, y, dydt, delays, force_from_heat, damping, spring_consts, masses):
     into ``dydt``, see :func:`~udkm1Dsim.simulations.solvers.phonon_scipy.odefunc`:
     the acceleration of layer :math:`i` is the sum of the spring forces of
     its two neighbours with all orders of the inter-atomic potential, the
-    damping force and the force of the thermal expansion of the current
-    delay, divided by its mass.
+    damping forces of the dashpots to its two neighbours and the force of the
+    thermal expansion of the current delay, divided by its mass.
 
     Args:
         t (float): time (s).
@@ -200,7 +200,7 @@ def rhs(t, y, dydt, delays, force_from_heat, damping, spring_consts, masses):
         delays (ndarray[float]): delays range of simulation (s).
         force_from_heat (ndarray[float]): forces of the thermal expansion
             :math:`L \times M` (N).
-        damping (ndarray[float]): phonon damping of the layers.
+        damping (ndarray[float]): phonon damping of the layers (kg/s).
         spring_consts (ndarray[float]): spring constants :math:`L \times J`.
         masses (ndarray[float]): masses of the layers (kg).
 
@@ -209,8 +209,10 @@ def rhs(t, y, dydt, delays, force_from_heat, damping, spring_consts, masses):
     order = spring_consts.shape[1]
     m_idx = _delay_index(t, delays)
     for i in range(L):
-        force = masses[i] * damping[i] * y[L + i] + force_from_heat[i, m_idx]
+        force = force_from_heat[i, m_idx]
         if i > 0:
+            # dashpot gamma_{i-1} between the left neighbour and this layer
+            force -= damping[i - 1] * (y[L + i] - y[L + i - 1])
             # spring k_{i-1} between the left neighbour and this layer
             d = y[i] - y[i - 1]
             power = d
@@ -218,6 +220,8 @@ def rhs(t, y, dydt, delays, force_from_heat, damping, spring_consts, masses):
                 force -= spring_consts[i - 1, j] * power
                 power *= d
         if i < L - 1:
+            # dashpot gamma_i between this layer and the right neighbour
+            force += damping[i] * (y[L + i + 1] - y[L + i])
             # spring k_i between this layer and the right neighbour
             d = y[i + 1] - y[i]
             power = d

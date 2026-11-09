@@ -246,7 +246,16 @@ def _heating(S, delays, two_steps=True):
 # backside within the delays
 @pytest.fixture(scope="module", params=["structure_freestanding", "structure_crystalline"])
 def reference_structure(request):
-    return request.getfixturevalue(request.param)
+    """the reference structures without phonon damping, which the analytical
+    solution neglects"""
+    S = request.getfixturevalue(request.param)
+    layers = S.get_unique_layers()[1]
+    dampings = [layer.phonon_damping for layer in layers]
+    for layer in layers:
+        layer.phonon_damping = 0 * u.kg / u.s
+    yield S
+    for layer, damping in zip(layers, dampings):
+        layer.phonon_damping = damping
 
 
 @pytest.fixture(scope="module")
@@ -318,3 +327,17 @@ def test_phonon_num_matches_ana(
     max_strain = np.max(np.abs(reference_strain_map))
     assert max_strain > 1e-4
     np.testing.assert_allclose(strain_map, reference_strain_map, rtol=0, atol=1e-5 * max_strain)
+
+
+def test_phonon_num_negative_damping_raises(structure_freestanding, delays, tmp_path):
+    layer = structure_freestanding.get_layer_handle(0)
+    damping = layer.phonon_damping
+    layer.phonon_damping = -1e-12 * u.kg / u.s
+    phonon_num = PhononNum(
+        structure_freestanding, True, cache_dir=tmp_path, save_data=False, disp_messages=False
+    )
+    try:
+        with pytest.raises(ValueError, match="must not be negative"):
+            phonon_num.calc_strain_map(delays, *_heating(structure_freestanding, delays))
+    finally:
+        layer.phonon_damping = damping

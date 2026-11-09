@@ -148,7 +148,7 @@ def test_layer_sound_vel(layer):
 
 
 def test_layer_phonon_damping(layer):
-    assert_equal(layer.phonon_damping, 1 * u.kg / u.s)
+    assert_equal(layer.phonon_damping, 1e-12 * u.kg / u.s)
 
 
 def test_layer_set_ho_spring_constants(layer):

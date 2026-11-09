@@ -116,7 +116,7 @@ def properties():
         "roughness": 0.5 * u.angstrom,
         "deb_wal_fac": 1 * u.angstrom**2,
         "sound_vel": 6 * u.nm / u.ps,
-        "phonon_damping": 1 * u.kg / u.s,
+        "phonon_damping": 1e-12 * u.kg / u.s,
         "dielectric": Dispersion.from_ref_index(REF_INDEX),
         "therm_cond": 1 * u.W / (u.m * u.K),
         "lin_therm_exp": 1e-5,
@@ -195,14 +195,14 @@ def amorphous_layer_oxygen(atom_oxygen, properties):
 def unit_cell_iron(atom_iron, properties):
     uc = UnitCell(id="unit_cell_Fe", name="unit cell iron", c_axis=5.0 * u.angstrom, **properties)
     uc.add_atom(atom_iron, 0.0)
-    return uc
+    return _dielectric_from_atoms_and_optics(uc)
 
 
 @pytest.fixture(scope="module")
 def unit_cell_oxygen(atom_oxygen, properties):
     uc = UnitCell(id="unit_cell_O", name="unit cell oxygen", c_axis=5.0 * u.angstrom, **properties)
     uc.add_atom(atom_oxygen, 0.0)
-    return uc
+    return _dielectric_from_atoms_and_optics(uc)
 
 
 # structure
