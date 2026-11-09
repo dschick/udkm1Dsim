@@ -237,7 +237,7 @@ def _linearized_coupling(J, eff_spins):
     orientation of the sublattices.
 
     Args:
-        J (ndarray[float]): mean-field exchange matrix :math:`P \times P` [J].
+        J (ndarray[float]): mean-field exchange matrix :math:`P \times P` (J).
         eff_spins (ndarray[float]): effective spins of the sublattices.
 
     Returns:
@@ -264,11 +264,11 @@ def ordering_temperature(J, eff_spins):
     which reduces to :math:`T_C = \frac{S+1}{3 S k_B} J` for one sublattice.
 
     Args:
-        J (ndarray[float]): mean-field exchange matrix :math:`P \times P` [J].
+        J (ndarray[float]): mean-field exchange matrix :math:`P \times P` (J).
         eff_spins (ndarray[float]): effective spins of the sublattices.
 
     Returns:
-        curie_temp (float): ordering temperature [K].
+        curie_temp (float): ordering temperature (K).
 
     """
     eigenvalues = np.linalg.eigvals(_linearized_coupling(J, eff_spins))
@@ -285,7 +285,7 @@ def sublattice_signs(J, eff_spins):
     sublattice defines the positive direction.
 
     Args:
-        J (ndarray[float]): mean-field exchange matrix :math:`P \times P` [J].
+        J (ndarray[float]): mean-field exchange matrix :math:`P \times P` (J).
         eff_spins (ndarray[float]): effective spins of the sublattices.
 
     Returns:
@@ -320,8 +320,8 @@ def mean_field_magnetization_coupled(temps, J, eff_spins, iterations=300):
     polished by Newton steps on the coupled system.
 
     Args:
-        temps (ndarray[float]): temperatures [K].
-        J (ndarray[float]): mean-field exchange matrix :math:`P \times P` [J],
+        temps (ndarray[float]): temperatures (K).
+        J (ndarray[float]): mean-field exchange matrix :math:`P \times P` (J),
             row :math:`a` holding the couplings of the field on sublattice
             :math:`a`.
         eff_spins (ndarray[float]): effective spins of the sublattices.
@@ -378,7 +378,7 @@ def mean_field_magnetization_coupled(temps, J, eff_spins, iterations=300):
 # rows of the equilibrium tables of a layer along their second axis
 TABLE = {"mag": 0, "alpha_par": 1, "alpha_perp": 2, "chi": 3}
 
-# cap of the longitudinal susceptibility [1/T], which diverges at the ordering
+# cap of the longitudinal susceptibility (1/T), which diverges at the ordering
 # temperature - its inverse, the longitudinal field per unit deviation, is
 # then negligible - and its floor, where the quantum susceptibility
 # underflows at very low temperatures
@@ -396,15 +396,15 @@ def temperature_grid(temp_max, curie_temps, n_grid=4000, n_dense=200):
     susceptibility diverges at :math:`T_C`, and containing :math:`T_C` itself.
 
     Args:
-        temp_max (float): largest temperature of the grid [K].
+        temp_max (float): largest temperature of the grid (K).
         curie_temps (ndarray[float]): ordering temperatures of the layers
-            [K], zeros are ignored.
+            (K), zeros are ignored.
         n_grid (int, optional): number of uniform points. Defaults to 4000.
         n_dense (int, optional): number of refinement points on either side
             of every ordering temperature. Defaults to 200.
 
     Returns:
-        temp_grid (ndarray[float]): ascending temperature grid [K].
+        temp_grid (ndarray[float]): ascending temperature grid (K).
 
     """
     temp_max = max(float(temp_max), 2.0)
@@ -434,11 +434,11 @@ def equilibrium_tables(temp_grid, mf_exch_coupling, eff_spins, mag_moments, lamb
     Padded (inactive) sublattices carry zeros and a susceptibility of one.
 
     Args:
-        temp_grid (ndarray[float]): temperature grid :math:`N_T` [K].
+        temp_grid (ndarray[float]): temperature grid :math:`N_T` (K).
         mf_exch_coupling (ndarray[float]): mean-field exchange matrix
-            :math:`P \times P` [J].
+            :math:`P \times P` (J).
         eff_spins (ndarray[float]): effective spins :math:`P`.
-        mag_moments (ndarray[float]): atomic magnetic moments :math:`P` [A m²].
+        mag_moments (ndarray[float]): atomic magnetic moments :math:`P` (A m²).
         lambdas (ndarray[float]): coupling-to-bath parameters :math:`P`.
         active (ndarray[float]): 1 for existing sublattices, 0 for padding.
 
@@ -479,7 +479,7 @@ def longitudinal_susceptibility(temps, zeta, eff_spins, mf_exch_coupling_abs, ma
     r"""longitudinal_susceptibility
 
     Longitudinal susceptibilities :math:`\chi_a = \partial m_a/\partial B`
-    [1/T] of :math:`P` coupled sublattices in the mean-field approximation,
+    (1/T) of :math:`P` coupled sublattices in the mean-field approximation,
     the solution of the linear system
 
     .. math::
@@ -497,18 +497,18 @@ def longitudinal_susceptibility(temps, zeta, eff_spins, mf_exch_coupling_abs, ma
     ordering temperature.
 
     Args:
-        temps (ndarray[float]): temperatures :math:`N_T` [K].
+        temps (ndarray[float]): temperatures :math:`N_T` (K).
         zeta (ndarray[float]): equilibrium mean-field arguments
             :math:`N_T \times P`.
         eff_spins (ndarray[float]): effective spins :math:`P`.
         mf_exch_coupling_abs (ndarray[float]): moduli of the mean-field
-            exchange matrix :math:`P \times P` [J].
+            exchange matrix :math:`P \times P` (J).
         mag_moments (ndarray[float]): atomic magnetic moments :math:`P`
-            [A m²].
+            (A m²).
 
     Returns:
         chi (ndarray[float]): longitudinal susceptibilities
-        :math:`N_T \times P` [1/T].
+        :math:`N_T \times P` (1/T).
 
     """
     P = np.shape(mf_exch_coupling_abs)[0]
@@ -558,13 +558,13 @@ def damping_parameters(temps, me, zeta, eff_spins, lambdas, curie_temp, below):
     :math:`T_C`.
 
     Args:
-        temps (ndarray[float]): temperatures :math:`N_T` [K].
+        temps (ndarray[float]): temperatures :math:`N_T` (K).
         me (ndarray[float]): equilibrium magnetizations :math:`N_T \times P`.
         zeta (ndarray[float]): equilibrium mean-field arguments
             :math:`N_T \times P`.
         eff_spins (ndarray[float]): effective spins :math:`P`.
         lambdas (ndarray[float]): coupling-to-bath parameters :math:`P`.
-        curie_temp (float): ordering temperature [K].
+        curie_temp (float): ordering temperature (K).
         below (ndarray[boolean]): mask of the ordered phase
             :math:`N_T \times P`.
 
@@ -598,9 +598,9 @@ def interpolate_tables(temp_grid, tables, temps):
     outside of the grid.
 
     Args:
-        temp_grid (ndarray[float]): temperature grid :math:`N_T` [K].
+        temp_grid (ndarray[float]): temperature grid :math:`N_T` (K).
         tables (ndarray[float]): tables :math:`N \times P \times 4 \times N_T`.
-        temps (ndarray[float]): temperatures of the layers :math:`N` [K].
+        temps (ndarray[float]): temperatures of the layers :math:`N` (K).
 
     Returns:
         values (ndarray[float]): interpolated tables :math:`N \times P \times 4`.
@@ -625,9 +625,9 @@ def interpolate_tables_map(temp_grid, tables, temp_map):
     temperature map.
 
     Args:
-        temp_grid (ndarray[float]): temperature grid :math:`N_T` [K].
+        temp_grid (ndarray[float]): temperature grid :math:`N_T` (K).
         tables (ndarray[float]): tables :math:`N \times P \times 4 \times N_T`.
-        temp_map (ndarray[float]): temperature map :math:`M \times N` [K].
+        temp_map (ndarray[float]): temperature map :math:`M \times N` (K).
 
     Returns:
         values (ndarray[float]): interpolated tables

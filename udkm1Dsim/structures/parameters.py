@@ -142,20 +142,27 @@ class Parameter:
             for i, (symbol, _, value, unit) in enumerate(entries)
         ]
 
+    def _relation(self, index):
+        """Relation between the symbol and the value of the entry `index`,
+        ``=`` for a value or ``:`` for a description."""
+        return "="
+
     def __str__(self):
         return "\n".join(
-            f"{symbol}{arguments} = {value}" + (f" {unit}" if unit else "")
-            for symbol, arguments, value, unit in self._entries("text")
+            f"{symbol}{arguments}{' = ' if self._relation(i) == '=' else ': '}{value}"
+            + (f" {unit}" if unit else "")
+            for i, (symbol, arguments, value, unit) in enumerate(self._entries("text"))
         )
 
     def _repr_latex_(self):
         lines = [
-            f"{symbol}{arguments} = {value}" + (rf"\ {unit}" if unit else "")
-            for symbol, arguments, value, unit in self._entries("latex")
+            (self._relation(i), f"{symbol}{arguments}", value + (rf"\ {unit}" if unit else ""))
+            for i, (symbol, arguments, value, unit) in enumerate(self._entries("latex"))
         ]
         if len(lines) == 1:
-            return f"${lines[0]}$"
-        lines = [line.replace(" = ", " &= ", 1) for line in lines]
+            relation, left, right = lines[0]
+            return f"${left} {relation} {right}$"
+        lines = [f"{left} &{relation} {right}" for relation, left, right in lines]
         return r"$\begin{aligned}" + r" \\ ".join(lines) + r"\end{aligned}$"
 
 
@@ -174,7 +181,8 @@ class VectorParameter(Parameter):
     `self.unit`. They are kept as given, e.g. (1, 2, 3) instead of
     (1, 1.9999999999999996, 3), and otherwise calculated on demand from the
     polar form, where components, which are zero within the numerical
-    precision, e.g. x for phi = 0, are exactly zero.
+    precision, e.g. x for phi = 0, are exactly zero. The vector is displayed
+    by its cartesian components.
 
     Setting the cartesian components gives a non-negative r. The angles,
     which are not defined by them, i.e. both angles for a zero vector and
@@ -193,8 +201,6 @@ class VectorParameter(Parameter):
     only changes the radius.
     """
 
-    # symbols of the polar components for the display of the vector
-    _polar_symbols = ("r", r"\phi", r"\gamma")
     # precision relative to r below which calculated cartesian components are zero
     _cartesian_precision = 1e-15
 
@@ -216,15 +222,11 @@ class VectorParameter(Parameter):
         self.__dict__.update(state)
 
     def _entries(self, mode):
-        """The polar components of the vector with the angles in its
-        `angle_unit`, which is used for bare-float angles."""
-        r, phi, gamma = self.polar
-        units = [self._format_unit(mode)] + 2 * [
-            format(self.angle_unit, {"text": "~P", "html": "~H", "latex": "~L"}[mode])
-        ]
+        """The cartesian components of the vector, as for `magnitude`."""
+        unit = self._format_unit(mode)
         return [
-            (self._format_symbol(symbol, mode), "", format_number(value.magnitude, mode), unit)
-            for symbol, value, unit in zip(self._polar_symbols, (r, phi, gamma), units)
+            (self._format_symbol(symbol, mode), "", format_number(value, mode), unit)
+            for symbol, value in zip(self._cartesian_keys, self.magnitude)
         ]
 
     _polar_keys = ("r", "phi", "gamma")
@@ -556,8 +558,8 @@ class TemperatureParameter(Parameter):
                     self._integral_expr.append(integral)
                 except Exception:
                     warnings.warn(
-                        "\nSympy's analytical integration of the heat capacity "
-                        "did not work.\n"
+                        "Sympy's analytical integration of the heat capacity "
+                        "did not work. "
                         "Just do it numerically with scipy.integrate.quad"
                     )
                     self._integral.append(lambda T: quad(functional, 0, T, limit=10000)[0])

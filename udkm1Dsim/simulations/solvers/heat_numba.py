@@ -62,12 +62,12 @@ def solve(
 
     Args:
         init_temp (ndarray[float]): initial spatial temperature profile on the
-            spatial grid :math:`N \times K` [K].
-        distances (ndarray[float]): spatial grid for calculation [m].
-        delays (ndarray[float]): delays range of simulation [s].
-        delay_pump (ndarray[float]): delays of the excitations [s].
-        pulse_width (ndarray[float]): pulse widths of the excitations [s].
-        fluence (ndarray[float]): excitation fluences [J/m²].
+            spatial grid :math:`N \times K` (K).
+        distances (ndarray[float]): spatial grid for calculation (m).
+        delays (ndarray[float]): delays range of simulation (s).
+        delay_pump (ndarray[float]): delays of the excitations (s).
+        pulse_width (ndarray[float]): pulse widths of the excitations (s).
+        fluence (ndarray[float]): excitation fluences (J/m²).
         therm_conds (list[list[@lambda]]): T-dependent thermal conductivity
             functions per layer and sub-system.
         therm_cond_takes_vector (list[list[boolean]]): true if the according
@@ -78,7 +78,7 @@ def solve(
         sub_system_couplings (list[list[@lambda]]): T-dependent sub-system
             coupling functions per layer and sub-system.
         densities (ndarray[float]): density of the layers on the spatial grid
-            [kg/m³].
+            (kg/m³).
         indices (ndarray[int]): indices of actual layers in respect to
             interpolated spatial grid.
         dAdz (ndarray[float]): differential absorption profile.
@@ -95,7 +95,7 @@ def solve(
 
     Returns:
         temp_map (ndarray[float]): spatio-temporal temperature map
-        :math:`M \times N \times K` [K].
+        :math:`M \times N \times K` (K).
 
     """
     raise NotImplementedError("heat diffusion by Numba is not implemented, yet")

@@ -84,12 +84,12 @@ def solve(
 
     Args:
         init_temp (ndarray[float]): initial temperature profile of shape
-            (N, K) for N spatial grid points and K sub-systems [K].
-        distances (ndarray[float]): spatial grid for calculation [m].
-        delays (ndarray[float]): delays range of simulation [s].
-        delay_pump (ndarray[float]): delays of the excitations [s].
-        pulse_width (ndarray[float]): pulse widths of the excitations [s].
-        fluence (ndarray[float]): excitation fluences [J/m²].
+            (N, K) for N spatial grid points and K sub-systems (K).
+        distances (ndarray[float]): spatial grid for calculation (m).
+        delays (ndarray[float]): delays range of simulation (s).
+        delay_pump (ndarray[float]): delays of the excitations (s).
+        pulse_width (ndarray[float]): pulse widths of the excitations (s).
+        fluence (ndarray[float]): excitation fluences (J/m²).
         therm_conds (list[list[@lambda]]): T-dependent thermal conductivity
             function handles of all unique layers and sub-systems.
         therm_cond_takes_vector (list[list[bool]]): true if the thermal
@@ -99,10 +99,10 @@ def solve(
             function handles of all unique layers and sub-systems.
         sub_system_couplings (list[list[@lambda]]): T-dependent sub-system
             coupling function handles of all unique layers and sub-systems.
-        densities (ndarray[float]): densities of all unique layers [kg/m³].
+        densities (ndarray[float]): densities of all unique layers (kg/m³).
         indices (ndarray[int]): indices of unique layers in respect to
             interpolated spatial grid.
-        dAdz (ndarray[float]): differential absorption profile [1/m].
+        dAdz (ndarray[float]): differential absorption profile (1/m).
         boundary_conditions (dict): boundary conditions with keys
             ``top_type``, ``top_value``, ``bottom_type``, and
             ``bottom_value``.
@@ -113,7 +113,7 @@ def solve(
 
     Returns:
         temp_map (ndarray[float]): spatio-temporal temperature map of
-        shape (M, N, K) for M delays [K].
+        shape (M, N, K) for M delays (K).
 
     """
     M = len(delays)
@@ -236,11 +236,11 @@ def odefunc(
     Ordinary differential equation that is solved for 1D heat diffusion.
 
     Args:
-        t (float): internal time step of the ode solver [s].
+        t (float): internal time step of the ode solver (s).
         u (ndarray[float]): internal variable of the ode solver.
         N (int): number of spatial grid points.
         K (int): number of sub-systems.
-        d_x_grid (ndarray[float]): derivative of spatial grid [m].
+        d_x_grid (ndarray[float]): derivative of spatial grid (m).
         thermal_conds (list[list[@lambda]]): T-dependent thermal
             conductivity function handles of all layers and sub-systems.
         therm_cond_takes_vector (list[list[bool]]): true if the thermal
@@ -251,13 +251,13 @@ def odefunc(
         sub_system_coupling (list[list[@lambda]]): T-dependent sub-system
             coupling function handles of all layers and sub-systems.
         densities (ndarray[float]): densities at each spatial grid point
-            [kg/m³].
+            (kg/m³).
         groups (list[tuple]): layer index and indices of its grid points
             for each layer.
-        dAdz (ndarray[float]): differential absorption profile [1/m].
-        fluence (ndarray[float]): excitation fluences [J/m²].
-        delay_pump (ndarray[float]): delays of the excitations [s].
-        pulse_length (ndarray[float]): pulse widths of the excitations [s].
+        dAdz (ndarray[float]): differential absorption profile (1/m).
+        fluence (ndarray[float]): excitation fluences (J/m²).
+        delay_pump (ndarray[float]): delays of the excitations (s).
+        pulse_length (ndarray[float]): pulse widths of the excitations (s).
         bc_top_type (int): top boundary type.
         bc_top_value (ndarray[float]): top boundary value.
         bc_bottom_type (int): bottom boundary type.

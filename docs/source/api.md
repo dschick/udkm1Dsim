@@ -6,6 +6,7 @@
 atoms
 parameters
 parameter_groups
+dielectric
 layers
 structure
 simulation

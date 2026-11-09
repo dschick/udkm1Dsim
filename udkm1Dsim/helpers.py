@@ -22,6 +22,9 @@
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
 __all__ = [
+    "read_columns",
+    "to_energy",
+    "SpectralTable",
     "make_hash_md5",
     "make_hashable",
     "m_power_x",
@@ -42,12 +45,44 @@ __all__ = [
 __docformat__ = "restructuredtext"
 
 import hashlib
+import os
 import re
 
 import numpy as np
+import pint
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.pretty.pretty_symbology import greek_unicode
 from sympy.printing.str import StrPrinter
+
+u = pint.get_application_registry()
+
+
+def read_columns(filename, delimiter=None, columns=3):
+    """read_columns
+
+    Read the first columns of a text file, e.g. of tabulated atomic form
+    factors or refractive indices. Lines starting with ``#`` and lines
+    without numbers, e.g. headers, are skipped.
+
+    Args:
+        filename (str): path of the file.
+        delimiter (str, optional): column delimiter, by default white space or
+            a comma.
+        columns (int, optional): number of columns. Defaults to 3.
+
+    Returns:
+        data (ndarray[float]): columns of shape (N, columns).
+
+    """
+    if delimiter is None:
+        with open(filename) as file:
+            text = file.read()
+        delimiter = "," if "," in text else None
+    data = np.atleast_2d(np.genfromtxt(filename, comments="#", delimiter=delimiter))
+    if data.shape[1] < columns:
+        raise ValueError(f"{filename} must have at least {columns} columns!")
+    # lines without a number in the first column, e.g. headers
+    return data[~np.isnan(data[:, 0]), :columns]
 
 
 def make_hash_md5(obj):
@@ -313,7 +348,14 @@ def convert_cartesian_to_polar(cartesian):
 
 _SUB = dict(zip("0123456789+-=()aehijklmnoprstuvx", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ"))
 _SUP = dict(zip("0123456789+-=()in", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁱⁿ"))
-_COMMANDS = {"langle": "⟨", "rangle": "⟩", "partial": "∂", "cdot": "·", "times": "×"}
+_COMMANDS = {
+    "varepsilon": "ε",
+    "langle": "⟨",
+    "rangle": "⟩",
+    "partial": "∂",
+    "cdot": "·",
+    "times": "×",
+}
 _TOKENS = re.compile(r"\\[A-Za-z]+|\\.|[{}_^]|\s+|.")
 
 
@@ -595,3 +637,248 @@ def expression_to_latex(expr):
 
     """
     return _LatexPrinter().doprint(expr)
+
+
+# ============================================================================
+# spectral tables, e.g. of dispersions and atomic form factors
+# ============================================================================
+
+
+def to_energy(value):
+    """to_energy
+
+    Convert photon energies, wavelengths, frequencies, or wavenumbers given
+    as pint Quantity to photon energies in eV. Numbers are taken in eV.
+
+    Args:
+        value (float, ndarray[float], Quantity): spectral value(s).
+
+    Returns:
+        energy (ndarray[float]): photon energies (eV).
+
+    """
+    if isinstance(value, u.Quantity):
+        return np.asarray(value.to("eV", "sp").magnitude, dtype=float)
+    return np.asarray(value, dtype=float)
+
+
+def _md5(*arrays):
+    """Short md5 digest of arrays for the representation of tabulated data."""
+    hasher = hashlib.md5()
+    for array in arrays:
+        hasher.update(np.ascontiguousarray(array).tobytes())
+    return hasher.hexdigest()[:8]
+
+
+def interpolate_table(x, values, energy):
+    """interpolate_table
+
+    Linear interpolation of complex values, which are tabulated for the
+    photon energies ``x`` (eV) in ascending order, e.g. of a
+    :class:`Dispersion` or of the form factors of an :class:`.Atom`. The
+    values are NaN outside of the table and between NaN entries of the table.
+
+    Args:
+        x (ndarray[float]): tabulated photon energies (eV) in ascending order.
+        values (ndarray[complex]): tabulated values of shape (K,) or (K, ...).
+        energy (ndarray[float]): photon energies (eV) of shape (M,).
+
+    Returns:
+        values (ndarray[complex]): interpolated values of shape (M,) or (M, ...).
+
+    """
+    values = np.asarray(values, dtype=complex)
+    flat = values.reshape(len(x), -1)
+    result = np.empty((len(energy), flat.shape[1]), dtype=complex)
+    for i in range(flat.shape[1]):
+        result[:, i] = np.interp(energy, x, flat[:, i].real, left=np.nan, right=np.nan) + 1j * (
+            np.interp(energy, x, flat[:, i].imag, left=np.nan, right=np.nan)
+        )
+    return result.reshape((len(energy),) + values.shape[1:])
+
+
+def defined_range(x, values):
+    """Lowest and highest photon energy (eV) with defined, i.e. not NaN,
+    tabulated values."""
+    values = np.asarray(values, dtype=complex)
+    valid = ~(np.isnan(values.real) | np.isnan(values.imag))
+    if valid.ndim > 1:
+        valid = valid.reshape(len(x), -1).all(axis=1)
+    if not np.any(valid):
+        return np.inf, -np.inf
+    return float(np.min(x[valid])), float(np.max(x[valid]))
+
+
+def undefined_error(description, energy, invalid, energy_ranges, spectral=None, hint=""):
+    """ValueError for the photon energies (eV) for which a tabulated quantity
+    is not defined. The requested and the defined ranges are given in the
+    quantity and unit of the ``spectral`` input of the user."""
+    invalid_energies = np.asarray(energy)[invalid]
+    name, texts = _spectral_texts([np.min(invalid_energies), np.max(invalid_energies)], spectral)
+    requested = (
+        f"the {name} {texts[0]}"
+        if texts[0] == texts[1]
+        else f"the {name}s from {texts[0]} to {texts[1]}"
+    )
+    defined = _range_text(energy_ranges, spectral, separator="\nand ")
+    message = f"{description}\nis not defined for {requested},\nbut only {defined}."
+    return ValueError(message + (f"\n{hint}" if hint else ""))
+
+
+def _format_energy(energy):
+    """Short text of a photon energy (eV)."""
+    if not np.isfinite(energy):
+        return "∞"
+    if energy >= 1000:
+        return f"{energy / 1000:.4g} keV"
+    return f"{energy:.4g} eV"
+
+
+_SPECTRAL_NAMES = {
+    "[length] ** 2 * [mass] / [time] ** 2": "photon energy",
+    "[length]": "wavelength",
+    "1 / [time]": "frequency",
+    "1 / [length]": "wavenumber",
+}
+
+
+def _spectral_texts(energies, spectral=None):
+    """Name of the spectral quantity and texts of photon energies (eV) in the
+    quantity and unit of the ``spectral`` input of the user, e.g. as
+    wavelengths in nm, sorted in ascending order. Without a pint Quantity as
+    input, the photon energies are given in eV."""
+    energies = np.asarray(energies, dtype=float)
+    if not isinstance(spectral, u.Quantity) or not np.all(np.isfinite(energies)):
+        return "photon energy", [_format_energy(e) for e in np.sort(energies)]
+    unit = spectral.units
+    name = _SPECTRAL_NAMES.get(str(spectral.dimensionality), "photon energy")
+    with np.errstate(divide="ignore"):
+        values = np.sort((energies * u.eV).to(unit, "sp").magnitude)
+    return name, [f"{value:.4g} {unit:~P}" for value in values]
+
+
+def _range_text(energy_ranges, spectral=None, separator=" and "):
+    """Text of energy ranges (eV) in the quantity and unit of the ``spectral``
+    input of the user, e.g. ``from 400 nm to 1000 nm and from ...``."""
+    texts = []
+    for energy_range in energy_ranges:
+        _, (lo, hi) = _spectral_texts(energy_range, spectral)
+        texts.append(f"from {lo} to {hi}")
+    return separator.join(texts)
+
+
+class SpectralTable:
+    """SpectralTable
+
+    Complex values, which are tabulated for photon energies in ascending
+    order and interpolated linearly, e.g. of a dispersion or of atomic form
+    factors. The values are NaN outside of the table and between invalid,
+    i.e. NaN, entries of the table.
+
+    Args:
+        x (ndarray[float], Quantity): photon energies, where floats are taken in
+            (eV), or wavelengths, frequencies, or wavenumbers as pint Quantity.
+        values (ndarray[complex]): tabulated values of shape (N,) or (N, ...).
+        source (str, optional): source of the table, e.g. its file name.
+
+    """
+
+    def __init__(self, x, values, source=""):
+        energy = np.atleast_1d(to_energy(x))
+        values = np.asarray(values, dtype=complex)
+        if values.shape[:1] != energy.shape:
+            raise ValueError(
+                f"The first axis of the values {values.shape} must match the "
+                f"{len(energy)} photon energies!"
+            )
+        order = np.argsort(energy)
+        self.energy = energy[order]
+        self.values = values[order]
+        self.source = source
+
+    @classmethod
+    def from_columns(cls, data, x_unit="eV", imaginary_sign=1, invalid_below=None, source=""):
+        """from_columns
+
+        Table from the columns of the spectral axis and the real and
+        imaginary part, e.g. read by :func:`read_columns`.
+
+        Args:
+            data (ndarray[float]): columns of shape (N, 3).
+            x_unit (str, optional): unit of the spectral axis. Defaults to eV.
+            imaginary_sign (int, optional): sign of the imaginary part, e.g. -1
+                for atomic form factors :math:`f_1 - i f_2`. Defaults to 1.
+            invalid_below (float, optional): real parts below are invalid,
+                e.g. the -9999 of the tables of Henke et al.
+            source (str, optional): source of the table.
+
+        Returns:
+            table (SpectralTable): table.
+
+        """
+        data = np.atleast_2d(np.asarray(data, dtype=float))
+        data = data[~np.isnan(data[:, 0])]
+        values = data[:, 1] + imaginary_sign * 1j * data[:, 2]
+        invalid = np.isnan(data[:, 1]) | np.isnan(data[:, 2])
+        if invalid_below is not None:
+            invalid |= data[:, 1] <= invalid_below
+        values[invalid] = np.nan
+        return cls(data[:, 0] * u(x_unit), values, source=source)
+
+    @classmethod
+    def from_file(
+        cls, filename, x_unit="eV", imaginary_sign=1, invalid_below=None, delimiter=None
+    ):
+        """from_file
+
+        Table from a text file with the columns of the spectral axis and the
+        real and imaginary part, see :func:`read_columns` and
+        :meth:`from_columns`.
+
+        Args:
+            filename (str): path of the file.
+            x_unit (str, optional): unit of the spectral axis. Defaults to eV.
+            imaginary_sign (int, optional): sign of the imaginary part.
+                Defaults to 1.
+            invalid_below (float, optional): real parts below are invalid.
+            delimiter (str, optional): column delimiter.
+
+        Returns:
+            table (SpectralTable): table.
+
+        """
+        return cls.from_columns(
+            read_columns(filename, delimiter),
+            x_unit=x_unit,
+            imaginary_sign=imaginary_sign,
+            invalid_below=invalid_below,
+            source=os.path.basename(str(filename)),
+        )
+
+    def __len__(self):
+        return len(self.energy)
+
+    @property
+    def energy_range(self):
+        """tuple[float]: lowest and highest photon energy (eV) with defined
+        values."""
+        return defined_range(self.energy, self.values)
+
+    @property
+    def md5(self):
+        """str: short md5 digest of the table, e.g. for the hash of simulations."""
+        return _md5(self.energy, self.values)
+
+    def __call__(self, energy):
+        """Interpolated values of shape (M,) or (M, ...) for photon energies,
+        where floats are taken in eV, or other spectral Quantities, which are
+        NaN outside of the table."""
+        return interpolate_table(self.energy, self.values, np.atleast_1d(to_energy(energy)))
+
+    def __repr__(self):
+        lo, hi = self.energy_range
+        source = f", source={self.source}" if self.source else ""
+        return (
+            f"SpectralTable({len(self)} values from {lo:.4g} eV to {hi:.4g} eV{source}, "
+            f"md5={self.md5})"
+        )

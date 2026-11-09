@@ -33,7 +33,13 @@ dependencies = [
     "matplotlib>=2.0.0",
 ]
 [dependency-groups]
-test = ["pytest", "pytest-cov", "pytest-codspeed", "numba"]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-codspeed",
+    "numba",
+    "refractiveindex>=1.3.1",
+]
 lint = ["ruff"]
 
 [project.optional-dependencies]
@@ -53,12 +59,16 @@ docs = [
     "myst_nb",
     "myst-sphinx-gallery",
     "sphinxcontrib-svg2pdfconverter[CairoSVG]",
+    "refractiveindex>=1.3.1",
+]
+refractiveindex = [
+    "refractiveindex>=1.3.1",
 ]
 
 [project.urls]
 homepage = "https://github.com/dschick/udkm1Dsim"
 repository = "https://github.com/dschick/udkm1Dsim.git"
-documentation = "https://https://udkm1dsim.readthedocs.io"
+documentation = "https://udkm1dsim.readthedocs.io"
 
 [tool.hatch.build.targets.wheel]
 packages = ["udkm1Dsim"]

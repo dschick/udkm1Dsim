@@ -89,7 +89,7 @@ from tqdm.auto import tqdm
 
 from .mean_field import TABLE, equilibrium_tables, interpolate_tables, temperature_grid
 
-# gyromagnetic ratio of a free electron [rad s^-1 T^-1], including its sign
+# gyromagnetic ratio of a free electron (rad s^-1 T^-1), including its sign
 GAMMA_E = -constants.physical_constants["electron gyromag. ratio"][0]
 
 # floor for magnetization norms that appear in denominators
@@ -99,11 +99,11 @@ Inputs = namedtuple("Inputs", ["delays", "B_ext", "amplitude_map", "temp_map", "
 Inputs.__doc__ = r"""Time-dependent inputs of the solver on the delay grid.
 
 Attributes:
-    delays (ndarray[float]): delays :math:`M` [s].
-    B_ext (ndarray[float]): external magnetic field :math:`M \times 3` [T].
+    delays (ndarray[float]): delays :math:`M` (s).
+    B_ext (ndarray[float]): external magnetic field :math:`M \times 3` (T).
     amplitude_map (ndarray[float]): magnetization amplitude :math:`M \times N \times P`
         of the LLG and iLLG, ones for the LLB.
-    temp_map (ndarray[float]): temperature :math:`M \times N` [K] of the
+    temp_map (ndarray[float]): temperature :math:`M \times N` (K) of the
         LLB, zeros for the LLG and iLLG.
     strain_map (ndarray[float]): strain :math:`M \times N`.
 
@@ -132,7 +132,7 @@ def stack_magnetic_parameters(layers):
             magnetic layers.
 
     Returns:
-        mag (SimpleNamespace): stacked parameters [SI units].
+        mag (SimpleNamespace): stacked parameters (SI units).
 
     """
     N = len(layers)
@@ -171,11 +171,11 @@ def tabulate_equilibrium(layers, temp_max=None):
         layers (list[MagneticParameters]): magnetic parameters of the
             magnetic layers.
         temp_max (float, optional): largest temperature of the simulation
-            [K], which sets the range of the tables. Defaults to None.
+            (K), which sets the range of the tables. Defaults to None.
 
     Returns:
         (tuple):
-        - *temp_grid (ndarray[float])* - temperature grid :math:`N_T` [K].
+        - *temp_grid (ndarray[float])* - temperature grid :math:`N_T` (K).
         - *tables (ndarray[float])* - tables :math:`N \times P \times 4 \times N_T`,
           see :data:`~udkm1Dsim.simulations.solvers.mean_field.TABLE`.
 
@@ -210,15 +210,15 @@ def prepare_inputs(delays, N, B_ext, amplitude_map=None, temp_map=None, strain_m
     :math:`M \times N` are broadcast to all sublattices.
 
     Args:
-        delays (ndarray[float]): delays range of simulation [s].
+        delays (ndarray[float]): delays range of simulation (s).
         N (int): number of magnetic layers.
-        B_ext (ndarray[float]): external magnetic field [T], a single vector
+        B_ext (ndarray[float]): external magnetic field (T), a single vector
             or one vector per delay :math:`M \times 3`.
         amplitude_map (ndarray[float], optional): magnetization amplitude map
             :math:`M \times N` or :math:`M \times N \times P` or None for
             ones.
         temp_map (ndarray[float], optional): temperature map
-            :math:`M \times N` [K] or None for zeros.
+            :math:`M \times N` (K) or None for zeros.
         strain_map (ndarray[float], optional): strain map :math:`M \times N`
             or None for zeros.
 
@@ -262,7 +262,7 @@ def time_weights(t, delays):
 
     Args:
         t (float): time.
-        delays (ndarray[float]): delays range of simulation [s].
+        delays (ndarray[float]): delays range of simulation (s).
 
     Returns:
         (tuple):
@@ -290,10 +290,10 @@ def interpolate_inputs(t, inputs):
 
     Returns:
         (tuple):
-        - *B_ext (ndarray[float])* - external field [T].
+        - *B_ext (ndarray[float])* - external field (T).
         - *amplitudes (ndarray[float])* - magnetization amplitudes
           :math:`N \\times P`.
-        - *temps (ndarray[float])* - temperatures :math:`N` [K].
+        - *temps (ndarray[float])* - temperatures :math:`N` (K).
         - *strains (ndarray[float])* - strains :math:`N`.
 
     """
@@ -321,12 +321,12 @@ def external_field(B_ext, N, P):
     The external magnetic field, the same for all layers and sublattices.
 
     Args:
-        B_ext (ndarray[float]): external field [T].
+        B_ext (ndarray[float]): external field (T).
         N (int): number of magnetic layers.
         P (int): number of sublattices.
 
     Returns:
-        B (ndarray[float]): field :math:`N \\times P \\times 3` [T].
+        B (ndarray[float]): field :math:`N \\times P \\times 3` (T).
 
     """
     return np.tile(np.asarray(B_ext, dtype=float), (N, P, 1))
@@ -356,7 +356,7 @@ def anisotropy_field(m, ref_mags, mag):
             :func:`stack_magnetic_parameters`.
 
     Returns:
-        B (ndarray[float]): field :math:`N \times P \times 3` [T].
+        B (ndarray[float]): field :math:`N \times P \times 3` (T).
 
     """
     factor = 2 / _safe_saturations(mag.mag_saturation) * _scaling(ref_mags, mag.aniso_exponent)
@@ -386,11 +386,11 @@ def interlayer_exchange_field(m, mag, exch_stiffnesses, thicknesses):
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
         exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
-            upper and lower magnetic layer :math:`N \times 2` [J/m].
-        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
+            upper and lower magnetic layer :math:`N \times 2` (J/m).
+        thicknesses (ndarray[float]): thicknesses :math:`N` (m).
 
     Returns:
-        B (ndarray[float]): field :math:`N \times P \times 3` [T].
+        B (ndarray[float]): field :math:`N \times P \times 3` (T).
 
     """
     B = np.zeros_like(m)
@@ -427,7 +427,7 @@ def magnetoelastic_field(m, ref_mags, strains, mag):
             :func:`stack_magnetic_parameters`.
 
     Returns:
-        B (ndarray[float]): field :math:`N \times P \times 3` [T].
+        B (ndarray[float]): field :math:`N \times P \times 3` (T).
 
     """
     B = np.zeros_like(m)
@@ -460,16 +460,16 @@ def effective_field(m, ref_mags, B_ext, strains, mag, exch_stiffnesses, thicknes
     Args:
         m (ndarray[float]): magnetization vectors :math:`N \times P \times 3`.
         ref_mags (ndarray[float]): reference magnetization :math:`N \times P`.
-        B_ext (ndarray[float]): external field [T].
+        B_ext (ndarray[float]): external field (T).
         strains (ndarray[float]): strains of the layers :math:`N`.
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
         exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
-            upper and lower magnetic layer :math:`N \times 2` [J/m].
-        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
+            upper and lower magnetic layer :math:`N \times 2` (J/m).
+        thicknesses (ndarray[float]): thicknesses :math:`N` (m).
 
     Returns:
-        B (ndarray[float]): field :math:`N \times P \times 3` [T].
+        B (ndarray[float]): field :math:`N \times P \times 3` (T).
 
     """
     N, P = m.shape[0:2]
@@ -503,7 +503,7 @@ def sublattice_exchange_field(m, mag):
             :func:`stack_magnetic_parameters`.
 
     Returns:
-        B (ndarray[float]): field :math:`N \times P \times 3` [T].
+        B (ndarray[float]): field :math:`N \times P \times 3` (T).
 
     """
     if m.shape[1] == 1:
@@ -535,7 +535,7 @@ def transverse_sublattice_exchange_field(m, m_squared, mag):
             :func:`stack_magnetic_parameters`.
 
     Returns:
-        B (ndarray[float]): field :math:`N \times P \times 3` [T].
+        B (ndarray[float]): field :math:`N \times P \times 3` (T).
 
     """
     if m.shape[1] == 1:
@@ -577,7 +577,7 @@ def longitudinal_field(m, m_norm, me, chi, mag):
 
     at and above it, where :math:`m_{e,a} = 0`. It pulls the norm of every
     sublattice towards its equilibrium :math:`m_{e,a}(T)` with the
-    longitudinal susceptibility :math:`\chi_a(T)` [1/T]. For a single
+    longitudinal susceptibility :math:`\chi_a(T)` (1/T). For a single
     sublattice it reduces to the thermal field
     :math:`-\frac{1}{\chi}\frac{m - m_e}{m_e}\mathbf{m}` of
     :cite:t:`nieves2014` below the Curie temperature.
@@ -604,12 +604,12 @@ def longitudinal_field(m, m_norm, me, chi, mag):
         m_norm (ndarray[float]): norms :math:`N \times P`.
         me (ndarray[float]): equilibrium magnetizations :math:`N \times P`.
         chi (ndarray[float]): longitudinal susceptibilities
-            :math:`N \times P` [1/T].
+            :math:`N \times P` (1/T).
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
 
     Returns:
-        B (ndarray[float]): field :math:`N \times P \times 3` [T].
+        B (ndarray[float]): field :math:`N \times P \times 3` (T).
 
     """
     N, P = m_norm.shape
@@ -668,14 +668,14 @@ def llg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
     from the inputs.
 
     Args:
-        t (float): time [s].
+        t (float): time (s).
         y (ndarray[float]): flattened unit vectors :math:`N \times P \times 3`.
         inputs (Inputs): time-dependent inputs.
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
         exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
-            upper and lower magnetic layer :math:`N \times 2` [J/m].
-        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
+            upper and lower magnetic layer :math:`N \times 2` (J/m).
+        thicknesses (ndarray[float]): thicknesses :math:`N` (m).
 
     Returns:
         dydt (ndarray[float]): flattened temporal derivative.
@@ -725,15 +725,15 @@ def illg_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses):
     gyromagnetic ratio :math:`\gamma` are the same as in :func:`llg_rhs`.
 
     Args:
-        t (float): time [s].
+        t (float): time (s).
         y (ndarray[float]): flattened unit vectors and velocities
             :math:`2 \times N \times P \times 3`.
         inputs (Inputs): time-dependent inputs.
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
         exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
-            upper and lower magnetic layer :math:`N \times 2` [J/m].
-        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
+            upper and lower magnetic layer :math:`N \times 2` (J/m).
+        thicknesses (ndarray[float]): thicknesses :math:`N` (m).
 
     Returns:
         dydt (ndarray[float]): flattened temporal derivative.
@@ -794,13 +794,13 @@ def exchange_relaxation_torque(m_norm, B_par, alpha_par, mag):
     Args:
         m_norm (ndarray[float]): norms :math:`N \times P`.
         B_par (ndarray[float]): longitudinal fields
-            :math:`N \times P \times 3` [T].
+            :math:`N \times P \times 3` (T).
         alpha_par (ndarray[float]): longitudinal damping :math:`N \times P`.
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
 
     Returns:
-        torque (ndarray[float]): :math:`N \times P \times 3` [1/s].
+        torque (ndarray[float]): :math:`N \times P \times 3` (1/s).
 
     """
     torque = np.zeros_like(B_par)
@@ -850,17 +850,17 @@ def llb_rhs(t, y, inputs, mag, exch_stiffnesses, thicknesses, temp_grid, tables)
     (:cite:t:`nieves2014`), classical with Langevin functions for infinite ones.
 
     Args:
-        t (float): time [s].
+        t (float): time (s).
         y (ndarray[float]): flattened magnetization vectors
             :math:`N \times P \times 3`.
         inputs (Inputs): time-dependent inputs.
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
         exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
-            upper and lower magnetic layer :math:`N \times 2` [J/m].
-        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
+            upper and lower magnetic layer :math:`N \times 2` (J/m).
+        thicknesses (ndarray[float]): thicknesses :math:`N` (m).
         temp_grid (ndarray[float]): temperature grid of the tables
-            :math:`N_T` [K].
+            :math:`N_T` (K).
         tables (ndarray[float]): equilibrium tables, see
             :func:`tabulate_equilibrium`.
 
@@ -943,22 +943,22 @@ def relax_directions(
             :math:`N \times P \times 3`.
         amplitudes (ndarray[float]): magnetization amplitudes
             :math:`N \times P`.
-        B_ext (ndarray[float]): external field [T].
+        B_ext (ndarray[float]): external field (T).
         strains (ndarray[float]): strains of the layers :math:`N`.
         mag (SimpleNamespace): stacked magnetic parameters, see
             :func:`stack_magnetic_parameters`.
         exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
-            upper and lower magnetic layer :math:`N \times 2` [J/m].
-        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
-        tol (float, optional): largest remaining torque [T]. Defaults to 1e-6.
-        max_time (float, optional): largest time of the overdamped flow [s].
+            upper and lower magnetic layer :math:`N \times 2` (J/m).
+        thicknesses (ndarray[float]): thicknesses :math:`N` (m).
+        tol (float, optional): largest remaining torque (T). Defaults to 1e-6.
+        max_time (float, optional): largest time of the overdamped flow (s).
             Defaults to 1e-6.
 
     Returns:
         (tuple):
         - *directions (ndarray[float])* - relaxed unit vectors
           :math:`N \times P \times 3`.
-        - *torque (float)* - largest remaining torque [T].
+        - *torque (float)* - largest remaining torque (T).
 
     """
     init_dir = np.asarray(init_dir, dtype=float)
@@ -1031,8 +1031,8 @@ def solve(
         layers (list[MagneticParameters]): magnetic parameters of the
             magnetic layers.
         exch_stiffnesses (ndarray[float]): exchange stiffnesses towards the
-            upper and lower magnetic layer :math:`N \times 2` [J/m].
-        thicknesses (ndarray[float]): thicknesses :math:`N` [m].
+            upper and lower magnetic layer :math:`N \times 2` (J/m).
+        thicknesses (ndarray[float]): thicknesses :math:`N` (m).
         ode_options (dict): options for scipy solve_ivp ode solver, whose
             ``max_step`` is only decreased by the shortest delay step.
         progress_bar (boolean, optional): enable tqdm progress bar. Defaults

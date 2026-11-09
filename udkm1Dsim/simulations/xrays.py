@@ -36,7 +36,8 @@ import scipy.constants as constants
 from tqdm.auto import trange
 
 from ..helpers import convert_polar_to_cartesian, finderb, m_power_x, m_times_n, make_hash_md5
-from ..structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
+from ..structures.dielectric import gyrotropic_tensor
+from ..structures.layers import Layer, UnitCell, Vacuum
 from ..structures.structure import Structure
 from .simulation import Simulation
 
@@ -1045,7 +1046,7 @@ class XrayDyn(Xray):
                 if len(strain_vectors) > 0:
                     warnings.warn(
                         "strain_vectors and temp_map are not compatible "
-                        "with each other!\nstrain_vectors takes over."
+                        "with each other! strain_vectors takes over."
                     )
 
             dask_client = kwargs.get("dask_client", [])
@@ -1512,7 +1513,7 @@ class XrayDyn(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom
-            area (float): area of the unit cell [m²]
+            area (float): area of the unit cell (m²)
             deb_wal_fac (float): Debye-Waller factor for unit cell
 
         Returns:
@@ -1575,7 +1576,7 @@ class XrayDyn(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom
-            area (float): area of the unit cell [m²]
+            area (float): area of the unit cell (m²)
             deb_wal_fac (float): Debye-Waller factor for unit cell
 
         Returns:
@@ -1610,7 +1611,7 @@ class XrayDyn(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom
-            area (float): area of the unit cell [m²]
+            area (float): area of the unit cell (m²)
             deb_wal_fac (float): Debye-Waller factor for unit cell
 
         Returns:
@@ -1806,7 +1807,7 @@ class XrayDynMag(Xray):
             param.append("cartesian")
             param.append(magnetization_map)
 
-        return self.S.get_hash(types=["xray", "magnetic"]) + "_" + make_hash_md5(param)
+        return self.S.get_hash(types=["xray", "magnetic", "optical"]) + "_" + make_hash_md5(param)
 
     def set_polarization(
         self, pol_in_state, pol_out_state, polarization_in=None, polarization_out=None
@@ -1861,7 +1862,7 @@ class XrayDynMag(Xray):
         Args:
             pol_in_state (int): incoming polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> p) [deg]
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
@@ -1892,7 +1893,7 @@ class XrayDynMag(Xray):
         Args:
             pol_out_state (int): outgoing polarization state id.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> p) [deg]
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         """
@@ -1978,7 +1979,7 @@ class XrayDynMag(Xray):
 
         Args:
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> p) [deg]
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
                 ellipticity (-+1 -> circular left/right; 0 -> linear)
 
         Returns:
@@ -2115,18 +2116,13 @@ class XrayDynMag(Xray):
             args = (args[0], self.parse_magnetization_map(args[1], polar), *args[2:])
 
         # add superstrate
-        if isinstance(self.S.superstrate[0], Vacuum):
-            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
-        elif isinstance(self.S.superstrate[0], AmorphousLayer):
-            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
-                self.S.superstrate[0].atom,
-                self.S.superstrate[0].structural.density.magnitude,
-                self.S.superstrate[0].structural.thickness.magnitude,
-            )
+        superstrate = self.S.superstrate[0]
+        if isinstance(superstrate, Layer) and not isinstance(superstrate, UnitCell):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_layer_boundary_phase_matrix(superstrate)
         else:
             raise TypeError(
-                "In XrayDynMag the superstrate must be of type Vacuum or "
-                "AmorphousLayer and should be present!"
+                "In XrayDynMag the superstrate must be a homogeneous Layer, e.g. "
+                "Vacuum or AmorphousLayer, and should be present!"
             )
 
         # calc the reflectivity-transmission matrix of the structure
@@ -2259,22 +2255,11 @@ class XrayDynMag(Xray):
                     temp_phi = m_times_n(temp2_phi, temp_phi)
 
                 layer_counter += 1
-            elif isinstance(layer, (Vacuum, AmorphousLayer)):
-                # calculate the ref-trans matrices for N layers
-                if isinstance(layer, Vacuum):
-                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = (
-                        self.get_atom_boundary_phase_matrix([], 0, 0)
-                    )
-                else:
-                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = (
-                        self.get_atom_boundary_phase_matrix(
-                            layer.atom,
-                            layer.structural.density.magnitude * (strains[layer_counter] + 1),
-                            layer.structural.thickness.magnitude * (strains[layer_counter] + 1),
-                            False,
-                            magnetizations[layer_counter],
-                        )
-                    )
+            elif isinstance(layer, Layer):
+                # calculate the ref-trans matrices for N homogeneous layers
+                A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = self.get_layer_boundary_phase_matrix(
+                    layer, strains[layer_counter], magnetizations[layer_counter]
+                )
 
                 roughness = layer.structural.roughness.magnitude
                 F = m_times_n(A_inv, last_A)
@@ -2548,18 +2533,13 @@ class XrayDynMag(Xray):
             # structure for each time step of the strain map
 
             # add superstrate
-            if isinstance(self.S.superstrate[0], Vacuum):
-                A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
-            elif isinstance(self.S.superstrate[0], AmorphousLayer):
-                A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
-                    self.S.superstrate[0].atom,
-                    self.S.superstrate[0].structural.density.magnitude,
-                    self.S.superstrate[0].structural.thickness.magnitude,
-                )
+            superstrate = self.S.superstrate[0]
+            if isinstance(superstrate, Layer) and not isinstance(superstrate, UnitCell):
+                A0, A0_phi, _, _, _, _, k_z_0 = self.get_layer_boundary_phase_matrix(superstrate)
             else:
                 raise TypeError(
-                    "In XrayDynMag the superstrate must be of type Vacuum or "
-                    "AmorphousLayer and should be present!"
+                    "In XrayDynMag the superstrate must be a homogeneous Layer, e.g. "
+                    "Vacuum or AmorphousLayer, and should be present!"
                 )
 
             RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = (
@@ -2633,17 +2613,13 @@ class XrayDynMag(Xray):
         T_phi = np.zeros_like(R)
 
         # add superstrate
-        if isinstance(self.S.superstrate[0], Vacuum):
-            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix([], 0, 0)
-        elif isinstance(self.S.superstrate[0], AmorphousLayer):
-            A0, A0_phi, _, _, _, _, k_z_0 = self.get_atom_boundary_phase_matrix(
-                self.S.superstrate[0].atom,
-                self.S.superstrate[0].structural.density.magnitude,
-                self.S.superstrate[0].structural.thickness.magnitude,
-            )
+        superstrate = self.S.superstrate[0]
+        if isinstance(superstrate, Layer) and not isinstance(superstrate, UnitCell):
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_layer_boundary_phase_matrix(superstrate)
         else:
             raise TypeError(
-                "In XrayDynMag the superstrate must be of type Vacuum or AmorphousLayer!"
+                "In XrayDynMag the superstrate must be a homogeneous Layer, e.g. "
+                "Vacuum or AmorphousLayer, and should be present!"
             )
 
         remote_A0 = dask_client.scatter(A0)
@@ -2790,23 +2766,10 @@ class XrayDynMag(Xray):
                         force_recalc,
                     )
                 )
-            elif isinstance(layer, (Vacuum, AmorphousLayer)):
-                if isinstance(layer, Vacuum):
-                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = (
-                        self.get_atom_boundary_phase_matrix(
-                            [], 0, layer.structural.thickness.magnitude * (strains[i] + 1)
-                        )
-                    )
-                else:
-                    A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = (
-                        self.get_atom_boundary_phase_matrix(
-                            layer.atom,
-                            layer.structural.density.magnitude / (strains[i] + 1),
-                            layer.structural.thickness.magnitude * (strains[i] + 1),
-                            force_recalc,
-                            magnetizations[i],
-                        )
-                    )
+            elif isinstance(layer, Layer):
+                A, A_phi, P, P_phi, A_inv, A_inv_phi, k_z = self.get_layer_boundary_phase_matrix(
+                    layer, strains[i], magnetizations[i], force_recalc
+                )
                 roughness = layer.structural.roughness.magnitude
                 F = m_times_n(A_inv, last_A)
                 F_phi = m_times_n(A_inv_phi, last_A_phi)
@@ -2817,7 +2780,7 @@ class XrayDynMag(Xray):
                 RT_layer = m_times_n(P, F)
                 RT_layer_phi = m_times_n(P_phi, F_phi)
             else:
-                raise TypeError("All layers must be either Vacuum, AmorphousLayers, or UnitCells!")
+                raise TypeError("All layers must be either homogeneous Layers or UnitCells!")
             if i == 0:
                 RT = RT_layer
                 RT_phi = RT_layer_phi
@@ -2917,6 +2880,89 @@ class XrayDynMag(Xray):
 
         return RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z
 
+    def get_layer_boundary_phase_matrix(
+        self, layer, strain=0.0, magnetization=None, force_recalc=False
+    ):
+        """get_layer_boundary_phase_matrix
+
+        Returns the boundary and phase matrices of a homogeneous layer, e.g.
+        an :class:`.AmorphousLayer`, from its dielectric tensor, see
+        :meth:`.Layer.get_dielectric_tensor`. The results for a given layer,
+        energy, :math:`q_z`, polarization, strain, and magnetization are
+        stored to RAM to avoid recalculation.
+
+        Args:
+            layer (Layer): homogeneous layer with an isotropic dielectric tensor.
+            strain (float, optional): strain of the layer. Defaults to 0.
+            magnetization (ndarray[float], optional): cartesian
+                magnetization ``(x, y, z)``. Defaults to the magnetization of
+                the layer.
+            force_recalc (boolean, optional): force recalculation of boundary
+                phase matrix if True. Defaults to False.
+
+        Returns:
+            (tuple):
+            - *A (ndarray[complex])* - boundary matrix.
+            - *A_phi (ndarray[complex])* - boundary matrix for opposite
+              magnetization.
+            - *P (ndarray[complex])* - phase matrix.
+            - *P_phi (ndarray[complex])* - phase matrix for opposite
+              magnetization.
+            - *A_inv (ndarray[complex])* - inverted boundary matrix.
+            - *A_inv_phi (ndarray[complex])* - inverted boundary matrix for
+              opposite magnetization.
+            - *k_z (ndarray[float])* - internal wave vector.
+
+        """
+        dielectric = layer.optical.dielectric
+        if dielectric.is_set and not dielectric.is_isotropic:
+            raise ValueError(
+                f"The formalism of XrayDynMag requires an isotropic dielectric tensor, but the "
+                f"layer '{layer.id}' is anisotropic!"
+            )
+        strain = float(np.asarray(strain).item())
+        if magnetization is None or np.size(magnetization) < 3:
+            magnetization = layer._magnetization_for_dielectric()
+        magnetization = tuple(float(m) for m in magnetization)
+        distance = layer.structural.thickness.magnitude * (strain + 1)
+
+        key = f"layer:{layer.id}"
+        _hash = make_hash_md5(
+            [
+                self._energy,
+                self._qz,
+                self.pol_in,
+                self.pol_out,
+                repr(dielectric),
+                layer.structural.density.magnitude,
+                distance,
+                strain,
+                *magnetization,
+            ]
+        )
+        cache = self.last_atom_ref_trans_matrices
+        try:
+            index = cache["atom_ids"].index(key)
+        except ValueError:
+            index = -1
+        names = ["A", "A_phi", "P", "P_phi", "A_inv", "A_inv_phi", "k_z"]
+        if not force_recalc and index >= 0 and cache["hashes"][index] == _hash:
+            return tuple(cache[name][index] for name in names)
+
+        eps = layer.get_dielectric_tensor(self._energy, strain, magnetization)
+        result = self.calc_boundary_phase_matrix(eps, distance)
+        if not force_recalc:
+            if index >= 0:
+                cache["hashes"][index] = _hash
+                for name, value in zip(names, result):
+                    cache[name][index] = value
+            else:
+                cache["atom_ids"].append(key)
+                cache["hashes"].append(_hash)
+                for name, value in zip(names, result):
+                    cache[name].append(value)
+        return result
+
     def get_atom_boundary_phase_matrix(self, atom, density, distance, force_recalc=False, *args):
         """get_atom_boundary_phase_matrix
 
@@ -2926,8 +2972,8 @@ class XrayDynMag(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
-            density (float): density around the atom [kg/m³].
-            distance (float): distance towards the next atomic [m].
+            density (float): density around the atom (kg/m³).
+            distance (float): distance towards the next atomic (m).
             force_recalc (boolean, optional): force recalculation of boundary
                 phase matrix if True. Defaults to False.
             args (ndarray[float]): cartesian magnetization vector
@@ -3028,8 +3074,8 @@ class XrayDynMag(Xray):
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom.
-            density (float): density around the atom [kg/m³].
-            distance (float): distance towards the next atomic [m].
+            density (float): density around the atom (kg/m³).
+            distance (float): distance towards the next atomic (m).
             args (ndarray[float]): cartesian magnetization vector
                 ``(x, y, z)``.
 
@@ -3059,47 +3105,51 @@ class XrayDynMag(Xray):
             except AttributeError:
                 U = [0, 0, 0]
 
+        try:
+            chi0, chim = atom.get_susceptibility(self._energy, density)
+        except AttributeError:
+            # its vacuum
+            chi0 = np.zeros_like(self._energy, dtype=np.complex128)
+            chim = None
+        eps = gyrotropic_tensor(1 + chi0, chim, U)
+        return self.calc_boundary_phase_matrix(eps, distance)
+
+    def calc_boundary_phase_matrix(self, eps, distance):
+        """calc_boundary_phase_matrix
+
+        Calculates the boundary and phase matrices of a homogeneous slab with
+        the dielectric tensor ``eps`` from :cite:t:`elzo2012`, which is
+        isotropic except for the gyrotropic, magnetic contributions.
+
+        Args:
+            eps (ndarray[complex]): dielectric tensor per energy of shape
+                (M, 3, 3).
+            distance (float): thickness of the slab (m).
+
+        Returns:
+            (tuple):
+            - *A (ndarray[complex])* - boundary matrix.
+            - *A_phi (ndarray[complex])* - boundary matrix for opposite
+              magnetization.
+            - *P (ndarray[complex])* - phase matrix.
+            - *P_phi (ndarray[complex])* - phase matrix for opposite
+              magnetization.
+            - *A_inv (ndarray[complex])* - inverted boundary matrix.
+            - *A_inv_phi (ndarray[complex])* - inverted boundary matrix for
+              opposite magnetization.
+            - *k_z (ndarray[float])* - internal wave vector.
+
+        """
         M = len(self._energy)  # number of energies
         N = np.shape(self._qz)[1]  # number of q_z
 
-        eps = np.zeros([M, N, 3, 3], dtype=np.complex128)
+        # the dielectric tensor does not depend on q_z
+        eps = np.broadcast_to(eps[:, np.newaxis, :, :], (M, N, 3, 3))
         A = np.zeros([M, N, 4, 4], dtype=np.complex128)
         A_phi = np.zeros_like(A, dtype=np.complex128)
         P = np.zeros_like(A, dtype=np.complex128)
         P_phi = np.zeros_like(A, dtype=np.complex128)
-
-        try:
-            molar_density = density / 1000 / atom.mass_number_a
-        except AttributeError:
-            molar_density = 0
-
-        energy = self._energy
-        factor = 830.9471 / energy**2
         theta = self._theta
-
-        try:
-            cf = atom.get_atomic_form_factor(energy)
-        except AttributeError:
-            cf = np.zeros_like(energy, dtype=np.complex128)
-        try:
-            mf = atom.get_magnetic_form_factor(energy)
-        except AttributeError:
-            mf = np.zeros_like(energy, dtype=np.complex128)
-
-        mag = factor * molar_density * mf
-        mag = np.tile(mag[:, np.newaxis], [1, N])
-        eps0 = 1 - factor * molar_density * cf
-        eps0 = np.tile(eps0[:, np.newaxis], [1, N])
-
-        eps[:, :, 0, 0] = eps0
-        eps[:, :, 0, 1] = -1j * U[2] * mag
-        eps[:, :, 0, 2] = 1j * U[1] * mag
-        eps[:, :, 1, 0] = -eps[:, :, 0, 1]
-        eps[:, :, 1, 1] = eps0
-        eps[:, :, 1, 2] = -1j * U[0] * mag
-        eps[:, :, 2, 0] = -eps[:, :, 0, 2]
-        eps[:, :, 2, 1] = -eps[:, :, 1, 2]
-        eps[:, :, 2, 2] = eps0
 
         alpha_y = np.divide(np.cos(theta), np.sqrt(eps[:, :, 0, 0]))
         alpha_z = np.sqrt(1 - alpha_y**2)
@@ -3351,7 +3401,7 @@ class XrayDynMag(Xray):
         roughness for the :cite:t:`elzo2012`.
 
         Args:
-            roughness (float): gaussian roughness of the interface [m].
+            roughness (float): gaussian roughness of the interface (m).
             k_z (ndarray[float)]: internal wave vector.
             last_k_z (ndarray[float)]: last internal wave vector.
 

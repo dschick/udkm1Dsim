@@ -11,7 +11,7 @@ import sympy as sp
 from pint.testing import assert_allclose as assert_approx
 from pint.testing import assert_equal
 
-from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Layer, UnitCell, u
+from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Dielectric, Dispersion, Layer, UnitCell, u
 from udkm1Dsim.structures.parameter_groups import (
     ElasticParameters,
     LatticeParameters,
@@ -162,17 +162,19 @@ def test_layer_set_ho_spring_constants(layer):
 # ============================================================================
 
 
-def test_layer_opt_pen_depth(layer):
-    # asserat_equal does not work on because of last digit uncertainty
-    assert_approx(layer.opt_pen_depth, 10 * u.nm)
+def test_layer_removed_optical_inputs():
+    for removed in ("opt_ref_index", "opt_pen_depth", "opt_ref_index_per_strain"):
+        with pytest.raises(TypeError, match=f"'{removed}' was removed"):
+            Layer("l", "l", **{removed: 1})
+        with pytest.raises(TypeError, match=f"'{removed}' was removed"):
+            Layer("l", "l", optical={removed: 1})
 
 
-def test_layer_opt_ref_index(layer):
-    assert layer.opt_ref_index == 5 - 3j
-
-
-def test_layer_opt_ref_index_per_strain(layer):
-    assert layer.opt_ref_index_per_strain == 1 - 1j
+def test_layer_dielectric_from_ref_index(layer):
+    assert isinstance(layer.dielectric, Dielectric)
+    assert layer.dielectric.is_isotropic
+    np.testing.assert_allclose(layer.get_ref_index(800 * u.nm), 5 - 3j)
+    np.testing.assert_allclose(layer.get_dielectric_tensor(1.0)[0], (5 - 3j) ** 2 * np.eye(3))
 
 
 # ============================================================================
@@ -244,13 +246,39 @@ def test_layer_mag_moment_in_si(layer):
     assert np.isclose(layer.magnetic.mag_moment.magnitude, 9.274e-24, rtol=1e-3)
 
 
-def test_layer_set_opt_pen_depth_from_ref_index(layer):
-    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
-    layer.set_opt_pen_depth_from_ref_index(800 * u.nm)
-    assert_approx(layer.opt_pen_depth, 21.22 * u.nm, rtol=1e-2)
-    layer.opt_ref_index = 2.0 + 0j
-    layer.set_opt_pen_depth_from_ref_index(800 * u.nm)
-    assert np.isinf(layer.optical.opt_pen_depth.magnitude)
+def test_layer_get_opt_pen_depth(layer):
+    # from the refractive index
+    assert_approx(layer.get_opt_pen_depth(800 * u.nm), 21.22 * u.nm, rtol=1e-3)
+    layer = Layer("opt", "opt", dielectric=Dispersion.from_ref_index(2.0))
+    assert np.isinf(layer.get_opt_pen_depth(800 * u.nm).magnitude)
+    with pytest.raises(ValueError, match="Layer 'empty'.*not set"):
+        Layer("empty", "empty").get_opt_pen_depth(800 * u.nm)
+
+
+def test_layer_set_opt_pen_depth():
+    # without a dielectric, the real part of the refractive index is 1
+    layer = Layer("opt", "opt")
+    with pytest.warns(UserWarning, match="only changes the extinction coefficient"):
+        layer.set_opt_pen_depth(20 * u.nm)
+    for wavelength in (400, 800) * u.nm:
+        assert_approx(layer.get_opt_pen_depth(wavelength), 20 * u.nm)
+    assert layer.get_ref_index(800 * u.nm).real == pytest.approx(1)
+    # the real part of the dielectric is kept
+    layer.optical.dielectric = Dispersion.from_ref_index(3 + 4j)
+    with pytest.warns(UserWarning):
+        layer.set_opt_pen_depth(10 * u.nm)
+    assert layer.get_ref_index(800 * u.nm).real == pytest.approx(3)
+    assert_approx(layer.get_opt_pen_depth(400 * u.nm), 10 * u.nm)
+    # a new penetration depth replaces the former one
+    with pytest.warns(UserWarning):
+        layer.set_opt_pen_depth(5 * u.nm)
+    assert_approx(layer.get_opt_pen_depth(800 * u.nm), 5 * u.nm)
+    assert layer.get_ref_index(800 * u.nm).real == pytest.approx(3)
+    assert "ζ = 5 nm" in str(layer.optical.dielectric)
+    # anisotropic dielectrics have no single penetration depth
+    layer.optical.dielectric = Dispersion.from_ref_index([2, 3])
+    with pytest.raises(ValueError, match="isotropic"):
+        layer.set_opt_pen_depth(5 * u.nm)
 
 
 # ============================================================================
@@ -359,7 +387,7 @@ def test_vacuum(vacuum):
     assert_approx(vacuum.thickness, 1 * u.nm)
     assert_approx(vacuum.density, 0 * u.kg / u.m**3)
     assert_approx(vacuum.mass, 0 * u.kg)
-    assert vacuum.opt_ref_index == 1
+    assert vacuum.get_ref_index(800 * u.nm) == 1
 
 
 # ============================================================================
@@ -470,7 +498,7 @@ def test_unit_cell_position_as_function_raises(atom_oxygen):
 def _magnitudes(layer):
     """all parameter magnitudes of a layer by their path"""
     return {
-        f"{group_name}.{name}": np.asarray(p.magnitude).tolist()
+        f"{group_name}.{name}": repr(np.asarray(p.magnitude).tolist())
         for group_name in layer._parameter_group_names
         for name, p in getattr(layer, group_name)._parameters().items()
         if name not in ("heat_capacity", "therm_cond")  # sympy expressions
@@ -651,7 +679,7 @@ def test_unit_cell_without_c_axis_raises():
         ("thermal.therm_cond", r"\kappa"),
         ("thermal.heat_capacity", "c"),
         ("elastic.spring_const", "k"),
-        ("optical.opt_pen_depth", r"\zeta"),
+        ("optical.dielectric", r"\varepsilon"),
         ("magnetic.aniso_exponent", r"\beta"),
         ("magnetic.exch_stiffness", r"A_\mathrm{ex}"),
     ],

@@ -45,6 +45,7 @@ import scipy.constants as constants
 import tabulate as tabulate_module
 from tabulate import tabulate
 
+from .dielectric import Dielectric
 from .parameters import Parameter, TemperatureParameter, VectorParameter
 
 u = pint.get_application_registry()
@@ -277,7 +278,7 @@ class AtomParameters(_AtomParametersBase):
     Attributes:
         atomic_number (int): atomic number :math:`Z`.
         mass_number (float): mass number :math:`A`.
-        mass (float): mass of the atom :math:`m` [kg], derived from the mass number.
+        mass (float): mass of the atom :math:`m` (kg), derived from the mass number.
         ionicity (int): ionicity :math:`I`.
         magnetization (VectorParameter): magnetization :math:`\mathbf{m}` as
             for the :class:`.MagneticParameters` of a layer, given by its
@@ -286,7 +287,7 @@ class AtomParameters(_AtomParametersBase):
             the xy-plane from the x-axis, and given in the same forms.
         cromer_mann_a (ndarray[float]): Cromer-Mann coefficients :math:`a_1 .. a_4`.
         cromer_mann_b (ndarray[float]): Cromer-Mann coefficients :math:`b_1 .. b_4`
-            [Å²].
+            (Å²).
         cromer_mann_c (float): Cromer-Mann coefficient :math:`c`.
 
     """
@@ -325,7 +326,7 @@ class AtomMixedParameters(_AtomParametersBase):
     Attributes:
         atomic_number (float): averaged atomic number :math:`Z`.
         mass_number (float): averaged mass number :math:`A`.
-        mass (float): averaged mass of the atom :math:`m` [kg].
+        mass (float): averaged mass of the atom :math:`m` (kg).
         ionicity (float): averaged ionicity :math:`I`.
         magnetization (VectorParameter): magnetization :math:`\mathbf{m}`, see
             :class:`AtomParameters`.
@@ -342,13 +343,13 @@ class StructuralParameters(ParameterGroup):
     r"""Structural parameters of a layer.
 
     Attributes:
-        thickness (float): thickness of the layer :math:`d` [m].
-        density (float): density of the layer :math:`\rho` [kg/m³].
-        area (float): area of layer :math:`A` [m²].
-        roughness (float): gaussian width of the top roughness of a layer :math:`\sigma` [m].
-        mass (float): mass of the layer :math:`m` [kg].
-        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² :math:`m_A` [kg].
-        volume (float): volume of layer :math:`V` [m³].
+        thickness (float): thickness of the layer :math:`d` (m).
+        density (float): density of the layer :math:`\rho` (kg/m³).
+        area (float): area of layer :math:`A` (m²).
+        roughness (float): gaussian width of the top roughness of a layer :math:`\sigma` (m).
+        mass (float): mass of the layer :math:`m` (kg).
+        mass_unit_area (float): mass of layer normalized to unit area of 1 Å² :math:`m_A` (kg).
+        volume (float): volume of layer :math:`V` (m³).
 
     """
 
@@ -381,9 +382,9 @@ class LatticeParameters(ParameterGroup):
     """Lattice parameters of a unit cell.
 
     Attributes:
-        a_axis (float): lattice parameter :math:`a` [m], defaults to c_axis.
-        b_axis (float): lattice parameter :math:`b` [m], defaults to c_axis.
-        c_axis (float): lattice parameter :math:`c` [m].
+        a_axis (float): lattice parameter :math:`a` (m), defaults to c_axis.
+        b_axis (float): lattice parameter :math:`b` (m), defaults to c_axis.
+        c_axis (float): lattice parameter :math:`c` (m).
 
     """
 
@@ -400,15 +401,15 @@ class ThermalParameters(ParameterGroup):
 
     Attributes:
         therm_cond (list[@lambda]): list of T-dependent thermal conductivity
-            :math:`\kappa` [W/(m K)].
+            :math:`\kappa` (W/(m K)).
         lin_therm_exp (list[@lambda]): list of T-dependent linear thermal
             expansion coefficient :math:`\alpha` (relative).
         heat_capacity (list[@lambda]): list of T-dependent heat capacity
-            function :math:`c` [J/(kg K)].
+            function :math:`c` (J/(kg K)).
         sub_system_coupling (list[@lambda]): list of coupling functions of
-            different subsystems :math:`G` [W/m³].
+            different subsystems :math:`G` (W/m³).
         deb_wal_fac (list[@lambda]): list of T-dependent Debye-Waller factors
-            :math:`\langle u^2\rangle` [m²].
+            :math:`\langle u^2\rangle` (m²).
         num_sub_systems (int): number of subsystems :math:`N` for heat and
             phonons (electrons, lattice, spins, ...).
         sub_system_labels (list[str]): labels of the subsystems, e.g.
@@ -473,11 +474,11 @@ class ElasticParameters(ParameterGroup):
     r"""Elastic and phonon parameters of a layer.
 
     Attributes:
-        sound_vel (float): longitudinal sound velocity in the layer :math:`v` [m/s].
-        phonon_damping (float): damping constant of phonon propagation :math:`\gamma` [kg/s].
+        sound_vel (float): longitudinal sound velocity in the layer :math:`v` (m/s).
+        phonon_damping (float): damping constant of phonon propagation :math:`\gamma` (kg/s).
         spring_const (ndarray[float]): spring constant :math:`k` of the layer
-            [kg/s²] and higher orders.
-        acoustic_impedance (float): acoustic impedance of a layer :math:`Z` [kg/(m² s)].
+            (kg/s²) and higher orders.
+        acoustic_impedance (float): acoustic impedance of a layer :math:`Z` (kg/(m² s)).
 
     """
 
@@ -541,42 +542,30 @@ class ElasticParameters(ParameterGroup):
 class OpticalParameters(ParameterGroup):
     r"""Optical and X-ray parameters of a layer.
 
+    The only parameter is the energy-dependent :class:`.Dielectric`, i.e. the
+    relative permittivity, of the layer, from which the refractive index, the
+    optical penetration depth, and the dielectric tensor for all light and
+    X-ray scattering formalisms follow, see e.g.
+    :meth:`.Layer.get_ref_index` and :meth:`.Layer.get_opt_pen_depth`. It is
+    given by a :class:`.Dispersion` or a :class:`.Dielectric`, e.g.
+
+    .. code-block:: python
+
+        optical = OpticalParameters(dielectric=Dispersion.from_ref_index(3.7 + 0.01j))
+        layer.optical.dielectric = Dispersion.from_file("Si.nk") | layer.dispersion_from_atoms()
+        layer.set_dielectric_from_atoms(fallback=Dispersion.from_ref_index(3.7 + 0.01j))
+
     Attributes:
-        opt_pen_depth (float): optical penetration depth of the layer :math:`\zeta` [m].
-        opt_ref_index (complex): complex optical refractive index :math:`n`.
-        opt_ref_index_per_strain (complex): change of the complex optical
-            refractive index per strain :math:`\mathrm{d}n/\mathrm{d}\epsilon`.
+        dielectric (Dielectric): dielectric function :math:`\varepsilon` of
+            the layer.
 
     """
 
-    def __init__(
-        self, opt_pen_depth=0.0, opt_ref_index=0.0 + 0.0j, opt_ref_index_per_strain=0.0 + 0.0j
-    ):
-        self.opt_pen_depth = Parameter("m", opt_pen_depth, symbol=r"\zeta")
-        self.opt_ref_index = Parameter("", opt_ref_index, symbol="n")
-        self.opt_ref_index_per_strain = Parameter(
-            "", opt_ref_index_per_strain, symbol=r"\mathrm{d}n/\mathrm{d}\epsilon"
-        )
-
+    def __init__(self, dielectric=None):
+        self.dielectric = Dielectric()
         self._connect_parameters()
-
-    def set_opt_pen_depth_from_ref_index(self, wavelength):
-        r"""set_opt_pen_depth_from_ref_index
-
-        Set the optical penetration depth from the optical refractive index
-        for a given wavelength:
-
-        .. math:: \zeta = \frac{\lambda}{4 \pi |\mathrm{Im}(n)|}
-
-        Args:
-            wavelength (Quantity): wavelength as Pint Quantity.
-
-        """
-        kappa = np.abs(np.imag(self.opt_ref_index.magnitude))
-        if kappa == 0:
-            self.opt_pen_depth.magnitude = np.inf
-        else:
-            self.opt_pen_depth.quantity = wavelength / (4 * np.pi * kappa)
+        if dielectric is not None:
+            self.dielectric = dielectric
 
 
 class MagneticParameters(ParameterGroup):
@@ -591,7 +580,7 @@ class MagneticParameters(ParameterGroup):
     :attr:`num_sublattices`.
 
     The sublattices are coupled by the mean-field exchange matrix
-    :math:`J_{ab}` [J], whose row :math:`a` holds the coupling constants of
+    :math:`J_{ab}` (J), whose row :math:`a` holds the coupling constants of
     the field acting on sublattice :math:`a` due to sublattice :math:`b`, and
     whose negative off-diagonal elements couple antiferromagnetically. It is
     derived from the Curie temperature for a single sublattice, see
@@ -605,23 +594,23 @@ class MagneticParameters(ParameterGroup):
     Attributes:
         eff_spin (float, ndarray[float]): effective spin :math:`S` per
             sublattice, which is infinite for the classical limit.
-        curie_temp (float): Curie temperature :math:`T_\mathrm{C}` [K].
+        curie_temp (float): Curie temperature :math:`T_\mathrm{C}` (K).
         mf_exch_coupling (float, ndarray[float]): mean-field exchange coupling
-            constant :math:`J` [m²kg/s²], a :math:`P \times P` matrix for
+            constant :math:`J` (m²kg/s²), a :math:`P \times P` matrix for
             several sublattices.
         lamda (float, ndarray[float]): intrinsic coupling to bath parameter
             :math:`\lambda` per sublattice.
         mag_moment (float, ndarray[float]): atomic magnetic moment
-            :math:`\mu` per sublattice [A m²].
+            :math:`\mu` per sublattice (A m²).
         aniso_exponent (float, ndarray[float]): exponent :math:`\beta` of the
             temperature dependence of the anisotropy per sublattice.
-        anisotropy (ndarray[float]): anisotropy :math:`K` at T=0 K [J/m³] as
+        anisotropy (ndarray[float]): anisotropy :math:`K` at T=0 K (J/m³) as
             x,y,z component vector, or one vector per sublattice as
             :math:`P \times 3` array.
         exch_stiffness (float): exchange stiffness at T=0 K
-            :math:`A_\mathrm{ex}` [J/m] towards the neighbouring layers.
+            :math:`A_\mathrm{ex}` (J/m) towards the neighbouring layers.
         mag_saturation (float, ndarray[float]): saturation magnetization at
-            0 K :math:`M_s` per sublattice [J/T/m³].
+            0 K :math:`M_s` per sublattice (J/T/m³).
         magnetization (VectorParameter, list[VectorParameter]): magnetization
             :math:`\mathbf{m}` given by its amplitude :math:`r`, which is
             negative for the reversed direction, and the angles :math:`\phi`
@@ -638,14 +627,14 @@ class MagneticParameters(ParameterGroup):
             :math:`\alpha` of the LLG per sublattice.
         gyromagnetic_ratio (float, ndarray[float]): gyromagnetic ratio
             :math:`\gamma = -g \mu_B / \hbar` of the magnetization dynamics
-            per sublattice, including its negative sign [rad/(s T)]. Defaults
+            per sublattice, including its negative sign (rad/(s T)). Defaults
             to the one of a free electron
             :math:`\gamma_e = -1.761\times10^{11}` rad/(s T).
         inertial_time (float, ndarray[float]): inertial relaxation time
-            :math:`\tau` of the inertial LLG per sublattice [s].
+            :math:`\tau` of the inertial LLG per sublattice (s).
         magnetoelastic_coupling (float, ndarray[float]): magnetoelastic
             coupling constant :math:`B_1` of the out-of-plane strain per
-            sublattice [J/m³].
+            sublattice (J/m³).
         exch_relax_rate (float): exchange-relaxation rate
             :math:`\lambda_\mathrm{ex}` between two sublattices of the
             extended LLB, see

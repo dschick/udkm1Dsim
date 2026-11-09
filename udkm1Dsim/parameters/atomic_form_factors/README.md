@@ -38,7 +38,7 @@ Tab-separated columns with one header line:
 | `Z` | atomic number |
 | `I` | ionicity |
 | `a1` .. `a4` | coefficients $a_i$ |
-| `b1` .. `b4` | coefficients $b_i$ [Å²] |
+| `b1` .. `b4` | coefficients $b_i$ (Å²) |
 | `c` | coefficient $c$ |
 
 `Atom.read_cromer_mann_coeff()` returns the first entry for the atomic number

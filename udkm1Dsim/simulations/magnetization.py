@@ -88,8 +88,8 @@ class Magnetization(Simulation):
             equations stiff.
         temp_sub_system (int): index of the sub-system of the ``temp_map``
             whose temperature drives the magnetization dynamics.
-        equilibrium_options (dict): ``tol``, the largest remaining torque [T],
-            and ``max_time``, the largest time of the overdamped flow [s], of
+        equilibrium_options (dict): ``tol``, the largest remaining torque (T),
+            and ``max_time``, the largest time of the overdamped flow (s), of
             the relaxation into the equilibrium, see
             :meth:`get_equilibrium_magnetization`.
 
@@ -290,11 +290,11 @@ class Magnetization(Simulation):
         profile ``init_magnetization`` can be provided.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             polar (bool, optional): return the map in polar instead of
                 cartesian coordinates. Defaults to False.
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile as well external magnetic field in [T]
+                temperature profile as well external magnetic field in T
                 also as quantity,
                 either constant or one vector per delay, and initial
                 magnetization.
@@ -318,11 +318,11 @@ class Magnetization(Simulation):
         ``magnetization_map``.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             polar (bool, optional): return the map in polar instead of
                 cartesian coordinates. Defaults to False.
             **kwargs (ndarray[float], optional): optional strain and
-                temperature profile as well external magnetic field in [T]
+                temperature profile as well external magnetic field in T
                 also as quantity,
                 either constant or one vector per delay, and initial
                 magnetization.
@@ -426,7 +426,7 @@ class Magnetization(Simulation):
         :func:`~udkm1Dsim.helpers.convert_polar_to_cartesian`.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             **kwargs (ndarray[float], optional): optional strain and
                 temperature profile as well external magnetic field and initial
                 magnetization.
@@ -726,10 +726,10 @@ class Magnetization(Simulation):
         Returns the delays as plain array in seconds.
 
         Args:
-            delays (ndarray[Quantity, float]): delays [s].
+            delays (ndarray[Quantity, float]): delays (s).
 
         Returns:
-            delays (ndarray[float]): delays [s].
+            delays (ndarray[float]): delays (s).
 
         """
         try:
@@ -746,10 +746,10 @@ class Magnetization(Simulation):
         given as quantity, otherwise unchanged.
 
         Args:
-            B_ext (ndarray[Quantity, float]): external magnetic field [T].
+            B_ext (ndarray[Quantity, float]): external magnetic field (T).
 
         Returns:
-            B_ext (ndarray[float]): external magnetic field [T].
+            B_ext (ndarray[float]): external magnetic field (T).
 
         """
         if isinstance(B_ext, u.Quantity):
@@ -868,7 +868,7 @@ class Magnetization(Simulation):
 
         Args:
             B_ext (ndarray[Quantity, float], optional): external magnetic
-                field (B_x, B_y, B_z) [T].
+                field (B_x, B_y, B_z) (T).
             init_magnetization (ndarray[float], dict, VectorParameter,
                 optional): initial magnetization, see
                 :meth:`check_initial_magnetization`.
@@ -1059,7 +1059,7 @@ class LLG(Magnetization):
     The amplitude must not be negative, a reversed direction is given by a
     negative amplitude of the initial magnetization only.
 
-    The field :math:`\mathbf{B}` [T] is the sum of the external field
+    The field :math:`\mathbf{B}` (T) is the sum of the external field
     ``B_ext``, the :func:`anisotropy field
     <udkm1Dsim.simulations.solvers.magnetization_scipy.anisotropy_field>`,
     the :func:`interlayer exchange field
@@ -1138,7 +1138,7 @@ class LLG(Magnetization):
         :class:`LLG`.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             mag_amplitude_map (ndarray[float], optional): spatio-temporal
                 amplitude of the magnetization :math:`M \times L`, i.e. the
                 reduced magnetization :math:`m = |\mathbf{M}|/M_s`, which is 1
@@ -1148,7 +1148,7 @@ class LLG(Magnetization):
                 map, used for the magnetization amplitude if no
                 ``mag_amplitude_map`` is given, see :class:`LLG`.
             B_ext (ndarray[Quantity, float], optional): external magnetic
-                field (B_x, B_y, B_z) [T], either constant or one vector per
+                field (B_x, B_y, B_z) (T), either constant or one vector per
                 delay.
             init_magnetization (ndarray[float], dict, VectorParameter,
                 optional): initial magnetization in cartesian coordinates by
@@ -1368,7 +1368,7 @@ class iLLG(LLG):
         magnetization amplitude, see :class:`iLLG` and :meth:`LLG.calc_magnetization_map`.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             mag_amplitude_map (ndarray[float], optional): spatio-temporal
                 amplitude of the magnetization :math:`M \times L`, i.e. the
                 reduced magnetization :math:`m = |\mathbf{M}|/M_s`, which is 1
@@ -1378,7 +1378,7 @@ class iLLG(LLG):
                 map, used for the magnetization amplitude if no
                 ``mag_amplitude_map`` is given, see :class:`LLG`.
             B_ext (ndarray[Quantity, float], optional): external magnetic
-                field (B_x, B_y, B_z) [T], either constant or one vector per
+                field (B_x, B_y, B_z) (T), either constant or one vector per
                 delay.
             init_magnetization (ndarray[float], dict, VectorParameter,
                 optional): initial magnetization in cartesian coordinates by
@@ -1390,7 +1390,7 @@ class iLLG(LLG):
                 first delay, see :meth:`get_equilibrium_magnetization`.
                 Defaults to False.
             init_velocity (ndarray[float], optional): initial velocity
-                :math:`d\mathbf{n}/dt` of the unit vectors [1/s], a single
+                :math:`d\mathbf{n}/dt` of the unit vectors (1/s), a single
                 vector, one per layer :math:`L \times 3`, or one per
                 sublattice :math:`L \times P \times 3`. Defaults to None,
                 in which case the velocity of the LLG for the initial state is
@@ -1444,7 +1444,7 @@ class iLLG(LLG):
             inputs (Inputs): time-dependent inputs of the magnetic layers.
             is_magnetic (ndarray[boolean]): mask of the magnetic layers.
             init_velocity (ndarray[float], optional): initial velocities
-                [1/s], see :meth:`calc_magnetization_map`. Defaults to None.
+                (1/s), see :meth:`calc_magnetization_map`. Defaults to None.
 
         Returns:
             init_state (ndarray[float]): initial state :math:`2 \times N
@@ -1527,7 +1527,7 @@ class LLB(Magnetization):
     layers), which defaults to the one of a free electron
     :math:`\gamma_e = -1.761\times10^{11}\,\mathrm{rad\,s^{-1}\,T^{-1}}`.
 
-    The field :math:`\mathbf{B}` [T] is the sum of all relevant magnetic
+    The field :math:`\mathbf{B}` (T) is the sum of all relevant magnetic
     interactions:
 
     * the external magnetic field ``B_ext``
@@ -1626,10 +1626,10 @@ class LLB(Magnetization):
         according temperature map, see :class:`LLB`.
 
         Args:
-            delays (ndarray[Quantity]): delays range of simulation [s].
+            delays (ndarray[Quantity]): delays range of simulation (s).
             temp_map (ndarray[float]): spatio-temporal temperature map.
             B_ext (ndarray[Quantity, float], optional): external magnetic
-                field (B_x, B_y, B_z) [T], either constant or one vector per
+                field (B_x, B_y, B_z) (T), either constant or one vector per
                 delay.
             init_magnetization (ndarray[float], dict, VectorParameter,
                 optional): initial magnetization in cartesian coordinates by
@@ -1741,7 +1741,7 @@ class LLB(Magnetization):
             mag_map (ndarray[float]): cartesian magnetization map of the
                 magnetic layers :math:`M \times N \times P \times 3`.
             temps (ndarray[float]): temperature map of the magnetic layers
-                :math:`M \times N` [K].
+                :math:`M \times N` (K).
             layers (list[MagneticParameters]): magnetic parameters of the
                 magnetic layers.
 

@@ -26,6 +26,7 @@ __all__ = ["Layer", "Vacuum", "AmorphousLayer", "UnitCell"]
 __docformat__ = "restructuredtext"
 
 import copy
+import warnings
 from inspect import isfunction
 from operator import attrgetter
 
@@ -45,9 +46,27 @@ from udkm1Dsim.structures.parameter_groups import (
 )
 
 from .atoms import Atom, AtomMixed
+from .dielectric import (
+    _ATOMIC_SUSCEPTIBILITY_FACTOR,
+    Dielectric,
+    Dispersion,
+    _Atoms,
+    _OptPenDepth,
+    to_energy,
+)
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
+
+
+# removed optical inputs and their replacements
+_REMOVED_OPTICAL_INPUTS = {
+    "opt_ref_index": "dielectric=Dispersion.from_ref_index(n)",
+    "opt_pen_depth": (
+        "dielectric=Dispersion.from_opt_pen_depth(zeta) or layer.set_opt_pen_depth(zeta)"
+    ),
+    "opt_ref_index_per_strain": "the strain_model of the Dielectric",
+}
 
 
 class _GroupAttribute:
@@ -150,6 +169,10 @@ class Layer:
     def __init__(self, id, name, **kwargs):
         self.id = id
         self.name = name
+        optical = kwargs.get("optical")
+        for removed, replacement in _REMOVED_OPTICAL_INPUTS.items():
+            if removed in kwargs or (isinstance(optical, dict) and removed in optical):
+                raise TypeError(f"'{removed}' was removed, use {replacement} instead!")
 
         # the parameters depending on several groups are updated once all are set
         self._updating = True
@@ -242,8 +265,7 @@ class Layer:
                 "structural.thickness",
                 "structural.mass_unit_area",
                 "structural.density",
-                "optical.opt_pen_depth",
-                "optical.opt_ref_index",
+                "optical.dielectric",
                 "thermal.therm_cond",
                 "thermal.heat_capacity",
                 "thermal.sub_system_coupling",
@@ -268,9 +290,8 @@ class Layer:
             ],
             "optical": [
                 "lattice.c_axis",
-                "optical.opt_pen_depth",
-                "optical.opt_ref_index",
-                "optical.opt_ref_index_per_strain",
+                "structural.density",
+                "optical.dielectric",
             ],
             "magnetic": [
                 "structural.thickness",
@@ -534,40 +555,358 @@ class Layer:
     # ============================================================================
 
     @property
-    def opt_pen_depth(self):
-        return self.optical.opt_pen_depth.quantity
+    def dielectric(self):
+        return self.optical.dielectric
 
-    @opt_pen_depth.setter
-    def opt_pen_depth(self, value):
-        self.optical.opt_pen_depth = value
+    @dielectric.setter
+    def dielectric(self, value):
+        self.optical.dielectric = value
 
-    @property
-    def opt_ref_index(self):
-        return self.optical.opt_ref_index.quantity
+    def _atoms_and_fractions(self):
+        """Atoms of the layer and their number fractions, see
+        :meth:`dispersion_from_atoms`."""
+        raise TypeError(
+            f"The {type(self).__name__} '{self.id}' has no atoms. Set its dielectric tensor "
+            "by a Dispersion, e.g. Dispersion.from_ref_index(n)!"
+        )
 
-    @opt_ref_index.setter
-    def opt_ref_index(self, value):
-        self.optical.opt_ref_index = value
+    def dispersion_from_atoms(self, magnetic=False):
+        r"""dispersion_from_atoms
 
-    @property
-    def opt_ref_index_per_strain(self):
-        return self.optical.opt_ref_index_per_strain.quantity
+        Dispersion of the layer from the atomic or magnetic form factors of
+        its atoms, see :meth:`.Atom.get_susceptibility`. It is evaluated for
+        the actual density of the layer and is only defined in the energy
+        range of the tabulated form factors, e.g. in the X-ray range.
 
-    @opt_ref_index_per_strain.setter
-    def opt_ref_index_per_strain(self, value):
-        self.optical.opt_ref_index_per_strain = value
+        The dispersion is never set automatically, but must be assigned to
+        the dielectric tensor of the layer, e.g. combined with an optical table:
 
-    def set_opt_pen_depth_from_ref_index(self, wavelength):
-        """set_opt_pen_depth_from_ref_index
+        .. code-block:: python
 
-        Set the optical penetration depth from the optical refractive index
-        for a given wavelength.
+            layer.optical.dielectric = (
+                Dispersion.from_file("Fe.nk") | layer.dispersion_from_atoms()
+            )
 
         Args:
-            wavelength (Quantity): wavelength as Pint Quantity.
+            magnetic (bool, optional): gyrotropic dispersion from the magnetic
+                form factors instead of the non-magnetic one from the atomic
+                form factors. Defaults to False.
+
+        Returns:
+            dispersion (Dispersion): dispersion from the atoms.
 
         """
-        self.optical.set_opt_pen_depth_from_ref_index(wavelength)
+        return _Atoms(self._atoms_and_fractions(), magnetic=magnetic)
+
+    def dielectric_from_atoms(self, fallback=None):
+        """dielectric_from_atoms
+
+        Dielectric of the layer from its atoms with the non-magnetic
+        dispersion from the atomic form factors, the gyrotropic dispersion
+        from the magnetic form factors, if tabulated, and the strain model
+        ``density``, see :meth:`dispersion_from_atoms`. It is not set as
+        dielectric of the layer, e.g. to change it before, see
+        :meth:`set_dielectric_from_atoms`.
+
+        Args:
+            fallback (Dispersion, optional): non-magnetic dispersion, which
+                is used outside of the energy range of the atomic form factors,
+                e.g. a refractive index in the optical range.
+
+        Returns:
+            dielectric (Dielectric): dielectric from the atoms.
+
+        """
+        atoms = self._atoms_and_fractions()
+        magnetic = any(atom.has_magnetic_form_factor for atom, _ in atoms)
+        eps0 = _Atoms(atoms)
+        if fallback is not None:
+            eps0 = eps0 | fallback
+        return Dielectric(
+            eps0=eps0,
+            eps_mag=_Atoms(atoms, magnetic=True) if magnetic else None,
+            strain_model="density",
+        )
+
+    def set_dielectric_from_atoms(self, fallback=None):
+        """set_dielectric_from_atoms
+
+        Set the dielectric tensor of the layer from its atoms, see
+        :meth:`dielectric_from_atoms`, e.g. with a refractive index in the
+        optical range for the excitation:
+
+        .. code-block:: python
+
+            layer.set_dielectric_from_atoms()
+            layer.set_dielectric_from_atoms(fallback=Dispersion.from_ref_index(2.9 + 3.4j))
+
+        Args:
+            fallback (Dispersion, optional): non-magnetic dispersion, which
+                is used outside of the energy range of the atomic form factors.
+
+        """
+        self.optical.dielectric = self.dielectric_from_atoms(fallback=fallback)
+
+    def set_opt_pen_depth(self, opt_pen_depth):
+        r"""set_opt_pen_depth
+
+        Set the optical penetration depth of the intensity :math:`\zeta` of
+        the layer at all wavelengths :math:`\lambda` by its extinction
+        coefficient :math:`\kappa = \lambda / (4 \pi \zeta)`, see
+        :meth:`.Dispersion.from_opt_pen_depth`.
+
+        Only :math:`\kappa` is changed, while the real part :math:`n'` of the
+        refractive index of the dielectric function is kept, which is 1 at energies
+        without a dielectric function. Hence, a warning is raised, as this is probably
+        only useful for the Lambert-Beer absorption. The magnetic part and the
+        strain model of the dielectric tensor are kept.
+
+        Args:
+            opt_pen_depth (float, Quantity): optical penetration depth, where
+                floats are taken in m.
+
+        """
+        dielectric = self.optical.dielectric
+        if dielectric.is_set and not dielectric.is_isotropic:
+            raise ValueError(
+                f"Layer '{self.id}': the optical penetration depth requires an isotropic "
+                "dielectric!"
+            )
+        warnings.warn(
+            f"The optical penetration depth of the layer '{self.id}' only changes the "
+            "extinction coefficient kappa, but not the real part n' of its refractive "
+            "index, so that it is probably only useful for the Lambert-Beer absorption.",
+            stacklevel=2,
+        )
+        base = dielectric.eps0
+        if isinstance(base, _OptPenDepth):
+            # replace a former penetration depth
+            base = base._base
+        if base is None:
+            dielectric.eps0 = _OptPenDepth(opt_pen_depth)
+        else:
+            dielectric.eps0 = _OptPenDepth(opt_pen_depth, base=base)
+
+    def _magnetization_for_dielectric(self):
+        """Magnetization of the layer for its dielectric tensor."""
+        magnetization = self.magnetic.magnetization
+        if isinstance(magnetization, list):
+            raise NotImplementedError(
+                f"The magnetization of the layer '{self.id}' has several sublattices. "
+                "Give the magnetization of the dielectric tensor explicitly!"
+            )
+        return magnetization.magnitude
+
+    def get_dielectric_tensor(self, energy, strain=0.0, magnetization=None, polar=False):
+        """get_dielectric_tensor
+
+        Dielectric tensor of the layer for its density, see
+        :meth:`.Dielectric.get_tensor`.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energies, where
+                floats are taken in eV, or other spectral Quantities.
+            strain (float, optional): strain. Defaults to 0.
+            magnetization (tuple[float], optional): cartesian magnetization
+                ``(x, y, z)``, or its amplitude, polar angle, and azimuth
+                (rad) for ``polar=True``. Defaults to the magnetization of
+                the layer.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates. Defaults to False.
+
+        Returns:
+            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
+
+        """
+        if magnetization is None:
+            magnetization, polar = self._magnetization_for_dielectric(), False
+        try:
+            return self.optical.dielectric.get_tensor(
+                energy,
+                strain,
+                magnetization,
+                density=self.structural.density.magnitude,
+                polar=polar,
+            )
+        except ValueError as e:
+            raise ValueError(f"Layer '{self.id}': {e}") from None
+
+    def _dielectric_output(self, method, energy, strain):
+        """Output of the dielectric tensor of the layer for its density, where errors
+        are given with the id of the layer, and a scalar for a scalar energy."""
+        dielectric = self.optical.dielectric
+        try:
+            if not dielectric.is_set:
+                # raises the error of the dielectric tensor
+                dielectric.get_tensor(energy)
+            result = getattr(dielectric, method)(
+                energy, strain=strain, density=self.structural.density.magnitude
+            )
+        except ValueError as e:
+            raise ValueError(f"Layer '{self.id}': {e}") from None
+        if np.ndim(energy) != 0:
+            return result
+        if isinstance(result, tuple):
+            return tuple(value[0] for value in result)
+        return result[0]
+
+    def get_ref_index(self, energy, strain=0.0):
+        """get_ref_index
+
+        Complex refractive index :math:`n = n' + i\\kappa` of the layer with
+        an isotropic dielectric function, see :meth:`.Dielectric.get_ref_index`.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energies, where
+                floats are taken in eV, or other spectral Quantities, e.g.
+                the wavelength.
+            strain (float, optional): strain. Defaults to 0.
+
+        Returns:
+            n (complex, ndarray[complex]): refractive index.
+
+        """
+        return self._dielectric_output("get_ref_index", energy, strain)
+
+    def get_delta_beta(self, energy, strain=0.0):
+        """get_delta_beta
+
+        Real and imaginary part of the refractive index
+        :math:`n = 1 - \\delta + i\\beta` of the layer, see
+        :meth:`.Dielectric.get_delta_beta`.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energies, where
+                floats are taken in eV, or other spectral Quantities.
+            strain (float, optional): strain. Defaults to 0.
+
+        Returns:
+            (tuple):
+            - *delta (float, ndarray[float])* - decrement of the real part.
+            - *beta (float, ndarray[float])* - imaginary part.
+
+        """
+        return self._dielectric_output("get_delta_beta", energy, strain)
+
+    def get_delta_beta_mag(self, energy, strain=0.0):
+        """get_delta_beta_mag
+
+        Magnetic optical constants :math:`\\Delta\\delta` and
+        :math:`\\Delta\\beta` of the layer per unit magnetization, see
+        :meth:`.Dielectric.get_delta_beta_mag`.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energies, where
+                floats are taken in eV, or other spectral Quantities.
+            strain (float, optional): strain. Defaults to 0.
+
+        Returns:
+            (tuple):
+            - *delta_mag (float, ndarray[float])* - magnetic decrement of the
+              real part.
+            - *beta_mag (float, ndarray[float])* - magnetic imaginary part.
+
+        """
+        return self._dielectric_output("get_delta_beta_mag", energy, strain)
+
+    def get_opt_pen_depth(self, energy, strain=0.0):
+        """get_opt_pen_depth
+
+        Optical penetration depth or absorption length of the intensity of
+        the layer, see :meth:`.Dielectric.get_opt_pen_depth`.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energies, where
+                floats are taken in eV, or other spectral Quantities, e.g.
+                the wavelength.
+            strain (float, optional): strain. Defaults to 0.
+
+        Returns:
+            zeta (Quantity): optical penetration depth.
+
+        """
+        return self._dielectric_output("get_opt_pen_depth", energy, strain)
+
+    def get_absorption_coefficient(self, energy, strain=0.0):
+        """get_absorption_coefficient
+
+        Attenuation coefficient of the intensity of the layer, i.e. the
+        inverse of its optical penetration depth, see
+        :meth:`.Dielectric.get_absorption_coefficient`.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energies, where
+                floats are taken in eV, or other spectral Quantities.
+            strain (float, optional): strain. Defaults to 0.
+
+        Returns:
+            mu (Quantity): attenuation coefficient.
+
+        """
+        return self._dielectric_output("get_absorption_coefficient", energy, strain)
+
+    def get_mass_attenuation_coefficient(self, energy, strain=0.0):
+        """get_mass_attenuation_coefficient
+
+        Mass attenuation coefficient of the layer for its density, see
+        :meth:`.Dielectric.get_mass_attenuation_coefficient`.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energies, where
+                floats are taken in eV, or other spectral Quantities.
+            strain (float, optional): strain. Defaults to 0.
+
+        Returns:
+            mu_rho (Quantity): mass attenuation coefficient.
+
+        """
+        return self._dielectric_output("get_mass_attenuation_coefficient", energy, strain)
+
+    def get_critical_angle(self, energy, strain=0.0):
+        """get_critical_angle
+
+        Critical angle of the total external reflection of the layer from
+        vacuum, see :meth:`.Dielectric.get_critical_angle`.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energies, where
+                floats are taken in eV, or other spectral Quantities.
+            strain (float, optional): strain. Defaults to 0.
+
+        Returns:
+            theta_c (Quantity): critical angle.
+
+        """
+        return self._dielectric_output("get_critical_angle", energy, strain)
+
+    def get_form_factor(self, energy, strain=0.0):
+        r"""get_form_factor
+
+        Effective atomic form factor :math:`f = f_1 - i f_2` per atom of a
+        layer with atoms, which follows from its dielectric function, e.g.
+        also from tabulated optical constants, by
+
+        .. math:: \varepsilon = 1 - \frac{r_e \lambda^2}{\pi} n_a f
+
+        with the number density :math:`n_a` of its atoms for their averaged
+        mass number.
+
+        Args:
+            energy (float, ndarray[float], Quantity): photon energies, where
+                floats are taken in eV, or other spectral Quantities.
+            strain (float, optional): strain. Defaults to 0.
+
+        Returns:
+            f (complex, ndarray[complex]): effective atomic form factor.
+
+        """
+        atoms = self._atoms_and_fractions()
+        mass_number = sum(fraction * atom.mass_number_a for atom, fraction in atoms)
+        n = self._dielectric_output("get_ref_index", energy, strain)
+        energy = to_energy(energy)
+        density = self.structural.density.magnitude / (1 + strain)
+        molar_density = density / 1000 / mass_number
+        return -(n**2 - 1) * energy**2 / (_ATOMIC_SUSCEPTIBILITY_FACTOR * molar_density)
 
     # ============================================================================
     # Magnetic parameters
@@ -716,7 +1055,7 @@ class Layer:
 class Vacuum(Layer):
     def __init__(self, thickness=1 * u.nm, **kwargs):
 
-        super().__init__("vacuum", "vacuum", opt_ref_index=1 + 0.0j)
+        super().__init__("vacuum", "vacuum", dielectric=Dispersion.from_ref_index(1))
         self.thickness = thickness
         self.density = 0.0 * u.kg / u.m**3
 
@@ -778,6 +1117,19 @@ class AmorphousLayer(Layer):
                 self.magnetic.magnetization = (0.0, 0.0, 0.0)
             # keeps the angles of the atom, also for a zero amplitude
             self.magnetic.magnetization.set(atom.atomic.magnetization)
+
+    def _atoms_and_fractions(self):
+        atom = getattr(self, "_atom", None)
+        if atom is None:
+            return super()._atoms_and_fractions()
+        return [(atom, 1.0)]
+
+    def _magnetization_for_dielectric(self):
+        """For sublattices, the magnetization of the mixed atom is used, as
+        its magnetic form factor is averaged from its constituents."""
+        if isinstance(self.magnetic.magnetization, list) and hasattr(self, "_atom"):
+            return self._atom.atomic.magnetization.magnitude
+        return super()._magnetization_for_dielectric()
 
 
 class UnitCell(Layer):
@@ -878,8 +1230,8 @@ class UnitCell(Layer):
                 "position function",
                 "magn.",
                 "amplitude",
-                "phi [°]",
-                "gamma [°]",
+                "phi (°)",
+                "gamma (°)",
             ],
             tablefmt=style,
         )
@@ -1026,6 +1378,13 @@ class UnitCell(Layer):
         """
         for _ in range(int(Nb)):
             self.add_atom(atom, position)
+
+    def _atoms_and_fractions(self):
+        """All atoms of the unit cell with equal number fractions, which
+        gives the susceptibility of the unit cell for its density."""
+        if self.num_atoms == 0:
+            return super()._atoms_and_fractions()
+        return [(atom, 1 / self.num_atoms) for atom, _, _ in self.atoms]
 
     def get_atom_ids(self):
         """get_atom_ids

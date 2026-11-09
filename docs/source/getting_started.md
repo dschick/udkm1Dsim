@@ -21,19 +21,19 @@ together with all required dependencies using your preferred package manager.
 
 :::{tab-item} pip
 
-    > pip install udkm1Dsim
+    pip install udkm1Dsim
 
 :::
 
 :::{tab-item} conda
 
-    > conda install -c conda-forge udkm1dsim
+    conda install -c conda-forge udkm1dsim
 
 :::
 
 :::{tab-item} mamba
 
-    > mamba install udkm1dsim
+    mamba install udkm1dsim
 
 :::
 
@@ -72,6 +72,7 @@ subsequent simulations, allowing users to build customized workflows with ease.
 :::
 ::::
 
+(coordinate_system)=
 ## Definitions
 
 :::{attention}

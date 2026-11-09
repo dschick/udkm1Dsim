@@ -7,7 +7,7 @@ import pint
 import pytest
 from pint.testing import assert_allclose
 
-from udkm1Dsim import Layer, Structure
+from udkm1Dsim import Dispersion, Layer, Structure
 
 u = pint.get_application_registry()
 u.formatter.default_format = ".4g~P"
@@ -137,7 +137,7 @@ def test_get_layer_property_vector_mag_moment_in_si(structure):
         ("heat", "thickness", 3 * u.nm),
         ("phonon", "phonon_damping", 1e-12 * u.kg / u.s),
         ("xray", "roughness", 1 * u.nm),
-        ("optical", "opt_ref_index", 1.5 + 0.1j),
+        ("optical", "dielectric", Dispersion.from_ref_index(1.5 + 0.1j)),
         ("magnetic", "curie_temp", 500 * u.K),
         (["xray", "magnetic"], "mag_moment", 2 * u.bohr_magneton),
     ],
