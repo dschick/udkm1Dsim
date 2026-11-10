@@ -197,6 +197,7 @@ class Elzo(MultilayerScattering):
 
     def _substrate_dielectric_tensor(self):
         """dielectric tensor of the last layer of the substrate"""
+        self._check_superstrate_and_substrate()
         return self.get_layer_dielectric_tensor(self.S.substrate[0])
 
     def _jones_of_fields(self, RT, eps=None):
@@ -298,14 +299,8 @@ class Elzo(MultilayerScattering):
 
         """
         # add superstrate
-        superstrate = self.S.superstrate[0]
-        if isinstance(superstrate, Layer):
-            A0, A0_phi, _, _, _, _, k_z_0 = self.get_layer_boundary_phase_matrix(superstrate)
-        else:
-            raise TypeError(
-                "In Elzo the superstrate must be a Layer, e.g. "
-                "Vacuum or AmorphousLayer, and should be present!"
-            )
+        self._check_superstrate_and_substrate()
+        A0, A0_phi, _, _, _, _, k_z_0 = self.get_layer_boundary_phase_matrix(self.S.superstrate[0])
 
         # calc the reflectivity-transmission matrix of the structure
         # and the inverse of the last boundary matrix
@@ -314,14 +309,11 @@ class Elzo(MultilayerScattering):
         )
 
         # add substrate
-        if isinstance(self.S.substrate[0], Layer):
-            RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = (
-                self.calc_homogeneous_matrix(self.S.substrate, last_A, last_A_phi, last_k_z)
-            )
-            RT = m_times_n(RT_sub, RT)
-            RT_phi = m_times_n(RT_sub_phi, RT_phi)
-        else:
-            raise ValueError("There should be a substrate present.")
+        RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = (
+            self.calc_homogeneous_matrix(self.S.substrate, last_A, last_A_phi, last_k_z)
+        )
+        RT = m_times_n(RT_sub, RT)
+        RT_phi = m_times_n(RT_sub_phi, RT_phi)
 
         # multiply the result of the structure with the boundary matrix
         # of the substrate
@@ -646,14 +638,10 @@ class Elzo(MultilayerScattering):
             # structure for each time step of the strain map
 
             # add superstrate
-            superstrate = self.S.superstrate[0]
-            if isinstance(superstrate, Layer):
-                A0, A0_phi, _, _, _, _, k_z_0 = self.get_layer_boundary_phase_matrix(superstrate)
-            else:
-                raise TypeError(
-                    "In Elzo the superstrate must be a Layer, e.g. "
-                    "Vacuum or AmorphousLayer, and should be present!"
-                )
+            self._check_superstrate_and_substrate()
+            A0, A0_phi, _, _, _, _, k_z_0 = self.get_layer_boundary_phase_matrix(
+                self.S.superstrate[0]
+            )
 
             RT, RT_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, last_k_z = (
                 self.calc_inhomogeneous_matrix(
@@ -662,14 +650,11 @@ class Elzo(MultilayerScattering):
             )
 
             # add substrate
-            if isinstance(self.S.substrate[0], Layer):
-                RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = (
-                    self.calc_homogeneous_matrix(self.S.substrate, last_A, last_A_phi, last_k_z)
-                )
-                RT = m_times_n(RT_sub, RT)
-                RT_phi = m_times_n(RT_sub_phi, RT_phi)
-            else:
-                raise ValueError("There should be a substrate present.")
+            RT_sub, RT_sub_phi, last_A, last_A_phi, last_A_inv, last_A_inv_phi, _ = (
+                self.calc_homogeneous_matrix(self.S.substrate, last_A, last_A_phi, last_k_z)
+            )
+            RT = m_times_n(RT_sub, RT)
+            RT_phi = m_times_n(RT_sub_phi, RT_phi)
 
             # multiply vacuum and last layer
             RT = m_times_n(last_A_inv, m_times_n(last_A, RT))
@@ -717,17 +702,9 @@ class Elzo(MultilayerScattering):
         T_phi = np.zeros_like(R)
 
         # add superstrate
-        superstrate = self.S.superstrate[0]
-        if isinstance(superstrate, Layer):
-            A0, A0_phi, _, _, _, _, k_z_0 = self.get_layer_boundary_phase_matrix(superstrate)
-        else:
-            raise TypeError(
-                "In Elzo the superstrate must be a Layer, e.g. "
-                "Vacuum or AmorphousLayer, and should be present!"
-            )
+        self._check_superstrate_and_substrate()
+        A0, A0_phi, _, _, _, _, k_z_0 = self.get_layer_boundary_phase_matrix(self.S.superstrate[0])
 
-        if self.S.substrate == []:
-            raise ValueError("There should be a substrate present.")
         eps = self._substrate_dielectric_tensor()
         boundary = dask_client.scatter((A0, A0_phi, k_z_0, eps), hash=False)
         results = self._compute_in_parallel(

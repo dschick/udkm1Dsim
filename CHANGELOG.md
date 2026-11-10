@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- all scattering simulations raise a `ValueError` with a hint to `Structure.add_superstrate()` and `add_substrate()`, if the superstrate or substrate is not a `Layer`, and `XrayKin` and `XrayDyn` warn that they neglect a superstrate other than `Vacuum` and a substrate other than `UnitCell`s or `Vacuum`
 - the parallel `inhomogeneous_reflectivity()` of the scattering simulations sends a single copy of the simulation to the dask workers instead of one per task, which strongly reduces the time and memory of the main process, and shows a progress bar
 - the inhomogeneous reflectivity of `Elzo` for layers does not calculate hashes of its unused cache anymore, and atoms only build the tables of their form factors once, which recovers the speed before the dielectric tensor of the layers
 - scattering simulations can be displayed before their photon energy is set

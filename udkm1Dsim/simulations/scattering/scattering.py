@@ -28,12 +28,14 @@ __all__ = ["Scattering"]
 __docformat__ = "restructuredtext"
 
 import copy
+import warnings
 
 import numpy as np
 import pint
 from tqdm.auto import tqdm
 
 from ...helpers import make_hash_md5
+from ...structures.layers import Layer, UnitCell, Vacuum
 from ..parameter_groups import ExperimentParameters
 from ..simulation import Simulation
 
@@ -113,6 +115,40 @@ class Scattering(Simulation):
         self._pol_out_state = 0  # no analyzer
         self.pol_in = self.calc_incoming_polarization(self._pol_in_state)
         self.pol_out = self.calc_outgoing_polarization(self._pol_out_state)
+
+    def _check_superstrate_and_substrate(self):
+        """Raise an error if the superstrate or substrate of the structure is
+        not a Layer with its number of repetitions, as set by
+        :meth:`.Structure.add_superstrate` and :meth:`.Structure.add_substrate`."""
+        for name in ("superstrate", "substrate"):
+            value = getattr(self.S, name, None)
+            if not (
+                isinstance(value, (list, tuple))
+                and len(value) == 2
+                and isinstance(value[0], Layer)
+            ):
+                raise ValueError(
+                    f"The {name} of the structure '{self.S.name}' must be a Layer, "
+                    f"e.g. Vacuum, set by Structure.add_{name}(), but is {value!r}!"
+                )
+
+    def _warn_ignored_superstrate_and_substrate(self):
+        """The atomistic formalisms neglect the superstrate and include only a
+        substrate of unit cells, which is warned for any other layer than
+        Vacuum."""
+        self._check_superstrate_and_substrate()
+        superstrate, substrate = self.S.superstrate[0], self.S.substrate[0]
+        if not isinstance(superstrate, Vacuum):
+            warnings.warn(
+                f"{type(self).__name__} neglects the superstrate '{superstrate.id}'!",
+                stacklevel=3,
+            )
+        if not isinstance(substrate, (UnitCell, Vacuum)):
+            warnings.warn(
+                f"{type(self).__name__} only includes a substrate of UnitCells and "
+                f"neglects the substrate '{substrate.id}'!",
+                stacklevel=3,
+            )
 
     def _worker_copy(self):
         """Copy of the simulation for the dask workers without cached results."""

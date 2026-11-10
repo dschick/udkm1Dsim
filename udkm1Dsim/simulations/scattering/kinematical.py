@@ -48,6 +48,12 @@ class XrayKin(Scattering):
 
     Kinetic X-ray scattering simulations following :cite:t:`warren1990`.
 
+    The superstrate is neglected, and the substrate is only included if it
+    is a :class:`.UnitCell`. Any other superstrate or substrate than
+    :class:`.Vacuum` raises a warning, see
+    :class:`~udkm1Dsim.simulations.scattering.elzo.Elzo` for homogeneous
+    layers.
+
     Args:
         S (Structure): sample to do simulations with.
         force_recalc (boolean): force recalculation of results.
@@ -164,6 +170,7 @@ class XrayKin(Scattering):
             - *A (ndarray[complex])* - reflected fields of sub-structures.
 
         """
+        self._warn_ignored_superstrate_and_substrate()
         if strains == 0:
             strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
 

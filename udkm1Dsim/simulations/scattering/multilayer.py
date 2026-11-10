@@ -756,15 +756,9 @@ class MultilayerScattering(Scattering):
 
     def _superstrate_and_substrate(self):
         """the superstrate and the layers of the substrate"""
+        self._check_superstrate_and_substrate()
         superstrate = self.S.superstrate[0]
-        if not isinstance(superstrate, Layer):
-            raise TypeError(
-                f"In {type(self).__name__} the superstrate must be a Layer, "
-                "e.g. Vacuum or AmorphousLayer, and should be present!"
-            )
         substrate, N = self.S.substrate
-        if not isinstance(substrate, Layer):
-            raise ValueError("There should be a substrate present.")
         return (superstrate, 0.0, None), [(substrate, 0.0, None)] * N
 
     def get_homogeneous_layers(self, *args):

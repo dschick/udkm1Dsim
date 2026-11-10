@@ -709,3 +709,31 @@ def test_elzo_worker_copy_has_no_cached_matrices(magnetic_multilayer):
     assert worker.last_layer_ref_trans_matrices["A"] == []
     assert worker.S is sim.S
     assert sim.last_layer_ref_trans_matrices["A"]
+
+
+@pytest.mark.parametrize("cls", [ud.XrayKin, ud.XrayDyn, Elzo, Parratt, BerremanStepanov])
+@pytest.mark.parametrize("name", ["superstrate", "substrate"])
+def test_missing_superstrate_or_substrate_raises(cls, name):
+    S = ud.Structure("empty")
+    setattr(S, name, [])
+    sim = cls(S, True, disp_messages=False, progress_bar=False, save_data=False)
+    sim.energy = np.r_[700.0] * u.eV
+    sim.qz = np.r_[1.0, 2.0] / u.nm
+    with pytest.raises(ValueError, match=f"The {name} of the structure 'empty' must be a Layer"):
+        sim.homogeneous_reflectivity()
+
+
+@pytest.mark.parametrize("cls", [ud.XrayKin, ud.XrayDyn])
+def test_atomistic_formalisms_warn_for_neglected_layers(cls, amorphous_layer_iron):
+    S = ud.Structure("empty")
+    sim = cls(S, True, disp_messages=False, progress_bar=False, save_data=False)
+    sim.energy = np.r_[8000.0] * u.eV
+    sim.qz = np.r_[1.0, 2.0] / u.nm
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        sim.homogeneous_reflectivity()  # Vacuum is no warning
+    S.add_substrate(amorphous_layer_iron)
+    S.add_superstrate(amorphous_layer_iron)
+    with pytest.warns(UserWarning, match="neglects the superstrate"):
+        with pytest.warns(UserWarning, match="neglects the substrate"):
+            sim.homogeneous_reflectivity()
