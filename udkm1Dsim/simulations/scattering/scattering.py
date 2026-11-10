@@ -27,8 +27,11 @@ __all__ = ["Scattering"]
 
 __docformat__ = "restructuredtext"
 
+import copy
+
 import numpy as np
 import pint
+from tqdm.auto import tqdm
 
 from ...helpers import make_hash_md5
 from ..parameter_groups import ExperimentParameters
@@ -86,6 +89,8 @@ class Scattering(Simulation):
     """
 
     _title = "Scattering simulation"
+    # attributes with cached results, which are not sent to the dask workers
+    _cache_attributes = ()
     polarizations = {
         0: "unpolarized",
         1: "circ +",
@@ -108,6 +113,38 @@ class Scattering(Simulation):
         self._pol_out_state = 0  # no analyzer
         self.pol_in = self.calc_incoming_polarization(self._pol_in_state)
         self.pol_out = self.calc_outgoing_polarization(self._pol_out_state)
+
+    def _worker_copy(self):
+        """Copy of the simulation for the dask workers without cached results."""
+        worker = copy.copy(self)
+        for name in self._cache_attributes:
+            setattr(worker, name, {key: [] for key in getattr(self, name)})
+        return worker
+
+    def _compute_in_parallel(self, dask_client, function, arguments):
+        """Calculates ``function(simulation, *args)`` for all arguments on the
+        dask workers. The function must be static, so that only a single copy
+        of the simulation is sent to the workers instead of one per task.
+
+        Args:
+            dask_client (Dask.Client): Dask client.
+            function (callable): static function.
+            arguments (list[tuple]): arguments of all tasks.
+
+        Returns:
+            results (list): results of all tasks in the order of the arguments.
+
+        """
+        from dask.distributed import as_completed
+
+        simulation = dask_client.scatter(self._worker_copy(), hash=False)
+        futures = [
+            dask_client.submit(function, simulation, *args, pure=False) for args in arguments
+        ]
+        if self.progress_bar:
+            for _ in tqdm(as_completed(futures), total=len(futures), desc="Progress", leave=True):
+                pass
+        return dask_client.gather(futures)
 
     @staticmethod
     def _format_range(values):

@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- the parallel `inhomogeneous_reflectivity()` of the scattering simulations sends a single copy of the simulation to the dask workers instead of one per task, which strongly reduces the time and memory of the main process, and shows a progress bar
 - the inhomogeneous reflectivity of `Elzo` for layers does not calculate hashes of its unused cache anymore, and atoms only build the tables of their form factors once, which recovers the speed before the dielectric tensor of the layers
 - scattering simulations can be displayed before their photon energy is set
 - the scattering vector and the incidence angle of the scattering simulations are consistent for several photon energies after changing the energy, wavelength, or wavenumber

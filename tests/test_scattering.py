@@ -680,3 +680,32 @@ def test_elzo_unit_cell_equals_layer_with_its_dielectric_tensor():
         results.append(simulation(Elzo, S, energy, theta).homogeneous_jones_matrices())
     for a, b in zip(*results):
         np.testing.assert_allclose(a, b)
+
+
+@pytest.mark.parametrize("cls", [Elzo, Parratt, Stepanov, BerremanElzo, BerremanStepanov])
+def test_inhomogeneous_parallel_equals_sequential(cls, magnetic_multilayer, tmp_path):
+    distributed = pytest.importorskip("distributed")
+    energy, theta = np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg
+    sim = simulation(cls, magnetic_multilayer, energy, theta)
+    sim.cache_dir = tmp_path
+    L = magnetic_multilayer.get_number_of_layers()
+    rng = np.random.default_rng(0)
+    strain_map = rng.uniform(-0.01, 0.01, (3, L))
+    magnetization_map = rng.uniform(-0.5, 0.5, (3, L, 3))
+    reference = sim.inhomogeneous_reflectivity(strain_map, magnetization_map)
+    with distributed.Client(processes=False, dashboard_address=None) as client:
+        result = sim.inhomogeneous_reflectivity(
+            strain_map, magnetization_map, calc_type="parallel", dask_client=client
+        )
+    for a, b in zip(result, reference):
+        np.testing.assert_allclose(a, b, rtol=1e-12)
+
+
+def test_elzo_worker_copy_has_no_cached_matrices(magnetic_multilayer):
+    sim = simulation(Elzo, magnetic_multilayer, np.r_[700] * u.eV, np.r_[1:20:4] * u.deg)
+    sim.homogeneous_reflectivity()
+    assert sim.last_layer_ref_trans_matrices["A"]
+    worker = sim._worker_copy()
+    assert worker.last_layer_ref_trans_matrices["A"] == []
+    assert worker.S is sim.S
+    assert sim.last_layer_ref_trans_matrices["A"]

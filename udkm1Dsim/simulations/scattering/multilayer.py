@@ -1087,6 +1087,11 @@ class MultilayerScattering(Scattering):
         ]
         return tuple(np.stack(result) for result in zip(*results))
 
+    @staticmethod
+    def _parallel_inhomogeneous_block(sim, strain_map, magnetization_map):
+        """Reflectivities of a block of delays on a dask worker."""
+        return sim.calc_inhomogeneous_reflectivities(strain_map, magnetization_map)
+
     def _delay_block_size(self):
         """number of delays, which are calculated at once"""
         return 1
@@ -1214,15 +1219,11 @@ class MultilayerScattering(Scattering):
             dask_client = kwargs.get("dask_client")
             if not dask_client:
                 raise ValueError("no dask client set")
-            from dask import delayed  # to allow parallel computation
-
-            tasks = [
-                delayed(self.calc_inhomogeneous_reflectivities)(
-                    strain_map[block, :], magnetization_map[block, :]
-                )
-                for block in blocks
-            ]
-            results = dask_client.compute(tasks, sync=True)
+            results = self._compute_in_parallel(
+                dask_client,
+                MultilayerScattering._parallel_inhomogeneous_block,
+                [(strain_map[block, :], magnetization_map[block, :]) for block in blocks],
+            )
         else:
             iterator = (
                 tqdm(blocks, desc="Progress", leave=True) if self.progress_bar else iter(blocks)

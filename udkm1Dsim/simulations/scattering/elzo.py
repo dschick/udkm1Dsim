@@ -118,6 +118,7 @@ class Elzo(MultilayerScattering):
     """
 
     _title = "Elzo multilayer scattering simulation"
+    _cache_attributes = ("last_layer_ref_trans_matrices",)
     _assembly = "transfer"
 
     def __init__(self, S, force_recalc, **kwargs):
@@ -705,10 +706,7 @@ class Elzo(MultilayerScattering):
         """
         if not dask_client:
             raise ValueError("no dask client set")
-        from dask import delayed  # to allow parallel computation
-
         # initialize
-        res = []
         M = np.size(strain_map, 0)  # delay steps
         num_pol = self.num_pol
         shape = (M,) + self.experiment.qz.magnitude.shape + ((num_pol,) if num_pol > 1 else ())
@@ -728,66 +726,34 @@ class Elzo(MultilayerScattering):
                 "Vacuum or AmorphousLayer, and should be present!"
             )
 
-        remote_A0 = dask_client.scatter(A0)
-        remote_A0_phi = dask_client.scatter(A0_phi)
-        remote_k_z_0 = dask_client.scatter(k_z_0)
+        if self.S.substrate == []:
+            raise ValueError("There should be a substrate present.")
         eps = self._substrate_dielectric_tensor()
-        if self.S.substrate != []:
-            remote_substrate = dask_client.scatter(self.S.substrate)
+        boundary = dask_client.scatter((A0, A0_phi, k_z_0, eps), hash=False)
+        results = self._compute_in_parallel(
+            dask_client,
+            Elzo._parallel_inhomogeneous_delay,
+            [(boundary, strain_map[i, :], magnetization_map[i, :]) for i in range(M)],
+        )
+        for i, result in enumerate(results):
+            R[i, ...], R_phi[i, ...], T[i, ...], T_phi[i, ...] = result
 
-        # create dask.delayed tasks for all delay steps
-        for i in range(M):
-            t = delayed(self.calc_inhomogeneous_matrix)(
-                remote_A0, remote_A0_phi, remote_k_z_0, strain_map[i, :], magnetization_map[i, :]
-            )
+        return R, R_phi, T, T_phi
 
-            RT = t[0]
-            RT_phi = t[1]
-            last_A = t[2]
-            last_A_phi = t[3]
-            last_A_inv = t[4]
-            last_A_inv_phi = t[5]
-            last_k_z = t[6]
-
-            # add substrate
-            if isinstance(self.S.substrate[0], Layer):
-                t2 = delayed(self.calc_homogeneous_matrix)(
-                    remote_substrate, last_A, last_A_phi, last_k_z
-                )
-                RT_sub = t2[0]
-                RT_sub_phi = t2[1]
-                last_A = t2[2]
-                last_A_phi = t2[3]
-                last_A_inv = t2[4]
-                last_A_inv_phi = t2[5]
-                RT = delayed(m_times_n)(RT_sub, RT)
-                RT_phi = delayed(m_times_n)(RT_sub_phi, RT_phi)
-            else:
-                raise ValueError("There should be a substrate present.")
-
-            # multiply the result of the structure with the boundary matrix
-            # of superstrate and substrate
-            temp = delayed(m_times_n)(last_A, RT)
-            temp_phi = delayed(m_times_n)(last_A_phi, RT_phi)
-            RT = delayed(m_times_n)(last_A_inv, temp)
-            RT_phi = delayed(m_times_n)(last_A_inv_phi, temp_phi)
-            RTi = delayed(self.calc_intensities_from_matrix)(RT, eps)
-            RTi_phi = delayed(self.calc_intensities_from_matrix)(RT_phi, eps)
-            res.append(RTi[0])
-            res.append(RTi_phi[0])
-            res.append(RTi[1])
-            res.append(RTi_phi[1])
-
-        # compute results
-        res = dask_client.compute(res, sync=True)
-
-        # reorder results to reflectivity matrix
-        for i in range(M):
-            R[i, :, :] = res[4 * i]
-            R_phi[i, :, :] = res[4 * i + 1]
-            T[i, :, :] = res[4 * i + 2]
-            T_phi[i, :, :] = res[4 * i + 3]
-
+    @staticmethod
+    def _parallel_inhomogeneous_delay(sim, boundary, strains, magnetizations):
+        """Reflectivity and transmissivity of a single delay on a dask worker."""
+        A0, A0_phi, k_z_0, eps = boundary
+        RT, RT_phi, A, A_phi, A_inv, A_inv_phi, k_z = sim.calc_inhomogeneous_matrix(
+            A0, A0_phi, k_z_0, strains, magnetizations
+        )
+        RT_sub, RT_sub_phi, A, A_phi, A_inv, A_inv_phi, _ = sim.calc_homogeneous_matrix(
+            sim.S.substrate, A, A_phi, k_z
+        )
+        RT = m_times_n(A_inv, m_times_n(A, m_times_n(RT_sub, RT)))
+        RT_phi = m_times_n(A_inv_phi, m_times_n(A_phi, m_times_n(RT_sub_phi, RT_phi)))
+        R, T = sim.calc_intensities_from_matrix(RT, eps)
+        R_phi, T_phi = sim.calc_intensities_from_matrix(RT_phi, eps)
         return R, R_phi, T, T_phi
 
     def distributed_inhomogeneous_reflectivity(

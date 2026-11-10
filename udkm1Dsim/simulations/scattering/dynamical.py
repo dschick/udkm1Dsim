@@ -90,6 +90,7 @@ class XrayDyn(Scattering):
     """
 
     _title = "Dynamical X-Ray Diffraction simulation"
+    _cache_attributes = ("last_atom_ref_trans_matrices",)
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
@@ -431,10 +432,7 @@ class XrayDyn(Scattering):
         """
         if not dask_client:
             raise ValueError("no dask client set")
-        from dask import delayed  # to allow parallel computation
-
         # initialize
-        res = []
         M = np.size(strain_map, 0)  # delay steps
         N = np.size(self.experiment.qz.magnitude, 0)  # energy steps
         K = np.size(self.experiment.qz.magnitude, 1)  # qz steps
@@ -452,39 +450,40 @@ class XrayDyn(Scattering):
         if len(strain_vectors) > 0:
             uc_indices, _, _ = self.S.get_layer_vectors()
             # make RTM available for all works
-            remote_RTM = dask_client.scatter(RTM)
-            remote_RTU = dask_client.scatter(RTU)
-            remote_uc_indices = dask_client.scatter(uc_indices)
-            remote_strain_vectors = dask_client.scatter(strain_vectors)
-            # create dask.delayed tasks for all delay steps
-            for i in range(M):
-                RT = delayed(XrayDyn.lookup_inhomogeneous_ref_trans_matrix)(
-                    remote_uc_indices,
-                    remote_RTU,
-                    strain_map[i, :],
-                    remote_strain_vectors,
-                    remote_RTM,
-                )
-                RT = delayed(m_times_n)(RT, RTS)
-                Ri = delayed(XrayDyn.calc_reflectivity_from_matrix)(RT)
-                res.append(Ri)
+            shared = dask_client.scatter((uc_indices, RTU, strain_vectors, RTM, RTS), hash=False)
+            results = self._compute_in_parallel(
+                dask_client,
+                XrayDyn._parallel_lookup_delay,
+                [(shared, strain_map[i, :]) for i in range(M)],
+            )
         else:
-            for i in range(M):
-                RT = delayed(self.calc_inhomogeneous_ref_trans_matrix)(
-                    strain_map[i, :], temp_map[i, :, :]
-                )
-                RT = delayed(m_times_n)(RT, RTS)
-                Ri = delayed(XrayDyn.calc_reflectivity_from_matrix)(RT)
-                res.append(Ri)
-
-        # compute results
-        res = dask_client.compute(res, sync=True)
+            remote_RTS = dask_client.scatter(RTS, hash=False)
+            results = self._compute_in_parallel(
+                dask_client,
+                XrayDyn._parallel_recalc_delay,
+                [(remote_RTS, strain_map[i, :], temp_map[i, :, :]) for i in range(M)],
+            )
 
         # reorder results to reflectivity matrix
-        for i in range(M):
-            R[i, :, :] = res[i]
+        for i, result in enumerate(results):
+            R[i, :, :] = result
 
         return R
+
+    @staticmethod
+    def _parallel_lookup_delay(sim, shared, strains):
+        """Reflectivity of a single delay from the given matrices on a dask worker."""
+        uc_indices, RTU, strain_vectors, RTM, RTS = shared
+        RT = XrayDyn.lookup_inhomogeneous_ref_trans_matrix(
+            uc_indices, RTU, strains, strain_vectors, RTM
+        )
+        return XrayDyn.calc_reflectivity_from_matrix(m_times_n(RT, RTS))
+
+    @staticmethod
+    def _parallel_recalc_delay(sim, RTS, strains, temps):
+        """Reflectivity of a single delay recalculated on a dask worker."""
+        RT = sim.calc_inhomogeneous_ref_trans_matrix(strains, temps)
+        return XrayDyn.calc_reflectivity_from_matrix(m_times_n(RT, RTS))
 
     def distributed_inhomogeneous_reflectivity(
         self, strain_map, strain_vectors, RTM, temp_map, job, num_worker
