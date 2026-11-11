@@ -151,29 +151,6 @@ def test_phonon_num_get_hash_is_backend_independent(phonon_num, delays, temp_map
     phonon_num.backend = "scipy"
 
 
-@pytest.mark.skipif(not HAS_NUMBA, reason="numba is not installed")
-def test_phonon_num_backends_agree(phonon_num, delays, temp_map, delta_temp_map):
-    """the step-like heating of the top 20 layers launches the same strain
-    wave with both backends"""
-    ode_options = dict(phonon_num.ode_options)
-    phonon_num.ode_options.update({"rtol": 1e-8, "atol": 1e-12})
-    strain_maps = []
-    try:
-        for backend in ["scipy", "numba"]:
-            phonon_num.backend = backend
-            # calc_strain_map, since the cached results do not depend on the backend
-            strain_maps.append(phonon_num.calc_strain_map(delays, temp_map, delta_temp_map)[0])
-    finally:
-        phonon_num.backend = "scipy"
-        phonon_num.ode_options = ode_options
-
-    assert np.all(np.isfinite(strain_maps[1]))
-    # the heated layers expand by about 1e-3 and launch a strain wave
-    assert np.max(strain_maps[0]) > 5e-4
-    assert np.max(np.abs(strain_maps[0][:, 20:])) > 1e-4
-    np.testing.assert_allclose(strain_maps[1], strain_maps[0], atol=1e-6)
-
-
 # PhononAna
 
 
@@ -187,6 +164,7 @@ def test_phonon_ana_get_strain_map(phonon_ana, delays, temp_map, delta_temp_map)
     phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
     phonon_ana.force_recalc = False
     phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
+    phonon_ana.force_recalc = True
 
 
 def test_phonon_ana_get_energy_per_eigenmode(phonon_ana, delays, temp_map, delta_temp_map):
@@ -246,7 +224,16 @@ def _heating(S, delays, two_steps=True):
 # backside within the delays
 @pytest.fixture(scope="module", params=["structure_freestanding", "structure_crystalline"])
 def reference_structure(request):
-    return request.getfixturevalue(request.param)
+    """the reference structures without phonon damping, which the analytical
+    solution neglects"""
+    S = request.getfixturevalue(request.param)
+    layers = S.get_unique_layers()[1]
+    dampings = [layer.phonon_damping for layer in layers]
+    for layer in layers:
+        layer.phonon_damping = 0 * u.kg / u.s
+    yield S
+    for layer, damping in zip(layers, dampings):
+        layer.phonon_damping = damping
 
 
 @pytest.fixture(scope="module")
@@ -318,3 +305,17 @@ def test_phonon_num_matches_ana(
     max_strain = np.max(np.abs(reference_strain_map))
     assert max_strain > 1e-4
     np.testing.assert_allclose(strain_map, reference_strain_map, rtol=0, atol=1e-5 * max_strain)
+
+
+def test_phonon_num_negative_damping_raises(structure_freestanding, delays, tmp_path):
+    layer = structure_freestanding.get_layer_handle(0)
+    damping = layer.phonon_damping
+    layer.phonon_damping = -1e-12 * u.kg / u.s
+    phonon_num = PhononNum(
+        structure_freestanding, True, cache_dir=tmp_path, save_data=False, disp_messages=False
+    )
+    try:
+        with pytest.raises(ValueError, match="must not be negative"):
+            phonon_num.calc_strain_map(delays, *_heating(structure_freestanding, delays))
+    finally:
+        layer.phonon_damping = damping

@@ -1,0 +1,1714 @@
+#!/usr/bin/env python
+
+# The MIT License (MIT)
+# Copyright (c) 2020 Daniel Schick
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+# OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+# OR OTHER DEALINGS IN THE SOFTWARE.
+
+"""Common base of the multilayer formalisms, which calculate the reflectivity
+and transmissivity of a stack of homogeneous layers from their dielectric
+tensors, see :class:`.Dielectric`.
+
+The magnetization and the dielectric tensor are given in the frame of the
+sample of :cite:t:`elzo2012`: the surface is the :math:`xy`-plane, the surface
+normal :math:`z` points out of the sample towards the superstrate, and
+:math:`yz` is the plane of incidence, so that the :math:`\\sigma` polarization
+is along :math:`x`. The grazing incidence angle :math:`\\theta` is measured
+from the surface in the superstrate, so that the in-plane wave vector
+:math:`k_y = n k \\cos\\theta` with the real part of the refractive index
+:math:`n` of the superstrate is conserved in the stack, which also allows for
+the coupling by a prism.
+
+Every layer has four eigenmodes, two propagating down, i.e. into the sample,
+and two up. Their boundary matrix :math:`A` holds the in-plane electric and
+magnetic fields of the modes, and their normal wave-vector components
+:math:`q_j = k_{z,j} / k` define the propagation through the layer. The stack
+is assembled either by transfer matrices
+
+.. math:: M = \\prod_j P_j A_j^{-1} A_{j-1}
+
+or by the numerically stable scattering-matrix recursion of
+:cite:t:`stepanov2000`, which avoids the exponentially growing terms of the
+upward modes in thick and absorbing stacks.
+
+"""
+
+__all__ = ["MultilayerScattering", "circular_to_linear", "compose_scattering_stacks"]
+
+__docformat__ = "restructuredtext"
+
+from os import path
+from time import time
+
+import numpy as np
+import pint
+from tqdm.auto import tqdm
+
+from ...helpers import convert_polar_to_cartesian, make_hash_md5
+from ...structures.layers import Layer, Vacuum
+from ...structures.structure import Structure
+from .scattering import Scattering
+
+u = pint.get_application_registry()
+Q_ = u.Quantity
+
+# change of the basis of the circular modes to the linear sigma/pi basis
+_CIRCULAR_TO_LINEAR = np.array([[-1, 1], [-1j, -1j]], dtype=np.complex128)
+_LINEAR_TO_CIRCULAR = np.array([[-1, 1j], [1, 1j]], dtype=np.complex128) * 0.5
+# incoming polarization vectors in the (sigma, pi) basis
+_POLARIZATION_VECTORS = {
+    1: np.array([-np.sqrt(0.5), -1j * np.sqrt(0.5)], dtype=np.complex128),
+    2: np.array([np.sqrt(0.5), -1j * np.sqrt(0.5)], dtype=np.complex128),
+    3: np.array([1, 0], dtype=np.complex128),
+    4: np.array([0, 1], dtype=np.complex128),
+}
+
+
+class _Period:
+    """Period of a stack, which is assembled once and then repeated by
+    integer powers for its number of repetitions, see
+    :meth:`MultilayerScattering.calc_jones_matrices`.
+
+    The homogeneous simulations keep the tree of the sub-structures and their
+    repetitions, e.g. 100 periods of a superlattice, as list of layers and
+    periods, see :meth:`MultilayerScattering._homogeneous_layer_tree`, so
+    that every period is assembled only once and then raised to the power of
+    its repetitions with :math:`\\mathcal{O}(\\log N)` matrix products. This
+    tree is not available from the :class:`.Structure`, which only provides
+    flattened vectors of all layers, e.g. by
+    :meth:`.Structure.get_layer_vectors`, as used by the inhomogeneous
+    simulations with a strain or magnetization per layer.
+    """
+
+    __slots__ = ("entries", "repetitions")
+
+    def __init__(self, entries, repetitions):
+        self.entries = entries
+        self.repetitions = repetitions
+
+
+def _repeated(entries, repetitions):
+    """entries of a part of the stack, which is repeated, as :class:`_Period`
+    or as plain entries for a single repetition"""
+    if repetitions == 1:
+        return list(entries)
+    return [_Period(list(entries), repetitions)]
+
+
+def _flatten_layers(entries):
+    """all layers of a stack tree with :class:`_Period` entries as plain list
+    in the order from the top to the bottom, e.g. for :class:`.Parratt`"""
+    layers = []
+    for entry in entries:
+        if isinstance(entry, _Period):
+            layers += _flatten_layers(entry.entries) * entry.repetitions
+        else:
+            layers.append(entry)
+    return layers
+
+
+def circular_to_linear(matrix):
+    """circular_to_linear
+
+    Converts a Jones matrix of shape (..., 2, 2) from the basis of the right
+    and left circular modes to the linear :math:`(\\sigma, \\pi)` basis.
+
+    Args:
+        matrix (ndarray[complex]): Jones matrix in the circular basis.
+
+    Returns:
+        matrix (ndarray[complex]): Jones matrix in the linear basis.
+
+    """
+    return np.matmul(np.matmul(_CIRCULAR_TO_LINEAR, matrix), _LINEAR_TO_CIRCULAR)
+
+
+class MultilayerScattering(Scattering):
+    r"""MultilayerScattering
+
+    Base class of the multilayer formalisms, which take the dielectric tensor
+    of every layer, see :meth:`.Layer.get_dielectric_tensor`, and the
+    incoming and analyzer polarization. The child classes define the
+    eigenmodes of the layers by :meth:`calc_modes` and select the assembly of
+    the stack by transfer matrices or by the scattering-matrix recursion.
+
+    Args:
+        S (Structure): sample to do simulations with.
+        force_recalc (boolean): force recalculation of results.
+
+    Keyword Args:
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+
+    Attributes:
+        S (Structure): sample structure to calculate simulations on.
+        force_recalc (boolean): force recalculation of results.
+        save_data (boolean): true to save simulation results.
+        cache_dir (str): path to cached data.
+        disp_messages (boolean): true to display messages from within the
+            simulations.
+        progress_bar (boolean): enable tqdm progress bar.
+        energy (ndarray[float]): photon energies :math:`E` of scattering light
+        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
+        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        theta (ndarray[float]): grazing incidence angles :math:`\theta` of
+            scattering light
+        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
+        polarizations (dict): polarization states and according names.
+        pol_in_state (int): incoming polarization state as defined in
+            polarizations dict.
+        pol_out_state (int): outgoing polarization state as defined in
+            polarizations dict.
+        pol_in (float): incoming polarization factor (can be a complex ndarray).
+        pol_out (float): outgoing polarization factor (can be a complex ndarray).
+
+    """
+
+    _title = "Multilayer scattering simulation"
+    _pol_in_states = (0, 1, 2, 3, 4, 5)
+    _pol_out_states = (0, 1, 2, 3, 4, 5)
+    # assembly of the stack, either "transfer" or "scattering"
+    _assembly = "scattering"
+
+    def get_hash(self, **kwargs):
+        """get_hash
+
+        Calculates an unique hash given by the energy :math:`E`, :math:`q_z`
+        range, polarization states as well as the sample structure hash for
+        relevant x-ray and magnetic parameters. Optionally, part of the
+        ``strain_map``, ``magnetization_map``, and ``temp_map`` are used.
+
+        Args:
+            **kwargs (ndarray[float]): spatio-temporal strain, magnetization,
+                and temperature profile.
+
+        Returns:
+            hash (str): unique hash.
+
+        """
+        param = [
+            self.pol_in_state,
+            self.pol_out_state,
+            self.pol_in,
+            self.pol_out,
+            self.experiment.qz.magnitude,
+            self.experiment.energy.magnitude,
+        ]
+
+        if "strain_map" in kwargs:
+            strain_map = kwargs.get("strain_map")
+            if np.size(strain_map) > 1e6:
+                strain_map = strain_map.flatten()[0:1000000]
+            param.append(strain_map)
+        if "magnetization_map" in kwargs:
+            magnetization_map = kwargs.get("magnetization_map")
+            if np.size(magnetization_map) > 1e6:
+                magnetization_map = magnetization_map.flatten()[0:1000000]
+            # cartesian magnetization maps since version 2.6.1
+            param.append("cartesian")
+            param.append(magnetization_map)
+        if np.size(kwargs.get("temp_map", [])) > 0:
+            # only a given temp_map changes the hash of former results
+            temp_map = kwargs.get("temp_map")
+            if np.size(temp_map) > 1e6:
+                temp_map = temp_map.flatten()[0:1000000]
+            param.append(temp_map)
+
+        return self.S.get_hash(types=["xray", "magnetic", "optical"]) + "_" + make_hash_md5(param)
+
+    # ---- polarizations ----------------------------------------------------------
+
+    def set_polarization(
+        self, pol_in_state, pol_out_state, polarization_in=None, polarization_out=None
+    ):
+        r"""set_polarization
+
+        Sets the incoming and analyzer (outgoing) polarization at the same time.
+        This is required to change the number of multiple elliptical
+        polarizations of both, the incoming and outgoing polarization, as the
+        individual setters check consistency against the currently set
+        counterpart.
+
+        Args:
+            pol_in_state (int, str): incoming polarization state id or name.
+            pol_out_state (int, str): outgoing polarization state id or name.
+            polarization_in (list[tuple[alpha (Quantity), ellipticity (float)]],
+                optional): elliptical incoming polarization, see
+                :meth:`set_incoming_polarization`.
+            polarization_out (list[tuple[alpha (Quantity), ellipticity (float)]],
+                optional): elliptical outgoing polarization, see
+                :meth:`set_outgoing_polarization`.
+
+        """
+        pol_in_state = self._parse_polarization_state(
+            pol_in_state, self._pol_in_states, "incoming"
+        )
+        pol_out_state = self._parse_polarization_state(
+            pol_out_state, self._pol_out_states, "analyzer"
+        )
+        pol_in = self.calc_incoming_polarization(pol_in_state, polarization_in)
+        pol_out = self.calc_outgoing_polarization(pol_out_state, polarization_out)
+        self.match_polarizations(pol_in, pol_out)
+
+        self._store_incoming_polarization(pol_in_state, pol_in)
+        self._store_outgoing_polarization(pol_out_state, pol_out)
+
+    def set_incoming_polarization(self, pol_in_state, polarization=None):
+        r"""set_incoming_polarization
+
+        Sets the incoming polarization factor for circular +, circular -, sigma,
+        pi, unpolarized, and elliptical polarization.
+        In the case of elliptical polarization a single or list of tuple of the
+        azimuth angle :math:`\alpha` and the ellipticity :math:`e` of the
+        polarization can be input.
+        :math:`0° \leq \alpha \leq +180°`
+        :math:`-1 \leq e \leq +1`
+
+        The number of multiple incoming polarizations must be either 1 or equal
+        to the number of currently set outgoing polarizations. Use
+        :meth:`set_polarization` to change both at the same time.
+
+        Args:
+            pol_in_state (int, str): incoming polarization state id or name.
+            polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
+                ellipticity (-+1 -> circular left/right; 0 -> linear)
+
+        """
+        state = self._parse_polarization_state(pol_in_state, self._pol_in_states, "incoming")
+        pol_in = self.calc_incoming_polarization(state, polarization)
+        self._check_polarizations(pol_in, self.pol_out)
+        self._store_incoming_polarization(state, pol_in)
+
+    def set_outgoing_polarization(self, pol_out_state, polarization=None):
+        r"""set_outgoing_polarization
+
+        Sets the outgoing polarization factor for circular +, circular -, sigma,
+        pi, unpolarized, and elliptical polarization.
+        In the case of elliptical polarization a single or list of tuple of the
+        azimuth angle :math:`\alpha` and the ellipticity :math:`e` of the
+        polarization can be input.
+        :math:`0° \leq \alpha \leq +180°`
+        :math:`-1 \leq e \leq +1`
+
+        The number of multiple outgoing polarizations must be either 1 or equal
+        to the number of currently set incoming polarizations. Use
+        :meth:`set_polarization` to change both at the same time.
+
+        Args:
+            pol_out_state (int, str): outgoing polarization state id or name.
+            polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
+                ellipticity (-+1 -> circular left/right; 0 -> linear)
+
+        """
+        state = self._parse_polarization_state(pol_out_state, self._pol_out_states, "analyzer")
+        pol_out = self.calc_outgoing_polarization(state, polarization)
+        self._check_polarizations(self.pol_in, pol_out)
+        self._store_outgoing_polarization(state, pol_out)
+
+    @staticmethod
+    def calc_incoming_polarization(pol_in_state, polarization=None):
+        """calc_incoming_polarization
+
+        Calculates the incoming polarization factor, i.e. the Jones vector in
+        the linear :math:`(\\sigma, \\pi)` basis, for a given state.
+        Unpolarized light has no Jones vector, so that it is marked by the zero
+        vector, for which :meth:`calc_reflectivity_transmissivity` averages
+        the intensities for the incoming :math:`\\sigma` and :math:`\\pi`
+        polarization.
+
+        Args:
+            pol_in_state (int): incoming polarization state id.
+            polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
+                elliptical polarization, see :meth:`set_incoming_polarization`.
+
+        Returns:
+            pol_in (ndarray[complex]): incoming polarization factor.
+
+        """
+        if pol_in_state == 0:  # unpolarized, see calc_reflectivity_transmissivity
+            return np.zeros(2, dtype=np.complex128)
+        if pol_in_state == 5:  # elliptical
+            return MultilayerScattering.calc_elliptical_polarization(polarization)
+        return _POLARIZATION_VECTORS[pol_in_state].copy()
+
+    @staticmethod
+    def calc_outgoing_polarization(pol_out_state, polarization=None):
+        """calc_outgoing_polarization
+
+        Calculates the outgoing polarization factor for a given state.
+
+        Args:
+            pol_out_state (int): outgoing polarization state id.
+            polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
+                elliptical polarization, see :meth:`set_outgoing_polarization`.
+
+        Returns:
+            pol_out (ndarray[complex]): outgoing polarization factor.
+
+        """
+        if pol_out_state == 0:  # no analyzer
+            return np.array([], dtype=np.complex128)
+        if pol_out_state == 5:  # elliptical
+            return MultilayerScattering.calc_elliptical_polarization(polarization)
+        return _POLARIZATION_VECTORS[pol_out_state].conj()
+
+    @staticmethod
+    def calc_elliptical_polarization(polarization):
+        r"""calc_elliptical_polarization
+
+        Calculates the polarization factors for a single or list of tuple of
+        the azimuth angle :math:`\alpha` and the ellipticity :math:`e`.
+
+        Args:
+            polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
+                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
+                ellipticity (-+1 -> circular left/right; 0 -> linear)
+
+        Returns:
+            pol (ndarray[complex]): polarization factors of shape (N, 2).
+
+        """
+        if polarization is None:
+            raise ValueError(
+                "For elliptical polarization a single or list tuple of azimuth "
+                "angle alpha and ellipticity e must be provided."
+            )
+        if type(polarization) is tuple:
+            polarization = [polarization]
+
+        N = len(polarization)
+        pol = np.zeros((N, 2), dtype=np.complex128)
+        for i, (alpha, ellipticity) in enumerate(polarization):
+            try:
+                alpha = alpha.to("rad").magnitude
+            except AttributeError:
+                pass
+
+            if ellipticity > 1 or ellipticity < -1:
+                raise ValueError("ellipticity must be -1 <= e <= +1")
+            else:
+                epsilon = np.arctan(ellipticity)
+
+            pol[i, :] = np.array(
+                [
+                    np.cos(alpha) * np.cos(epsilon) - 1j * np.sin(alpha) * np.sin(epsilon),
+                    np.sin(alpha) * np.cos(epsilon) + 1j * np.cos(alpha) * np.sin(epsilon),
+                ],
+                dtype=np.complex128,
+            )
+        return pol
+
+    @staticmethod
+    def match_polarizations(pol_in, pol_out):
+        """match_polarizations
+
+        Checks that the number of incoming and outgoing polarizations is either
+        equal or one of them is 1, and tiles the single one to the length of
+        the other.
+
+        Args:
+            pol_in (ndarray[complex]): incoming polarization factor.
+            pol_out (ndarray[complex]): outgoing polarization factor.
+
+        Returns:
+            (tuple):
+            - *pol_in (ndarray[complex])* - incoming polarization factors of
+              shape (num_pol, 2).
+            - *pol_out (ndarray[complex])* - outgoing polarization factors of
+              shape (num_pol, 2) or (num_pol, 0) for no analyzer.
+            - *num_pol (int)* - number of polarizations.
+
+        """
+        # add second dimension to polarization vectors for iteration
+        pol_in = np.atleast_2d(pol_in)
+        pol_out = np.atleast_2d(pol_out)
+
+        num_pol_in = pol_in.shape[0]
+        num_pol_out = pol_out.shape[0]
+
+        if (num_pol_in > 1) and (num_pol_out > 1) and (num_pol_in != num_pol_out):
+            raise ValueError(
+                f"the number of multiple incoming (#{num_pol_in:d}) and outgoing "
+                f"(#{num_pol_out:d}) elliptical polarizations must be the same."
+            )
+        num_pol = max(num_pol_in, num_pol_out)
+        if num_pol_in < num_pol:
+            pol_in = np.tile(pol_in, (num_pol, 1))
+        if num_pol_out < num_pol:
+            pol_out = np.tile(pol_out, (num_pol, 1))
+        return pol_in, pol_out, num_pol
+
+    def _check_polarizations(self, pol_in, pol_out):
+        """_check_polarizations
+
+        Checks the consistency of incoming and outgoing polarizations and adds
+        a hint to :meth:`set_polarization` to the error message.
+
+        Args:
+            pol_in (ndarray[complex]): incoming polarization factor.
+            pol_out (ndarray[complex]): outgoing polarization factor.
+
+        """
+        try:
+            self.match_polarizations(pol_in, pol_out)
+        except ValueError as e:
+            raise ValueError(
+                f"{e} Use set_polarization() to change the incoming and "
+                "outgoing polarizations at the same time."
+            ) from None
+
+    @property
+    def num_pol(self):
+        """int: number of incoming/outgoing polarization pairs."""
+        return self.match_polarizations(self.pol_in, self.pol_out)[2]
+
+    # ---- Jones matrices and intensities -----------------------------------------
+
+    def calc_reflectivity_transmissivity(self, Ref, Trans, pol_in=None, pol_out=None):
+        """calc_reflectivity_transmissivity
+
+        Calculates the reflectivity and transmissivity from the Jones matrices
+        in the linear :math:`(\\sigma, \\pi)` basis for the incoming and
+        analyzer polarization, e.g. from :meth:`homogeneous_jones_matrices`
+        or :meth:`inhomogeneous_jones_matrices`.
+
+        Unpolarized incoming light is an incoherent mixture of two orthogonal
+        polarizations, so that its intensities are the average of the ones
+        for the incoming :math:`\\sigma` and :math:`\\pi` polarization, also
+        for any analyzer, e.g.
+        :math:`R = (|r_{\\sigma\\sigma}|^2 + |r_{\\sigma\\pi}|^2) / 2` for the
+        :math:`\\sigma` analyzer. It has no Jones vector and is marked by the
+        zero vector of :meth:`calc_incoming_polarization`.
+
+        Args:
+            Ref (ndarray[complex]): Jones matrix of the reflection of shape
+                (..., 2, 2).
+            Trans (ndarray[complex]): Jones matrix of the transmission.
+            pol_in (ndarray[complex], optional): incoming polarization factor.
+                Defaults to the one of the simulation.
+            pol_out (ndarray[complex], optional): outgoing polarization
+                factor. Defaults to the one of the simulation.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - reflectivity of shape (...) or
+              (..., P) for P polarizations.
+            - *T (ndarray[float])* - transmissivity.
+
+        """
+        pol_in = self.pol_in if pol_in is None else pol_in
+        pol_out = self.pol_out if pol_out is None else pol_out
+        # enable multiple polarizations
+        pol_in, pol_out, num_pol = self.match_polarizations(pol_in, pol_out)
+        R = np.empty(Ref.shape[:-2] + (num_pol,))
+        T = np.empty(Trans.shape[:-2] + (num_pol,))
+        for i in range(num_pol):
+            if np.any(pol_in[i, :]):
+                incoming = [(1.0, pol_in[i, :])]
+            else:
+                # unpolarized: incoherent average of sigma and pi
+                incoming = [(0.5, _POLARIZATION_VECTORS[3]), (0.5, _POLARIZATION_VECTORS[4])]
+            R[..., i] = 0
+            T[..., i] = 0
+            for weight, vector in incoming:
+                E_R = np.matmul(Ref, vector)
+                E_T = np.matmul(Trans, vector)
+                if pol_out.size == 0:
+                    # no analyzer polarization
+                    R[..., i] += weight * np.sum(np.abs(E_R) ** 2, axis=-1)
+                    T[..., i] += weight * np.sum(np.abs(E_T) ** 2, axis=-1)
+                else:
+                    R[..., i] += weight * np.abs(np.matmul(E_R, pol_out[i, :])) ** 2
+                    T[..., i] += weight * np.abs(np.matmul(E_T, pol_out[i, :])) ** 2
+        if num_pol == 1:
+            return R[..., 0], T[..., 0]
+        return R, T
+
+    @staticmethod
+    def calc_rotation_ellipticity(jones, pi_incident=False):
+        r"""calc_rotation_ellipticity
+
+        Calculates the rotation :math:`\theta` and ellipticity
+        :math:`\epsilon` of the polarization ellipse of the reflected or
+        transmitted light for an incoming :math:`\sigma` or :math:`\pi`
+        polarization, e.g. the Kerr or Faraday effect or the change by a
+        birefringent layer, from the ratio
+        :math:`\chi = r_{\pi\sigma} / r_{\sigma\sigma}` or
+        :math:`\chi = r_{\sigma\pi} / r_{\pi\pi}` of the Jones matrix:
+
+        .. math::
+
+            \tan(2 \theta) = \frac{2 \Re(\chi)}{1 - |\chi|^2}, \quad
+            \sin(2 \epsilon) = \frac{2 \Im(\chi)}{1 + |\chi|^2}
+
+        which reduce to :math:`\theta + i \epsilon \approx \chi` for small
+        angles. In the Fresnel convention of the :math:`\pi` polarization,
+        i.e. :math:`r_{\pi\pi} = -r_{\sigma\sigma}` at normal incidence, the
+        polar Kerr rotation for :math:`\sigma` and :math:`\pi` incidence have
+        opposite signs at normal incidence.
+
+        Args:
+            jones (ndarray[complex]): Jones matrix of shape (..., 2, 2) in the
+                linear :math:`(\sigma, \pi)` basis, see
+                :meth:`homogeneous_jones_matrices`.
+            pi_incident (bool, optional): incoming :math:`\pi` instead of
+                :math:`\sigma` polarization. Defaults to False.
+
+        Returns:
+            (tuple):
+            - *rotation (Quantity)* - rotation of the polarization (deg).
+            - *ellipticity (Quantity)* - ellipticity of the polarization
+              (deg).
+
+        """
+        if pi_incident:
+            ratio = jones[..., 0, 1] / jones[..., 1, 1]
+        else:
+            ratio = jones[..., 1, 0] / jones[..., 0, 0]
+        abs2 = np.abs(ratio) ** 2
+        rotation = 0.5 * np.arctan2(2 * np.real(ratio), 1 - abs2)
+        ellipticity = 0.5 * np.arcsin(np.clip(2 * np.imag(ratio) / (1 + abs2), -1, 1))
+        return Q_(rotation, u.rad).to("deg"), Q_(ellipticity, u.rad).to("deg")
+
+    @staticmethod
+    def jones_from_transfer_matrix(RT):
+        """jones_from_transfer_matrix
+
+        Calculates the Jones matrices of the reflection and transmission in
+        the linear :math:`(\\sigma, \\pi)` basis from the transfer matrix
+        :math:`M` of the stack from :cite:t:`elzo2012`, which fulfills
+        :math:`(t, 0) = M (1, r)` for the down and up modes.
+
+        Args:
+            RT (ndarray[complex]): transfer matrix of shape (M, N, 4, 4).
+
+        Returns:
+            (tuple):
+            - *Ref (ndarray[complex])* - Jones matrix of the reflection of
+              shape (M, N, 2, 2).
+            - *Trans (ndarray[complex])* - Jones matrix of the transmission.
+
+        """
+        Ref = np.zeros(RT.shape[:-2] + (2, 2), dtype=np.complex128)
+        Trans = np.zeros_like(Ref)
+
+        d = np.divide(1, RT[..., 3, 3] * RT[..., 2, 2] - RT[..., 3, 2] * RT[..., 2, 3])
+        Ref[..., 0, 0] = (-RT[..., 3, 3] * RT[..., 2, 0] + RT[..., 2, 3] * RT[..., 3, 0]) * d
+        Ref[..., 0, 1] = (-RT[..., 3, 3] * RT[..., 2, 1] + RT[..., 2, 3] * RT[..., 3, 1]) * d
+        Ref[..., 1, 0] = (RT[..., 3, 2] * RT[..., 2, 0] - RT[..., 2, 2] * RT[..., 3, 0]) * d
+        Ref[..., 1, 1] = (RT[..., 3, 2] * RT[..., 2, 1] - RT[..., 2, 2] * RT[..., 3, 1]) * d
+
+        Trans[..., 0, 0] = (
+            RT[..., 0, 0] + RT[..., 0, 2] * Ref[..., 0, 0] + RT[..., 0, 3] * Ref[..., 1, 0]
+        )
+        Trans[..., 0, 1] = (
+            RT[..., 0, 1] + RT[..., 0, 2] * Ref[..., 0, 1] + RT[..., 0, 3] * Ref[..., 1, 1]
+        )
+        Trans[..., 1, 0] = (
+            RT[..., 1, 0] + RT[..., 1, 2] * Ref[..., 0, 0] + RT[..., 1, 3] * Ref[..., 1, 0]
+        )
+        Trans[..., 1, 1] = (
+            RT[..., 1, 1] + RT[..., 1, 2] * Ref[..., 0, 1] + RT[..., 1, 3] * Ref[..., 1, 1]
+        )
+        return circular_to_linear(Ref), circular_to_linear(Trans)
+
+    @staticmethod
+    def calc_roughness_matrix(roughness, k_z, last_k_z):
+        """calc_roughness_matrix
+
+        Calculates the roughness matrix for an interface with a gaussian
+        roughness for the :cite:t:`elzo2012`.
+
+        Args:
+            roughness (float): gaussian roughness of the interface (m).
+            k_z (ndarray[float)]: internal wave vector.
+            last_k_z (ndarray[float)]: last internal wave vector.
+
+        Returns:
+            W (ndarray[float]): roughness matrix.
+
+        """
+        W = np.zeros([k_z.shape[0], k_z.shape[1], 4, 4], dtype=np.complex128)
+        rugosp = np.exp(-((k_z + last_k_z) ** 2) * roughness**2 / 2)
+        rugosn = np.exp(-((-k_z + last_k_z) ** 2) * roughness**2 / 2)
+        W[:, :, 0, 0] = rugosn
+        W[:, :, 0, 1] = rugosn
+        W[:, :, 0, 2] = rugosp
+        W[:, :, 0, 3] = rugosp
+        W[:, :, 1, 0] = rugosn
+        W[:, :, 1, 1] = rugosn
+        W[:, :, 1, 2] = rugosp
+        W[:, :, 1, 3] = rugosp
+        W[:, :, 2, 0] = rugosp
+        W[:, :, 2, 1] = rugosp
+        W[:, :, 2, 2] = rugosn
+        W[:, :, 2, 3] = rugosn
+        W[:, :, 3, 0] = rugosp
+        W[:, :, 3, 1] = rugosp
+        W[:, :, 3, 2] = rugosn
+        W[:, :, 3, 3] = rugosn
+
+        return W
+
+    def _pi_incident(self):
+        """True for an incoming pi and False for a sigma polarization, which
+        define the rotation and ellipticity."""
+        if self.pol_in_state not in (3, 4):
+            raise ValueError(
+                "The rotation and ellipticity are defined for an incoming sigma or pi "
+                f"polarization, but it is {self.polarizations[self.pol_in_state]}!"
+            )
+        return self.pol_in_state == 4
+
+    # ---- eigenmodes and assembly of the stack -----------------------------------
+
+    def calc_modes(self, eps):
+        """calc_modes
+
+        Calculates the eigenmodes of a homogeneous layer with the dielectric
+        tensor ``eps`` for all photon energies and incidence angles. Must be
+        overwritten by the child classes.
+
+        Args:
+            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
+
+        Returns:
+            (tuple):
+            - *A (ndarray[complex])* - boundary matrix of shape (M, N, 4, 4).
+            - *A_phi (ndarray[complex])* - boundary matrix for opposite
+              magnetization.
+            - *q (ndarray[complex])* - normal wave-vector components
+              :math:`k_{z,j} / k` of the down and up modes of shape (M, N, 4).
+            - *q_phi (ndarray[complex])* - normal wave-vector components for
+              opposite magnetization.
+            - *k_z (ndarray[complex])* - mean normal wave-vector component
+              :math:`k_z / k` of shape (M, N) for the roughness.
+
+        """
+        raise NotImplementedError
+
+    def get_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
+        """get_layer_dielectric_tensor
+
+        Dielectric tensor of a layer at the photon energies of the simulation,
+        see :meth:`.Layer.get_dielectric_tensor`.
+
+        Args:
+            layer (Layer): homogeneous layer.
+            strain (float, optional): strain of the layer. Defaults to 0.
+            magnetization (ndarray[float], optional): cartesian
+                magnetization ``(x, y, z)``. Defaults to the magnetization of
+                the layer.
+
+        Returns:
+            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
+
+        """
+        return layer.get_dielectric_tensor(self.experiment.energy.magnitude, strain, magnetization)
+
+    def get_homogeneous_layers(self, strains=np.array([]), magnetizations=np.array([])):
+        """get_homogeneous_layers
+
+        List of all layers of the stack from the superstrate to the substrate
+        with their strain and magnetization for homogeneous strains and
+        magnetizations of the sub-structures.
+
+        Args:
+            strains (ndarray[float], optional): strain of each sub-structure.
+            magnetizations (ndarray[float], optional): cartesian magnetization
+                of each sub-structure.
+
+        Returns:
+            layers (list[tuple]): layer, strain, and magnetization.
+
+        """
+        return _flatten_layers(self._homogeneous_layer_tree(strains, magnetizations))
+
+    def get_inhomogeneous_layers(self, strains, magnetizations):
+        """get_inhomogeneous_layers
+
+        List of all layers of the stack from the superstrate to the substrate
+        with their strain and magnetization for a single delay of the
+        ``strain_map`` and ``magnetization_map``.
+
+        Args:
+            strains (ndarray[float]): strain of every layer.
+            magnetizations (ndarray[float]): magnetization of every layer.
+
+        Returns:
+            layers (list[tuple]): layer, strain, and magnetization.
+
+        """
+        _, _, handles = self.S.get_layer_vectors()
+        superstrate, substrate = self._superstrate_and_substrate()
+        return (
+            [superstrate]
+            + [(handles[i], strains[i], magnetizations[i]) for i in range(len(handles))]
+            + substrate
+        )
+
+    def calc_jones_matrices(self, layers, cache=None):
+        """calc_jones_matrices
+
+        Calculates the Jones matrices of the reflection and transmission of a
+        stack of layers in the linear :math:`(\\sigma, \\pi)` basis for the
+        given and the opposite magnetization.
+
+        Args:
+            layers (list[tuple]): layer, strain, and magnetization from the
+                superstrate to the substrate, see :meth:`get_homogeneous_layers`,
+                where repeated parts of the stack are assembled only once and
+                raised to the power of their repetitions by the transfer
+                matrices or the scattering matrices.
+            cache (dict, optional): cache of the eigenmodes of identical
+                layers. Defaults to None.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
+              (M, N, 2, 2).
+            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
+              opposite magnetization.
+            - *T (ndarray[complex])* - Jones matrix of the transmission.
+            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
+              opposite magnetization.
+
+        """
+        k = self.experiment.k.magnitude[:, np.newaxis]
+        self._check_superstrate(layers[0])
+        top = self._layer_modes(*layers[0], cache=cache)
+        # state of the assembly from the superstrate to the substrate for the
+        # given and the opposite magnetization:
+        # - stack: transfer or scattering matrices of the layers assembled so far
+        # - last: boundary matrix A and normal wave vector k_z of the last layer
+        # - eps: dielectric tensor of the last layer for the transmitted field
+        state = {
+            "stack": [None, None],
+            "last": [(top[0], top[4]), (top[1], top[4])],
+            "eps": top[7],
+        }
+        self._assemble(layers[1:], state, cache, k)
+        stack, stack_phi = state["stack"]
+        eps = state["eps"]
+
+        if self._assembly == "transfer":
+            R, T = self.jones_from_transfer_matrix(stack)
+            R_phi, T_phi = self.jones_from_transfer_matrix(stack_phi)
+        else:
+            R, R_phi = circular_to_linear(stack[2]), circular_to_linear(stack_phi[2])
+            T, T_phi = circular_to_linear(stack[0]), circular_to_linear(stack_phi[0])
+        T, T_phi = self.transmitted_field(T, eps), self.transmitted_field(T_phi, eps)
+        R, T = self.incident_field(R, T, top[7])
+        R_phi, T_phi = self.incident_field(R_phi, T_phi, top[7])
+        return R, R_phi, T, T_phi
+
+    @staticmethod
+    def incident_field(R, T, eps):
+        r"""incident_field
+
+        Converts the Jones matrices of the reflection and transmission from the
+        amplitudes of the eigenmodes of the superstrate to the amplitudes of
+        its electric field. The transmission of the eigenmodes of
+        :func:`~udkm1Dsim.simulations.scattering.elzo.elzo_modes` is
+        :math:`\\varepsilon_{00}` times smaller, where :math:`\\varepsilon` is the
+        dielectric tensor of the superstrate, while their reflection is
+        given for the electric field. Must be overwritten for other
+        eigenmodes.
+
+        Args:
+            R (ndarray[complex]): Jones matrix of the reflection of the modes
+                of shape (M, N, 2, 2).
+            T (ndarray[complex]): Jones matrix of the transmission.
+            eps (ndarray[complex]): dielectric tensor of the superstrate of
+                shape (M, 3, 3).
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - Jones matrix of the reflected electric
+              field.
+            - *T (ndarray[complex])* - Jones matrix of the transmission for
+              the incident electric field.
+
+        """
+        return R, T * eps[:, 0, 0][:, np.newaxis, np.newaxis, np.newaxis]
+
+    @staticmethod
+    def transmitted_field(T, eps):
+        r"""transmitted_field
+
+        Converts the Jones matrix of the transmission from the amplitudes of
+        the eigenmodes of :func:`~udkm1Dsim.simulations.scattering.elzo.elzo_modes`
+        to the amplitudes of the transmitted electric field, which are
+        :math:`\\varepsilon_{00}` times smaller, where :math:`\\varepsilon` is the
+        dielectric tensor of the last layer of the substrate. Must be
+        overwritten for other eigenmodes.
+
+        The transmission of all multilayer formalisms is the electric field
+        at the bottom of the last layer of the substrate per incident
+        electric field, i.e. after the propagation through the thickness of
+        the substrate layers, below which the substrate is semi-infinite.
+        Hence, a substrate layer of zero thickness gives the transmitted
+        field at the top of the substrate, as many other codes do.
+
+        Args:
+            T (ndarray[complex]): Jones matrix of the transmission of the modes
+                of shape (M, N, 2, 2).
+            eps (ndarray[complex]): dielectric tensor of the last layer of
+                shape (M, 3, 3).
+
+        Returns:
+            T (ndarray[complex]): Jones matrix of the transmitted electric
+            field.
+
+        """
+        return T / eps[:, 0, 0][:, np.newaxis, np.newaxis, np.newaxis]
+
+    def _in_plane_wavevector(self):
+        """In-plane component :math:`k_y / k_0 = n \\cos\\vartheta` of the wave
+        vector, which is conserved in the stack, for the grazing angles
+        :math:`\\vartheta` in the superstrate with the real part of its
+        refractive index :math:`n`, e.g. for the coupling by a prism, where
+        it exceeds 1."""
+        cos_theta = np.cos(self.experiment.theta.magnitude)
+        superstrate = self.S.superstrate[0] if isinstance(self.S, Structure) else None
+        if superstrate is None or isinstance(superstrate, Vacuum):
+            return cos_theta
+        n = superstrate.get_ref_index(self.experiment.energy.magnitude)
+        return np.real(np.atleast_1d(n))[:, np.newaxis] * cos_theta
+
+    @staticmethod
+    def _parse_layer_inputs(layer, strain, magnetization):
+        """strain as float and magnetization as tuple, where magnetizations
+        with fewer than three elements are replaced by the one of the layer"""
+        strain = float(np.ravel(strain)[0]) if np.size(strain) > 0 else 0.0
+        if magnetization is None or np.size(magnetization) < 3:
+            magnetization = layer._magnetization_for_dielectric()
+        return strain, tuple(float(m) for m in np.ravel(magnetization)[:3])
+
+    def _layer_modes(self, layer, strain, magnetization, cache=None):
+        """eigenmodes, thickness, and roughness of a layer, which are cached
+        for identical layers, strains, and magnetizations"""
+        if not isinstance(layer, Layer):
+            raise TypeError(f"{type(self).__name__} can only handle Layers and their sub-classes!")
+        strain, magnetization = self._parse_layer_inputs(layer, strain, magnetization)
+        key = (id(layer), strain, magnetization)
+        if cache is not None and key in cache:
+            return cache[key]
+        eps = self.get_layer_dielectric_tensor(layer, strain, magnetization)
+        modes = self.calc_modes(eps)
+        result = modes + (
+            layer.structural.thickness.magnitude * (1 + strain),
+            layer.structural.roughness.magnitude,
+            eps,
+        )
+        if cache is not None:
+            cache[key] = result
+        return result
+
+    def _expand_sub_structures(self, S, strains, magnetizations):
+        """layers of all sub-structures with their strain and magnetization
+        from the values per sub-structure, see :meth:`homogeneous_reflectivity_transmissivity`"""
+        entries = []
+        counter = 0
+        for sub_structure, repetitions in S.sub_structures:
+            if isinstance(sub_structure, Layer):
+                entry = (sub_structure, strains[counter], magnetizations[counter])
+                entries += _repeated([entry], repetitions)
+                counter += 1
+            else:
+                num = sub_structure.get_number_of_sub_structures()
+                entries += _repeated(
+                    self._expand_sub_structures(
+                        sub_structure,
+                        strains[counter : counter + num],
+                        magnetizations[counter : counter + num],
+                    ),
+                    repetitions,
+                )
+                counter += num
+        return entries
+
+    def _superstrate_and_substrate(self):
+        """the superstrate and the layers of the substrate"""
+        self._check_superstrate_and_substrate()
+        superstrate = self.S.superstrate[0]
+        substrate, N = self.S.substrate
+        return (superstrate, 0.0, None), _repeated([(substrate, 0.0, None)], N)
+
+    def _homogeneous_layer_tree(self, strains=np.array([]), magnetizations=np.array([])):
+        """_homogeneous_layer_tree
+
+        List of all layers of the stack from the superstrate to the substrate
+        with their strain and magnetization for homogeneous strains and
+        magnetizations of the sub-structures.
+
+        Args:
+            strains (ndarray[float], optional): strain of each sub-structure.
+            magnetizations (ndarray[float], optional): cartesian magnetization
+                of each sub-structure.
+
+        Returns:
+            layers (list[tuple, _Period]): layer, strain, and
+            magnetization, where repeated parts are kept as repetitions.
+
+        """
+        if not isinstance(self.S, Structure):
+            raise TypeError("The sample must be a Structure!")
+        L = self.S.get_number_of_sub_structures()
+        if np.size(strains) == 0:
+            strains = np.zeros([L, 1])
+        if np.size(magnetizations) == 0:
+            magnetizations = np.zeros([L, 1])
+        superstrate, substrate = self._superstrate_and_substrate()
+        return (
+            [superstrate]
+            + self._expand_sub_structures(self.S, strains, magnetizations)
+            + substrate
+        )
+
+    def _check_superstrate(self, entry):
+        """check of the superstrate, which must be isotropic to define the
+        polarizations, by the child classes"""
+
+    def _assemble(self, entries, state, cache, k):
+        """Adds the layers and repeated parts of the stack to the transfer or
+        scattering matrices in ``state`` for both magnetizations."""
+        step = self._transfer_step if self._assembly == "transfer" else self._scattering_step
+        for entry in entries:
+            if isinstance(entry, _Period):
+                self._assemble_period(entry, state, cache, k)
+                continue
+            A, A_phi, q, q_phi, k_z, distance, roughness, eps = self._layer_modes(
+                *entry, cache=cache
+            )
+            W = None
+            if roughness > 0:
+                W = self.calc_roughness_matrix(roughness, k * k_z, k * state["last"][0][1])
+            for i, (A_i, q_i) in enumerate([(A, q), (A_phi, q_phi)]):
+                state["stack"][i] = step(
+                    state["stack"][i], A_i, q_i, state["last"][i][0], W, k * distance
+                )
+                state["last"][i] = (A_i, k_z)
+            state["eps"] = eps
+
+    def _assemble_period(self, period, state, cache, k):
+        """Adds a period of the stack, where the first repetition starts at
+        the layer above and all others at the end of the period."""
+        N = period.repetitions
+        if N < 1 or not period.entries:
+            return
+        first = {"stack": [None, None], "last": list(state["last"]), "eps": state["eps"]}
+        self._assemble(period.entries, first, cache, k)
+        blocks = first["stack"]
+        end = first
+        if N > 1:
+            end = {"stack": [None, None], "last": list(first["last"]), "eps": first["eps"]}
+            self._assemble(period.entries, end, cache, k)
+            blocks = [
+                self._compose_stacks(block, self._repeat_stack(inner, N - 1))
+                for block, inner in zip(first["stack"], end["stack"])
+            ]
+        state["stack"] = [
+            block if stack is None else self._compose_stacks(stack, block)
+            for stack, block in zip(state["stack"], blocks)
+        ]
+        state["last"], state["eps"] = end["last"], end["eps"]
+
+    def _compose_stacks(self, stack, following):
+        """transfer or scattering matrices of a stack and the following part"""
+        if self._assembly == "transfer":
+            return np.matmul(following, stack)
+        return compose_scattering_stacks(stack, following)
+
+    def _repeat_stack(self, stack, n):
+        """transfer or scattering matrices of a period repeated ``n`` times"""
+        if self._assembly == "transfer":
+            return _repeat_transfer_matrix(stack, n)
+        return _repeat_scattering_stack(stack, n)
+
+    @staticmethod
+    def _transfer_step(stack, A, q, last_A, W, phase):
+        """transfer matrix of the stack including the next layer, i.e. its
+        projection A_j^-1 A_j-1 at the interface and propagation P_j"""
+        interface = np.linalg.solve(A, last_A)
+        if W is not None:
+            interface = interface * W
+        M = np.exp(1j * phase[..., np.newaxis] * q)[..., np.newaxis] * interface
+        return M if stack is None else np.matmul(M, stack)
+
+    @staticmethod
+    def _scattering_step(stack, A, q, last_A, W, phase):
+        """scattering matrices of the stack including the next layer by the
+        recursion of :cite:t:`stepanov2000`"""
+        interface = np.linalg.solve(A, last_A)
+        if W is not None:
+            interface = interface * W
+        Xtt, Xtr = interface[..., :2, :2], interface[..., :2, 2:]
+        Xrt, Xrr = interface[..., 2:, :2], interface[..., 2:, 2:]
+        # the down modes decay and the inverse propagation of the up modes as
+        # well, so that no exponentially growing terms appear
+        down = np.exp(1j * phase[..., np.newaxis] * q[..., :2])
+        up_inv = np.exp(-1j * phase[..., np.newaxis] * q[..., 2:])
+        inv_Xrr = np.linalg.inv(Xrr)
+        Mtt = down[..., :, np.newaxis] * (Xtt - Xtr @ inv_Xrr @ Xrt)
+        Mtr = down[..., :, np.newaxis] * (Xtr @ inv_Xrr) * up_inv[..., np.newaxis, :]
+        Mrt = -inv_Xrr @ Xrt
+        Mrr = inv_Xrr * up_inv[..., np.newaxis, :]
+        if stack is None:
+            return Mtt, Mtr, Mrt, Mrr
+        return compose_scattering_stacks(stack, (Mtt, Mtr, Mrt, Mrr))
+
+    # ---- homogeneous simulations ------------------------------------------------
+
+    def homogeneous_jones_matrices(
+        self,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+    ):
+        """homogeneous_jones_matrices
+
+        Calculates the Jones matrices of the reflection and transmission of
+        the whole sample structure in the linear :math:`(\\sigma, \\pi)` basis
+        allowing only for homogeneous strain and magnetization, from which
+        :meth:`calc_reflectivity_transmissivity` and
+        :meth:`calc_rotation_ellipticity` follow.
+
+        Args:
+            strains (ndarray[float], optional): strain of each sub-structure.
+                Defaults to no strain.
+            magnetizations (ndarray[float], optional): magnetization of each
+                sub-structure as :math:`L \times 3` array in cartesian
+                coordinates ``(x, y, z)`` by default, see
+                :meth:`inhomogeneous_jones_matrices`. Defaults to no
+                magnetization.
+            temps (ndarray[float], optional): temperature of each sub-structure,
+                also for :math:`K` sub-systems, e.g. electrons and phonons. The
+                temperature dependence of the dielectric tensor is planned for
+                a future version, so that given ``temps`` raise a
+                ``NotImplementedError``.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad.
+                Defaults to False.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
+              (M, N, 2, 2).
+            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
+              opposite magnetization.
+            - *T (ndarray[complex])* - Jones matrix of the transmission, see
+              :meth:`transmitted_field`.
+            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
+              opposite magnetization.
+
+        """
+        self._check_experiment()
+        self._reject_temperatures(temps, "temps")
+        if np.size(magnetizations) > 0:
+            magnetizations = self.parse_magnetization_map(magnetizations, polar)
+        t1 = time()
+        self.disp_message("Calculating _homogeneous_jones_matrices_ ...")
+        results = self.calc_jones_matrices(
+            self._homogeneous_layer_tree(strains, magnetizations), cache={}
+        )
+        self.disp_message(f"Elapsed time for _homogeneous_jones_matrices_: {time() - t1:f} s")
+        return results
+
+    def homogeneous_reflectivity_transmissivity(
+        self,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+    ):
+        r"""homogeneous_reflectivity_transmissivity
+
+        Calculates the reflectivity :math:`R` and transmissivity :math:`T` of
+        the whole sample structure allowing only for homogeneous strain and
+        magnetization for the incoming and analyzer polarization, see
+        :meth:`homogeneous_jones_matrices` and
+        :meth:`calc_reflectivity_transmissivity`.
+
+        Args:
+            strains (ndarray[float], optional): strain of each sub-structure.
+                Defaults to no strain.
+            magnetizations (ndarray[float], optional): magnetization of each
+                sub-structure as :math:`L \times 3` array in cartesian
+                coordinates ``(x, y, z)`` by default, see
+                :meth:`inhomogeneous_jones_matrices`. Defaults to no
+                magnetization.
+            temps (ndarray[float], optional): temperature of each sub-structure,
+                also for :math:`K` sub-systems, e.g. electrons and phonons. The
+                temperature dependence of the dielectric tensor is planned for
+                a future version, so that given ``temps`` raise a
+                ``NotImplementedError``.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad.
+                Defaults to False.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - reflectivity.
+            - *R_phi (ndarray[float])* - reflectivity for opposite
+              magnetization.
+            - *T (ndarray[float])* - transmissivity.
+            - *T_phi (ndarray[float])* - transmissivity for opposite
+              magnetization.
+
+        """
+        Ref, Ref_phi, Trans, Trans_phi = self.homogeneous_jones_matrices(
+            strains, magnetizations, temps, polar=polar
+        )
+        R, T = self.calc_reflectivity_transmissivity(Ref, Trans)
+        R_phi, T_phi = self.calc_reflectivity_transmissivity(Ref_phi, Trans_phi)
+        return R, R_phi, T, T_phi
+
+    def homogeneous_rotation_ellipticity(
+        self,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+    ):
+        r"""homogeneous_rotation_ellipticity
+
+        Calculates the rotation and ellipticity of the polarization of the
+        reflected and transmitted light, e.g. the Kerr and Faraday effect, of
+        the whole sample structure allowing only for homogeneous strain and
+        magnetization for the incoming :math:`\sigma` or :math:`\pi`
+        polarization, see :meth:`homogeneous_jones_matrices` and
+        :meth:`calc_rotation_ellipticity`.
+
+        Args:
+            strains (ndarray[float], optional): strain of each sub-structure.
+                Defaults to no strain.
+            magnetizations (ndarray[float], optional): magnetization of each
+                sub-structure as :math:`L \times 3` array in cartesian
+                coordinates ``(x, y, z)`` by default, see
+                :meth:`inhomogeneous_jones_matrices`. Defaults to no
+                magnetization.
+            temps (ndarray[float], optional): temperature of each sub-structure,
+                also for :math:`K` sub-systems, e.g. electrons and phonons. The
+                temperature dependence of the dielectric tensor is planned for
+                a future version, so that given ``temps`` raise a
+                ``NotImplementedError``.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad.
+                Defaults to False.
+
+        Returns:
+            (tuple):
+            - *R (tuple[Quantity])* - rotation and ellipticity of the
+              reflection, e.g. the Kerr effect.
+            - *R_phi (tuple[Quantity])* - rotation and ellipticity of the
+              reflection for opposite magnetization.
+            - *T (tuple[Quantity])* - rotation and ellipticity of the
+              transmission, e.g. the Faraday effect.
+            - *T_phi (tuple[Quantity])* - rotation and ellipticity of the
+              transmission for opposite magnetization.
+
+        """
+        pi_incident = self._pi_incident()
+        jones = self.homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar)
+        return tuple(self.calc_rotation_ellipticity(j, pi_incident) for j in jones)
+
+    # ---- inhomogeneous simulations ----------------------------------------------
+
+    def inhomogeneous_jones_matrices(
+        self,
+        strain_map=np.array([]),
+        magnetization_map=np.array([]),
+        temp_map=np.array([]),
+        *,
+        polar=False,
+        **kwargs,
+    ):
+        r"""inhomogeneous_jones_matrices
+
+        Calculates the Jones matrices of the reflection and transmission of an
+        inhomogeneously strained and magnetized sample structure for a given
+        ``strain_map`` and ``magnetization_map`` in space and time for each
+        layer of the sample structure, from which
+        :meth:`calc_reflectivity_transmissivity` and
+        :meth:`calc_rotation_ellipticity` follow. They are not saved to the
+        cache, as they need much more memory than these.
+
+        Args:
+            strain_map (ndarray[float], optional): spatio-temporal strain
+                profile.
+            magnetization_map (ndarray[float], optional): spatio-temporal
+                magnetization profile :math:`M \times N \times 3` with
+                :math:`M` delays and :math:`N` layers. The magnetization is
+                given in cartesian coordinates ``(x, y, z)`` by default, as
+                returned by
+                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
+                Its amplitude scales the magnetic part of the dielectric tensor.
+            temp_map (ndarray[float], optional): spatio-temporal temperature
+                profile :math:`M \times N` or :math:`M \times N \times K` of
+                :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map` with
+                :math:`K` sub-systems, e.g. electrons and phonons. The
+                temperature dependence of the dielectric tensor is planned for
+                a future version, so that a given ``temp_map`` raises a
+                ``NotImplementedError``.
+            polar (bool, optional): the ``magnetization_map`` is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
+                as before version 2.6.1. Defaults to False.
+            **kwargs:
+                - *calc_type (str)* - ``sequential`` (default) or ``parallel``
+                  over blocks of delays utilizing `Dask <https://dask.org/>`_
+                  on a local machine or a cluster, depending on the
+                  ``dask_client``.
+                - *dask_client (Dask.Client)* - Dask client.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
+              (D, M, N, 2, 2) for D delays.
+            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
+              opposite magnetization.
+            - *T (ndarray[complex])* - Jones matrix of the transmission.
+            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
+              opposite magnetization.
+
+        """
+        strain_map, magnetization_map = self._parse_maps(
+            strain_map, magnetization_map, temp_map, polar
+        )
+        t1 = time()
+        self.disp_message("Calculating _inhomogeneous_jones_matrices_ ...")
+        results = self._calc_inhomogeneous(strain_map, magnetization_map, None, **kwargs)
+        self.disp_message(f"Elapsed time for _inhomogeneous_jones_matrices_: {time() - t1:f} s")
+        return results
+
+    def inhomogeneous_reflectivity_transmissivity(
+        self,
+        strain_map=np.array([]),
+        magnetization_map=np.array([]),
+        temp_map=np.array([]),
+        *,
+        polar=False,
+        **kwargs,
+    ):
+        r"""inhomogeneous_reflectivity_transmissivity
+
+        Returns the reflectivity and transmissivity of an inhomogeneously
+        strained and magnetized sample structure for a given ``strain_map``
+        and ``magnetization_map`` in space and time for each layer of the
+        sample structure and the incoming and analyzer polarization. If no
+        result is saved in the cache it is calculated, see
+        :meth:`inhomogeneous_jones_matrices`.
+
+        Args:
+            strain_map (ndarray[float], optional): spatio-temporal strain
+                profile.
+            magnetization_map (ndarray[float], optional): spatio-temporal
+                magnetization profile :math:`M \times N \times 3` with
+                :math:`M` delays and :math:`N` layers. The magnetization is
+                given in cartesian coordinates ``(x, y, z)`` by default, as
+                returned by
+                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
+                Its amplitude scales the magnetic part of the dielectric tensor.
+            temp_map (ndarray[float], optional): spatio-temporal temperature
+                profile :math:`M \times N` or :math:`M \times N \times K` of
+                :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map` with
+                :math:`K` sub-systems, e.g. electrons and phonons. The
+                temperature dependence of the dielectric tensor is planned for
+                a future version, so that a given ``temp_map`` raises a
+                ``NotImplementedError``.
+            polar (bool, optional): the ``magnetization_map`` is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
+                as before version 2.6.1. Defaults to False.
+            **kwargs:
+                - *calc_type (str)* - ``sequential`` (default) or ``parallel``
+                  over blocks of delays utilizing `Dask <https://dask.org/>`_
+                  on a local machine or a cluster, depending on the
+                  ``dask_client``.
+                - *dask_client (Dask.Client)* - Dask client.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - reflectivity.
+            - *R_phi (ndarray[float])* - reflectivity for opposite
+              magnetization.
+            - *T (ndarray[float])* - transmissivity.
+            - *T_phi (ndarray[float])* - transmissivity for opposite
+              magnetization.
+
+        """
+        return self._cached_inhomogeneous(
+            "reflectivity_transmissivity",
+            ("R", "R_phi", "T", "T_phi"),
+            MultilayerScattering._reduce_reflectivity_transmissivity,
+            strain_map,
+            magnetization_map,
+            temp_map,
+            polar,
+            kwargs,
+        )
+
+    def inhomogeneous_rotation_ellipticity(
+        self,
+        strain_map=np.array([]),
+        magnetization_map=np.array([]),
+        temp_map=np.array([]),
+        *,
+        polar=False,
+        **kwargs,
+    ):
+        r"""inhomogeneous_rotation_ellipticity
+
+        Returns the rotation and ellipticity of the polarization of the
+        reflected and transmitted light, e.g. the time-resolved Kerr and
+        Faraday effect, of an inhomogeneously strained and magnetized sample
+        structure for a given ``strain_map`` and ``magnetization_map`` for the
+        incoming :math:`\sigma` or :math:`\pi` polarization. If no result is
+        saved in the cache it is calculated, see
+        :meth:`inhomogeneous_jones_matrices`.
+
+        Args:
+            strain_map (ndarray[float], optional): spatio-temporal strain
+                profile.
+            magnetization_map (ndarray[float], optional): spatio-temporal
+                magnetization profile :math:`M \times N \times 3` with
+                :math:`M` delays and :math:`N` layers. The magnetization is
+                given in cartesian coordinates ``(x, y, z)`` by default, as
+                returned by
+                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
+                Its amplitude scales the magnetic part of the dielectric tensor.
+            temp_map (ndarray[float], optional): spatio-temporal temperature
+                profile :math:`M \times N` or :math:`M \times N \times K` of
+                :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map` with
+                :math:`K` sub-systems, e.g. electrons and phonons. The
+                temperature dependence of the dielectric tensor is planned for
+                a future version, so that a given ``temp_map`` raises a
+                ``NotImplementedError``.
+            polar (bool, optional): the ``magnetization_map`` is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
+                as before version 2.6.1. Defaults to False.
+            **kwargs:
+                - *calc_type (str)* - ``sequential`` (default) or ``parallel``
+                  over blocks of delays utilizing `Dask <https://dask.org/>`_
+                  on a local machine or a cluster, depending on the
+                  ``dask_client``.
+                - *dask_client (Dask.Client)* - Dask client.
+
+        Returns:
+            (tuple):
+            - *R (tuple[Quantity])* - rotation and ellipticity of the
+              reflection, e.g. the Kerr effect.
+            - *R_phi (tuple[Quantity])* - rotation and ellipticity of the
+              reflection for opposite magnetization.
+            - *T (tuple[Quantity])* - rotation and ellipticity of the
+              transmission, e.g. the Faraday effect.
+            - *T_phi (tuple[Quantity])* - rotation and ellipticity of the
+              transmission for opposite magnetization.
+
+        """
+        self._pi_incident()
+        keys = (
+            "rot_R",
+            "ell_R",
+            "rot_R_phi",
+            "ell_R_phi",
+            "rot_T",
+            "ell_T",
+            "rot_T_phi",
+            "ell_T_phi",
+        )
+        results = self._cached_inhomogeneous(
+            "rotation_ellipticity",
+            keys,
+            MultilayerScattering._reduce_rotation_ellipticity,
+            strain_map,
+            magnetization_map,
+            temp_map,
+            polar,
+            kwargs,
+        )
+        angles = [Q_(value, u.deg) for value in results]
+        return tuple((angles[i], angles[i + 1]) for i in range(0, 8, 2))
+
+    def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map, temp_map=None):
+        """calc_inhomogeneous_jones_matrices
+
+        Calculates the Jones matrices of the sample structure for a block of
+        delays of the ``strain_map`` and ``magnetization_map``, see
+        :meth:`calc_jones_matrices` for every delay. Formalisms, which
+        calculate all delays at once, overwrite this method and
+        :meth:`_delay_block_size`.
+
+        Args:
+            strain_map (ndarray[float]): strain of every layer for each delay.
+            magnetization_map (ndarray[float]): magnetization of every layer
+                for each delay.
+            temp_map (ndarray[float], optional): temperature of every layer
+                for each delay, which is reserved for the planned temperature
+                dependence of the dielectric tensor. Defaults to None.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
+              (D, M, N, 2, 2) for D delays.
+            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
+              opposite magnetization.
+            - *T (ndarray[complex])* - Jones matrix of the transmission.
+            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
+              opposite magnetization.
+
+        """
+        results = [
+            self.calc_jones_matrices(self.get_inhomogeneous_layers(strains, magnetizations))
+            for strains, magnetizations in zip(strain_map, magnetization_map)
+        ]
+        return tuple(np.stack(result) for result in zip(*results))
+
+    @staticmethod
+    def parse_magnetization_map(magnetization_map, polar=False):
+        r"""parse_magnetization_map
+
+        Returns the magnetization as plain cartesian array, which is used
+        internally. The ``magnetization_map`` is given in cartesian
+        coordinates ``(x, y, z)`` by default or in polar coordinates
+        ``(amplitude, phi, gamma)`` with the angles in rad for ``polar=True``
+        in its last dimension, see :meth:`inhomogeneous_jones_matrices`. Maps
+        with only a single component in the last dimension or empty maps are
+        returned unchanged, since the magnetization of the layers is used for
+        them.
+
+        Args:
+            magnetization_map (ndarray[float]): magnetization map.
+            polar (bool, optional): the magnetization map is given in polar
+                coordinates. Defaults to False.
+
+        Returns:
+            magnetization_map (ndarray[float]): cartesian magnetization map.
+
+        """
+        if not polar:
+            return magnetization_map
+        magnetization_map = np.asarray(magnetization_map, dtype=float)
+        if magnetization_map.ndim == 0 or magnetization_map.shape[-1] != 3:
+            return magnetization_map
+        return convert_polar_to_cartesian(magnetization_map)
+
+    @staticmethod
+    def _reject_temperatures(temps, name):
+        """The temperature dependence of the dielectric tensor is planned, so
+        that only empty temperatures are accepted yet."""
+        if np.size(temps) > 0:
+            raise NotImplementedError(
+                "The temperature dependence of the dielectric tensor is planned for a future "
+                f"version, so that the {name} of the multilayer formalisms must be empty!"
+            )
+
+    def _parse_maps(self, strain_map, magnetization_map, temp_map, polar):
+        """strain and cartesian magnetization map with the same delays"""
+        self._check_experiment()
+        if not isinstance(strain_map, np.ndarray):
+            raise TypeError("strain_map must be a numpy ndarray!")
+        if not isinstance(magnetization_map, np.ndarray):
+            raise TypeError("magnetization_map must be a numpy ndarray!")
+        if not isinstance(temp_map, np.ndarray):
+            raise TypeError("temp_map must be a numpy ndarray!")
+        self._reject_temperatures(temp_map, "temp_map")
+        magnetization_map = self.parse_magnetization_map(magnetization_map, polar)
+        M = np.size(strain_map, 0)
+        N = np.size(magnetization_map, 0)
+        if (M == 0) and (N > 0):
+            strain_map = np.zeros([np.size(magnetization_map, 0), np.size(magnetization_map, 1)])
+        elif (M > 0) and (N == 0):
+            magnetization_map = np.zeros_like(strain_map)
+        elif (M == 0) and (N == 0):
+            raise ValueError("At least a strain_map or magnetzation_map must be given!")
+        elif M != N:
+            raise ValueError(
+                "The strain_map and magnetzation_map must have the same number of delay steps!"
+            )
+        return strain_map, magnetization_map
+
+    def _delay_block_size(self):
+        """number of delays, which are calculated at once"""
+        return 1
+
+    def _delay_blocks(self, M, dask_client=None):
+        """slices of the blocks of delays of the size of
+        :meth:`_delay_block_size`, which are split into at least one block
+        per worker thread of the ``dask_client`` for the parallel
+        calculation"""
+        size = self._delay_block_size()
+        if dask_client is not None:
+            workers = max(1, sum(dask_client.nthreads().values()))
+            size = max(1, min(size, -(-M // workers)))
+        return [slice(i, min(i + size, M)) for i in range(0, M, size)]
+
+    def _cached_inhomogeneous(
+        self, name, keys, reduce, strain_map, magnetization_map, temp_map, polar, kwargs
+    ):
+        """Results of :meth:`_calc_inhomogeneous`, which are saved to and
+        loaded from the cache by their ``name`` and ``keys``."""
+        strain_map, magnetization_map = self._parse_maps(
+            strain_map, magnetization_map, temp_map, polar
+        )
+        filename = (
+            f"inhomogeneous_{name}_{type(self).__name__}_"
+            + self.get_hash(
+                strain_map=strain_map, magnetization_map=magnetization_map, temp_map=temp_map
+            )
+            + ".npz"
+        )
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        if path.exists(full_filename) and not self.force_recalc:
+            tmp = np.load(full_filename)
+            self.disp_message(f"_inhomogeneous_{name}_ loaded from file:\n\t" + filename)
+            return tuple(tmp[key] for key in keys)
+        t1 = time()
+        self.disp_message(f"Calculating _inhomogeneous_{name}_ ...")
+        results = self._calc_inhomogeneous(strain_map, magnetization_map, reduce, **kwargs)
+        self.disp_message(f"Elapsed time for _inhomogeneous_{name}_: {time() - t1:f} s")
+        self.save(full_filename, dict(zip(keys, results)), f"_inhomogeneous_{name}_")
+        return results
+
+    def _calc_inhomogeneous(self, strain_map, magnetization_map, reduce, **kwargs):
+        """Results of :meth:`calc_inhomogeneous_jones_matrices` for all blocks
+        of delays, which are reduced by the static function ``reduce`` on the
+        dask workers, e.g. to the reflectivity, or are the Jones matrices for
+        ``reduce=None``, see :meth:`_delay_blocks`."""
+        calc_type = kwargs.get("calc_type", "sequential")
+        if calc_type not in ["parallel", "sequential"]:
+            raise TypeError("calc_type must be either _parallel_ or _sequential_!")
+        dask_client = kwargs.get("dask_client")
+        if calc_type == "parallel" and not dask_client:
+            raise ValueError("no dask client set")
+        blocks = self._delay_blocks(
+            np.size(strain_map, 0), dask_client if calc_type == "parallel" else None
+        )
+        if calc_type == "parallel":
+            results = self._compute_in_parallel(
+                dask_client,
+                MultilayerScattering._parallel_inhomogeneous_block,
+                [(reduce, strain_map[block, :], magnetization_map[block, :]) for block in blocks],
+            )
+        else:
+            iterator = (
+                tqdm(blocks, desc="Progress", leave=True) if self.progress_bar else iter(blocks)
+            )
+            results = [
+                MultilayerScattering._parallel_inhomogeneous_block(
+                    self, reduce, strain_map[block, :], magnetization_map[block, :]
+                )
+                for block in iterator
+            ]
+        return tuple(np.concatenate(parts) for parts in zip(*results))
+
+    @staticmethod
+    def _parallel_inhomogeneous_block(sim, reduce, strain_map, magnetization_map):
+        """Results of a block of delays on a dask worker."""
+        jones = sim.calc_inhomogeneous_jones_matrices(strain_map, magnetization_map)
+        return jones if reduce is None else reduce(sim, jones)
+
+    @staticmethod
+    def _reduce_reflectivity_transmissivity(sim, jones):
+        """reflectivity and transmissivity of a block of Jones matrices"""
+        Ref, Ref_phi, Trans, Trans_phi = jones
+        R, T = sim.calc_reflectivity_transmissivity(Ref, Trans)
+        R_phi, T_phi = sim.calc_reflectivity_transmissivity(Ref_phi, Trans_phi)
+        return R, R_phi, T, T_phi
+
+    @staticmethod
+    def _reduce_rotation_ellipticity(sim, jones):
+        """rotation and ellipticity (deg) of a block of Jones matrices"""
+        pi_incident = sim._pi_incident()
+        result = []
+        for j in jones:
+            rotation, ellipticity = MultilayerScattering.calc_rotation_ellipticity(j, pi_incident)
+            result += [rotation.to("deg").magnitude, ellipticity.to("deg").magnitude]
+        return tuple(result)
+
+
+def compose_scattering_stacks(stack, following):
+    r"""compose_scattering_stacks
+
+    Composes the scattering matrices
+    :math:`S^{(1)} = (S^{(1)}_{tt}, S^{(1)}_{tr}, S^{(1)}_{rt}, S^{(1)}_{rr})`
+    of the upper part of a stack with the ones :math:`S^{(2)}` of its lower
+    part by Eqs. (63)-(67) of :cite:t:`stepanov2000`
+
+    .. math::
+
+        S_{tt} = X S^{(1)}_{tt}, \quad
+        S_{tr} = S^{(2)}_{tr} + X S^{(1)}_{tr} S^{(2)}_{rr}, \quad
+        S_{rt} = S^{(1)}_{rt} + Y S^{(2)}_{rt} S^{(1)}_{tt}, \quad
+        S_{rr} = Y S^{(2)}_{rr}
+
+    with :math:`X = S^{(2)}_{tt} (1 - S^{(1)}_{tr} S^{(2)}_{rt})^{-1}` and
+    :math:`Y = S^{(1)}_{rr} (1 - S^{(2)}_{rt} S^{(1)}_{tr})^{-1}`, where
+    :math:`t` and :math:`r` label the down- and up-going modes, so that
+    :math:`S_{rt}` is the reflection and :math:`S_{tt}` the transmission in
+    the basis of the modes of the superstrate and the last layer.
+
+    Args:
+        stack (tuple[ndarray[complex]]): scattering matrices :math:`S^{(1)}`
+            of the upper part of shape (..., 2, 2).
+        following (tuple[ndarray[complex]]): scattering matrices
+            :math:`S^{(2)}` of the lower part.
+
+    Returns:
+        stack (tuple[ndarray[complex]]): scattering matrices :math:`S` of the
+        combined stack.
+
+    """
+    S1_tt, S1_tr, S1_rt, S1_rr = stack
+    S2_tt, S2_tr, S2_rt, S2_rr = following
+    identity = np.eye(2, dtype=np.complex128)
+    X = S2_tt @ np.linalg.inv(identity - S1_tr @ S2_rt)
+    Y = S1_rr @ np.linalg.inv(identity - S2_rt @ S1_tr)
+    return X @ S1_tt, S2_tr + X @ S1_tr @ S2_rr, S1_rt + Y @ S2_rt @ S1_tt, Y @ S2_rr
+
+
+def _repeat_transfer_matrix(matrix, n):
+    """Repeat a batched transfer matrix ``n`` times by integer powers."""
+    return np.linalg.matrix_power(matrix, n)
+
+
+def _scattering_stack_power(stack, n):
+    """Raise a scattering stack to a positive integer power by binary
+    powers, see :func:`compose_scattering_stacks`."""
+    result = None
+    while n > 0:
+        if n & 1:
+            result = stack if result is None else compose_scattering_stacks(result, stack)
+        n >>= 1
+        if n:
+            stack = compose_scattering_stacks(stack, stack)
+    return result
+
+
+def _repeat_scattering_stack(stack, n):
+    """Repeat a scattering stack ``n`` times by binary powers."""
+    return _scattering_stack_power(stack, n)

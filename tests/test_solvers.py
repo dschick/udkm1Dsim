@@ -20,54 +20,6 @@ from udkm1Dsim.simulations.solvers.heat_scipy import jacobian_sparsity, odefunc
 # tests
 
 
-def test_ode_func():
-    t = np.r_[0:1]
-    u = np.r_[0:2]
-    N = 2
-    K = 1
-    d_x_grid = np.r_[0.5, 0.5]
-    thermal_conds = [[lambda T: 1], [lambda T: 1]]
-    therm_cond_takes_vector = [[False], [False]]
-    heat_capacities = [[lambda T: 1], [lambda T: 1]]
-    sub_system_coupling = [[lambda T: 1], [lambda T: 1]]
-    densities = np.r_[1:3]
-    groups = [(0, np.r_[0]), (1, np.r_[1])]
-    dAdz = np.r_[0:2]
-    fluence = np.r_[1]
-    delay_pump = np.r_[0]
-    pulse_length = np.r_[1]
-    bc_top_type = "isolator"
-    bc_top_value = np.r_[1]
-    bc_bottom_type = "isolator"
-    bc_bottom_value = np.r_[1]
-    pbar = None
-    state = (0, 1)
-
-    odefunc(
-        t,
-        u,
-        N,
-        K,
-        d_x_grid,
-        thermal_conds,
-        therm_cond_takes_vector,
-        heat_capacities,
-        sub_system_coupling,
-        densities,
-        groups,
-        dAdz,
-        fluence,
-        delay_pump,
-        pulse_length,
-        bc_top_type,
-        bc_top_value,
-        bc_bottom_type,
-        bc_bottom_value,
-        pbar,
-        state,
-    )
-
-
 def test_ode_func_groups():
     # two layers with different T-dependent properties, interleaved on the grid
     N = 6
@@ -231,6 +183,69 @@ def test_phonon_solve_max_step(monkeypatch):
     assert run({"method": "RK45", "max_step": dt_stab / 2})["max_step"] == dt_stab / 2
     # implicit solvers are not limited
     assert run({"method": "Radau", "max_step": np.inf})["max_step"] == np.inf
+
+
+def test_phonon_force_from_damping():
+    """the dashpots act on the rate of deformation, so that a uniform motion
+    is not damped and the total momentum is conserved"""
+    damping = np.r_[1.0, 2.0, 3.0, 4.0]
+    assert np.allclose(phonon_scipy.force_from_damping(np.full(4, 5.0), damping), 0)
+    v = np.r_[0.0, 1.0, 0.0, 0.0]
+    F = phonon_scipy.force_from_damping(v, damping)
+    # dashpot 0 between layers 0 and 1, dashpot 1 between layers 1 and 2
+    np.testing.assert_allclose(F, [1.0, -3.0, 2.0, 0.0])
+    assert F.sum() == pytest.approx(0)
+
+
+def test_phonon_stability_time_step_damping():
+    L = 4
+    masses = np.full(L, 1e-25)
+    spring_consts = np.full(L, 10.0)
+    omega = np.sqrt(4 * 10.0 / 1e-25)
+    rate = 4 * 1e-12 / 1e-25
+    dt = phonon_scipy.stability_time_step(spring_consts, masses, damping=np.full(L, 1e-12))
+    assert dt == pytest.approx(1 / (omega + rate))
+
+
+@pytest.mark.parametrize("backend", ["scipy", "numba"])
+def test_phonon_damping_rate(backend):
+    """a standing wave of the free chain decays at the rate
+    2 gamma sin^2(q d / 2) / m, i.e. quadratic in its wave vector"""
+    if backend == "numba":
+        pytest.importorskip("numba")
+        from udkm1Dsim.simulations.solvers.phonon_numba import solve
+    else:
+        solve = phonon_scipy.solve
+    L = 40
+    mass = 2e-26
+    spring_const = 16.0
+    gamma = 1e-13
+    masses = np.full(L, mass)
+    spring_consts = np.full(L, spring_const)
+    rates = []
+    for n in [2, 4]:
+        qd = np.pi * n / L
+        x0 = np.r_[np.cos(qd * (np.arange(L) + 0.5)), np.zeros(L)] * 1e-12
+        omega = 2 * np.sqrt(spring_const / mass) * np.sin(qd / 2)
+        delays = np.linspace(0, 10 * 2 * np.pi / omega, 201)
+        X = solve(
+            x0,
+            delays,
+            np.zeros((L, len(delays))),
+            np.full(L, gamma),
+            spring_consts,
+            masses,
+            {"method": "RK45", "rtol": 1e-8, "atol": 1e-20},
+        )
+        # energy of the mode decays at twice the rate of its amplitude
+        energy = 0.5 * mass * np.sum(X[:, L:] ** 2, 1) + 0.5 * spring_const * np.sum(
+            np.diff(X[:, :L], 1, 1) ** 2, 1
+        )
+        rate = -np.polyfit(delays, np.log(energy), 1)[0] / 2
+        expected = 2 * gamma * np.sin(qd / 2) ** 2 / mass
+        assert rate == pytest.approx(expected, rel=2e-2)
+        rates.append(rate)
+    assert rates[1] / rates[0] == pytest.approx(4, rel=5e-2)
 
 
 def test_heat_numba_solve_not_implemented():

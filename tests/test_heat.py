@@ -195,10 +195,12 @@ def test_get_temp_map(heat):
     # load data from cache
     heat.force_recalc = False
     heat.get_temp_map(delays, init_temp)
+    heat.force_recalc = True
 
 
-@pytest.mark.skip(reason="takes too much time in CI")
 def test_get_diffusion_temp_map(heat):
+    """the heat diffuses from the excited surface into the depth, while the
+    isolating boundaries conserve the absorbed energy"""
     delays = np.r_[-1:10:0.01] * u.ps
     init_temp = 300 * u.K
     heat.heat_diffusion = True
@@ -212,7 +214,20 @@ def test_get_diffusion_temp_map(heat):
         "multilayer_absorption": True,
         "backside": False,
     }
-    heat.get_temp_map(delays, init_temp)
+    heat.boundary_conditions = {"top_type": "isolator", "bottom_type": "isolator"}
+    temp_map, _ = heat.get_temp_map(delays, init_temp)
+    after = delays.to("ps").magnitude >= 0
+    # energy per area of the layers with the constant heat capacity of the fixtures
+    thicknesses = heat.S.get_layer_property_vector("structural.thickness.magnitude")
+    densities = heat.S.get_layer_property_vector("structural.density.magnitude")
+    energy = (temp_map[after] - 300) @ (500 * densities * thicknesses)
+    assert energy[0] > 0
+    # up to the tolerance of the solver and the sampling of the layers
+    np.testing.assert_allclose(energy, energy[0], rtol=1e-2)
+    # the excited surface cools, while the deeper layers warm up
+    excited = temp_map[after][0]
+    assert temp_map[-1, 0] < excited[0]
+    assert np.any(temp_map[-1] > excited + 1e-3)
 
 
 @pytest.mark.skipif(not HAS_NUMBA, reason="numba is not installed")
@@ -296,8 +311,10 @@ def test_boundary_conditions(heat):
 
 
 def test_distances(heat):
-    heat.distances = np.r_[0:10e-9:1e-10] * u.nm
-    assert_allclose(heat.distances, np.r_[0:10e-9:1e-10] * u.nm)
+    heat.distances = np.r_[0:10:0.1] * u.nm
+    assert_allclose(heat.distances, np.r_[0:10:0.1] * u.nm)
+    assert_allclose(heat.distances.to("m"), np.r_[0:10e-9:1e-10] * u.m)
+    heat.distances = np.array([]) * u.nm
 
 
 def test_backend(heat):

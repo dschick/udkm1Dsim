@@ -3994,6 +3994,7 @@ lint = [
     { name = "ruff" },
 ]
 test = [
+    { name = "dask", extra = ["distributed"] },
     { name = "numba" },
     { name = "pytest" },
     { name = "pytest-codspeed" },
@@ -4033,6 +4034,7 @@ provides-extras = ["parallel", "numba", "docs", "refractiveindex"]
 [package.metadata.requires-dev]
 lint = [{ name = "ruff" }]
 test = [
+    { name = "dask", extras = ["distributed"], specifier = ">=2.6.0" },
     { name = "numba" },
     { name = "pytest" },
     { name = "pytest-codspeed" },

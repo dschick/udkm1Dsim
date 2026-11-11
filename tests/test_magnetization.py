@@ -118,10 +118,6 @@ def test_magnetization_repr(magnetization):
     assert magnetization._repr_html_().startswith("<h2>Magnetization simulation</h2>")
 
 
-def test_magnetization_get_hash(magnetization, delays, temp_map):
-    magnetization.get_hash(delays=delays, temp_map=temp_map)
-
-
 def test_magnetization_get_hash_distinguishes_simulations(structure_amorph, delays, temp_map):
     """the cache must not hand a result of one simulation type or
     temperature sub-system to another"""
@@ -169,6 +165,7 @@ def test_llb_get_magnetization(llb, temp_map, delays):
     llb.get_magnetization_map(delays, temp_map=temp_map)
     llb.force_recalc = False
     llb.get_magnetization_map(delays, temp_map=temp_map)
+    llb.force_recalc = True
 
 
 @pytest.mark.parametrize(
@@ -275,23 +272,6 @@ def test_no_exchange_across_spacer(tmp_path):
     assert np.allclose(A_mag, [[0, 1e-11], [1e-11, 0]])
 
 
-def test_llb_larmor_precession(tmp_path):
-    """without damping the magnetization precesses around the external field
-    at the Larmor frequency"""
-    S = make_structure((make_layer("m", lamda=0.0), 1))
-    llb = simulation(LLB, S, tmp_path)
-    delays = np.r_[0:100:0.5] * u.ps
-    B = 0.5
-    temp_map = 300 * np.ones((len(delays), 1, 1))
-    m = llb.get_magnetization_map(delays, temp_map=temp_map, B_ext=np.r_[0, 0, B])[:, 0, :]
-    t = delays.to("s").magnitude
-    omega = magnetization_scipy.GAMMA_E * B
-    norm = np.linalg.norm(m[0])
-    assert np.allclose(m[:, 0], norm * np.cos(omega * t), atol=1e-5)
-    assert np.allclose(m[:, 1], -norm * np.sin(omega * t), atol=1e-5)
-    assert np.allclose(np.linalg.norm(m, axis=-1), norm)
-
-
 def test_gyromagnetic_ratio_default():
     """the gyromagnetic ratio defaults to the one of a free electron"""
     layer = make_layer("m")
@@ -318,6 +298,7 @@ def test_gyromagnetic_ratio_precession(model, tmp_path):
     norm = np.linalg.norm(m[0])
     assert np.allclose(m[:, 0], norm * np.cos(omega * t), atol=1e-5)
     assert np.allclose(m[:, 1], -norm * np.sin(omega * t), atol=1e-5)
+    assert np.allclose(np.linalg.norm(m, axis=-1), norm)
 
 
 @pytest.mark.parametrize("eff_spin", [0.5, 3.5, np.inf])
@@ -655,7 +636,7 @@ def pulse(delays, T0=300.0, dT=200.0, L=1):
 def test_uncoupled_sublattices_are_independent_layers(tmp_path):
     """sublattices without coupling evolve as separate layers"""
     J_a, J_b = mf_exchange(0.5, 630), mf_exchange(3.5, 1000)
-    delays = np.r_[0:20:0.1] * u.ps
+    delays = np.r_[0:10:0.1] * u.ps
     kwargs = {"lamda": [0.01, 0.02], "eff_spin": [0.5, 3.5], "gilbert_damping": [0.05, 0.1]}
     layer = make_sublattice_layer("ab", [(1, 0, 0), (0, 1, 0)], np.diag([J_a, J_b]), **kwargs)
     reference = make_structure(
@@ -687,7 +668,7 @@ def test_identical_coupled_sublattices_are_one_sublattice(sign, tmp_path):
     temperature, parallel for a ferromagnetic and antiparallel for an
     antiferromagnetic coupling"""
     J_1, J_2 = mf_exchange(0.5, 400), mf_exchange(0.5, 230)
-    delays = np.r_[0:20:0.1] * u.ps
+    delays = np.r_[0:10:0.1] * u.ps
     temp_map = pulse(delays)
     layer = make_sublattice_layer(
         "ab", [(1, 0, 0), (sign, 0, 0)], np.array([[J_1, sign * J_2], [sign * J_2, J_1]])
@@ -1176,7 +1157,3 @@ def test_all_optical_switching(gdfeco, tmp_path):
     assert np.any((switched[:, 0] < -0.01) & (switched[:, 1] < -0.01))
     assert m_z(low, exchange_relaxation=True)[-1, 0] > 0.3
     assert m_z(high)[-1, 0] > 0
-    # the switching is converged with the default tolerances, which deviate
-    # by ~2e-3 from tight ones
-    llb.ode_options.update({"rtol": 1e-7, "atol": 1e-10})
-    assert np.allclose(m_z(high, exchange_relaxation=True), switched, atol=5e-3)

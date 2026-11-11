@@ -99,7 +99,9 @@ def solve(
     if options.get("method", "RK45") in _EXPLICIT_METHODS:
         max_step = options.get("max_step")
         max_step = np.inf if max_step is None else max_step
-        options["max_step"] = min(max_step, stability_time_step(spring_consts, masses))
+        options["max_step"] = min(
+            max_step, stability_time_step(spring_consts, masses, damping=damping)
+        )
 
     sol = solve_ivp(
         odefunc,
@@ -169,7 +171,7 @@ def odefunc(
 
     # accelerations = derivative of velocities
     X_prime[L:] = (
-        force_from_damping(v, damping, masses)
+        force_from_damping(v, damping)
         + force_from_spring(np.r_[np.diff(x), 0], np.r_[0, np.diff(x)], spring_consts)
         + force_from_heat[:, finderb(t, delays)].squeeze()
     ) / masses
@@ -256,32 +258,43 @@ def force_from_heat(sticks, spring_consts):
     return F
 
 
-def force_from_damping(v, damping, masses):
+def force_from_damping(v, damping):
     r"""force_from_damping
 
-    Calculates the force acting on each mass in a linear spring due to
-    damping (:math:`\gamma_i`) according to the shift velocity difference
-    :math:`v_{i}-v_{i-1}` with :math:`v_i(t) = \dot{x}_i(t)`:
+    Calculates the force acting on each mass due to the damping of the
+    springs, which act as dashpots :math:`\gamma_i` between the masses
+    :math:`i` and :math:`i+1` with a force proportional to the rate of
+    their deformation :math:`\dot{x}_{i+1}-\dot{x}_i` with
+    :math:`v_i(t) = \dot{x}_i(t)`:
 
     .. math::
 
-        F_i^{damp} = \gamma_i(\dot{x}_i-\dot{x}_{i-1})
+        F_i^{damp} = \gamma_i(\dot{x}_{i+1}-\dot{x}_i)
+        - \gamma_{i-1}(\dot{x}_i-\dot{x}_{i-1})
+
+    as for the spring constants, the damping :math:`\gamma_i` of the last
+    layer is unused. The damping rate of a phonon grows with the square of its
+    wave vector :math:`q` as :math:`\gamma_i q^2 d_i^2 / 2 m_i` for
+    :math:`q d_i \ll 1`.
 
     Args:
         v (ndarray[float]): velocity of masses.
-        damping (ndarray[float]): phonon damping.
-        masses (ndarray[float]): masses.
+        damping (ndarray[float]): phonon damping (kg/s).
 
     Returns:
         F (ndarray[float]): force from damping.
 
     """
-    F = masses * damping * np.diff(v, 0)
-
+    damping = np.ravel(damping)
+    # force of the dashpot between the layers i and i+1
+    F_dashpot = damping[:-1] * np.diff(v)
+    F = np.zeros_like(v)
+    F[:-1] += F_dashpot
+    F[1:] -= F_dashpot
     return F
 
 
-def stability_time_step(spring_consts, masses, fraction=1.0):
+def stability_time_step(spring_consts, masses, fraction=1.0, damping=None):
     r"""stability_time_step
 
     Largest time step the explicit Runge-Kutta schemes may take on the
@@ -296,8 +309,16 @@ def stability_time_step(spring_consts, masses, fraction=1.0):
     imaginary axis end at :math:`h\,\omega \approx 1.7` for ``RK23`` and
     :math:`h\,\omega \approx 3.3` for ``RK45``, so the step
     :math:`h = f/\omega_\mathrm{max}` with :math:`f = 1` keeps every mode of
-    the chain stable. The step is a bound on the stability, the accuracy is
-    left to the error control.
+    the chain stable. The dashpots of the ``damping`` add the damping rates
+    bounded by
+
+    .. math::
+
+        c_\mathrm{max} \leq \max_i \frac{2\,(\gamma_{i-1} + \gamma_i)}{m_i}
+
+    so that :math:`h = f/(\omega_\mathrm{max} + c_\mathrm{max})` is used.
+    The step is a bound on the stability, the accuracy is left to the error
+    control.
 
     Args:
         spring_consts (ndarray[float]): spring constants :math:`L \times J`,
@@ -305,6 +326,8 @@ def stability_time_step(spring_consts, masses, fraction=1.0):
         masses (ndarray[float]): masses of the layers (kg).
         fraction (float, optional): fraction :math:`f` of the stability
             limit. Defaults to 1.0.
+        damping (ndarray[float], optional): phonon damping of the layers
+            (kg/s). Defaults to None.
 
     Returns:
         max_step (float): largest stable time step (s).
@@ -314,7 +337,11 @@ def stability_time_step(spring_consts, masses, fraction=1.0):
     # k_i connects the layers i and i+1, the last spring is unused
     k_left = np.r_[0.0, k[:-1]]
     k_right = np.r_[k[:-1], 0.0]
-    omega_max = np.sqrt(np.max(2 * (k_left + k_right) / np.asarray(masses, dtype=float)))
+    masses = np.asarray(masses, dtype=float)
+    omega_max = np.sqrt(np.max(2 * (k_left + k_right) / masses))
+    if damping is not None:
+        gamma = np.abs(np.ravel(np.asarray(damping, dtype=float)))
+        omega_max += np.max(2 * (np.r_[0.0, gamma[:-1]] + np.r_[gamma[:-1], 0.0]) / masses)
     if not np.isfinite(omega_max) or omega_max <= 0:
         return np.inf
     return fraction / omega_max

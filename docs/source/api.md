@@ -14,6 +14,6 @@ solvers
 heat
 phonons
 magnetization
-xrays
+scattering
 helpers
 ```

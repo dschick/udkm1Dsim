@@ -57,6 +57,7 @@ extensions = [
     'myst_sphinx_gallery',
 ]
 
+import re
 from pathlib import Path
 
 from myst_sphinx_gallery import GalleryConfig, ThumbnailConfig
@@ -78,6 +79,35 @@ myst_sphinx_gallery_config = GalleryConfig(
         quality_animated=15,
     ),
 )
+
+# A notebook can select an image of its markdown as gallery thumbnail by an
+# html image with the class gallery_thumbnail, which is otherwise the last
+# image of its code cells. For an svg image, the png image of the same name
+# next to it is used, as the thumbnails are rendered by Pillow.
+from myst_sphinx_gallery.gallery import ExampleConverter
+from myst_sphinx_gallery.images import Thumbnail
+
+_parse_thumb = ExampleConverter._parse_thumb
+
+
+def _parse_marked_thumb(self):
+    if self.file_type == "notebook":
+        for tag in re.findall(r"<img\s[^>]*>", self._load_content()):
+            if "gallery_thumbnail" in tag:
+                src = re.search(r'src="([^"]+)"', tag).group(1)
+                image = (self.example_file.parent / src).with_suffix(".png")
+                gallery_thumb = self.thumb_dir / f"{self.example_file.stem}.webp"
+                self._gallery_thumb = self.thumb_file_rel(gallery_thumb)
+                if self.save_thumbnail:
+                    thumbnail = Thumbnail(
+                        image, self.thumb_dir, **self.config.thumbnail_config.to_dict()
+                    )
+                    thumbnail.save_thumbnail(gallery_thumb)
+                return
+    _parse_thumb(self)
+
+
+ExampleConverter._parse_thumb = _parse_marked_thumb
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

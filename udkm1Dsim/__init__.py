@@ -2,9 +2,20 @@ import pint
 
 from .simulations.heat import Heat
 from .simulations.magnetization import LLB, LLG, Magnetization, iLLG
+from .simulations.parameter_groups import ExperimentParameters
 from .simulations.phonons import Phonon, PhononAna, PhononNum
+from .simulations.scattering import (
+    BerremanElzo,
+    BerremanStepanov,
+    Elzo,
+    MultilayerScattering,
+    Parratt,
+    Scattering,
+    Stepanov,
+    XrayDyn,
+    XrayKin,
+)
 from .simulations.simulation import Simulation
-from .simulations.xrays import Xray, XrayDyn, XrayDynMag, XrayKin
 from .structures.atoms import Atom, AtomMixed
 from .structures.dielectric import Dielectric, Dispersion
 from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
@@ -26,6 +37,7 @@ u.formatter.default_format = ".4g~P"
 Q_ = u.Quantity
 
 __all__ = [
+    "ExperimentParameters",
     "Atom",
     "AtomMixed",
     "AtomMixedParameters",
@@ -55,10 +67,15 @@ __all__ = [
     "LLB",
     "TemperatureParameter",
     "VectorParameter",
-    "Xray",
+    "Scattering",
     "XrayKin",
     "XrayDyn",
-    "XrayDynMag",
+    "MultilayerScattering",
+    "Parratt",
+    "Elzo",
+    "Stepanov",
+    "BerremanElzo",
+    "BerremanStepanov",
     "u",
     "Q_",
 ]
