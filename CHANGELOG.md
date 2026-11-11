@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0a2] 2026-11-11
+
 ### Added
 
 - tests of the multilayer formalisms against the reference results of refnx, tmm, GenX, PyGTM, PyLlama, Dyna, and MAG_sl and GID_sl of the Stepanov X-ray Server for isotropic, rough, birefringent, magneto-optical, and resonant magnetic X-ray stacks, where only their outputs are stored in `tests/data/references`
