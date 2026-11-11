@@ -85,9 +85,14 @@ def _forward_sqrt(value):
     """square root with a positive real part, or a positive imaginary part
     for a vanishing real part, i.e. of a mode propagating or decaying into
     the sample"""
+    # the principal root has a non-negative real part, so that only roots
+    # with a negative imaginary part and a vanishing real part are flipped
     root = np.sqrt(np.asarray(value, dtype=np.complex128))
+    negative = root.imag < 0
+    if not np.any(negative):
+        return root
     tol = _TOLERANCE * np.maximum(1, np.abs(root))
-    flip = (root.real < -tol) | ((np.abs(root.real) <= tol) & (root.imag < 0))
+    flip = negative & (np.abs(root.real) <= tol)
     return np.where(flip, -root, root)
 
 

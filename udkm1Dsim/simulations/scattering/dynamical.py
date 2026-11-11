@@ -123,6 +123,7 @@ class XrayDyn(Scattering):
               sub-structures.
 
         """
+        self._check_experiment()
         self._warn_ignored_superstrate_and_substrate()
         t1 = time()
         self.disp_message("Calculating _homogenous_reflectivity_ ...")
@@ -291,6 +292,7 @@ class XrayDyn(Scattering):
             R (ndarray[float]): inhomogeneous reflectivity.
 
         """
+        self._check_experiment()
         self._warn_ignored_superstrate_and_substrate()
         # create a hash of all simulation parameters
         filename = (

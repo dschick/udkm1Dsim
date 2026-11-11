@@ -3,7 +3,9 @@
 import numpy as np
 import pytest
 
-from udkm1Dsim import Elzo, XrayDyn, XrayKin, u
+from udkm1Dsim import BerremanElzo, BerremanStepanov, Elzo, Parratt, Stepanov, XrayDyn, XrayKin, u
+
+MULTILAYER = [Parratt, Elzo, Stepanov, BerremanElzo, BerremanStepanov]
 
 # fixtures
 
@@ -38,9 +40,9 @@ def xray_dyn(structure_crystalline, tmp_path_factory):
     return xray_dyn
 
 
-@pytest.fixture(scope="module")
-def xray_dyn_mag(structure, tmp_path_factory):
-    xray_dyn_mag = Elzo(
+@pytest.fixture(scope="module", params=MULTILAYER, ids=lambda cls: cls.__name__)
+def multilayer(request, structure, tmp_path_factory):
+    multilayer = request.param(
         structure,
         force_recalc=True,
         cache_dir=tmp_path_factory.mktemp("cache"),
@@ -48,9 +50,9 @@ def xray_dyn_mag(structure, tmp_path_factory):
         disp_messages=False,
         progress_bar=False,
     )
-    xray_dyn_mag.energy = np.r_[700, 800] * u.eV
-    xray_dyn_mag.qz = np.r_[0.01:5:0.02] / u.nm
-    return xray_dyn_mag
+    multilayer.energy = np.r_[700, 800] * u.eV
+    multilayer.qz = np.r_[0.01:5:0.02] / u.nm
+    return multilayer
 
 
 @pytest.fixture(scope="module")
@@ -113,26 +115,24 @@ def test_xray_dyn_inhomogeneous_reflectivity_strain_vectors(xray_dyn, strain_map
     xray_dyn.inhomogeneous_reflectivity(strain_map_crystalline, strain_vectors=strain_vectors)
 
 
-# Elzo
+# multilayer formalisms
 
 
 @pytest.mark.benchmark
-def test_xray_dyn_mag_homogeneous_reflectivity(xray_dyn_mag):
-    xray_dyn_mag.set_polarization(3, 0)
-    xray_dyn_mag.homogeneous_reflectivity_transmissivity()
+def test_multilayer_homogeneous_reflectivity(multilayer):
+    multilayer.set_polarization(3, 0)
+    multilayer.homogeneous_reflectivity_transmissivity()
 
 
 @pytest.mark.benchmark
-def test_xray_dyn_mag_inhomogeneous_reflectivity(
-    xray_dyn_mag, strain_map_mixed, magnetization_map
-):
-    xray_dyn_mag.set_polarization(3, 0)
-    xray_dyn_mag.inhomogeneous_reflectivity_transmissivity(
+def test_multilayer_inhomogeneous_reflectivity(multilayer, strain_map_mixed, magnetization_map):
+    multilayer.set_polarization(3, 0)
+    multilayer.inhomogeneous_reflectivity_transmissivity(
         strain_map=strain_map_mixed, magnetization_map=magnetization_map
     )
 
 
 @pytest.mark.benchmark
-def test_xray_dyn_mag_homogeneous_reflectivity_elliptical(xray_dyn_mag, polarizations):
-    xray_dyn_mag.set_polarization(5, 0, polarization_in=polarizations)
-    xray_dyn_mag.homogeneous_reflectivity_transmissivity()
+def test_multilayer_homogeneous_reflectivity_elliptical(multilayer, polarizations):
+    multilayer.set_polarization(5, 0, polarization_in=polarizations)
+    multilayer.homogeneous_reflectivity_transmissivity()

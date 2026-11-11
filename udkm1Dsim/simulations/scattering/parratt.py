@@ -96,23 +96,52 @@ class Parratt(MultilayerScattering):
             eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
 
         """
+        self._check_isotropic(layer)
+        return layer.get_dielectric_tensor(
+            self.experiment.energy.magnitude, strain, (0.0, 0.0, 0.0)
+        )
+
+    def get_layer_ref_index(self, layer, strain=0.0):
+        """get_layer_ref_index
+
+        Refractive index of an isotropic layer at the photon energies of the
+        simulation from its scalar dielectric function only, see
+        :meth:`.Layer.get_ref_index`, which is much faster than the
+        dielectric tensor for many layers and strains.
+
+        Args:
+            layer (Layer): homogeneous layer.
+            strain (float, ndarray[float], optional): strain of the layer, or
+                an array of strains of shape (D,), e.g. for D delays.
+                Defaults to 0.
+
+        Returns:
+            n (ndarray[complex]): refractive index of shape (M,) or (D, M).
+
+        """
+        self._check_isotropic(layer)
+        return layer.get_ref_index(self.experiment.energy.magnitude, strain)
+
+    def _check_isotropic(self, layer):
+        """The formalism requires an isotropic dielectric tensor."""
         dielectric = layer.optical.dielectric
         if dielectric.is_set and not dielectric.is_isotropic:
             raise ValueError(
                 f"The formalism of {type(self).__name__} requires an isotropic dielectric tensor, "
                 f"but the layer '{layer.id}' is anisotropic! Use BerremanStepanov instead."
             )
-        return layer.get_dielectric_tensor(
-            self.experiment.energy.magnitude, strain, (0.0, 0.0, 0.0)
-        )
 
-    def _layer_constants(self, layer, strain, magnetization, cache):
-        """dielectric function, normal wave-vector component, thickness, and
-        roughness of a layer, where an array of strains of shape (D,), e.g.
-        for D delays, gives constants of shape (D, M, N)"""
+    def _layer_constants(self, layer, strain, magnetization, k, k_y2, cache):
+        """refractive index, dielectric function, normal wave-vector
+        component, phase through the thickness, and roughness of a layer for
+        the wavenumbers ``k`` and the squared in-plane wave vector ``k_y2``,
+        where an array of strains of shape (D,), e.g. for D delays, gives
+        constants of shape (D, M, N). Every constant is calculated only once
+        per layer, as the recursion needs it at both interfaces of the
+        layer."""
         if np.ndim(strain) > 0 and np.size(strain) > 1:
             strain = np.asarray(strain, dtype=float)
-            eps = self.get_layer_dielectric_tensor(layer, strain)[..., 0, 0][..., np.newaxis]
+            n = self.get_layer_ref_index(layer, strain)[..., np.newaxis]
             thickness = layer.structural.thickness.magnitude * (1 + strain)
             thickness = thickness[:, np.newaxis, np.newaxis]
         else:
@@ -120,12 +149,12 @@ class Parratt(MultilayerScattering):
             key = (id(layer), strain)
             if cache is not None and key in cache:
                 return cache[key]
-            eps = self.get_layer_dielectric_tensor(layer, strain)[:, 0, 0][:, np.newaxis]
+            n = self.get_layer_ref_index(layer, strain)[:, np.newaxis]
             thickness = layer.structural.thickness.magnitude * (1 + strain)
-        k_z = self.experiment.k.magnitude[:, np.newaxis] * _forward_sqrt(
-            eps - self._in_plane_wavevector() ** 2
-        )
-        result = (eps, k_z, thickness, layer.structural.roughness.magnitude)
+        eps = n * n
+        k_z = k * _forward_sqrt(eps - k_y2)
+        phase = np.exp(1j * k_z * thickness)
+        result = (n, eps, k_z, phase, layer.structural.roughness.magnitude)
         if cache is not None and np.ndim(thickness) == 0:
             cache[key] = result
         return result
@@ -169,34 +198,39 @@ class Parratt(MultilayerScattering):
         # ratio of the up and down amplitudes at the top of the layer below;
         # the constants are calculated on the fly to keep only two layers
         # in memory for arrays of strains
-        below = self._layer_constants(*layers[-1], cache)
+        k = self.experiment.k.magnitude[:, np.newaxis]
+        k_y2 = self._in_plane_wavevector() ** 2
+        below = self._layer_constants(*layers[-1], k, k_y2, cache)
         for j in range(len(layers) - 1, 0, -1):
-            above = self._layer_constants(*layers[j - 1], cache)
-            eps_a, k_a, d_a, _ = above
-            eps_b, k_b, d_b, sigma = below
+            above = self._layer_constants(*layers[j - 1], k, k_y2, cache)
+            n_a, eps_a, k_a, phase_a, _ = above
+            n_b, eps_b, k_b, phase_b, sigma = below
             r_s = (k_a - k_b) / (k_a + k_b)
-            r_p = (eps_b * k_a - eps_a * k_b) / (eps_b * k_a + eps_a * k_b)
+            eps_b_k_a = eps_b * k_a
+            eps_a_k_b = eps_a * k_b
+            r_p = (eps_b_k_a - eps_a_k_b) / (eps_b_k_a + eps_a_k_b)
             tau_s = 1 + r_s
             # transmission of the electric field from the magnetic field
-            tau_p = (1 + r_p) * np.sqrt(eps_a) / np.sqrt(eps_b)
+            tau_p = (1 + r_p) * (n_a / n_b)
             if sigma > 0:
                 r_s = r_s * np.exp(-2 * k_a * k_b * sigma**2)
                 r_p = r_p * np.exp(-2 * k_a * k_b * sigma**2)
                 damping = np.exp((k_b - k_a) ** 2 * sigma**2 / 2)
                 tau_s = tau_s * damping
                 tau_p = tau_p * damping
-            phase = np.exp(1j * k_b * d_b)
             denominator_s = 1 + r_s * X_s
             denominator_p = 1 + r_p * X_p
-            t_s = t_s * tau_s / denominator_s * phase
-            t_p = t_p * tau_p / denominator_p * phase
-            X_s = (r_s + X_s) / denominator_s
-            X_p = (r_p + X_p) / denominator_p
+            t_s *= tau_s * phase_b / denominator_s
+            t_p *= tau_p * phase_b / denominator_p
+            X_s += r_s
+            X_s /= denominator_s
+            X_p += r_p
+            X_p /= denominator_p
             if j > 1:
                 # propagate to the top of the layer above
-                phase_a = np.exp(2j * k_a * d_a)
-                X_s = X_s * phase_a
-                X_p = X_p * phase_a
+                propagation = phase_a * phase_a
+                X_s *= propagation
+                X_p *= propagation
             below = above
 
         R = np.zeros(shape + (2, 2), dtype=np.complex128)
@@ -205,7 +239,7 @@ class Parratt(MultilayerScattering):
         T[..., 0, 0], T[..., 1, 1] = t_s, t_p
         return R, R, T, T
 
-    def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map):
+    def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map, temp_map=None):
         """calc_inhomogeneous_jones_matrices
 
         Calculates the Jones matrices of the sample structure for a block of
@@ -217,6 +251,9 @@ class Parratt(MultilayerScattering):
             strain_map (ndarray[float]): strain of every layer for each delay.
             magnetization_map (ndarray[float]): neglected magnetization of
                 every layer for each delay.
+            temp_map (ndarray[float], optional): temperature of every layer
+                for each delay, which is reserved for the planned temperature
+                dependence of the dielectric tensor. Defaults to None.
 
         Returns:
             (tuple):
@@ -231,7 +268,9 @@ class Parratt(MultilayerScattering):
         """
         strain_map = np.asarray(strain_map, dtype=float)
         if strain_map.shape[0] == 1:
-            return super().calc_inhomogeneous_jones_matrices(strain_map, magnetization_map)
+            return super().calc_inhomogeneous_jones_matrices(
+                strain_map, magnetization_map, temp_map
+            )
         _, _, handles = self.S.get_layer_vectors()
         superstrate, substrate = self._superstrate_and_substrate()
         layers = (
@@ -243,6 +282,8 @@ class Parratt(MultilayerScattering):
         return Ref, Ref, Trans, Trans
 
     def _delay_block_size(self):
-        """number of delays, which are calculated at once, for about 2^20
-        elements per array"""
-        return max(1, 2**20 // max(1, np.size(self.experiment.theta.magnitude)))
+        """number of delays, which are calculated at once, for about 2^13
+        elements per array, which keeps the arrays of the recursion in the
+        CPU cache and results in several blocks for the progress bar and the
+        parallel calculation"""
+        return max(1, 2**13 // max(1, np.size(self.experiment.theta.magnitude)))

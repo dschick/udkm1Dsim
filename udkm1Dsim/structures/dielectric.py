@@ -130,22 +130,37 @@ def _vector_to_tensor(values, shape):
 def euler_matrix(theta, phi, psi):
     r"""euler_matrix
 
-    Rotation matrix of the z-x-z Euler angles :math:`(\theta, \phi, \psi)`
+    Rotation matrix of the proper z-x-z Euler angles
+    :math:`(\theta, \phi, \psi)`
 
     .. math:: R = R_z(\phi) R_x(\theta) R_z(\psi)
 
     which rotates a tensor actively from the frame of the crystal to the
-    frame of the sample, i.e. :math:`\varepsilon = R \varepsilon' R^T`. Hence,
-    :math:`\psi` turns the crystal about its own :math:`z'` axis, which is
-    then tilted by :math:`\theta` from the surface normal along the direction
-    :math:`(\sin\phi, -\cos\phi)` in the surface, i.e. into the plane of
-    incidence for :math:`\phi = 0` and along :math:`\sigma` for
-    :math:`\phi = 90°`.
+    frame of the sample, i.e. :math:`\varepsilon = R \varepsilon' R^T`.
 
     The frame of the sample is the one of :cite:t:`elzo2012` and Dyna:
     :math:`z` is the surface normal pointing out of the sample towards the
     superstrate, :math:`yz` is the plane of incidence and :math:`x` is along
     :math:`\sigma`, as for the magnetization.
+
+    Without rotation, the crystal axes :math:`x'`, :math:`y'`, :math:`z'`
+    coincide with :math:`x`, :math:`y`, :math:`z`. As for the
+    `Euler angles <https://en.wikipedia.org/wiki/Euler_angles>`_
+    :math:`(\alpha, \beta, \gamma)`,
+
+    * :math:`\phi` is the angle of the line of nodes :math:`N`, i.e. the
+      intersection of the :math:`xy` and :math:`x'y'` planes, from :math:`x`,
+    * :math:`\theta` is the tilt of :math:`z'` from the surface normal
+      :math:`z` about :math:`N`, and
+    * :math:`\psi` is the angle of :math:`x'` from :math:`N` about
+      :math:`z'`.
+
+    Hence, :math:`z'` points along
+    :math:`(\sin\theta\sin\phi, -\sin\theta\cos\phi, \cos\theta)`, i.e.
+    it is tilted in the plane of incidence for :math:`\phi = 0`, and for
+    :math:`\theta = 0`, :math:`\phi + \psi` is the azimuth of :math:`x'` from
+    :math:`x`, i.e. from the :math:`\sigma` polarization, counterclockwise
+    about :math:`z`.
 
     In contrast, `PyGTM <https://pygtm.readthedocs.io>`_ of
     :cite:t:`passler2017,passler2020` rotates the frame instead of the crystal,
@@ -157,24 +172,25 @@ def euler_matrix(theta, phi, psi):
     -\phi_\mathrm{G})`.
 
     Args:
-        theta (float): rotation about the x-axis (rad).
-        phi (float): rotation about the z-axis after the rotation by theta (rad).
-        psi (float): rotation about the z-axis before the rotation by theta (rad).
+        theta (float): tilt of :math:`z'` from :math:`z` about the line of
+            nodes (rad).
+        phi (float): angle of the line of nodes from :math:`x` about
+            :math:`z` (rad).
+        psi (float): angle of :math:`x'` from the line of nodes about
+            :math:`z'` (rad).
 
     Returns:
         R (ndarray[float]): rotation matrix.
 
     """
-    ct, st = np.cos(theta), np.sin(theta)
-    cp, sp = np.cos(phi), np.sin(phi)
-    cs, ss = np.cos(psi), np.sin(psi)
-    return np.array(
-        [
-            [cs * cp - ct * sp * ss, -ss * cp - ct * sp * cs, st * sp],
-            [cs * sp + ct * cp * ss, -ss * sp + ct * cp * cs, -st * cp],
-            [st * ss, st * cs, ct],
-        ]
-    )
+
+    def rot_z(angle):
+        c, s = np.cos(angle), np.sin(angle)
+        return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+
+    c, s = np.cos(theta), np.sin(theta)
+    rot_x = np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+    return rot_z(phi) @ rot_x @ rot_z(psi)
 
 
 def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
@@ -673,11 +689,8 @@ class Dispersion:
         try:
             material.get_wl_range(unit="um", quantity="k")
         except refractiveindex.NoExtinctionCoefficient:
-            warnings.warn(
-                f"The page {material!r} of refractiveindex.info has no extinction "
-                "coefficient, so that kappa = 0 is assumed.",
-                stacklevel=2,
-            )
+            name = url if url is not None else f"{shelf}/{book}/{page}"
+            warnings.warn(f"kappa = 0 for {name} without extinction coefficient", stacklevel=2)
         lo, hi = material.get_wl_range(unit="um")
         wavelength = np.geomspace(lo, hi, int(num))
         eps = np.asarray(material.get_epsilon(wavelength, unit="um"), dtype=complex)
@@ -1643,17 +1656,22 @@ class Dielectric(Parameter):
     def get_ref_index(self, energy, strain=0.0, density=None):
         """get_ref_index
 
-        Complex refractive index :math:`n = \\sqrt{\\varepsilon}` of an
-        isotropic dielectric.
+        Complex refractive index :math:`n = \\sqrt{\\varepsilon_{xx}}` of an
+        isotropic dielectric without its magnetic part. It is calculated from
+        the scalar dielectric function only, i.e. without the dielectric
+        tensor, e.g. for many layers and strains of :class:`.Parratt`.
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
                 floats are taken in eV, or other spectral Quantities.
-            strain (float, optional): strain :math:`\\eta`. Defaults to 0.
+            strain (float, ndarray[float], optional): strain :math:`\\eta`,
+                or an array of strains of shape S, e.g. of a layer for all
+                delays. Defaults to 0.
             density (float, optional): mass density of the layer (kg/m³).
 
         Returns:
-            n (ndarray[complex]): refractive index.
+            n (ndarray[complex]): refractive index of shape (M,), or (S, M)
+            for an array of strains.
 
         """
         if self.is_set and not self.is_isotropic:
@@ -1661,8 +1679,30 @@ class Dielectric(Parameter):
                 "The dielectric tensor is anisotropic and has no single "
                 "refractive index. Use get_tensor() instead!"
             )
-        eps = self.get_tensor(energy, strain, density=density)
-        return np.sqrt(eps[:, 0, 0])
+        if self._eps0 is None:
+            # raises the error of the unset dielectric tensor
+            self.get_tensor(energy)
+        spectral = energy if isinstance(energy, u.Quantity) else None
+        energy = np.atleast_1d(to_energy(energy))
+        if spectral is None:
+            spectral = energy
+        strain = np.asarray(strain, dtype=float)[..., np.newaxis]
+        # the scalar eps0 is invariant under the rotation by the Euler angles
+        eps = self._eps0.evaluate(spectral, density, _VACUUM_UNITY)
+        if self._strain_model == "density":
+            eps = 1 + (eps - 1) / (1 + strain)
+        elif self._strain_model == "photoelastic":
+            deps = self._deps_dstrain
+            if isinstance(deps, Dispersion):
+                deps = deps.evaluate(spectral, density, _VACUUM_ZERO)
+            else:
+                deps = np.broadcast_to(deps, energy.shape + np.shape(deps))
+            if deps.ndim > 1:
+                deps = deps[..., 0, 0]
+            eps = eps + deps * strain
+        else:
+            eps = np.broadcast_to(eps, strain.shape[:-1] + eps.shape)
+        return np.sqrt(eps)
 
     def get_opt_pen_depth(self, energy, strain=0.0, density=None):
         r"""get_opt_pen_depth

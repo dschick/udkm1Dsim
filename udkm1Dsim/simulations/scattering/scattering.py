@@ -149,7 +149,6 @@ class Scattering(Simulation):
         substrate of unit cells, which is warned for any other layer than
         Vacuum."""
         self._check_superstrate_and_substrate()
-        self._check_experiment()
         superstrate, substrate = self.S.superstrate[0], self.S.substrate[0]
         if not isinstance(superstrate, Vacuum):
             warnings.warn(
@@ -173,7 +172,8 @@ class Scattering(Simulation):
     def _compute_in_parallel(self, dask_client, function, arguments):
         """Calculates ``function(simulation, *args)`` for all arguments on the
         dask workers. The function must be static, so that only a single copy
-        of the simulation is sent to the workers instead of one per task.
+        of the simulation is sent to the workers instead of one per task. The
+        array arguments are sent to the workers before the tasks as well.
 
         Args:
             dask_client (Dask.Client): Dask client.
@@ -187,6 +187,19 @@ class Scattering(Simulation):
         from dask.distributed import as_completed
 
         simulation = dask_client.scatter(self._worker_copy(), hash=False)
+        # the arrays, e.g. blocks of the strain map, are sent to the workers
+        # before the tasks, which keeps the task graph small
+        arguments = [list(args) for args in arguments]
+        positions = [
+            (i, j)
+            for i, args in enumerate(arguments)
+            for j, arg in enumerate(args)
+            if isinstance(arg, np.ndarray)
+        ]
+        if positions:
+            scattered = dask_client.scatter([arguments[i][j] for i, j in positions], hash=False)
+            for (i, j), future in zip(positions, scattered):
+                arguments[i][j] = future
         futures = [
             dask_client.submit(function, simulation, *args, pure=False) for args in arguments
         ]

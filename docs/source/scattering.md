@@ -4,7 +4,9 @@
 .. automodule:: udkm1Dsim.simulations.scattering
 ```
 
-## `scattering.scattering`
+## Base
+
+### Scattering: `scattering.scattering`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.scattering.scattering
@@ -12,7 +14,7 @@
     :members:
 ```
 
-## `simulations.parameter_groups`
+### Experiment parameters: `simulations.parameter_groups`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.parameter_groups
@@ -22,7 +24,7 @@
 
 ## Atomistic formalisms
 
-### `scattering.kinematical`
+### Kinematical: `scattering.kinematical`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.scattering.kinematical
@@ -30,7 +32,7 @@
     :members:
 ```
 
-### `scattering.dynamical`
+### Dynamical: `scattering.dynamical`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.scattering.dynamical
@@ -40,7 +42,7 @@
 
 ## Multilayer formalisms
 
-### `scattering.multilayer`
+### Multilayer scattering: `scattering.multilayer`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.scattering.multilayer
@@ -48,7 +50,7 @@
     :members:
 ```
 
-### `scattering.parratt`
+### Parratt: `scattering.parratt`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.scattering.parratt
@@ -57,7 +59,7 @@
     :inherited-members:
 ```
 
-### `scattering.elzo`
+### Elzo: `scattering.elzo`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.scattering.elzo
@@ -66,7 +68,7 @@
     :inherited-members:
 ```
 
-### `scattering.stepanov`
+### Stepanov: `scattering.stepanov`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.scattering.stepanov
@@ -75,7 +77,7 @@
     :inherited-members:
 ```
 
-### `scattering.berreman`
+### Berreman: `scattering.berreman`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.scattering.berreman

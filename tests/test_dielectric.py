@@ -276,8 +276,14 @@ def test_euler_matrix():
     R = euler_matrix(0.3, 0.7, -1.1)
     np.testing.assert_allclose(R @ R.T, np.eye(3), atol=1e-15)
     np.testing.assert_allclose(np.linalg.det(R), 1)
-    # rotation by theta about x moves the z-axis towards -y
+    # without rotation, the crystal axes x', y', z' coincide with x, y, z
+    np.testing.assert_allclose(euler_matrix(0, 0, 0), np.eye(3), atol=1e-15)
+    # theta tilts z' about the line of nodes, i.e. in the plane of incidence for phi = 0
     np.testing.assert_allclose(euler_matrix(np.pi / 2, 0, 0) @ [0, 0, 1], [0, -1, 0], atol=1e-15)
+    # phi turns the line of nodes counterclockwise about z
+    np.testing.assert_allclose(
+        euler_matrix(np.pi / 2, np.pi / 2, 0) @ [0, 0, 1], [1, 0, 0], atol=1e-15
+    )
     # psi and phi rotate about z
     np.testing.assert_allclose(euler_matrix(0, 0.4, 0.2), euler_matrix(0, 0.6, 0), atol=1e-15)
 

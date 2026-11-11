@@ -959,7 +959,9 @@ class PhononAna(Phonon):
         Returns:
             (tuple):
             - *omega (ndarray[float])* - eigenfrequencies in Hz.
-            - *E (ndarray[float])* - energy per eigenmode in J.
+            - *E (ndarray[float])* - energy per eigenmode in J for the unit
+              area of 1 Å² of the ``mass_unit_area`` of the
+              :class:`.StructuralParameters`.
 
         """
         # initialize

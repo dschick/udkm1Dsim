@@ -170,6 +170,7 @@ class XrayKin(Scattering):
             - *A (ndarray[complex])* - reflected fields of sub-structures.
 
         """
+        self._check_experiment()
         self._warn_ignored_superstrate_and_substrate()
         if strains == 0:
             strains = np.zeros([self.S.get_number_of_sub_structures(), 1])

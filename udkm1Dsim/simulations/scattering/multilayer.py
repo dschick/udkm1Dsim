@@ -83,7 +83,18 @@ _POLARIZATION_VECTORS = {
 class _Period:
     """Period of a stack, which is assembled once and then repeated by
     integer powers for its number of repetitions, see
-    :meth:`MultilayerScattering.calc_jones_matrices`."""
+    :meth:`MultilayerScattering.calc_jones_matrices`.
+
+    The homogeneous simulations keep the tree of the sub-structures and their
+    repetitions, e.g. 100 periods of a superlattice, as list of layers and
+    periods, see :meth:`MultilayerScattering._homogeneous_layer_tree`, so
+    that every period is assembled only once and then raised to the power of
+    its repetitions with :math:`\\mathcal{O}(\\log N)` matrix products. This
+    tree is not available from the :class:`.Structure`, which only provides
+    flattened vectors of all layers, e.g. by
+    :meth:`.Structure.get_layer_vectors`, as used by the inhomogeneous
+    simulations with a strain or magnetization per layer.
+    """
 
     __slots__ = ("entries", "repetitions")
 
@@ -93,14 +104,16 @@ class _Period:
 
 
 def _repeated(entries, repetitions):
-    """entries of a part of the stack, which is repeated"""
+    """entries of a part of the stack, which is repeated, as :class:`_Period`
+    or as plain entries for a single repetition"""
     if repetitions == 1:
         return list(entries)
     return [_Period(list(entries), repetitions)]
 
 
 def _flatten_layers(entries):
-    """all layers of a stack with repetitions as plain list"""
+    """all layers of a stack tree with :class:`_Period` entries as plain list
+    in the order from the top to the bottom, e.g. for :class:`.Parratt`"""
     layers = []
     for entry in entries:
         if isinstance(entry, _Period):
@@ -221,6 +234,8 @@ class MultilayerScattering(Scattering):
             param.append(temp_map)
 
         return self.S.get_hash(types=["xray", "magnetic", "optical"]) + "_" + make_hash_md5(param)
+
+    # ---- polarizations ----------------------------------------------------------
 
     def set_polarization(
         self, pol_in_state, pol_out_state, polarization_in=None, polarization_out=None
@@ -468,49 +483,7 @@ class MultilayerScattering(Scattering):
         """int: number of incoming/outgoing polarization pairs."""
         return self.match_polarizations(self.pol_in, self.pol_out)[2]
 
-    # ---- Jones matrices and intensities ------------------------------------
-
-    @staticmethod
-    def jones_from_transfer_matrix(RT):
-        """jones_from_transfer_matrix
-
-        Calculates the Jones matrices of the reflection and transmission in
-        the linear :math:`(\\sigma, \\pi)` basis from the transfer matrix
-        :math:`M` of the stack from :cite:t:`elzo2012`, which fulfills
-        :math:`(t, 0) = M (1, r)` for the down and up modes.
-
-        Args:
-            RT (ndarray[complex]): transfer matrix of shape (M, N, 4, 4).
-
-        Returns:
-            (tuple):
-            - *Ref (ndarray[complex])* - Jones matrix of the reflection of
-              shape (M, N, 2, 2).
-            - *Trans (ndarray[complex])* - Jones matrix of the transmission.
-
-        """
-        Ref = np.zeros(RT.shape[:-2] + (2, 2), dtype=np.complex128)
-        Trans = np.zeros_like(Ref)
-
-        d = np.divide(1, RT[..., 3, 3] * RT[..., 2, 2] - RT[..., 3, 2] * RT[..., 2, 3])
-        Ref[..., 0, 0] = (-RT[..., 3, 3] * RT[..., 2, 0] + RT[..., 2, 3] * RT[..., 3, 0]) * d
-        Ref[..., 0, 1] = (-RT[..., 3, 3] * RT[..., 2, 1] + RT[..., 2, 3] * RT[..., 3, 1]) * d
-        Ref[..., 1, 0] = (RT[..., 3, 2] * RT[..., 2, 0] - RT[..., 2, 2] * RT[..., 3, 0]) * d
-        Ref[..., 1, 1] = (RT[..., 3, 2] * RT[..., 2, 1] - RT[..., 2, 2] * RT[..., 3, 1]) * d
-
-        Trans[..., 0, 0] = (
-            RT[..., 0, 0] + RT[..., 0, 2] * Ref[..., 0, 0] + RT[..., 0, 3] * Ref[..., 1, 0]
-        )
-        Trans[..., 0, 1] = (
-            RT[..., 0, 1] + RT[..., 0, 2] * Ref[..., 0, 1] + RT[..., 0, 3] * Ref[..., 1, 1]
-        )
-        Trans[..., 1, 0] = (
-            RT[..., 1, 0] + RT[..., 1, 2] * Ref[..., 0, 0] + RT[..., 1, 3] * Ref[..., 1, 0]
-        )
-        Trans[..., 1, 1] = (
-            RT[..., 1, 1] + RT[..., 1, 2] * Ref[..., 0, 1] + RT[..., 1, 3] * Ref[..., 1, 1]
-        )
-        return circular_to_linear(Ref), circular_to_linear(Trans)
+    # ---- Jones matrices and intensities -----------------------------------------
 
     def calc_reflectivity_transmissivity(self, Ref, Trans, pol_in=None, pol_out=None):
         """calc_reflectivity_transmissivity
@@ -618,15 +591,47 @@ class MultilayerScattering(Scattering):
         ellipticity = 0.5 * np.arcsin(np.clip(2 * np.imag(ratio) / (1 + abs2), -1, 1))
         return Q_(rotation, u.rad).to("deg"), Q_(ellipticity, u.rad).to("deg")
 
-    def _pi_incident(self):
-        """True for an incoming pi and False for a sigma polarization, which
-        define the rotation and ellipticity."""
-        if self.pol_in_state not in (3, 4):
-            raise ValueError(
-                "The rotation and ellipticity are defined for an incoming sigma or pi "
-                f"polarization, but it is {self.polarizations[self.pol_in_state]}!"
-            )
-        return self.pol_in_state == 4
+    @staticmethod
+    def jones_from_transfer_matrix(RT):
+        """jones_from_transfer_matrix
+
+        Calculates the Jones matrices of the reflection and transmission in
+        the linear :math:`(\\sigma, \\pi)` basis from the transfer matrix
+        :math:`M` of the stack from :cite:t:`elzo2012`, which fulfills
+        :math:`(t, 0) = M (1, r)` for the down and up modes.
+
+        Args:
+            RT (ndarray[complex]): transfer matrix of shape (M, N, 4, 4).
+
+        Returns:
+            (tuple):
+            - *Ref (ndarray[complex])* - Jones matrix of the reflection of
+              shape (M, N, 2, 2).
+            - *Trans (ndarray[complex])* - Jones matrix of the transmission.
+
+        """
+        Ref = np.zeros(RT.shape[:-2] + (2, 2), dtype=np.complex128)
+        Trans = np.zeros_like(Ref)
+
+        d = np.divide(1, RT[..., 3, 3] * RT[..., 2, 2] - RT[..., 3, 2] * RT[..., 2, 3])
+        Ref[..., 0, 0] = (-RT[..., 3, 3] * RT[..., 2, 0] + RT[..., 2, 3] * RT[..., 3, 0]) * d
+        Ref[..., 0, 1] = (-RT[..., 3, 3] * RT[..., 2, 1] + RT[..., 2, 3] * RT[..., 3, 1]) * d
+        Ref[..., 1, 0] = (RT[..., 3, 2] * RT[..., 2, 0] - RT[..., 2, 2] * RT[..., 3, 0]) * d
+        Ref[..., 1, 1] = (RT[..., 3, 2] * RT[..., 2, 1] - RT[..., 2, 2] * RT[..., 3, 1]) * d
+
+        Trans[..., 0, 0] = (
+            RT[..., 0, 0] + RT[..., 0, 2] * Ref[..., 0, 0] + RT[..., 0, 3] * Ref[..., 1, 0]
+        )
+        Trans[..., 0, 1] = (
+            RT[..., 0, 1] + RT[..., 0, 2] * Ref[..., 0, 1] + RT[..., 0, 3] * Ref[..., 1, 1]
+        )
+        Trans[..., 1, 0] = (
+            RT[..., 1, 0] + RT[..., 1, 2] * Ref[..., 0, 0] + RT[..., 1, 3] * Ref[..., 1, 0]
+        )
+        Trans[..., 1, 1] = (
+            RT[..., 1, 1] + RT[..., 1, 2] * Ref[..., 0, 1] + RT[..., 1, 3] * Ref[..., 1, 1]
+        )
+        return circular_to_linear(Ref), circular_to_linear(Trans)
 
     @staticmethod
     def calc_roughness_matrix(roughness, k_z, last_k_z):
@@ -666,7 +671,17 @@ class MultilayerScattering(Scattering):
 
         return W
 
-    # ---- eigenmodes and assembly of the stack ------------------------------
+    def _pi_incident(self):
+        """True for an incoming pi and False for a sigma polarization, which
+        define the rotation and ellipticity."""
+        if self.pol_in_state not in (3, 4):
+            raise ValueError(
+                "The rotation and ellipticity are defined for an incoming sigma or pi "
+                f"polarization, but it is {self.polarizations[self.pol_in_state]}!"
+            )
+        return self.pol_in_state == 4
+
+    # ---- eigenmodes and assembly of the stack -----------------------------------
 
     def calc_modes(self, eps):
         """calc_modes
@@ -712,6 +727,163 @@ class MultilayerScattering(Scattering):
         """
         return layer.get_dielectric_tensor(self.experiment.energy.magnitude, strain, magnetization)
 
+    def get_homogeneous_layers(self, strains=np.array([]), magnetizations=np.array([])):
+        """get_homogeneous_layers
+
+        List of all layers of the stack from the superstrate to the substrate
+        with their strain and magnetization for homogeneous strains and
+        magnetizations of the sub-structures.
+
+        Args:
+            strains (ndarray[float], optional): strain of each sub-structure.
+            magnetizations (ndarray[float], optional): cartesian magnetization
+                of each sub-structure.
+
+        Returns:
+            layers (list[tuple]): layer, strain, and magnetization.
+
+        """
+        return _flatten_layers(self._homogeneous_layer_tree(strains, magnetizations))
+
+    def get_inhomogeneous_layers(self, strains, magnetizations):
+        """get_inhomogeneous_layers
+
+        List of all layers of the stack from the superstrate to the substrate
+        with their strain and magnetization for a single delay of the
+        ``strain_map`` and ``magnetization_map``.
+
+        Args:
+            strains (ndarray[float]): strain of every layer.
+            magnetizations (ndarray[float]): magnetization of every layer.
+
+        Returns:
+            layers (list[tuple]): layer, strain, and magnetization.
+
+        """
+        _, _, handles = self.S.get_layer_vectors()
+        superstrate, substrate = self._superstrate_and_substrate()
+        return (
+            [superstrate]
+            + [(handles[i], strains[i], magnetizations[i]) for i in range(len(handles))]
+            + substrate
+        )
+
+    def calc_jones_matrices(self, layers, cache=None):
+        """calc_jones_matrices
+
+        Calculates the Jones matrices of the reflection and transmission of a
+        stack of layers in the linear :math:`(\\sigma, \\pi)` basis for the
+        given and the opposite magnetization.
+
+        Args:
+            layers (list[tuple]): layer, strain, and magnetization from the
+                superstrate to the substrate, see :meth:`get_homogeneous_layers`,
+                where repeated parts of the stack are assembled only once and
+                raised to the power of their repetitions by the transfer
+                matrices or the scattering matrices.
+            cache (dict, optional): cache of the eigenmodes of identical
+                layers. Defaults to None.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
+              (M, N, 2, 2).
+            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
+              opposite magnetization.
+            - *T (ndarray[complex])* - Jones matrix of the transmission.
+            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
+              opposite magnetization.
+
+        """
+        k = self.experiment.k.magnitude[:, np.newaxis]
+        self._check_superstrate(layers[0])
+        top = self._layer_modes(*layers[0], cache=cache)
+        # state of the assembly from the superstrate to the substrate for the
+        # given and the opposite magnetization:
+        # - stack: transfer or scattering matrices of the layers assembled so far
+        # - last: boundary matrix A and normal wave vector k_z of the last layer
+        # - eps: dielectric tensor of the last layer for the transmitted field
+        state = {
+            "stack": [None, None],
+            "last": [(top[0], top[4]), (top[1], top[4])],
+            "eps": top[7],
+        }
+        self._assemble(layers[1:], state, cache, k)
+        stack, stack_phi = state["stack"]
+        eps = state["eps"]
+
+        if self._assembly == "transfer":
+            R, T = self.jones_from_transfer_matrix(stack)
+            R_phi, T_phi = self.jones_from_transfer_matrix(stack_phi)
+        else:
+            R, R_phi = circular_to_linear(stack[2]), circular_to_linear(stack_phi[2])
+            T, T_phi = circular_to_linear(stack[0]), circular_to_linear(stack_phi[0])
+        T, T_phi = self.transmitted_field(T, eps), self.transmitted_field(T_phi, eps)
+        R, T = self.incident_field(R, T, top[7])
+        R_phi, T_phi = self.incident_field(R_phi, T_phi, top[7])
+        return R, R_phi, T, T_phi
+
+    @staticmethod
+    def incident_field(R, T, eps):
+        r"""incident_field
+
+        Converts the Jones matrices of the reflection and transmission from the
+        amplitudes of the eigenmodes of the superstrate to the amplitudes of
+        its electric field. The transmission of the eigenmodes of
+        :func:`~udkm1Dsim.simulations.scattering.elzo.elzo_modes` is
+        :math:`\\varepsilon_{00}` times smaller, where :math:`\\varepsilon` is the
+        dielectric tensor of the superstrate, while their reflection is
+        given for the electric field. Must be overwritten for other
+        eigenmodes.
+
+        Args:
+            R (ndarray[complex]): Jones matrix of the reflection of the modes
+                of shape (M, N, 2, 2).
+            T (ndarray[complex]): Jones matrix of the transmission.
+            eps (ndarray[complex]): dielectric tensor of the superstrate of
+                shape (M, 3, 3).
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - Jones matrix of the reflected electric
+              field.
+            - *T (ndarray[complex])* - Jones matrix of the transmission for
+              the incident electric field.
+
+        """
+        return R, T * eps[:, 0, 0][:, np.newaxis, np.newaxis, np.newaxis]
+
+    @staticmethod
+    def transmitted_field(T, eps):
+        r"""transmitted_field
+
+        Converts the Jones matrix of the transmission from the amplitudes of
+        the eigenmodes of :func:`~udkm1Dsim.simulations.scattering.elzo.elzo_modes`
+        to the amplitudes of the transmitted electric field, which are
+        :math:`\\varepsilon_{00}` times smaller, where :math:`\\varepsilon` is the
+        dielectric tensor of the last layer of the substrate. Must be
+        overwritten for other eigenmodes.
+
+        The transmission of all multilayer formalisms is the electric field
+        at the bottom of the last layer of the substrate per incident
+        electric field, i.e. after the propagation through the thickness of
+        the substrate layers, below which the substrate is semi-infinite.
+        Hence, a substrate layer of zero thickness gives the transmitted
+        field at the top of the substrate, as many other codes do.
+
+        Args:
+            T (ndarray[complex]): Jones matrix of the transmission of the modes
+                of shape (M, N, 2, 2).
+            eps (ndarray[complex]): dielectric tensor of the last layer of
+                shape (M, 3, 3).
+
+        Returns:
+            T (ndarray[complex]): Jones matrix of the transmitted electric
+            field.
+
+        """
+        return T / eps[:, 0, 0][:, np.newaxis, np.newaxis, np.newaxis]
+
     def _in_plane_wavevector(self):
         """In-plane component :math:`k_y / k_0 = n \\cos\\vartheta` of the wave
         vector, which is conserved in the stack, for the grazing angles
@@ -722,8 +894,8 @@ class MultilayerScattering(Scattering):
         superstrate = self.S.superstrate[0] if isinstance(self.S, Structure) else None
         if superstrate is None or isinstance(superstrate, Vacuum):
             return cos_theta
-        eps = self.get_layer_dielectric_tensor(superstrate)[:, 0, 0]
-        return np.real(np.sqrt(eps))[:, np.newaxis] * cos_theta
+        n = superstrate.get_ref_index(self.experiment.energy.magnitude)
+        return np.real(np.atleast_1d(n))[:, np.newaxis] * cos_theta
 
     @staticmethod
     def _parse_layer_inputs(layer, strain, magnetization):
@@ -814,155 +986,6 @@ class MultilayerScattering(Scattering):
             + self._expand_sub_structures(self.S, strains, magnetizations)
             + substrate
         )
-
-    def get_homogeneous_layers(self, strains=np.array([]), magnetizations=np.array([])):
-        """get_homogeneous_layers
-
-        List of all layers of the stack from the superstrate to the substrate
-        with their strain and magnetization for homogeneous strains and
-        magnetizations of the sub-structures.
-
-        Args:
-            strains (ndarray[float], optional): strain of each sub-structure.
-            magnetizations (ndarray[float], optional): cartesian magnetization
-                of each sub-structure.
-
-        Returns:
-            layers (list[tuple]): layer, strain, and magnetization.
-
-        """
-        return _flatten_layers(self._homogeneous_layer_tree(strains, magnetizations))
-
-    def get_inhomogeneous_layers(self, strains, magnetizations):
-        """get_inhomogeneous_layers
-
-        List of all layers of the stack from the superstrate to the substrate
-        with their strain and magnetization for a single delay of the
-        ``strain_map`` and ``magnetization_map``.
-
-        Args:
-            strains (ndarray[float]): strain of every layer.
-            magnetizations (ndarray[float]): magnetization of every layer.
-
-        Returns:
-            layers (list[tuple]): layer, strain, and magnetization.
-
-        """
-        _, _, handles = self.S.get_layer_vectors()
-        superstrate, substrate = self._superstrate_and_substrate()
-        return (
-            [superstrate]
-            + [(handles[i], strains[i], magnetizations[i]) for i in range(len(handles))]
-            + substrate
-        )
-
-    def calc_jones_matrices(self, layers, cache=None):
-        """calc_jones_matrices
-
-        Calculates the Jones matrices of the reflection and transmission of a
-        stack of layers in the linear :math:`(\\sigma, \\pi)` basis for the
-        given and the opposite magnetization.
-
-        Args:
-            layers (list[tuple]): layer, strain, and magnetization from the
-                superstrate to the substrate, see :meth:`get_homogeneous_layers`,
-                where repeated parts of the stack are assembled only once and
-                raised to the power of their repetitions by the transfer
-                matrices or the scattering matrices.
-            cache (dict, optional): cache of the eigenmodes of identical
-                layers. Defaults to None.
-
-        Returns:
-            (tuple):
-            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
-              (M, N, 2, 2).
-            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
-              opposite magnetization.
-            - *T (ndarray[complex])* - Jones matrix of the transmission.
-            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
-              opposite magnetization.
-
-        """
-        k = self.experiment.k.magnitude[:, np.newaxis]
-        self._check_superstrate(layers[0])
-        top = self._layer_modes(*layers[0], cache=cache)
-        state = {"stack": [None, None], "last": [(top[0], top[4]), (top[1], top[4])]}
-        state["eps"] = top[7]
-        self._assemble(layers[1:], state, cache, k)
-        stack, stack_phi = state["stack"]
-        eps = state["eps"]
-
-        if self._assembly == "transfer":
-            R, T = self.jones_from_transfer_matrix(stack)
-            R_phi, T_phi = self.jones_from_transfer_matrix(stack_phi)
-        else:
-            R, R_phi = circular_to_linear(stack[2]), circular_to_linear(stack_phi[2])
-            T, T_phi = circular_to_linear(stack[0]), circular_to_linear(stack_phi[0])
-        T, T_phi = self.transmitted_field(T, eps), self.transmitted_field(T_phi, eps)
-        R, T = self.incident_field(R, T, top[7])
-        R_phi, T_phi = self.incident_field(R_phi, T_phi, top[7])
-        return R, R_phi, T, T_phi
-
-    @staticmethod
-    def incident_field(R, T, eps):
-        r"""incident_field
-
-        Converts the Jones matrices of the reflection and transmission from the
-        amplitudes of the eigenmodes of the superstrate to the amplitudes of
-        its electric field. The transmission of the eigenmodes of
-        :func:`~udkm1Dsim.simulations.scattering.elzo.elzo_modes` is
-        :math:`\\varepsilon_{00}` times smaller, where :math:`\\varepsilon` is the
-        dielectric tensor of the superstrate, while their reflection is
-        given for the electric field. Must be overwritten for other
-        eigenmodes.
-
-        Args:
-            R (ndarray[complex]): Jones matrix of the reflection of the modes
-                of shape (M, N, 2, 2).
-            T (ndarray[complex]): Jones matrix of the transmission.
-            eps (ndarray[complex]): dielectric tensor of the superstrate of
-                shape (M, 3, 3).
-
-        Returns:
-            (tuple):
-            - *R (ndarray[complex])* - Jones matrix of the reflected electric
-              field.
-            - *T (ndarray[complex])* - Jones matrix of the transmission for
-              the incident electric field.
-
-        """
-        return R, T * eps[:, 0, 0][:, np.newaxis, np.newaxis, np.newaxis]
-
-    @staticmethod
-    def transmitted_field(T, eps):
-        r"""transmitted_field
-
-        Converts the Jones matrix of the transmission from the amplitudes of
-        the eigenmodes of :func:`~udkm1Dsim.simulations.scattering.elzo.elzo_modes`
-        to the amplitudes of the transmitted electric field, which are
-        :math:`\\varepsilon_{00}` times smaller, where :math:`\\varepsilon` is the
-        dielectric tensor of the last layer of the substrate. Must be
-        overwritten for other eigenmodes.
-
-        The transmission of all multilayer formalisms is the electric field
-        at the bottom of the last layer of the substrate per incident
-        electric field, i.e. after the propagation through the thickness of
-        the substrate layers, below which the substrate is semi-infinite.
-        Hence, a substrate layer of zero thickness gives the transmitted
-        field at the top of the substrate, as many other codes do.
-
-        Args:
-            T (ndarray[complex]): Jones matrix of the transmission of the modes
-                of shape (M, N, 2, 2).
-            eps (ndarray[complex]): dielectric tensor of the last layer of
-                shape (M, 3, 3).
-
-        Returns:
-            T (ndarray[complex]): Jones matrix of the transmitted electric
-            field.
-
-        """
-        return T / eps[:, 0, 0][:, np.newaxis, np.newaxis, np.newaxis]
 
     def _check_superstrate(self, entry):
         """check of the superstrate, which must be isotropic to define the
@@ -1056,7 +1079,7 @@ class MultilayerScattering(Scattering):
             return Mtt, Mtr, Mrt, Mrr
         return compose_scattering_stacks(stack, (Mtt, Mtr, Mrt, Mrr))
 
-    # ---- simulations -------------------------------------------------------
+    # ---- homogeneous simulations ------------------------------------------------
 
     def homogeneous_jones_matrices(
         self,
@@ -1107,9 +1130,13 @@ class MultilayerScattering(Scattering):
         self._reject_temperatures(temps, "temps")
         if np.size(magnetizations) > 0:
             magnetizations = self.parse_magnetization_map(magnetizations, polar)
-        return self.calc_jones_matrices(
+        t1 = time()
+        self.disp_message("Calculating _homogeneous_jones_matrices_ ...")
+        results = self.calc_jones_matrices(
             self._homogeneous_layer_tree(strains, magnetizations), cache={}
         )
+        self.disp_message(f"Elapsed time for _homogeneous_jones_matrices_: {time() - t1:f} s")
+        return results
 
     def homogeneous_reflectivity_transmissivity(
         self,
@@ -1154,16 +1181,11 @@ class MultilayerScattering(Scattering):
               magnetization.
 
         """
-        t1 = time()
-        self.disp_message("Calculating _homogeneous_reflectivity_transmissivity_ ...")
         Ref, Ref_phi, Trans, Trans_phi = self.homogeneous_jones_matrices(
             strains, magnetizations, temps, polar=polar
         )
         R, T = self.calc_reflectivity_transmissivity(Ref, Trans)
         R_phi, T_phi = self.calc_reflectivity_transmissivity(Ref_phi, Trans_phi)
-        self.disp_message(
-            f"Elapsed time for _homogeneous_reflectivity_transmissivity_: {time() - t1:f} s"
-        )
         return R, R_phi, T, T_phi
 
     def homogeneous_rotation_ellipticity(
@@ -1216,154 +1238,7 @@ class MultilayerScattering(Scattering):
         jones = self.homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar)
         return tuple(self.calc_rotation_ellipticity(j, pi_incident) for j in jones)
 
-    def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map):
-        """calc_inhomogeneous_jones_matrices
-
-        Calculates the Jones matrices of the sample structure for a block of
-        delays of the ``strain_map`` and ``magnetization_map``, see
-        :meth:`calc_jones_matrices` for every delay. Formalisms, which
-        calculate all delays at once, overwrite this method and
-        :meth:`_delay_block_size`.
-
-        Args:
-            strain_map (ndarray[float]): strain of every layer for each delay.
-            magnetization_map (ndarray[float]): magnetization of every layer
-                for each delay.
-
-        Returns:
-            (tuple):
-            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
-              (D, M, N, 2, 2) for D delays.
-            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
-              opposite magnetization.
-            - *T (ndarray[complex])* - Jones matrix of the transmission.
-            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
-              opposite magnetization.
-
-        """
-        results = [
-            self.calc_jones_matrices(self.get_inhomogeneous_layers(strains, magnetizations))
-            for strains, magnetizations in zip(strain_map, magnetization_map)
-        ]
-        return tuple(np.stack(result) for result in zip(*results))
-
-    @staticmethod
-    def _reduce_reflectivity_transmissivity(sim, jones):
-        """reflectivity and transmissivity of a block of Jones matrices"""
-        Ref, Ref_phi, Trans, Trans_phi = jones
-        R, T = sim.calc_reflectivity_transmissivity(Ref, Trans)
-        R_phi, T_phi = sim.calc_reflectivity_transmissivity(Ref_phi, Trans_phi)
-        return R, R_phi, T, T_phi
-
-    @staticmethod
-    def _reduce_rotation_ellipticity(sim, jones):
-        """rotation and ellipticity (deg) of a block of Jones matrices"""
-        pi_incident = sim._pi_incident()
-        result = []
-        for j in jones:
-            rotation, ellipticity = MultilayerScattering.calc_rotation_ellipticity(j, pi_incident)
-            result += [rotation.to("deg").magnitude, ellipticity.to("deg").magnitude]
-        return tuple(result)
-
-    @staticmethod
-    def _parallel_inhomogeneous_block(sim, reduce, strain_map, magnetization_map):
-        """Results of a block of delays on a dask worker."""
-        jones = sim.calc_inhomogeneous_jones_matrices(strain_map, magnetization_map)
-        return jones if reduce is None else reduce(sim, jones)
-
-    @staticmethod
-    def _reject_temperatures(temps, name):
-        """The temperature dependence of the dielectric tensor is planned, so
-        that only empty temperatures are accepted yet."""
-        if np.size(temps) > 0:
-            raise NotImplementedError(
-                "The temperature dependence of the dielectric tensor is planned for a future "
-                f"version, so that the {name} of the multilayer formalisms must be empty!"
-            )
-
-    def _parse_maps(self, strain_map, magnetization_map, temp_map, polar):
-        """strain and cartesian magnetization map with the same delays"""
-        self._check_experiment()
-        if not isinstance(strain_map, np.ndarray):
-            raise TypeError("strain_map must be a numpy ndarray!")
-        if not isinstance(magnetization_map, np.ndarray):
-            raise TypeError("magnetization_map must be a numpy ndarray!")
-        if not isinstance(temp_map, np.ndarray):
-            raise TypeError("temp_map must be a numpy ndarray!")
-        self._reject_temperatures(temp_map, "temp_map")
-        magnetization_map = self.parse_magnetization_map(magnetization_map, polar)
-        M = np.size(strain_map, 0)
-        N = np.size(magnetization_map, 0)
-        if (M == 0) and (N > 0):
-            strain_map = np.zeros([np.size(magnetization_map, 0), np.size(magnetization_map, 1)])
-        elif (M > 0) and (N == 0):
-            magnetization_map = np.zeros_like(strain_map)
-        elif (M == 0) and (N == 0):
-            raise ValueError("At least a strain_map or magnetzation_map must be given!")
-        elif M != N:
-            raise ValueError(
-                "The strain_map and magnetzation_map must have the same number of delay steps!"
-            )
-        return strain_map, magnetization_map
-
-    def _calc_inhomogeneous(self, strain_map, magnetization_map, reduce, **kwargs):
-        """Results of :meth:`calc_inhomogeneous_jones_matrices` for all blocks
-        of delays, which are reduced by the static function ``reduce`` on the
-        dask workers, e.g. to the reflectivity, or are the Jones matrices for
-        ``reduce=None``."""
-        calc_type = kwargs.get("calc_type", "sequential")
-        if calc_type not in ["parallel", "sequential"]:
-            raise TypeError("calc_type must be either _parallel_ or _sequential_!")
-        M = np.size(strain_map, 0)
-        size = self._delay_block_size()
-        blocks = [slice(i, min(i + size, M)) for i in range(0, M, size)]
-        if calc_type == "parallel":
-            dask_client = kwargs.get("dask_client")
-            if not dask_client:
-                raise ValueError("no dask client set")
-            results = self._compute_in_parallel(
-                dask_client,
-                MultilayerScattering._parallel_inhomogeneous_block,
-                [(reduce, strain_map[block, :], magnetization_map[block, :]) for block in blocks],
-            )
-        else:
-            iterator = (
-                tqdm(blocks, desc="Progress", leave=True) if self.progress_bar else iter(blocks)
-            )
-            results = [
-                MultilayerScattering._parallel_inhomogeneous_block(
-                    self, reduce, strain_map[block, :], magnetization_map[block, :]
-                )
-                for block in iterator
-            ]
-        return tuple(np.concatenate(parts) for parts in zip(*results))
-
-    def _cached_inhomogeneous(
-        self, name, keys, reduce, strain_map, magnetization_map, temp_map, polar, kwargs
-    ):
-        """Results of :meth:`_calc_inhomogeneous`, which are saved to and
-        loaded from the cache by their ``name`` and ``keys``."""
-        strain_map, magnetization_map = self._parse_maps(
-            strain_map, magnetization_map, temp_map, polar
-        )
-        filename = (
-            f"inhomogeneous_{name}_{type(self).__name__}_"
-            + self.get_hash(
-                strain_map=strain_map, magnetization_map=magnetization_map, temp_map=temp_map
-            )
-            + ".npz"
-        )
-        full_filename = path.abspath(path.join(self.cache_dir, filename))
-        if path.exists(full_filename) and not self.force_recalc:
-            tmp = np.load(full_filename)
-            self.disp_message(f"_inhomogeneous_{name}_ loaded from file:\n\t" + filename)
-            return tuple(tmp[key] for key in keys)
-        t1 = time()
-        self.disp_message(f"Calculating _inhomogeneous_{name}_ ...")
-        results = self._calc_inhomogeneous(strain_map, magnetization_map, reduce, **kwargs)
-        self.disp_message(f"Elapsed time for _inhomogeneous_{name}_: {time() - t1:f} s")
-        self.save(full_filename, dict(zip(keys, results)), f"_inhomogeneous_{name}_")
-        return results
+    # ---- inhomogeneous simulations ----------------------------------------------
 
     def inhomogeneous_jones_matrices(
         self,
@@ -1579,9 +1454,39 @@ class MultilayerScattering(Scattering):
         angles = [Q_(value, u.deg) for value in results]
         return tuple((angles[i], angles[i + 1]) for i in range(0, 8, 2))
 
-    def _delay_block_size(self):
-        """number of delays, which are calculated at once"""
-        return 1
+    def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map, temp_map=None):
+        """calc_inhomogeneous_jones_matrices
+
+        Calculates the Jones matrices of the sample structure for a block of
+        delays of the ``strain_map`` and ``magnetization_map``, see
+        :meth:`calc_jones_matrices` for every delay. Formalisms, which
+        calculate all delays at once, overwrite this method and
+        :meth:`_delay_block_size`.
+
+        Args:
+            strain_map (ndarray[float]): strain of every layer for each delay.
+            magnetization_map (ndarray[float]): magnetization of every layer
+                for each delay.
+            temp_map (ndarray[float], optional): temperature of every layer
+                for each delay, which is reserved for the planned temperature
+                dependence of the dielectric tensor. Defaults to None.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
+              (D, M, N, 2, 2) for D delays.
+            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
+              opposite magnetization.
+            - *T (ndarray[complex])* - Jones matrix of the transmission.
+            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
+              opposite magnetization.
+
+        """
+        results = [
+            self.calc_jones_matrices(self.get_inhomogeneous_layers(strains, magnetizations))
+            for strains, magnetizations in zip(strain_map, magnetization_map)
+        ]
+        return tuple(np.stack(result) for result in zip(*results))
 
     @staticmethod
     def parse_magnetization_map(magnetization_map, polar=False):
@@ -1611,6 +1516,139 @@ class MultilayerScattering(Scattering):
         if magnetization_map.ndim == 0 or magnetization_map.shape[-1] != 3:
             return magnetization_map
         return convert_polar_to_cartesian(magnetization_map)
+
+    @staticmethod
+    def _reject_temperatures(temps, name):
+        """The temperature dependence of the dielectric tensor is planned, so
+        that only empty temperatures are accepted yet."""
+        if np.size(temps) > 0:
+            raise NotImplementedError(
+                "The temperature dependence of the dielectric tensor is planned for a future "
+                f"version, so that the {name} of the multilayer formalisms must be empty!"
+            )
+
+    def _parse_maps(self, strain_map, magnetization_map, temp_map, polar):
+        """strain and cartesian magnetization map with the same delays"""
+        self._check_experiment()
+        if not isinstance(strain_map, np.ndarray):
+            raise TypeError("strain_map must be a numpy ndarray!")
+        if not isinstance(magnetization_map, np.ndarray):
+            raise TypeError("magnetization_map must be a numpy ndarray!")
+        if not isinstance(temp_map, np.ndarray):
+            raise TypeError("temp_map must be a numpy ndarray!")
+        self._reject_temperatures(temp_map, "temp_map")
+        magnetization_map = self.parse_magnetization_map(magnetization_map, polar)
+        M = np.size(strain_map, 0)
+        N = np.size(magnetization_map, 0)
+        if (M == 0) and (N > 0):
+            strain_map = np.zeros([np.size(magnetization_map, 0), np.size(magnetization_map, 1)])
+        elif (M > 0) and (N == 0):
+            magnetization_map = np.zeros_like(strain_map)
+        elif (M == 0) and (N == 0):
+            raise ValueError("At least a strain_map or magnetzation_map must be given!")
+        elif M != N:
+            raise ValueError(
+                "The strain_map and magnetzation_map must have the same number of delay steps!"
+            )
+        return strain_map, magnetization_map
+
+    def _delay_block_size(self):
+        """number of delays, which are calculated at once"""
+        return 1
+
+    def _delay_blocks(self, M, dask_client=None):
+        """slices of the blocks of delays of the size of
+        :meth:`_delay_block_size`, which are split into at least one block
+        per worker thread of the ``dask_client`` for the parallel
+        calculation"""
+        size = self._delay_block_size()
+        if dask_client is not None:
+            workers = max(1, sum(dask_client.nthreads().values()))
+            size = max(1, min(size, -(-M // workers)))
+        return [slice(i, min(i + size, M)) for i in range(0, M, size)]
+
+    def _cached_inhomogeneous(
+        self, name, keys, reduce, strain_map, magnetization_map, temp_map, polar, kwargs
+    ):
+        """Results of :meth:`_calc_inhomogeneous`, which are saved to and
+        loaded from the cache by their ``name`` and ``keys``."""
+        strain_map, magnetization_map = self._parse_maps(
+            strain_map, magnetization_map, temp_map, polar
+        )
+        filename = (
+            f"inhomogeneous_{name}_{type(self).__name__}_"
+            + self.get_hash(
+                strain_map=strain_map, magnetization_map=magnetization_map, temp_map=temp_map
+            )
+            + ".npz"
+        )
+        full_filename = path.abspath(path.join(self.cache_dir, filename))
+        if path.exists(full_filename) and not self.force_recalc:
+            tmp = np.load(full_filename)
+            self.disp_message(f"_inhomogeneous_{name}_ loaded from file:\n\t" + filename)
+            return tuple(tmp[key] for key in keys)
+        t1 = time()
+        self.disp_message(f"Calculating _inhomogeneous_{name}_ ...")
+        results = self._calc_inhomogeneous(strain_map, magnetization_map, reduce, **kwargs)
+        self.disp_message(f"Elapsed time for _inhomogeneous_{name}_: {time() - t1:f} s")
+        self.save(full_filename, dict(zip(keys, results)), f"_inhomogeneous_{name}_")
+        return results
+
+    def _calc_inhomogeneous(self, strain_map, magnetization_map, reduce, **kwargs):
+        """Results of :meth:`calc_inhomogeneous_jones_matrices` for all blocks
+        of delays, which are reduced by the static function ``reduce`` on the
+        dask workers, e.g. to the reflectivity, or are the Jones matrices for
+        ``reduce=None``, see :meth:`_delay_blocks`."""
+        calc_type = kwargs.get("calc_type", "sequential")
+        if calc_type not in ["parallel", "sequential"]:
+            raise TypeError("calc_type must be either _parallel_ or _sequential_!")
+        dask_client = kwargs.get("dask_client")
+        if calc_type == "parallel" and not dask_client:
+            raise ValueError("no dask client set")
+        blocks = self._delay_blocks(
+            np.size(strain_map, 0), dask_client if calc_type == "parallel" else None
+        )
+        if calc_type == "parallel":
+            results = self._compute_in_parallel(
+                dask_client,
+                MultilayerScattering._parallel_inhomogeneous_block,
+                [(reduce, strain_map[block, :], magnetization_map[block, :]) for block in blocks],
+            )
+        else:
+            iterator = (
+                tqdm(blocks, desc="Progress", leave=True) if self.progress_bar else iter(blocks)
+            )
+            results = [
+                MultilayerScattering._parallel_inhomogeneous_block(
+                    self, reduce, strain_map[block, :], magnetization_map[block, :]
+                )
+                for block in iterator
+            ]
+        return tuple(np.concatenate(parts) for parts in zip(*results))
+
+    @staticmethod
+    def _parallel_inhomogeneous_block(sim, reduce, strain_map, magnetization_map):
+        """Results of a block of delays on a dask worker."""
+        jones = sim.calc_inhomogeneous_jones_matrices(strain_map, magnetization_map)
+        return jones if reduce is None else reduce(sim, jones)
+
+    @staticmethod
+    def _reduce_reflectivity_transmissivity(sim, jones):
+        """reflectivity and transmissivity of a block of Jones matrices"""
+        Ref, Ref_phi, Trans, Trans_phi = jones
+        R, T = sim.calc_reflectivity_transmissivity(Ref, Trans)
+        R_phi, T_phi = sim.calc_reflectivity_transmissivity(Ref_phi, Trans_phi)
+        return R, R_phi, T, T_phi
+
+    @staticmethod
+    def _reduce_rotation_ellipticity(sim, jones):
+        """rotation and ellipticity (deg) of a block of Jones matrices"""
+        pi_incident = sim._pi_incident()
+        result = []
+        for j in jones:
+            rotation, ellipticity = MultilayerScattering.calc_rotation_ellipticity(j, pi_incident)
+            result += [rotation.to("deg").magnitude, ellipticity.to("deg").magnitude]
+        return tuple(result)
 
 
 def compose_scattering_stacks(stack, following):
