@@ -133,7 +133,7 @@ def test_get_layer_property_vector_mag_moment_in_si(structure):
 @pytest.mark.parametrize(
     "types, prop, value",
     [
-        ("heat", "heat_capacity", 500 * u.J / u.kg / u.K),
+        ("heat", "heat_capacity", 700 * u.J / u.kg / u.K),  # differs from the fixtures
         ("heat", "thickness", 3 * u.nm),
         ("phonon", "phonon_damping", 2e-12 * u.kg / u.s),
         ("xray", "roughness", 1 * u.nm),
