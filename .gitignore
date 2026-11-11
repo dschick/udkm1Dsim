@@ -24,7 +24,7 @@ docs/source/examples/**/*.rst
 
 # ipython checkpoints
 docs/source/**/.ipynb_checkpoints
-examples/.ipynb_checkpoints
+examples/**/.ipynb_checkpoints
 
 # dask worker space
 docs/source/**/dask-worker-space
