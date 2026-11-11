@@ -130,21 +130,31 @@ def _vector_to_tensor(values, shape):
 def euler_matrix(theta, phi, psi):
     r"""euler_matrix
 
-    Rotation matrix of the z-x-z Euler angles :math:`(\theta, \phi, \psi)` as in
-    `PyGTM <https://pygtm.readthedocs.io>`_, which implements the formalism
-    of :cite:t:`passler2017,passler2020`,
+    Rotation matrix of the z-x-z Euler angles :math:`(\theta, \phi, \psi)`
 
     .. math:: R = R_z(\phi) R_x(\theta) R_z(\psi)
 
-    which rotates a tensor from the frame of the crystal to the frame of the
-    sample, i.e. :math:`\varepsilon = R \varepsilon' R^T`.
+    which rotates a tensor actively from the frame of the crystal to the
+    frame of the sample, i.e. :math:`\varepsilon = R \varepsilon' R^T`. Hence,
+    :math:`\psi` turns the crystal about its own :math:`z'` axis, which is
+    then tilted by :math:`\theta` from the surface normal along the direction
+    :math:`(\sin\phi, -\cos\phi)` in the surface, i.e. into the plane of
+    incidence for :math:`\phi = 0` and along :math:`\sigma` for
+    :math:`\phi = 90°`.
 
-    The frame of the sample is the one of :cite:t:`elzo2012`: :math:`z` is the
-    surface normal pointing out of the sample towards the superstrate,
-    :math:`yz` is the plane of incidence and :math:`x` is along
-    :math:`\sigma`. In contrast to PyGTM, whose :math:`z` axis points into the
-    sample, a rotation by :math:`\theta` thus tilts out-of-plane axes the
-    opposite way, while in-plane rotations are the same.
+    The frame of the sample is the one of :cite:t:`elzo2012` and Dyna:
+    :math:`z` is the surface normal pointing out of the sample towards the
+    superstrate, :math:`yz` is the plane of incidence and :math:`x` is along
+    :math:`\sigma`, as for the magnetization.
+
+    In contrast, `PyGTM <https://pygtm.readthedocs.io>`_ of
+    :cite:t:`passler2017,passler2020` rotates the frame instead of the crystal,
+    i.e. :math:`\varepsilon = R^T \varepsilon' R`, in its frame with the
+    plane of incidence :math:`xz` and :math:`z` pointing into the sample.
+    For its diagonal tensors of the principal values, its Euler angles
+    :math:`(\theta_\mathrm{G}, \phi_\mathrm{G}, \psi_\mathrm{G})` correspond
+    to :math:`(\theta, \phi, \psi) = (\theta_\mathrm{G}, 90° - \psi_\mathrm{G},
+    -\phi_\mathrm{G})`.
 
     Args:
         theta (float): rotation about the x-axis (rad).

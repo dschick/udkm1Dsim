@@ -30,13 +30,12 @@ __all__ = ["Stepanov"]
 
 __docformat__ = "restructuredtext"
 
-import numpy as np
 
-from .elzo import elzo_modes
+from .elzo import _ElzoModes
 from .multilayer import MultilayerScattering
 
 
-class Stepanov(MultilayerScattering):
+class Stepanov(_ElzoModes, MultilayerScattering):
     r"""Stepanov
 
     Multilayer scattering simulations with the analytical eigenmodes of
@@ -68,54 +67,3 @@ class Stepanov(MultilayerScattering):
 
     _title = "Stepanov multilayer scattering simulation"
     _assembly = "scattering"
-
-    def calc_modes(self, eps):
-        """calc_modes
-
-        Calculates the analytical eigenmodes of a homogeneous layer with the
-        dielectric tensor ``eps``, see
-        :func:`~udkm1Dsim.simulations.scattering.elzo.elzo_modes`.
-
-        Args:
-            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
-
-        Returns:
-            (tuple):
-            - *A (ndarray[complex])* - boundary matrix of shape (M, N, 4, 4).
-            - *A_phi (ndarray[complex])* - boundary matrix for opposite
-              magnetization.
-            - *q (ndarray[complex])* - normal wave-vector components of the
-              modes of shape (M, N, 4).
-            - *q_phi (ndarray[complex])* - normal wave-vector components for
-              opposite magnetization.
-            - *k_z (ndarray[complex])* - normal wave-vector component of the
-              non-magnetic layer of shape (M, N).
-
-        """
-        return elzo_modes(eps, np.cos(self.experiment.theta.magnitude))
-
-    def get_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
-        """get_layer_dielectric_tensor
-
-        Dielectric tensor of a layer at the photon energies of the simulation,
-        which must be isotropic except for its gyrotropic part, see
-        :meth:`.Layer.get_dielectric_tensor`.
-
-        Args:
-            layer (Layer): homogeneous layer.
-            strain (float, optional): strain of the layer. Defaults to 0.
-            magnetization (ndarray[float], optional): cartesian
-                magnetization ``(x, y, z)``. Defaults to the magnetization of
-                the layer.
-
-        Returns:
-            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
-
-        """
-        dielectric = layer.optical.dielectric
-        if dielectric.is_set and not dielectric.is_isotropic:
-            raise ValueError(
-                f"The formalism of {type(self).__name__} requires an isotropic dielectric tensor, "
-                f"but the layer '{layer.id}' is anisotropic! Use BerremanStepanov instead."
-            )
-        return layer.get_dielectric_tensor(self.experiment.energy.magnitude, strain, magnetization)

@@ -78,15 +78,6 @@ def magnetization_map(structure):
 
 
 @pytest.fixture(scope="module")
-def ref_trans_matrix(xray_dyn_mag):
-    A0, A0_phi, _, _, _, _, k_z_0 = xray_dyn_mag.get_layer_boundary_phase_matrix(
-        xray_dyn_mag.S.superstrate[0]
-    )
-    RT, *_ = xray_dyn_mag.calc_homogeneous_matrix(xray_dyn_mag.S, A0, A0_phi, k_z_0)
-    return RT
-
-
-@pytest.fixture(scope="module")
 def polarizations():
     # 18 elliptical polarizations
     return [(alpha * u.deg, 0.2) for alpha in range(0, 180, 10)]
@@ -128,7 +119,7 @@ def test_xray_dyn_inhomogeneous_reflectivity_strain_vectors(xray_dyn, strain_map
 @pytest.mark.benchmark
 def test_xray_dyn_mag_homogeneous_reflectivity(xray_dyn_mag):
     xray_dyn_mag.set_polarization(3, 0)
-    xray_dyn_mag.homogeneous_reflectivity()
+    xray_dyn_mag.homogeneous_reflectivity_transmissivity()
 
 
 @pytest.mark.benchmark
@@ -136,7 +127,7 @@ def test_xray_dyn_mag_inhomogeneous_reflectivity(
     xray_dyn_mag, strain_map_mixed, magnetization_map
 ):
     xray_dyn_mag.set_polarization(3, 0)
-    xray_dyn_mag.inhomogeneous_reflectivity(
+    xray_dyn_mag.inhomogeneous_reflectivity_transmissivity(
         strain_map=strain_map_mixed, magnetization_map=magnetization_map
     )
 
@@ -144,12 +135,4 @@ def test_xray_dyn_mag_inhomogeneous_reflectivity(
 @pytest.mark.benchmark
 def test_xray_dyn_mag_homogeneous_reflectivity_elliptical(xray_dyn_mag, polarizations):
     xray_dyn_mag.set_polarization(5, 0, polarization_in=polarizations)
-    xray_dyn_mag.homogeneous_reflectivity()
-
-
-def test_xray_dyn_mag_calc_reflectivity_transmissivity_from_matrix(
-    benchmark, ref_trans_matrix, polarizations
-):
-    pol_in = Elzo.calc_elliptical_polarization(polarizations)
-    pol_out = np.array([], dtype=np.complex128)  # no analyzer
-    benchmark(Elzo.calc_reflectivity_transmissivity_from_matrix, ref_trans_matrix, pol_in, pol_out)
+    xray_dyn_mag.homogeneous_reflectivity_transmissivity()

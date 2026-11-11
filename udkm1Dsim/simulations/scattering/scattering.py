@@ -116,6 +116,18 @@ class Scattering(Simulation):
         self.pol_in = self.calc_incoming_polarization(self._pol_in_state)
         self.pol_out = self.calc_outgoing_polarization(self._pol_out_state)
 
+    def _check_experiment(self):
+        """Warn for scattering vectors beyond :math:`2k`, which have no
+        incidence angle at the photon energy."""
+        invalid = ~np.isfinite(self.experiment.theta.magnitude)
+        if np.any(invalid):
+            energy = self.experiment.energy.magnitude[np.any(invalid, axis=1)]
+            warnings.warn(
+                f"{np.sum(invalid)} scattering vectors qz exceed 2k at photon energies from "
+                f"{np.min(energy):g} eV to {np.max(energy):g} eV and have no incidence angle!",
+                stacklevel=3,
+            )
+
     def _check_superstrate_and_substrate(self):
         """Raise an error if the superstrate or substrate of the structure is
         not a Layer with its number of repetitions, as set by
@@ -137,6 +149,7 @@ class Scattering(Simulation):
         substrate of unit cells, which is warned for any other layer than
         Vacuum."""
         self._check_superstrate_and_substrate()
+        self._check_experiment()
         superstrate, substrate = self.S.superstrate[0], self.S.substrate[0]
         if not isinstance(superstrate, Vacuum):
             warnings.warn(

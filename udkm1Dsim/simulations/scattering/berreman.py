@@ -246,7 +246,7 @@ class _BerremanModes:
               of the down modes of shape (M, N).
 
         """
-        cos_theta = np.cos(self.experiment.theta.magnitude)
+        cos_theta = self._in_plane_wavevector()
         # the normal axis of the Berreman matrix points into the sample,
         # opposite to the one of the sample frame of Elzo et al., so that the
         # tensor is mirrored at the surface

@@ -869,8 +869,8 @@ class Magnetization(Simulation):
         Args:
             B_ext (ndarray[Quantity, float], optional): external magnetic
                 field (B_x, B_y, B_z) (T).
-            init_magnetization (ndarray[float], dict, VectorParameter,
-                optional): initial magnetization, see
+            init_magnetization (ndarray[float], dict, VectorParameter, optional):
+                initial magnetization, see
                 :meth:`check_initial_magnetization`.
             polar (bool, optional): return the magnetization in polar instead
                 of cartesian coordinates. Defaults to False.
@@ -1150,8 +1150,8 @@ class LLG(Magnetization):
             B_ext (ndarray[Quantity, float], optional): external magnetic
                 field (B_x, B_y, B_z) (T), either constant or one vector per
                 delay.
-            init_magnetization (ndarray[float], dict, VectorParameter,
-                optional): initial magnetization in cartesian coordinates by
+            init_magnetization (ndarray[float], dict, VectorParameter, optional):
+                initial magnetization in cartesian coordinates by
                 default, see :meth:`check_initial_magnetization`.
                 Its amplitude is kept if neither ``mag_amplitude_map`` nor
                 ``temp_map`` are given, otherwise only its direction is used.
@@ -1380,8 +1380,8 @@ class iLLG(LLG):
             B_ext (ndarray[Quantity, float], optional): external magnetic
                 field (B_x, B_y, B_z) (T), either constant or one vector per
                 delay.
-            init_magnetization (ndarray[float], dict, VectorParameter,
-                optional): initial magnetization in cartesian coordinates by
+            init_magnetization (ndarray[float], dict, VectorParameter, optional):
+                initial magnetization in cartesian coordinates by
                 default, see :meth:`check_initial_magnetization`.
             strain_map (ndarray[float], optional): spatio-temporal strain map
                 :math:`M \times L`.
@@ -1631,8 +1631,8 @@ class LLB(Magnetization):
             B_ext (ndarray[Quantity, float], optional): external magnetic
                 field (B_x, B_y, B_z) (T), either constant or one vector per
                 delay.
-            init_magnetization (ndarray[float], dict, VectorParameter,
-                optional): initial magnetization in cartesian coordinates by
+            init_magnetization (ndarray[float], dict, VectorParameter, optional):
+                initial magnetization in cartesian coordinates by
                 default, see :meth:`check_initial_magnetization`. If none is
                 given, the layers start in the equilibrium of their
                 initial temperature along the magnetization of the layers.

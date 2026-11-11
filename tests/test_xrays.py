@@ -4,8 +4,7 @@ import numpy as np
 import pytest
 from pint.testing import assert_allclose
 
-from udkm1Dsim import Elzo, XrayDyn, XrayKin, u
-from udkm1Dsim.helpers import convert_polar_to_cartesian
+from udkm1Dsim import XrayDyn, XrayKin, u
 
 # fixtures
 
@@ -35,18 +34,6 @@ def xray_dyn(structure_crystalline, tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
-def xray_dyn_mag(structure, tmp_path_factory):
-    return Elzo(
-        structure,
-        force_recalc=True,
-        cache_dir=tmp_path_factory.mktemp("cache"),
-        save_data=True,
-        disp_messages=True,
-        progress_bar=True,
-    )
-
-
-@pytest.fixture(scope="module")
 def delays():
     return np.r_[-1:10:1] * u.ps
 
@@ -58,12 +45,6 @@ def distances(structure_amorph):
 
 
 @pytest.fixture(scope="module")
-def distances_mixed(structure):
-    dists, _, _ = structure.get_distances_of_layers()
-    return dists
-
-
-@pytest.fixture(scope="module")
 def temp_map(delays, distances):
     return 50 * np.ones([len(delays), len(distances)])
 
@@ -71,16 +52,6 @@ def temp_map(delays, distances):
 @pytest.fixture(scope="module")
 def strain_map(delays, distances):
     return 0.01 * np.ones([len(delays), len(distances)])
-
-
-@pytest.fixture(scope="module")
-def strain_map_mixed(delays, distances_mixed):
-    return 0.01 * np.ones([len(delays), len(distances_mixed)])
-
-
-@pytest.fixture(scope="module")
-def magnetization_map(delays, distances_mixed):
-    return np.zeros([len(delays), len(distances_mixed), 3])
 
 
 # tests
@@ -110,21 +81,25 @@ def test_xray_kin_repr(xray_kin):
     assert xray_kin._repr_html_().startswith("<h2>Kinematical X-Ray Diffraction simulation</h2>")
 
 
-def test_xray_kin_set_polarization(xray_kin):
+@pytest.mark.parametrize("fixture", ["xray_kin", "xray_dyn"])
+def test_atomistic_set_polarization(fixture, request):
+    """the atomistic formalisms support only the linear and unpolarized
+    states"""
+    sim = request.getfixturevalue(fixture)
     for pol_in in [0, 3, 4, "unpolarized", "sigma", "pi"]:
-        xray_kin.set_polarization(pol_in, 0)
-    assert xray_kin.pol_in_state == 4
-    assert xray_kin.pol_in == 1
-    xray_kin.set_polarization("sigma", "none")
-    assert xray_kin.pol_in_state == 3
-    assert xray_kin.pol_out_state == 0
+        sim.set_polarization(pol_in, 0)
+    assert sim.pol_in_state == 4
+    assert sim.pol_in == 1
+    sim.set_polarization("sigma", "none")
+    assert sim.pol_in_state == 3
+    assert sim.pol_out_state == 0
     for pol_in in [1, 2, 5, 7, "circ +", "linear"]:
         with pytest.raises(ValueError, match="does not support the incoming polarization"):
-            xray_kin.set_incoming_polarization(pol_in)
+            sim.set_incoming_polarization(pol_in)
     with pytest.raises(ValueError, match="does not support the analyzer polarization"):
-        xray_kin.set_outgoing_polarization(3)
+        sim.set_outgoing_polarization(3)
     with pytest.raises(AttributeError):
-        xray_kin.pol_in_state = 4
+        sim.pol_in_state = 4
 
 
 def test_xray_kin_get_polarization_factor(xray_kin):
@@ -158,23 +133,6 @@ def test_xray_dyn_repr(xray_dyn):
     assert repr(xray_dyn).startswith("Dynamical X-Ray Diffraction simulation properties:")
     assert str(xray_dyn) == repr(xray_dyn)
     assert xray_dyn._repr_html_().startswith("<h2>Dynamical X-Ray Diffraction simulation</h2>")
-
-
-def test_xray_dyn_set_polarization(xray_dyn):
-    for pol_in in [0, 3, 4, "unpolarized", "sigma", "pi"]:
-        xray_dyn.set_polarization(pol_in, 0)
-    assert xray_dyn.pol_in_state == 4
-    assert xray_dyn.pol_in == 1
-    xray_dyn.set_polarization("sigma", "none")
-    assert xray_dyn.pol_in_state == 3
-    assert xray_dyn.pol_out_state == 0
-    for pol_in in [1, 2, 5, 7, "circ +", "linear"]:
-        with pytest.raises(ValueError, match="does not support the incoming polarization"):
-            xray_dyn.set_incoming_polarization(pol_in)
-    with pytest.raises(ValueError, match="does not support the analyzer polarization"):
-        xray_dyn.set_outgoing_polarization(3)
-    with pytest.raises(AttributeError):
-        xray_dyn.pol_in_state = 4
 
 
 def test_xray_dyn_get_hash(xray_dyn, strain_map, temp_map):
@@ -213,7 +171,7 @@ def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map, temp_map):
         xray_dyn.inhomogeneous_reflectivity(
             strain_map, strain_vectors=strain_vectors, calc_type="parallel"
         )
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError, match="calc_type"):
         xray_dyn.inhomogeneous_reflectivity(
             strain_map, strain_vectors=strain_vectors, calc_type="distributed"
         )
@@ -225,171 +183,3 @@ def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map, temp_map):
         xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=np.array([]))
     with pytest.raises(ValueError):
         xray_dyn.inhomogeneous_reflectivity(strain_map, temp_map=np.ones([11, 20, 2]))
-
-
-# Elzo
-
-
-def test_xray_dyn_mag_repr(xray_dyn_mag):
-    xray_dyn_mag.energy = 800 * u.eV
-    xray_dyn_mag.theta = np.r_[1:10] * u.deg
-    assert repr(xray_dyn_mag).startswith("Elzo multilayer scattering simulation properties:")
-    assert str(xray_dyn_mag) == repr(xray_dyn_mag)
-    assert xray_dyn_mag._repr_html_().startswith("<h2>Elzo multilayer scattering simulation</h2>")
-
-
-def test_xray_dyn_mag_set_polarization(xray_dyn_mag):
-    xray_dyn_mag.set_polarization(0, 0)
-    xray_dyn_mag.set_polarization(1, 1)
-    xray_dyn_mag.set_polarization(2, 0)
-    xray_dyn_mag.set_polarization(3, 0)
-    xray_dyn_mag.set_polarization(4, 0)
-
-
-def test_xray_dyn_mag_set_incoming_polarization(xray_dyn_mag):
-    with pytest.raises(ValueError):
-        xray_dyn_mag.set_incoming_polarization(5)
-    xray_dyn_mag.set_incoming_polarization(5, (0, 0))
-    with pytest.raises(ValueError):
-        xray_dyn_mag.set_incoming_polarization(5, (0, 2))
-
-
-def test_xray_dyn_mag_set_outgoing_polarization(xray_dyn_mag):
-    with pytest.raises(ValueError):
-        xray_dyn_mag.set_outgoing_polarization(5)
-    xray_dyn_mag.set_outgoing_polarization(5, (0, 0))
-    with pytest.raises(ValueError):
-        xray_dyn_mag.set_outgoing_polarization(5, (0, 2))
-
-
-def test_xray_dyn_mag_get_hash(xray_dyn_mag, strain_map_mixed, magnetization_map):
-    xray_dyn_mag.get_hash(strain_map=strain_map_mixed, magnetization_map=magnetization_map)
-
-
-def test_xray_dyn_mag_homogeneous_reflectivity(xray_dyn_mag):
-    xray_dyn_mag.energy = 800 * u.eV
-    xray_dyn_mag.theta = np.r_[1:10] * u.deg
-    xray_dyn_mag.homogeneous_reflectivity()
-    with pytest.raises(ValueError):
-        xray_dyn_mag.set_incoming_polarization(5, [(0, 0), (1, 0), (2, 0)])
-        xray_dyn_mag.set_outgoing_polarization(5, [(0, 0), (1, 0)])
-        xray_dyn_mag.homogeneous_reflectivity()
-
-
-def test_xray_dyn_mag_inhomogeneous_reflectivity(
-    xray_dyn_mag, strain_map_mixed, magnetization_map
-):
-    xray_dyn_mag.energy = 800 * u.eV
-    xray_dyn_mag.theta = np.r_[1:10] * u.deg
-    xray_dyn_mag.set_incoming_polarization(5, (0, 0))
-    xray_dyn_mag.set_outgoing_polarization(5, [(0, 0)])
-    xray_dyn_mag.inhomogeneous_reflectivity(
-        strain_map=strain_map_mixed, magnetization_map=magnetization_map
-    )
-    xray_dyn_mag.force_recalc = False
-    xray_dyn_mag.inhomogeneous_reflectivity(
-        strain_map=strain_map_mixed, magnetization_map=magnetization_map
-    )
-    xray_dyn_mag.force_recalc = True
-    with pytest.raises(ValueError):
-        xray_dyn_mag.inhomogeneous_reflectivity(
-            strain_map=strain_map_mixed, magnetization_map=magnetization_map, calc_type="parallel"
-        )
-    with pytest.raises(NotImplementedError):
-        xray_dyn_mag.inhomogeneous_reflectivity(
-            strain_map=strain_map_mixed,
-            magnetization_map=magnetization_map,
-            calc_type="distributed",
-        )
-
-
-def test_xray_dyn_mag_inhomogeneous_reflectivity_polarization(
-    xray_dyn_mag, strain_map_mixed, magnetization_map
-):
-    xray_dyn_mag.energy = 800 * u.eV
-    xray_dyn_mag.theta = np.r_[1:10] * u.deg
-    xray_dyn_mag.set_incoming_polarization(5, [(0 * u.deg, 0), (45 * u.deg, 0), (90 * u.deg, 0)])
-    xray_dyn_mag.set_outgoing_polarization(5, [(0, 0)])
-    assert xray_dyn_mag.num_pol == 3
-    R, R_phi, T, T_phi = xray_dyn_mag.inhomogeneous_reflectivity(
-        strain_map=strain_map_mixed, magnetization_map=magnetization_map
-    )
-    assert R.shape == (strain_map_mixed.shape[0],) + xray_dyn_mag.experiment.qz.magnitude.shape + (
-        3,
-    )
-    # single polarization results equal the respective multi-polarization slices
-    xray_dyn_mag.set_incoming_polarization(5, (45 * u.deg, 0))
-    R_single, _, _, _ = xray_dyn_mag.inhomogeneous_reflectivity(
-        strain_map=strain_map_mixed, magnetization_map=magnetization_map
-    )
-    assert R_single.ndim == 3
-    np.testing.assert_allclose(R_single, R[..., 1])
-
-
-def test_xray_dyn_mag_polar_magnetization_map(xray_dyn_mag, strain_map_mixed):
-    """the magnetization_map is cartesian by default and polar for
-    polar=True, which give the same results"""
-    xray_dyn_mag.energy = 700 * u.eV
-    xray_dyn_mag.theta = np.r_[1:10] * u.deg
-    xray_dyn_mag.set_polarization(3, 0)
-    M, L = strain_map_mixed.shape
-    polar = np.zeros([M, L, 3])
-    polar[..., 0] = np.linspace(0.2, 1, L)
-    polar[..., 1] = np.pi / 3
-    polar[..., 2] = np.pi / 4
-    cartesian = convert_polar_to_cartesian(polar)
-    R, R_phi, _, _ = xray_dyn_mag.inhomogeneous_reflectivity(
-        strain_map=strain_map_mixed, magnetization_map=cartesian
-    )
-    R_polar, R_phi_polar, _, _ = xray_dyn_mag.inhomogeneous_reflectivity(
-        strain_map=strain_map_mixed, magnetization_map=polar, polar=True
-    )
-    np.testing.assert_allclose(R_polar, R)
-    np.testing.assert_allclose(R_phi_polar, R_phi)
-    # the magnetization matters for circular polarization
-    R_zero, _, _, _ = xray_dyn_mag.inhomogeneous_reflectivity(
-        strain_map=strain_map_mixed, magnetization_map=np.zeros([M, L, 3])
-    )
-    assert not np.allclose(R, R_zero)
-    # the homogeneous reflectivity of the sub-structures
-    N = xray_dyn_mag.S.get_number_of_sub_structures()
-    strains = np.zeros(N)
-    R_hom, _, _, _ = xray_dyn_mag.homogeneous_reflectivity(strains, cartesian[0, :N])
-    R_hom_polar, _, _, _ = xray_dyn_mag.homogeneous_reflectivity(strains, polar[0, :N], polar=True)
-    np.testing.assert_allclose(R_hom_polar, R_hom)
-
-
-def test_xray_dyn_mag_set_polarization_consistency(xray_dyn_mag):
-    xray_dyn_mag.set_polarization(5, 5, [(0, 0), (1, 0), (2, 0)], [(0, 0), (1, 0), (2, 0)])
-    assert xray_dyn_mag.num_pol == 3
-    # changing only one side to a different number of polarizations must fail
-    # and keep the previous state
-    with pytest.raises(ValueError, match="set_polarization"):
-        xray_dyn_mag.set_outgoing_polarization(5, [(0, 0), (1, 0)])
-    assert xray_dyn_mag.pol_out.shape == (3, 2)
-    with pytest.raises(ValueError, match="set_polarization"):
-        xray_dyn_mag.set_incoming_polarization(5, [(0, 0), (1, 0)])
-    assert xray_dyn_mag.pol_in.shape == (3, 2)
-    # a single polarization on one side is always allowed
-    xray_dyn_mag.set_outgoing_polarization(3)
-    assert xray_dyn_mag.num_pol == 3
-    xray_dyn_mag.set_outgoing_polarization(0)
-    assert xray_dyn_mag.num_pol == 3
-    # changing both at the same time
-    xray_dyn_mag.set_polarization(5, 5, [(0, 0), (1, 0)], [(0, 0), (1, 0)])
-    assert xray_dyn_mag.num_pol == 2
-    with pytest.raises(ValueError):
-        xray_dyn_mag.set_polarization(5, 5, [(0, 0), (1, 0)], [(0, 0), (1, 0), (2, 0)])
-    assert xray_dyn_mag.num_pol == 2
-    xray_dyn_mag.set_polarization(3, 0)
-    assert xray_dyn_mag.num_pol == 1
-
-
-def test_xray_dyn_mag_get_hash_elliptical(xray_dyn_mag):
-    xray_dyn_mag.set_polarization(5, 0, (0 * u.deg, 0))
-    hash_1 = xray_dyn_mag.get_hash()
-    xray_dyn_mag.set_polarization(5, 0, (45 * u.deg, 0))
-    hash_2 = xray_dyn_mag.get_hash()
-    xray_dyn_mag.set_polarization(5, 0, [(0 * u.deg, 0), (45 * u.deg, 0)])
-    hash_3 = xray_dyn_mag.get_hash()
-    assert len({hash_1, hash_2, hash_3}) == 3

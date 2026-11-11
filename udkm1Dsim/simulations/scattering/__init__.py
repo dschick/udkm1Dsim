@@ -39,6 +39,18 @@ The formalisms are named by their method:
 All formalisms except :class:`XrayKin` and :class:`XrayDyn` take the dielectric
 tensor of the layers, see :class:`.Dielectric`.
 
+The multilayer formalisms calculate the Jones matrices of the reflection and
+transmission once by :meth:`~MultilayerScattering.homogeneous_jones_matrices`
+or :meth:`~MultilayerScattering.inhomogeneous_jones_matrices`, from which the
+reflectivity and transmissivity and the rotation and ellipticity of the
+polarization, e.g. the Kerr and Faraday effect, follow by
+:meth:`~MultilayerScattering.calc_reflectivity_transmissivity` and
+:meth:`~MultilayerScattering.calc_rotation_ellipticity`, or directly by
+``homogeneous_reflectivity_transmissivity()``,
+``inhomogeneous_reflectivity_transmissivity()``,
+``homogeneous_rotation_ellipticity()``, and
+``inhomogeneous_rotation_ellipticity()``.
+
 The photon energies and angles of a simulation are held by its
 :class:`~udkm1Dsim.simulations.parameter_groups.ExperimentParameters` in
 ``sim.experiment``, with ``sim.energy``, ``sim.wl``, ``sim.k``, ``sim.theta``,

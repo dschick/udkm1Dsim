@@ -31,7 +31,7 @@ __docformat__ = "restructuredtext"
 import numpy as np
 
 from .berreman import _forward_sqrt
-from .multilayer import MultilayerScattering
+from .multilayer import MultilayerScattering, _flatten_layers
 
 
 class Parratt(MultilayerScattering):
@@ -123,7 +123,7 @@ class Parratt(MultilayerScattering):
             eps = self.get_layer_dielectric_tensor(layer, strain)[:, 0, 0][:, np.newaxis]
             thickness = layer.structural.thickness.magnitude * (1 + strain)
         k_z = self.experiment.k.magnitude[:, np.newaxis] * _forward_sqrt(
-            eps - np.cos(self.experiment.theta.magnitude) ** 2
+            eps - self._in_plane_wavevector() ** 2
         )
         result = (eps, k_z, thickness, layer.structural.roughness.magnitude)
         if cache is not None and np.ndim(thickness) == 0:
@@ -154,6 +154,7 @@ class Parratt(MultilayerScattering):
               magnetization.
 
         """
+        layers = _flatten_layers(layers)
         # leading dimension of the delays for arrays of strains
         shape = self.experiment.theta.magnitude.shape
         for _, strain, _ in layers:
@@ -204,13 +205,13 @@ class Parratt(MultilayerScattering):
         T[..., 0, 0], T[..., 1, 1] = t_s, t_p
         return R, R, T, T
 
-    def calc_inhomogeneous_reflectivities(self, strain_map, magnetization_map):
-        """calc_inhomogeneous_reflectivities
+    def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map):
+        """calc_inhomogeneous_jones_matrices
 
-        Calculates the reflectivity and transmissivity of the sample structure
-        for a block of delays of the ``strain_map`` at once, where the
-        recursion runs over the layers for all delays, photon energies, and
-        angles in parallel. The magnetization is neglected.
+        Calculates the Jones matrices of the sample structure for a block of
+        delays of the ``strain_map`` at once, where the recursion runs over
+        the layers for all delays, photon energies, and angles in parallel.
+        The magnetization is neglected.
 
         Args:
             strain_map (ndarray[float]): strain of every layer for each delay.
@@ -219,34 +220,27 @@ class Parratt(MultilayerScattering):
 
         Returns:
             (tuple):
-            - *R (ndarray[float])* - reflectivity for each delay.
-            - *R_phi (ndarray[float])* - the same reflectivity for opposite
+            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
+              (D, M, N, 2, 2) for D delays.
+            - *R_phi (ndarray[complex])* - the same Jones matrix for opposite
               magnetization.
-            - *T (ndarray[float])* - transmissivity.
-            - *T_phi (ndarray[float])* - the same transmissivity for opposite
+            - *T (ndarray[complex])* - Jones matrix of the transmission.
+            - *T_phi (ndarray[complex])* - the same Jones matrix for opposite
               magnetization.
 
         """
         strain_map = np.asarray(strain_map, dtype=float)
-        D = strain_map.shape[0]
-        if D == 1:
-            return super().calc_inhomogeneous_reflectivities(strain_map, magnetization_map)
+        if strain_map.shape[0] == 1:
+            return super().calc_inhomogeneous_jones_matrices(strain_map, magnetization_map)
         _, _, handles = self.S.get_layer_vectors()
         superstrate, substrate = self._superstrate_and_substrate()
         layers = (
             [superstrate]
             + [(handle, strain_map[:, i], None) for i, handle in enumerate(handles)]
-            + substrate
+            + _flatten_layers(substrate)
         )
         Ref, _, Trans, _ = self.calc_jones_matrices(layers, {})
-        # the intensities are calculated for all delays and photon energies
-        shape = Ref.shape
-        Ref = Ref.reshape((-1,) + shape[2:])
-        Trans = Trans.reshape((-1,) + shape[2:])
-        R, T = self.calc_intensities(Ref, Trans, self.pol_in, self.pol_out)
-        R = R.reshape(shape[:3] + R.shape[2:])
-        T = T.reshape(shape[:3] + T.shape[2:])
-        return R, R, T, T
+        return Ref, Ref, Trans, Trans
 
     def _delay_block_size(self):
         """number of delays, which are calculated at once, for about 2^20

@@ -12,11 +12,9 @@ from udkm1Dsim import (
     Atom,
     Dielectric,
     Dispersion,
-    Elzo,
     Layer,
     Structure,
     UnitCell,
-    Vacuum,
     u,
 )
 from udkm1Dsim.structures.dielectric import euler_matrix, gyrotropic_tensor, to_energy
@@ -99,7 +97,9 @@ def test_dispersion_out_of_range():
     # also through the dielectric of a layer
     layer = Layer("l", "l", dielectric=d)
     with pytest.raises(
-        ValueError, match="for the wavelength 1.2 µm,\nbut only from 0.4 µm to 1 µm"
+        # pint prints the micro sign (U+00B5) or, since 0.26, the Greek mu (U+03BC)
+        ValueError,
+        match="for the wavelength 1.2 [µμ]m,\nbut only from 0.4 [µμ]m to 1 [µμ]m",
     ):
         layer.get_ref_index(1.2 * u.um)
 
@@ -447,55 +447,6 @@ def test_layer_without_atoms():
         Layer("l", "l").dispersion_from_atoms()
     with pytest.raises(ValueError, match="Layer 'l'"):
         Layer("l", "l").get_dielectric_tensor(1.0)
-
-
-# ============================================================================
-# Elzo
-# ============================================================================
-
-
-@pytest.fixture
-def magnetic_structure(iron):
-    fe = AmorphousLayer("fe", "fe", thickness=2 * u.nm, density=7874 * u.kg / u.m**3, atom=iron)
-    fe.optical.dielectric = fe.dielectric_from_atoms()
-    S = Structure("s")
-    S.add_sub_structure(fe, 2)
-    S.add_sub_structure(Vacuum(thickness=1 * u.nm), 1)
-    S.add_sub_structure(fe, 2)
-    S.add_substrate(fe)
-    return S
-
-
-def _xray_dyn_mag(S):
-    x = Elzo(S, True, disp_messages=False, progress_bar=False, save_data=False)
-    x.energy = np.r_[700, 707] * u.eV
-    x.theta = np.r_[1:20:4] * u.deg
-    x.set_polarization(3, 0)
-    return x
-
-
-def test_xray_dyn_mag_homogeneous_equals_unstrained_inhomogeneous(magnetic_structure):
-    x = _xray_dyn_mag(magnetic_structure)
-    R, R_phi, _, _ = x.homogeneous_reflectivity()
-    L = magnetic_structure.get_number_of_layers()
-    magnetization_map = np.zeros((1, L, 3))
-    magnetization_map[..., 0] = 1  # along x
-    Ri, Ri_phi, _, _ = x.inhomogeneous_reflectivity(
-        strain_map=np.zeros((1, L)), magnetization_map=magnetization_map
-    )
-    # including the thickness of the vacuum layer
-    np.testing.assert_allclose(Ri[0], R, rtol=1e-10)
-    np.testing.assert_allclose(Ri_phi[0], R_phi, rtol=1e-10)
-
-
-def test_xray_dyn_mag_requires_dielectric(magnetic_structure):
-    S = copy.deepcopy(magnetic_structure)
-    S.get_layer_handle(0).optical.dielectric = None
-    with pytest.raises(ValueError, match="Layer 'fe'.*not set"):
-        _xray_dyn_mag(S).homogeneous_reflectivity()
-    S.get_layer_handle(0).optical.dielectric = Dispersion.from_ref_index([1, 1.1])
-    with pytest.raises(ValueError, match="isotropic"):
-        _xray_dyn_mag(S).homogeneous_reflectivity()
 
 
 # ============================================================================

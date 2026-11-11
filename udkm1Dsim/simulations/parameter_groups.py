@@ -132,8 +132,12 @@ class ExperimentParameters(ParameterGroup):
         if scan.magnitude.shape[0] != M:
             scan.magnitude = np.tile(scan.magnitude[0, :], (M, 1))
         if self._scan == "qz":
-            self.theta.magnitude = np.arcsin(
-                self.wl.magnitude[:, np.newaxis] * self.qz.magnitude / (4 * np.pi)
-            )
+            # a scattering vector beyond 2k has no incidence angle, which is
+            # warned for by the simulations only on a calculation, as it may
+            # be set right after the photon energy
+            with np.errstate(invalid="ignore"):
+                self.theta.magnitude = np.arcsin(
+                    self.wl.magnitude[:, np.newaxis] * self.qz.magnitude / (4 * np.pi)
+                )
         else:
             self.qz.magnitude = 2 * self.k.magnitude[:, np.newaxis] * np.sin(self.theta.magnitude)

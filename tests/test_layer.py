@@ -83,20 +83,20 @@ def test_layer_nonintegratable_lin_therm_exp(layer):
 
 
 def test_layer_heat_capacity(layer):
-    assert layer.heat_capacity[0](300) == 10
+    assert layer.heat_capacity[0](300) == 500
 
 
 def test_layer_heat_capacity_expr(layer):
-    assert float(layer.heat_capacity_expr[0]) == pytest.approx(10.0, rel=1e-9, abs=0)
+    assert float(layer.heat_capacity_expr[0]) == pytest.approx(500.0, rel=1e-9, abs=0)
 
 
 def test_layer_int_heat_capacity(layer):
-    assert layer.int_heat_capacity[0](300) == 3000.0
+    assert layer.int_heat_capacity[0](300) == 150000.0
 
 
 def test_layer_int_heat_capacity_expr(layer):
     T = sp.symbols("T")
-    assert layer.int_heat_capacity_expr[0].equals(10.0 * T)
+    assert layer.int_heat_capacity_expr[0].equals(500.0 * T)
 
 
 def test_layer_nonintegratable_heat_capacity(layer):
@@ -105,7 +105,7 @@ def test_layer_nonintegratable_heat_capacity(layer):
         # integration is only carried out when explicitly called
         layer.int_heat_capacity
     # reset to original value
-    layer.heat_capacity = 10 * (u.J / u.kg / u.K)
+    layer.heat_capacity = 500 * (u.J / u.kg / u.K)
 
 
 def test_layer_sub_system_coupling(layer):
@@ -148,7 +148,7 @@ def test_layer_sound_vel(layer):
 
 
 def test_layer_phonon_damping(layer):
-    assert_equal(layer.phonon_damping, 1e-12 * u.kg / u.s)
+    assert_equal(layer.phonon_damping, 1e-15 * u.kg / u.s)
 
 
 def test_layer_set_ho_spring_constants(layer):
@@ -173,8 +173,8 @@ def test_layer_removed_optical_inputs():
 def test_layer_dielectric_from_ref_index(layer):
     assert isinstance(layer.dielectric, Dielectric)
     assert layer.dielectric.is_isotropic
-    np.testing.assert_allclose(layer.get_ref_index(800 * u.nm), 5 - 3j)
-    np.testing.assert_allclose(layer.get_dielectric_tensor(1.0)[0], (5 - 3j) ** 2 * np.eye(3))
+    np.testing.assert_allclose(layer.get_ref_index(800 * u.nm), 5 + 3j)
+    np.testing.assert_allclose(layer.get_dielectric_tensor(1.0)[0], (5 + 3j) ** 2 * np.eye(3))
 
 
 # ============================================================================
@@ -397,13 +397,6 @@ def test_vacuum(vacuum):
 
 def test_amorphous_layer_atom(amorphous_layer, atom_iron):
     assert amorphous_layer.atom is atom_iron
-
-
-def test_amorphous_layer_magnetization_from_atom(amorphous_layer):
-    amplitude, phi, gamma = amorphous_layer.magnetic.magnetization.polar
-    assert np.isclose(amplitude, 0.5)
-    assert_approx(phi, 0 * u.deg)
-    assert_approx(gamma, 180 * u.deg)
 
 
 def test_amorphous_layer_without_atom():

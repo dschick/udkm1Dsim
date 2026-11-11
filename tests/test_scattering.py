@@ -128,6 +128,8 @@ def test_titles():
     ]:
         sim = simulation(cls, S, 1.55 * u.eV, np.r_[10] * u.deg)
         assert repr(sim).startswith(f"{title} multilayer scattering simulation properties:")
+        assert str(sim) == repr(sim)
+        assert sim._repr_html_().startswith(f"<h2>{title} multilayer scattering simulation</h2>")
 
 
 # ============================================================================
@@ -158,7 +160,9 @@ def test_fresnel_equations(cls):
 @pytest.mark.parametrize("cls", FORMALISMS)
 def test_fresnel_equations_dielectric_superstrate(cls):
     """reflection and transmission of the electric field at an interface of a
-    dielectric superstrate and the substrate"""
+    dielectric superstrate and the substrate for the grazing angles in the
+    superstrate, also for in-plane wave vectors n cos(theta) > 1 beyond the
+    vacuum, as for the coupling by a prism"""
     n_sup = 1.3
     superstrate = substrate_layer(Dispersion.from_ref_index(n_sup))
     S = Structure("interface")
@@ -169,7 +173,8 @@ def test_fresnel_equations_dielectric_superstrate(cls):
     sim = simulation(cls, S, 1.55 * u.eV, theta * u.deg)
     R, _, T, _ = sim.homogeneous_jones_matrices()
     eps0, eps1 = n_sup**2, N_SUB**2
-    b = np.cos(np.radians(theta))
+    b = n_sup * np.cos(np.radians(theta))
+    assert np.any(b > 1)
     kz0, kz1 = np.sqrt(eps0 - b**2), np.sqrt(eps1 - b**2)
     r_s = (kz0 - kz1) / (kz0 + kz1)
     r_p = (eps1 * kz0 - eps0 * kz1) / (eps1 * kz0 + eps0 * kz1)
@@ -249,8 +254,8 @@ def test_parratt_x_rays_equal_elzo(magnetic_multilayer):
         parratt.set_polarization(pol_in, pol_out)
         elzo.set_polarization(pol_in, pol_out)
         for a, b in zip(
-            parratt.homogeneous_reflectivity(np.zeros(L), no_magnetization),
-            elzo.homogeneous_reflectivity(np.zeros(L), no_magnetization),
+            parratt.homogeneous_reflectivity_transmissivity(np.zeros(L), no_magnetization),
+            elzo.homogeneous_reflectivity_transmissivity(np.zeros(L), no_magnetization),
         ):
             np.testing.assert_allclose(a, b, rtol=1e-10, atol=1e-14)
 
@@ -276,10 +281,9 @@ def test_berreman_x_rays_close_to_elzo(cls, magnetic_multilayer):
     for pol_in, pol_out in [(1, 0), (2, 0), (3, 0), (4, 0), (3, 4)]:
         elzo.set_polarization(pol_in, pol_out)
         berreman.set_polarization(pol_in, pol_out)
-        R, R_phi, _, _ = elzo.homogeneous_reflectivity()
-        R_b, R_b_phi, _, _ = berreman.homogeneous_reflectivity()
+        R, R_phi, _, _ = elzo.homogeneous_reflectivity_transmissivity()
+        R_b, R_b_phi, _, _ = berreman.homogeneous_reflectivity_transmissivity()
         np.testing.assert_allclose(R_b, R, rtol=3e-2)
-        # the magnetic asymmetry
         # the magnetic asymmetry up to second order at the Fe L3 resonance
         np.testing.assert_allclose(
             (R_b - R_b_phi) / (R_b + R_b_phi), (R - R_phi) / (R + R_phi), atol=5e-3
@@ -313,8 +317,8 @@ def test_kerr_angles():
     S = magnetic_film((0, 0, 1))
     sim = simulation(BerremanStepanov, S, np.r_[1.55] * u.eV, np.r_[30, 60] * u.deg)
     R, R_phi, _, _ = sim.homogeneous_jones_matrices()
-    rotation, ellipticity = sim.calc_kerr_angles(R)
-    rotation_phi, ellipticity_phi = sim.calc_kerr_angles(R_phi)
+    rotation, ellipticity = sim.calc_rotation_ellipticity(R)
+    rotation_phi, ellipticity_phi = sim.calc_rotation_ellipticity(R_phi)
     np.testing.assert_allclose(rotation_phi.m, -rotation.m, rtol=1e-8)
     np.testing.assert_allclose(ellipticity_phi.m, -ellipticity.m, rtol=1e-8)
     ratio = R[..., 1, 0] / R[..., 0, 0]
@@ -322,17 +326,33 @@ def test_kerr_angles():
     np.testing.assert_allclose(rotation.to("rad").m, ratio.real, rtol=1e-3)
     np.testing.assert_allclose(ellipticity.to("rad").m, ratio.imag, rtol=1e-3)
     assert rotation.units == u.deg
-    rotation_p, _ = sim.calc_kerr_angles(R, pi_incident=True)
+    rotation_p, _ = sim.calc_rotation_ellipticity(R, pi_incident=True)
     assert np.all(np.abs(rotation_p.m) > 0)
 
 
-def test_elzo_kerr_effect_from_matrix(magnetic_multilayer):
-    elzo = simulation(Elzo, magnetic_multilayer, np.r_[707] * u.eV, np.r_[5, 10] * u.deg)
-    RT, _ = elzo.calc_homogeneous_transfer_matrix()
-    (rotation, ellipticity), (rotation_p, ellipticity_p) = elzo.calc_kerr_effect_from_matrix(RT)
-    R = elzo.jones_from_transfer_matrix(RT)[0]
-    np.testing.assert_allclose(rotation.m, elzo.calc_kerr_angles(R)[0].m)
-    np.testing.assert_allclose(ellipticity_p.m, elzo.calc_kerr_angles(R, True)[1].m)
+@pytest.mark.parametrize("cls", MAGNETIC)
+def test_rotation_ellipticity_from_one_calculation(cls, magnetic_multilayer):
+    sim = simulation(cls, magnetic_multilayer, np.r_[700, 707] * u.eV, np.r_[5, 10] * u.deg)
+    L = magnetic_multilayer.get_number_of_layers()
+    R, R_phi, T, T_phi = sim.homogeneous_jones_matrices()
+    for pol, pi_incident in [("sigma", False), ("pi", True)]:
+        sim.set_polarization(pol, "none")
+        angles = sim.homogeneous_rotation_ellipticity()
+        for (rotation, ellipticity), jones in zip(angles, (R, R_phi, T, T_phi)):
+            reference = sim.calc_rotation_ellipticity(jones, pi_incident)
+            np.testing.assert_allclose(rotation.m, reference[0].m)
+            np.testing.assert_allclose(ellipticity.m, reference[1].m)
+        # all delays of a homogeneous map equal the homogeneous result
+        maps = (np.zeros((2, L)), np.zeros((2, L, 1)))
+        delays = sim.inhomogeneous_rotation_ellipticity(*maps)
+        for (rotation, ellipticity), (reference, _) in zip(delays, angles):
+            np.testing.assert_allclose(rotation.m, np.stack([reference.m] * 2), atol=1e-12)
+    jones = sim.inhomogeneous_jones_matrices(*maps)
+    for a, b in zip(jones, (R, R_phi, T, T_phi)):
+        np.testing.assert_allclose(a, np.stack([b] * 2), rtol=1e-10, atol=1e-14)
+    sim.set_polarization("unpolarized", "none")
+    with pytest.raises(ValueError, match="incoming sigma or pi polarization"):
+        sim.homogeneous_rotation_ellipticity()
 
 
 # ============================================================================
@@ -384,21 +404,27 @@ def test_tilted_optic_axis():
 def test_isotropic_formalisms_reject_anisotropic_layers(cls):
     S = interface(substrate_layer(Dispersion.from_ref_index([1.66, 1.49])))
     with pytest.raises(ValueError, match="isotropic"):
-        simulation(cls, S, 1.55 * u.eV, np.r_[10] * u.deg).homogeneous_reflectivity()
+        simulation(
+            cls, S, 1.55 * u.eV, np.r_[10] * u.deg
+        ).homogeneous_reflectivity_transmissivity()
 
 
 def test_berreman_requires_isotropic_superstrate():
     S = interface(substrate_layer())
     S.add_superstrate(substrate_layer(Dispersion.from_ref_index([1.66, 1.49])))
     with pytest.raises(ValueError, match="superstrate 'sub' .* must be isotropic"):
-        simulation(BerremanStepanov, S, 1.55 * u.eV, np.r_[10] * u.deg).homogeneous_reflectivity()
+        simulation(
+            BerremanStepanov, S, 1.55 * u.eV, np.r_[10] * u.deg
+        ).homogeneous_reflectivity_transmissivity()
 
 
 @pytest.mark.parametrize("cls", FORMALISMS)
 def test_formalisms_require_dielectric(cls):
     sub = AmorphousLayer("sub", "substrate", thickness=1 * u.nm, density=1000 * u.kg / u.m**3)
     with pytest.raises(ValueError, match="Layer 'sub'.*not set"):
-        simulation(cls, interface(sub), 1.55 * u.eV, np.r_[10] * u.deg).homogeneous_reflectivity()
+        simulation(
+            cls, interface(sub), 1.55 * u.eV, np.r_[10] * u.deg
+        ).homogeneous_reflectivity_transmissivity()
 
 
 # ============================================================================
@@ -464,19 +490,19 @@ def test_stepanov_is_stable_for_thick_absorbing_stacks():
 # ============================================================================
 
 
-@pytest.mark.parametrize("cls", [Parratt, Stepanov, BerremanStepanov])
+@pytest.mark.parametrize("cls", FORMALISMS)
 def test_inhomogeneous_equals_homogeneous(cls, magnetic_multilayer, tmp_path):
     energy, theta = np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg
     sim = simulation(cls, magnetic_multilayer, energy, theta)
     sim.set_polarization(1, 0)
     sim.cache_dir = tmp_path
-    R, R_phi, T, T_phi = sim.homogeneous_reflectivity()
+    R, R_phi, T, T_phi = sim.homogeneous_reflectivity_transmissivity()
     L = magnetic_multilayer.get_number_of_layers()
     magnetization_map = np.zeros((2, L, 3))
     magnetization_map[..., 0] = 1
     magnetization_map[..., 1] = np.pi / 2
     magnetization_map[..., 2] = np.pi / 6
-    result = sim.inhomogeneous_reflectivity(
+    result = sim.inhomogeneous_reflectivity_transmissivity(
         strain_map=np.zeros((2, L)), magnetization_map=magnetization_map, polar=True
     )
     for a, b in zip(result, (R, R_phi, T, T_phi)):
@@ -484,13 +510,15 @@ def test_inhomogeneous_equals_homogeneous(cls, magnetic_multilayer, tmp_path):
     # cached results
     sim.save_data = True
     sim.force_recalc = False
-    sim.inhomogeneous_reflectivity(strain_map=np.zeros((2, L)))
-    cached = sim.inhomogeneous_reflectivity(strain_map=np.zeros((2, L)))
+    sim.inhomogeneous_reflectivity_transmissivity(strain_map=np.zeros((2, L)))
+    cached = sim.inhomogeneous_reflectivity_transmissivity(strain_map=np.zeros((2, L)))
     assert any(
-        path.name.startswith(f"inhomogeneous_reflectivity_{cls.__name__}_")
+        path.name.startswith(f"inhomogeneous_reflectivity_transmissivity_{cls.__name__}_")
         for path in tmp_path.iterdir()
     )
-    np.testing.assert_allclose(cached[0][0], sim.homogeneous_reflectivity()[0], rtol=1e-10)
+    np.testing.assert_allclose(
+        cached[0][0], sim.homogeneous_reflectivity_transmissivity()[0], rtol=1e-10
+    )
 
 
 @pytest.mark.parametrize("cls", [Stepanov, BerremanStepanov])
@@ -512,10 +540,15 @@ def test_inhomogeneous_equals_elzo(cls, magnetic_multilayer):
     result = simulation(cls, magnetic_multilayer, energy, theta)
     for sim in (elzo, result):
         sim.set_polarization(1, 0)
-    reference = elzo.inhomogeneous_reflectivity(strain_map, magnetization_map, polar=True)
+    reference = elzo.inhomogeneous_reflectivity_transmissivity(
+        strain_map, magnetization_map, polar=True
+    )
     rtol = 1e-10 if cls is Stepanov else 3e-2
     for a, b in zip(
-        result.inhomogeneous_reflectivity(strain_map, magnetization_map, polar=True), reference
+        result.inhomogeneous_reflectivity_transmissivity(
+            strain_map, magnetization_map, polar=True
+        ),
+        reference,
     ):
         np.testing.assert_allclose(a, b, rtol=rtol)
 
@@ -534,13 +567,16 @@ def test_parratt_inhomogeneous_for_all_delays_at_once(pol_in):
     for sim in (parratt, stepanov):
         sim.set_polarization(pol_in, 0)
     assert parratt._delay_block_size() >= 5
-    result = parratt.inhomogeneous_reflectivity(strain_map)
-    single = MultilayerScattering.calc_inhomogeneous_reflectivities(
-        parratt, strain_map, np.zeros((5, L, 3))
+    result = parratt.inhomogeneous_reflectivity_transmissivity(strain_map)
+    single = MultilayerScattering._reduce_reflectivity_transmissivity(
+        parratt,
+        MultilayerScattering.calc_inhomogeneous_jones_matrices(
+            parratt, strain_map, np.zeros((5, L, 3))
+        ),
     )
     S.get_layer_handle(0).roughness = 0 * u.nm
-    reference = stepanov.inhomogeneous_reflectivity(strain_map)
-    smooth = parratt.inhomogeneous_reflectivity(strain_map)
+    reference = stepanov.inhomogeneous_reflectivity_transmissivity(strain_map)
+    smooth = parratt.inhomogeneous_reflectivity_transmissivity(strain_map)
     for a, b, c, d in zip(result, single, smooth, reference):
         assert a.shape == d.shape
         np.testing.assert_allclose(a, b, rtol=1e-12)
@@ -551,15 +587,59 @@ def test_inhomogeneous_input_validation(magnetic_multilayer):
     sim = simulation(Stepanov, magnetic_multilayer, np.r_[707] * u.eV, np.r_[5] * u.deg)
     L = magnetic_multilayer.get_number_of_layers()
     with pytest.raises(ValueError, match="At least"):
-        sim.inhomogeneous_reflectivity()
+        sim.inhomogeneous_reflectivity_transmissivity()
     with pytest.raises(ValueError, match="same number of delay steps"):
-        sim.inhomogeneous_reflectivity(np.zeros((2, L)), np.zeros((3, L, 3)))
+        sim.inhomogeneous_reflectivity_transmissivity(np.zeros((2, L)), np.zeros((3, L, 3)))
     with pytest.raises(TypeError, match="numpy ndarray"):
-        sim.inhomogeneous_reflectivity(list(np.zeros((2, L))))
+        sim.inhomogeneous_reflectivity_transmissivity(list(np.zeros((2, L))))
     with pytest.raises(TypeError, match="calc_type"):
-        sim.inhomogeneous_reflectivity(np.zeros((2, L)), calc_type="distributed")
+        sim.inhomogeneous_reflectivity_transmissivity(np.zeros((2, L)), calc_type="distributed")
     with pytest.raises(ValueError, match="dask client"):
-        sim.inhomogeneous_reflectivity(np.zeros((2, L)), calc_type="parallel")
+        sim.inhomogeneous_reflectivity_transmissivity(np.zeros((2, L)), calc_type="parallel")
+    # polar is a keyword only, so that it cannot be confused with a map
+    with pytest.raises(TypeError):
+        sim.inhomogeneous_reflectivity_transmissivity(
+            np.zeros((2, L)), np.zeros((2, L, 3)), [], True
+        )
+
+
+def test_temperatures_are_not_implemented(magnetic_multilayer):
+    """the temperature dependence of the dielectric tensor is planned, while
+    an empty temp_map or temps keep the results and their cache"""
+    sim = simulation(Stepanov, magnetic_multilayer, np.r_[707] * u.eV, np.r_[5] * u.deg)
+    L = magnetic_multilayer.get_number_of_layers()
+    strain_map = np.zeros((2, L))
+    for method in (
+        sim.inhomogeneous_jones_matrices,
+        sim.inhomogeneous_reflectivity_transmissivity,
+        sim.inhomogeneous_rotation_ellipticity,
+    ):
+        with pytest.raises(NotImplementedError, match="temperature dependence"):
+            method(strain_map, temp_map=np.full((2, L), 300.0))
+    with pytest.raises(TypeError, match="temp_map"):
+        sim.inhomogeneous_reflectivity_transmissivity(strain_map, temp_map=[300.0])
+    N = magnetic_multilayer.get_number_of_sub_structures()
+    for method in (
+        sim.homogeneous_jones_matrices,
+        sim.homogeneous_reflectivity_transmissivity,
+        sim.homogeneous_rotation_ellipticity,
+    ):
+        with pytest.raises(NotImplementedError, match="temps"):
+            method(temps=np.full(N, 300.0))
+    for a, b in zip(
+        sim.homogeneous_jones_matrices(np.zeros(N), temps=[]), sim.homogeneous_jones_matrices()
+    ):
+        np.testing.assert_array_equal(a, b)
+    reference = sim.inhomogeneous_reflectivity_transmissivity(strain_map)
+    result = sim.inhomogeneous_reflectivity_transmissivity(strain_map, temp_map=np.array([]))
+    for a, b in zip(result, reference):
+        np.testing.assert_array_equal(a, b)
+    assert sim.get_hash(strain_map=strain_map, temp_map=np.array([])) == sim.get_hash(
+        strain_map=strain_map
+    )
+    assert sim.get_hash(strain_map=strain_map, temp_map=np.ones((2, L))) != sim.get_hash(
+        strain_map=strain_map
+    )
 
 
 def test_homogeneous_layers_of_nested_structures():
@@ -653,6 +733,144 @@ def test_multilayer_polarization_names_and_invalid_states(cls, magnetic_multilay
     assert sim.pol_in_state == 3
 
 
+@pytest.fixture
+def elzo(magnetic_multilayer):
+    return simulation(Elzo, magnetic_multilayer, np.r_[700, 707] * u.eV, np.r_[1:10:2] * u.deg)
+
+
+def test_elliptical_polarization_requires_valid_parameters(elzo):
+    for setter in (elzo.set_incoming_polarization, elzo.set_outgoing_polarization):
+        with pytest.raises(ValueError):
+            setter(5)
+        setter(5, (0, 0))
+        with pytest.raises(ValueError):
+            setter(5, (0, 2))
+
+
+def test_polarization_consistency(elzo):
+    elzo.set_polarization(5, 5, [(0, 0), (1, 0), (2, 0)], [(0, 0), (1, 0), (2, 0)])
+    assert elzo.num_pol == 3
+    # changing only one side to a different number of polarizations must fail
+    # and keep the previous state
+    with pytest.raises(ValueError, match="set_polarization"):
+        elzo.set_outgoing_polarization(5, [(0, 0), (1, 0)])
+    assert elzo.pol_out.shape == (3, 2)
+    with pytest.raises(ValueError, match="set_polarization"):
+        elzo.set_incoming_polarization(5, [(0, 0), (1, 0)])
+    assert elzo.pol_in.shape == (3, 2)
+    # a single polarization on one side is always allowed
+    elzo.set_outgoing_polarization(3)
+    assert elzo.num_pol == 3
+    elzo.set_outgoing_polarization(0)
+    assert elzo.num_pol == 3
+    # changing both at the same time
+    elzo.set_polarization(5, 5, [(0, 0), (1, 0)], [(0, 0), (1, 0)])
+    assert elzo.num_pol == 2
+    with pytest.raises(ValueError):
+        elzo.set_polarization(5, 5, [(0, 0), (1, 0)], [(0, 0), (1, 0), (2, 0)])
+    assert elzo.num_pol == 2
+    elzo.set_polarization(3, 0)
+    assert elzo.num_pol == 1
+
+
+def test_get_hash_of_elliptical_polarizations(elzo):
+    elzo.set_polarization(5, 0, (0 * u.deg, 0))
+    hash_1 = elzo.get_hash()
+    elzo.set_polarization(5, 0, (45 * u.deg, 0))
+    hash_2 = elzo.get_hash()
+    elzo.set_polarization(5, 0, [(0 * u.deg, 0), (45 * u.deg, 0)])
+    hash_3 = elzo.get_hash()
+    assert len({hash_1, hash_2, hash_3}) == 3
+
+
+def test_inhomogeneous_for_several_polarizations(elzo, magnetic_multilayer):
+    L = magnetic_multilayer.get_number_of_layers()
+    strain_map = np.full((2, L), 0.01)
+    magnetization_map = np.zeros((2, L, 3))
+    elzo.set_incoming_polarization(5, [(0 * u.deg, 0), (45 * u.deg, 0), (90 * u.deg, 0)])
+    elzo.set_outgoing_polarization(5, [(0, 0)])
+    assert elzo.num_pol == 3
+    R, _, _, _ = elzo.inhomogeneous_reflectivity_transmissivity(strain_map, magnetization_map)
+    assert R.shape == (2,) + elzo.experiment.qz.magnitude.shape + (3,)
+    # single polarization results equal the respective multi-polarization slices
+    elzo.set_incoming_polarization(5, (45 * u.deg, 0))
+    R_single, _, _, _ = elzo.inhomogeneous_reflectivity_transmissivity(
+        strain_map, magnetization_map
+    )
+    assert R_single.ndim == 3
+    np.testing.assert_allclose(R_single, R[..., 1])
+
+
+def test_polar_and_cartesian_magnetization_maps(elzo, magnetic_multilayer):
+    """the magnetization_map is cartesian by default and polar for
+    polar=True, which give the same results"""
+    elzo.set_polarization("circ +", "none")
+    L = magnetic_multilayer.get_number_of_layers()
+    strain_map = np.full((2, L), 0.01)
+    polar = np.zeros([2, L, 3])
+    polar[..., 0] = np.linspace(0.2, 1, L)
+    polar[..., 1] = np.pi / 3
+    polar[..., 2] = np.pi / 4
+    cartesian = ud.helpers.convert_polar_to_cartesian(polar)
+    R, R_phi, _, _ = elzo.inhomogeneous_reflectivity_transmissivity(strain_map, cartesian)
+    R_polar, R_phi_polar, _, _ = elzo.inhomogeneous_reflectivity_transmissivity(
+        strain_map, polar, polar=True
+    )
+    np.testing.assert_allclose(R_polar, R)
+    np.testing.assert_allclose(R_phi_polar, R_phi)
+    # the magnetization matters for circular polarization
+    R_zero, _, _, _ = elzo.inhomogeneous_reflectivity_transmissivity(
+        strain_map, np.zeros([2, L, 3])
+    )
+    assert not np.allclose(R, R_zero)
+    # the homogeneous reflectivity of the sub-structures
+    N = magnetic_multilayer.get_number_of_sub_structures()
+    R_hom, _, _, _ = elzo.homogeneous_reflectivity_transmissivity(np.zeros(N), cartesian[0, :N])
+    R_hom_polar, _, _, _ = elzo.homogeneous_reflectivity_transmissivity(
+        np.zeros(N), polar[0, :N], polar=True
+    )
+    np.testing.assert_allclose(R_hom_polar, R_hom)
+
+
+@pytest.mark.parametrize("cls", MAGNETIC)
+def test_unpolarized_light_is_an_incoherent_average(cls, magnetic_multilayer):
+    """unpolarized light is the incoherent average of sigma and pi, or of the
+    circular polarizations, for any analyzer, also for magnetic layers with
+    polarization conversion, and without analyzer and a transverse
+    magnetization the average of a circular polarization for both directions
+    of the magnetization"""
+    sim = simulation(cls, magnetic_multilayer, np.r_[700, 707] * u.eV, np.r_[5:40:5] * u.deg)
+    R, _, T, _ = sim.homogeneous_jones_matrices()
+    assert np.max(np.abs(R[..., 1, 0])) > 1e-2 * np.max(np.abs(R[..., 0, 0]))
+    np.testing.assert_array_equal(sim.calc_incoming_polarization(0), [0, 0])
+
+    def intensity(J, pol_in, pol_out):
+        return sim.calc_reflectivity_transmissivity(
+            J, T, sim.calc_incoming_polarization(pol_in), sim.calc_outgoing_polarization(pol_out)
+        )[0]
+
+    for pol_out in [0, 1, 3, 4]:
+        unpolarized = intensity(R, 0, pol_out)
+        linear = (intensity(R, 3, pol_out) + intensity(R, 4, pol_out)) / 2
+        circular = (intensity(R, 1, pol_out) + intensity(R, 2, pol_out)) / 2
+        np.testing.assert_allclose(unpolarized, linear, rtol=1e-12)
+        np.testing.assert_allclose(unpolarized, circular, rtol=1e-12)
+    # without a transverse magnetization along x, reversing the magnetization
+    # switches the helicity, while a transverse one changes the reflectivity of
+    # pi itself, which differs then for the unpolarized light of both directions
+    N = magnetic_multilayer.get_number_of_sub_structures()
+    for magnetization, equal in [((0, 0.6, 0.8), True), ((1, 0, 0), False)]:
+        R_m, R_m_phi, _, _ = sim.homogeneous_jones_matrices(
+            np.zeros(N), np.tile(magnetization, (N, 1))
+        )
+        average = (intensity(R_m, 1, 0) + intensity(R_m_phi, 1, 0)) / 2
+        assert np.allclose(intensity(R_m, 0, 0), average, rtol=1e-10) == equal
+    # the same for the high-level methods of the simulation
+    sim.set_polarization("unpolarized", "sigma")
+    reference = (intensity(R, 3, 3) + intensity(R, 4, 3)) / 2
+    np.testing.assert_allclose(sim.homogeneous_reflectivity_transmissivity()[0], reference)
+
+
 def test_elzo_unit_cell_equals_layer_with_its_dielectric_tensor():
     """a UnitCell is a homogeneous layer with its dielectric tensor"""
     n = 1 - 1e-3 + 1e-3j
@@ -692,23 +910,27 @@ def test_inhomogeneous_parallel_equals_sequential(cls, magnetic_multilayer, tmp_
     rng = np.random.default_rng(0)
     strain_map = rng.uniform(-0.01, 0.01, (3, L))
     magnetization_map = rng.uniform(-0.5, 0.5, (3, L, 3))
-    reference = sim.inhomogeneous_reflectivity(strain_map, magnetization_map)
-    with distributed.Client(processes=False, dashboard_address=None) as client:
-        result = sim.inhomogeneous_reflectivity(
+    reference = sim.inhomogeneous_reflectivity_transmissivity(strain_map, magnetization_map)
+    with distributed.Client(processes=False, dashboard_address=":0") as client:
+        result = sim.inhomogeneous_reflectivity_transmissivity(
             strain_map, magnetization_map, calc_type="parallel", dask_client=client
         )
     for a, b in zip(result, reference):
         np.testing.assert_allclose(a, b, rtol=1e-12)
 
 
-def test_elzo_worker_copy_has_no_cached_matrices(magnetic_multilayer):
-    sim = simulation(Elzo, magnetic_multilayer, np.r_[700] * u.eV, np.r_[1:20:4] * u.deg)
+def test_worker_copy_has_no_cached_matrices(unit_cell_iron):
+    S = ud.Structure("crystal")
+    S.add_sub_structure(unit_cell_iron, 5)
+    sim = ud.XrayDyn(S, True, disp_messages=False, progress_bar=False, save_data=False)
+    sim.energy = np.r_[8000.0] * u.eV
+    sim.qz = np.r_[1.0, 2.0] / u.nm
     sim.homogeneous_reflectivity()
-    assert sim.last_layer_ref_trans_matrices["A"]
+    assert sim.last_atom_ref_trans_matrices["H"]
     worker = sim._worker_copy()
-    assert worker.last_layer_ref_trans_matrices["A"] == []
+    assert worker.last_atom_ref_trans_matrices["H"] == []
     assert worker.S is sim.S
-    assert sim.last_layer_ref_trans_matrices["A"]
+    assert sim.last_atom_ref_trans_matrices["H"]
 
 
 @pytest.mark.parametrize("cls", [ud.XrayKin, ud.XrayDyn, Elzo, Parratt, BerremanStepanov])
@@ -719,8 +941,9 @@ def test_missing_superstrate_or_substrate_raises(cls, name):
     sim = cls(S, True, disp_messages=False, progress_bar=False, save_data=False)
     sim.energy = np.r_[700.0] * u.eV
     sim.qz = np.r_[1.0, 2.0] / u.nm
+    calc = getattr(sim, "homogeneous_reflectivity_transmissivity", None)
     with pytest.raises(ValueError, match=f"The {name} of the structure 'empty' must be a Layer"):
-        sim.homogeneous_reflectivity()
+        (calc or sim.homogeneous_reflectivity)()
 
 
 @pytest.mark.parametrize("cls", [ud.XrayKin, ud.XrayDyn])
@@ -737,3 +960,17 @@ def test_atomistic_formalisms_warn_for_neglected_layers(cls, amorphous_layer_iro
     with pytest.warns(UserWarning, match="neglects the superstrate"):
         with pytest.warns(UserWarning, match="neglects the substrate"):
             sim.homogeneous_reflectivity()
+
+
+def test_unreachable_scattering_vector_warns_only_on_calculation():
+    sim = ud.XrayKin(ud.Structure("empty"), True, disp_messages=False)
+    sim.energy = np.r_[8000.0] * u.eV
+    sim.qz = np.r_[1.0, 5.0] / u.angstrom
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        sim.energy = np.r_[3000.0] * u.eV  # 5 1/Angstrom > 2k, but qz is set again
+        sim.qz = np.r_[1.0] / u.angstrom
+        sim.homogeneous_reflectivity()
+    sim.qz = np.r_[1.0, 5.0] / u.angstrom
+    with pytest.warns(UserWarning, match="1 scattering vectors qz exceed 2k"):
+        sim.homogeneous_reflectivity()

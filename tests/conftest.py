@@ -23,7 +23,7 @@ from udkm1Dsim import (
 
 
 # refractive index of the layers for the optical excitation
-REF_INDEX = 5 - 3j
+REF_INDEX = 5 + 3j  # n + i kappa with kappa > 0 for an absorbing layer
 
 
 def _dielectric_from_atoms_and_optics(layer):
@@ -116,11 +116,15 @@ def properties():
         "roughness": 0.5 * u.angstrom,
         "deb_wal_fac": 1 * u.angstrom**2,
         "sound_vel": 6 * u.nm / u.ps,
-        "phonon_damping": 1e-12 * u.kg / u.s,
+        # small enough to keep PhononNum fast: the phonon damping between two
+        # layers limits the time step of its solver by about 4 * damping / mass,
+        # i.e. 4e12 1/s for the lightest layers of 1e-27 kg, which is well below
+        # their highest phonon frequency of about 4e13 1/s
+        "phonon_damping": 1e-15 * u.kg / u.s,
         "dielectric": Dispersion.from_ref_index(REF_INDEX),
         "therm_cond": 1 * u.W / (u.m * u.K),
         "lin_therm_exp": 1e-5,
-        "heat_capacity": 10 * (u.J / u.kg / u.K),
+        "heat_capacity": 500 * (u.J / u.kg / u.K),
         "sub_system_coupling": [0],
         "eff_spin": 1,
         "curie_temp": 100 * u.K,

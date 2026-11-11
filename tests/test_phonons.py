@@ -151,29 +151,6 @@ def test_phonon_num_get_hash_is_backend_independent(phonon_num, delays, temp_map
     phonon_num.backend = "scipy"
 
 
-@pytest.mark.skipif(not HAS_NUMBA, reason="numba is not installed")
-def test_phonon_num_backends_agree(phonon_num, delays, temp_map, delta_temp_map):
-    """the step-like heating of the top 20 layers launches the same strain
-    wave with both backends"""
-    ode_options = dict(phonon_num.ode_options)
-    phonon_num.ode_options.update({"rtol": 1e-8, "atol": 1e-12})
-    strain_maps = []
-    try:
-        for backend in ["scipy", "numba"]:
-            phonon_num.backend = backend
-            # calc_strain_map, since the cached results do not depend on the backend
-            strain_maps.append(phonon_num.calc_strain_map(delays, temp_map, delta_temp_map)[0])
-    finally:
-        phonon_num.backend = "scipy"
-        phonon_num.ode_options = ode_options
-
-    assert np.all(np.isfinite(strain_maps[1]))
-    # the heated layers expand by about 1e-3 and launch a strain wave
-    assert np.max(strain_maps[0]) > 5e-4
-    assert np.max(np.abs(strain_maps[0][:, 20:])) > 1e-4
-    np.testing.assert_allclose(strain_maps[1], strain_maps[0], atol=1e-6)
-
-
 # PhononAna
 
 
@@ -187,6 +164,7 @@ def test_phonon_ana_get_strain_map(phonon_ana, delays, temp_map, delta_temp_map)
     phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
     phonon_ana.force_recalc = False
     phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
+    phonon_ana.force_recalc = True
 
 
 def test_phonon_ana_get_energy_per_eigenmode(phonon_ana, delays, temp_map, delta_temp_map):

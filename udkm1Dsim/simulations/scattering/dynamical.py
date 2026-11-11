@@ -272,9 +272,8 @@ class XrayDyn(Scattering):
         sub-routines for the reflectivity computation are called:
 
         * ``parallel`` parallelization over the time steps utilizing
-          `Dask <https://dask.org/>`_
-        * ``distributed`` not implemented in Python, but should be possible
-          with `Dask <https://dask.org/>`_ as well
+          `Dask <https://dask.org/>`_ on a local machine or a cluster,
+          depending on the ``dask_client``
         * ``sequential`` no parallelization at all
 
         Args:
@@ -341,12 +340,8 @@ class XrayDyn(Scattering):
 
             dask_client = kwargs.get("dask_client", [])
             calc_type = kwargs.get("calc_type", "sequential")
-            if calc_type not in ["parallel", "sequential", "distributed"]:
-                raise TypeError(
-                    "calc_type must be either _parallel_, _sequential_, or _distributed_!"
-                )
-            job = kwargs.get("job")
-            num_workers = kwargs.get("num_workers", 1)
+            if calc_type not in ["parallel", "sequential"]:
+                raise TypeError("calc_type must be either _parallel_ or _sequential_!")
 
             # optinally calculate all ref-trans matrices for all unique unitCells
             # and for all possible strains in advance, if strain_vectors are given
@@ -359,10 +354,6 @@ class XrayDyn(Scattering):
             if calc_type == "parallel":
                 R = self.parallel_inhomogeneous_reflectivity(
                     strain_map, strain_vectors, RTM, temp_map, dask_client
-                )
-            elif calc_type == "distributed":
-                R = self.distributed_inhomogeneous_reflectivity(
-                    strain_map, strain_vectors, job, num_workers, RTM, temp_map
                 )
             else:  # sequential
                 R = self.sequential_inhomogeneous_reflectivity(
@@ -492,29 +483,6 @@ class XrayDyn(Scattering):
         """Reflectivity of a single delay recalculated on a dask worker."""
         RT = sim.calc_inhomogeneous_ref_trans_matrix(strains, temps)
         return XrayDyn.calc_reflectivity_from_matrix(m_times_n(RT, RTS))
-
-    def distributed_inhomogeneous_reflectivity(
-        self, strain_map, strain_vectors, RTM, temp_map, job, num_worker
-    ):
-        """distributed_inhomogeneous_reflectivity
-
-        This is a stub. Not yet implemented in python.
-
-        Args:
-            strain_map (ndarray[float]): spatio-temporal strain profile.
-            strain_vectors (list[ndarray[float]]): reduced strains per unique
-                layer.
-            RTM (list[ndarray[complex]]): reflection-transmission matrices for
-                all given strains per unique layer.
-            temp_map (ndarray[float], optional): spatio-temporal temperature profile.
-            job (Dask.job): Dask job.
-            num_workers (int): Dask number of workers.
-
-        Returns:
-            R (ndarray[float]): inhomogeneous reflectivity.
-
-        """
-        raise NotImplementedError
 
     def calc_inhomogeneous_reflectivity(self, strains, strain_vectors, RTM, temps):
         r"""calc_inhomogeneous_reflectivity
@@ -834,7 +802,7 @@ class XrayDyn(Scattering):
             # These are new parameters so we have to calculate.
             # Get the reflection-transmission-factors
             rho = self.get_atom_reflection_factor(atom, area, deb_wal_fac)
-            tau = self.get_atom_transmission_factor(atom, area, deb_wal_fac)
+            tau = self.get_atom_transmission_factor(atom, area)
             # calculate the reflection-transmission matrix
             H = np.zeros(
                 [
@@ -900,26 +868,25 @@ class XrayDyn(Scattering):
         ) / (self.experiment.qz.magnitude * area)
         return rho
 
-    def get_atom_transmission_factor(self, atom, area, deb_wal_fac):
+    def get_atom_transmission_factor(self, atom, area):
         r"""get_atom_transmission_factor
 
         Calculates the transmission factor from dynamical x-ray theory:
 
-        .. math:: \tau = 1 - \frac{i 4 \pi r_e f(E,0) \exp(-M)}{q_z A}
+        .. math:: \tau = 1 - \frac{i 4 \pi r_e f(E,0)}{q_z A}
 
         - :math:`r_e` is the electron radius
         - :math:`f(E,0)` is the energy dispersive atomic form factor
           (no angle correction)
         - :math:`A` is the area in :math:`x-y` plane on which the atom
           is placed
-        - :math:`M = 0.5 \mbox{dbf} q_z^2` where
-          :math:`\mbox{dbf} = \langle u^2\rangle` is the average
-          thermal vibration of the atoms - Debye-Waller factor
+
+        The Debye-Waller factor does not apply to the forward scattering
+        without momentum transfer, which gives the absorption and refraction.
 
         Args:
             atom (Atom, AtomMixed): atom or mixed atom
             area (float): area of the unit cell (m²)
-            deb_wal_fac (float): Debye-Waller factor for unit cell
 
         Returns:
             tau (complex): transmission factor
@@ -932,7 +899,6 @@ class XrayDyn(Scattering):
             * atom.get_cm_atomic_form_factor(
                 self.experiment.energy.magnitude, np.zeros_like(self.experiment.qz.magnitude)
             )
-            * np.exp(-0.5 * deb_wal_fac * self.experiment.qz.magnitude**2)
         ) / (self.experiment.qz.magnitude * area)
         return tau
 
