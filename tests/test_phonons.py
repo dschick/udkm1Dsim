@@ -112,6 +112,14 @@ def test_calc_sticks_from_temp_map(phonon, temp_map, delta_temp_map):
 # PhononNum
 
 
+def test_phonon_num_default_tolerances(structure):
+    """the absolute tolerance is set for the shifts of the layers of a few
+    picometers"""
+    pnum = PhononNum(structure, True, save_data=False)
+    assert pnum.ode_options["atol"] == 1e-12
+    assert pnum.ode_options["rtol"] == 1e-3
+
+
 def test_phonon_num_repr(phonon_num):
     assert repr(phonon_num).startswith("Numerical Phonon simulation properties:")
     assert str(phonon_num) == repr(phonon_num)

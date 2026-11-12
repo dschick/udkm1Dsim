@@ -62,9 +62,8 @@ def solve(
     For the explicit solvers ``RK23``, ``RK45`` and ``DOP853`` the
     ``max_step`` is limited to the :meth:`stability_time_step` of the chain,
     which they must not exceed - the error control alone does not catch the
-    instability, since the shifts of the layers are of the order of
-    picometers and therefore far below the absolute tolerance ``atol`` that
-    is set in meters.
+    instability, since the shifts of the layers of the order of picometers
+    are close to the absolute tolerance ``atol`` that is set in meters.
 
     Args:
         x0 (ndarray[float]): initial shifts and velocities of all :math:`L`

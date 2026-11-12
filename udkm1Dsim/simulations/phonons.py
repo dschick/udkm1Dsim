@@ -388,8 +388,10 @@ class PhononNum(Phonon):
         only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
         backend (str): ode solver backend - either default scipy or numba.
-        ode_options (dict): options for scipy solve_ivp ode solver. The numba
-            backend uses ``rtol``, ``atol``, ``max_step`` and ``first_step``.
+        ode_options (dict): options for scipy solve_ivp ode solver with the
+            absolute tolerance ``atol`` of 1 pm for the shifts of the layers
+            by default. The numba backend uses ``rtol``, ``atol``,
+            ``max_step`` and ``first_step``.
 
     """
 
@@ -403,7 +405,7 @@ class PhononNum(Phonon):
             "first_step": None,
             "max_step": np.inf,
             "rtol": 1e-3,
-            "atol": 1e-6,
+            "atol": 1e-12,  # (m) for shifts of the layers of a few picometers
         }
 
     def _property_rows(self):
