@@ -79,8 +79,8 @@ class Parratt(MultilayerScattering):
 
     _title = "Parratt multilayer scattering simulation"
 
-    def get_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
-        """get_layer_dielectric_tensor
+    def calc_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
+        """calc_layer_dielectric_tensor
 
         Non-magnetic dielectric tensor of a layer at the photon energies of
         the simulation, which must be isotropic, see
@@ -101,8 +101,8 @@ class Parratt(MultilayerScattering):
             self.experiment.energy.magnitude, strain, (0.0, 0.0, 0.0)
         )
 
-    def get_layer_ref_index(self, layer, strain=0.0):
-        """get_layer_ref_index
+    def calc_layer_ref_index(self, layer, strain=0.0):
+        """calc_layer_ref_index
 
         Refractive index of an isotropic layer at the photon energies of the
         simulation from its scalar dielectric function only, see
@@ -141,7 +141,7 @@ class Parratt(MultilayerScattering):
         layer."""
         if np.ndim(strain) > 0 and np.size(strain) > 1:
             strain = np.asarray(strain, dtype=float)
-            n = self.get_layer_ref_index(layer, strain)[..., np.newaxis]
+            n = self.calc_layer_ref_index(layer, strain)[..., np.newaxis]
             thickness = layer.structural.thickness.magnitude * (1 + strain)
             thickness = thickness[:, np.newaxis, np.newaxis]
         else:
@@ -149,7 +149,7 @@ class Parratt(MultilayerScattering):
             key = (id(layer), strain)
             if cache is not None and key in cache:
                 return cache[key]
-            n = self.get_layer_ref_index(layer, strain)[:, np.newaxis]
+            n = self.calc_layer_ref_index(layer, strain)[:, np.newaxis]
             thickness = layer.structural.thickness.magnitude * (1 + strain)
         eps = n * n
         k_z = k * _forward_sqrt(eps - k_y2)
@@ -168,7 +168,7 @@ class Parratt(MultilayerScattering):
 
         Args:
             layers (list[tuple]): layer, strain, and magnetization from the
-                superstrate to the substrate, see :meth:`get_homogeneous_layers`.
+                superstrate to the substrate, see :meth:`calc_homogeneous_layers`.
             cache (dict, optional): cache of the constants of identical
                 layers. Defaults to None.
 

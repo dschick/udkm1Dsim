@@ -27,7 +27,6 @@ __all__ = ["XrayKin"]
 
 __docformat__ = "restructuredtext"
 
-from time import time
 
 import numpy as np
 import pint
@@ -95,8 +94,8 @@ class XrayKin(Scattering):
         super().__init__(S, force_recalc, **kwargs)
 
     @u.wraps(None, (None, "eV", "m**-1", None), strict=False)
-    def get_uc_atomic_form_factors(self, energy, qz, uc):
-        """get_uc_atomic_form_factors
+    def calc_uc_atomic_form_factors(self, energy, qz, uc):
+        """calc_uc_atomic_form_factors
 
         Returns the energy- and angle-dependent atomic form factors
         :math: `f(q_z, E)` of all atoms in the unit cell as a vector.
@@ -118,8 +117,8 @@ class XrayKin(Scattering):
         return f
 
     @u.wraps(None, (None, "eV", "m**-1", None, None), strict=False)
-    def get_uc_structure_factor(self, energy, qz, uc, strain=0):
-        r"""get_uc_structure_factor
+    def calc_uc_structure_factor(self, energy, qz, uc, strain=0):
+        r"""calc_uc_structure_factor
 
         Calculates the energy-, angle-, and strain-dependent structure factor
         .. math: `S(E,q_z,\epsilon)` of the unit cell:
@@ -146,7 +145,7 @@ class XrayKin(Scattering):
             qz = np.array([qz])
 
         S = np.sum(
-            self.get_uc_atomic_form_factors(energy, qz, uc)
+            self.calc_uc_atomic_form_factors(energy, qz, uc)
             * np.exp(
                 1j * uc.lattice.c_axis.magnitude * np.outer(uc.get_atom_positions(strain), qz)
             ),
@@ -165,9 +164,31 @@ class XrayKin(Scattering):
             strains (ndarray[float], optional): strains of each sub-structure
 
         Returns:
+            result (Result): with the homogeneous ``reflectivity`` of the
+            dimensions ``energy`` and ``angles`` and the list of the reflected
+            fields of the sub-structures ``sub_structure_fields``, see
+            :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
+
+        """
+        R, A = self._timed("homogeneous_reflectivity", self.calc_homogeneous_reflectivity, strains)
+        return self._scattering_result(
+            "homogeneous reflectivity", ("reflectivity", "sub_structure_fields"), (R, A)
+        )
+
+    def calc_homogeneous_reflectivity(self, strains=0):
+        """calc_homogeneous_reflectivity
+
+        Plain arrays of :meth:`homogeneous_reflectivity` without the metadata
+        of a :class:`~udkm1Dsim.simulations.result.Result`, e.g. for fits
+        with many calls.
+
+        Args:
+            strains (ndarray[float], optional): strains of each sub-structure
+
+        Returns:
             (tuple):
-            - *R (ndarray[complex])* - homogeneous reflectivity.
-            - *A (ndarray[complex])* - reflected fields of sub-structures.
+            - *R (ndarray[float])* - homogeneous reflectivity.
+            - *A (list)* - reflected fields of the sub-structures.
 
         """
         self._check_experiment()
@@ -175,8 +196,6 @@ class XrayKin(Scattering):
         if strains == 0:
             strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
 
-        t1 = time()
-        self.disp_message("Calculating _homogenous_reflectivity_ ...")
         # get the reflected field of the structure for each energy
         R = np.zeros_like(self.experiment.qz.magnitude)
         for i, energy in enumerate(self.experiment.energy.magnitude):
@@ -193,7 +212,6 @@ class XrayKin(Scattering):
 
             # calculate the real reflectivity from Ef
             R[i, :] = np.real(Ept * np.conj(Ept))
-        self.disp_message(f"Elapsed time for _homogenous_reflectivity_: {time() - t1:f} s")
         return R, A
 
     @u.wraps((None, None), (None, None, "eV", "m**-1", "rad", None), strict=False)
@@ -281,7 +299,7 @@ class XrayKin(Scattering):
             if isinstance(sub_structure[0], UnitCell):
                 # the substructure is an unit cell and we can calculate
                 # Ep directly
-                Ep = self.get_Ep(energy, qz, theta, sub_structure[0], strains[strainCounter])
+                Ep = self.calc_Ep(energy, qz, theta, sub_structure[0], strains[strainCounter])
                 z = sub_structure[0].lattice.c_axis.magnitude
                 strainCounter = strainCounter + 1
             elif isinstance(sub_structure[0], Structure):
@@ -304,7 +322,7 @@ class XrayKin(Scattering):
 
             # calculate the interference function for N repetitions of
             # the substructure with the length z
-            psi = self.get_interference_function(qz, z, sub_structure[1])
+            psi = self.calc_interference_function(qz, z, sub_structure[1])
             # calculate the reflected field for N repetitions of
             # the substructure with the length z
             EpN = Ep * psi
@@ -320,8 +338,8 @@ class XrayKin(Scattering):
         return Ept, A
 
     @u.wraps(None, (None, "m**-1", "m", None), strict=False)
-    def get_interference_function(self, qz, z, N):
-        r"""get_interference_function
+    def calc_interference_function(self, qz, z, N):
+        r"""calc_interference_function
 
         Calculates the interference function for :math:`N` repetitions of the
         structure with the length :math:`z`:
@@ -344,8 +362,8 @@ class XrayKin(Scattering):
         return psi
 
     @u.wraps(None, (None, "eV", "m**-1", "rad", None, None), strict=False)
-    def get_Ep(self, energy, qz, theta, uc, strain):
-        r"""get_Ep
+    def calc_Ep(self, energy, qz, theta, uc, strain):
+        r"""calc_Ep
 
         Calculates the reflected field :math:`E_p` for one unit cell
         with a given strain :math:`\epsilon`:
@@ -383,8 +401,8 @@ class XrayKin(Scattering):
             / c.electron_mass
             / c.c**2
             * (
-                self.get_polarization_factor(theta)
-                * self.get_uc_structure_factor(energy, qz, uc, strain)
+                self.calc_polarization_factor(theta)
+                * self.calc_uc_structure_factor(energy, qz, uc, strain)
                 / uc.structural.area.magnitude
             )
             / qz

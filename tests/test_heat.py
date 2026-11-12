@@ -172,8 +172,16 @@ def test_get_temperature_after_delta_excitation(heat):
         "multilayer_absorption": True,
         "backside": False,
     }
-    heat.get_temperature_after_delta_excitation(10, 300)
-    heat.get_temperature_after_delta_excitation(10, 300, distances=np.r_[0:10e-9:1e-10])
+    result = heat.get_temperature_after_delta_excitation(10, 300)
+    final_temp, delta_temp = heat.calc_temperature_after_delta_excitation(10, 300)
+    np.testing.assert_array_equal(result.final_temp, final_temp)
+    # the temperature change is the difference to the initial temperature
+    assert np.max(delta_temp) > 0
+    np.testing.assert_allclose(delta_temp, final_temp - 300)
+    assert result.dims("delta_temp") == ("distances", "subsystems")
+    distances = np.r_[0:10e-9:1e-10]
+    result = heat.get_temperature_after_delta_excitation(10, 300, distances=distances)
+    np.testing.assert_array_equal(result.distances, distances)
 
 
 def test_get_temp_map(heat):
@@ -215,7 +223,8 @@ def test_get_diffusion_temp_map(heat):
         "backside": False,
     }
     heat.boundary_conditions = {"top_type": "isolator", "bottom_type": "isolator"}
-    temp_map, _ = heat.get_temp_map(delays, init_temp)
+    res = heat.get_temp_map(delays, init_temp)
+    temp_map = res.temp_map
     after = delays.to("ps").magnitude >= 0
     # energy per area of the layers with the constant heat capacity of the fixtures
     thicknesses = heat.S.get_layer_property_vector("structural.thickness.magnitude")
@@ -266,6 +275,34 @@ def test_calc_energy_flux_map(heat):
     temp_map = np.zeros((len(delays), len(dists)))
     delta_map = temp_map
     heat.calc_energy_flux_map(temp_map, delta_map, delays)
+
+
+def test_get_energy_maps_of_temp_map(heat):
+    """the energy and energy flux maps of the result of get_temp_map equal the
+    ones of its arrays"""
+    delays = np.r_[-1:5:0.1] * u.ps
+    heat.heat_diffusion = False
+    heat.excitation = {
+        "fluence": [10] * u.mJ / u.cm**2,
+        "delay_pump": [0] * u.ps,
+        "pulse_width": [0] * u.ps,
+    }
+    temp = heat.get_temp_map(delays, 300 * u.K)
+    np.testing.assert_array_equal(temp.init_temp, heat.check_initial_temperature(300))
+    energy = heat.get_energy_map(temp)
+    reference = heat.calc_energy_map(temp.temp_map, 300 * u.K)
+    np.testing.assert_array_equal(energy.energy_map, reference)
+    assert np.max(energy.energy_map) > 0
+    np.testing.assert_array_equal(energy.delays, temp.delays)
+    flux = heat.get_energy_flux_map(temp)
+    reference = heat.calc_energy_flux_map(temp.temp_map, temp.delta_temp_map, delays)
+    for i, name in enumerate(("total", "coupling", "diffusion")):
+        np.testing.assert_array_equal(flux[f"{name}_energy_flux_map"], reference[..., i])
+    assert flux.unit("total_energy_flux_map") == "W"
+    with pytest.raises(ValueError, match="init_temp must be given"):
+        heat.get_energy_map(temp.temp_map)
+    with pytest.raises(ValueError, match="delays must be given"):
+        heat.get_energy_flux_map(temp.temp_map)
 
 
 def test_boundary_conditions(heat):

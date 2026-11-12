@@ -53,8 +53,6 @@ __all__ = ["MultilayerScattering", "circular_to_linear", "compose_scattering_sta
 
 __docformat__ = "restructuredtext"
 
-from os import path
-from time import time
 
 import numpy as np
 import pint
@@ -63,6 +61,7 @@ from tqdm.auto import tqdm
 from ...helpers import convert_polar_to_cartesian, make_hash_md5
 from ...structures.layers import Layer, Vacuum
 from ...structures.structure import Structure
+from ..result import Result, find_source, get_entry
 from .scattering import Scattering
 
 u = pint.get_application_registry()
@@ -137,6 +136,28 @@ def circular_to_linear(matrix):
 
     """
     return np.matmul(np.matmul(_CIRCULAR_TO_LINEAR, matrix), _LINEAR_TO_CIRCULAR)
+
+
+#: names of the Jones matrices of a :class:`~udkm1Dsim.simulations.result.Result`
+JONES_NAMES = (
+    "jones_reflection",
+    "jones_reflection_phi",
+    "jones_transmission",
+    "jones_transmission_phi",
+)
+#: names of the reflectivities and transmissivities of a result
+REFLECTIVITY_NAMES = ("reflectivity", "reflectivity_phi", "transmissivity", "transmissivity_phi")
+#: names of the rotations and ellipticities of a result
+ROTATION_NAMES = (
+    "reflection_rotation",
+    "reflection_ellipticity",
+    "reflection_rotation_phi",
+    "reflection_ellipticity_phi",
+    "transmission_rotation",
+    "transmission_ellipticity",
+    "transmission_rotation_phi",
+    "transmission_ellipticity_phi",
+)
 
 
 class MultilayerScattering(Scattering):
@@ -478,6 +499,16 @@ class MultilayerScattering(Scattering):
                 "outgoing polarizations at the same time."
             ) from None
 
+    def _pi_incident(self):
+        """True for an incoming pi and False for a sigma polarization, which
+        define the rotation and ellipticity."""
+        if self.pol_in_state not in (3, 4):
+            raise ValueError(
+                "The rotation and ellipticity are defined for an incoming sigma or pi "
+                f"polarization, but it is {self.polarizations[self.pol_in_state]}!"
+            )
+        return self.pol_in_state == 4
+
     @property
     def num_pol(self):
         """int: number of incoming/outgoing polarization pairs."""
@@ -591,6 +622,148 @@ class MultilayerScattering(Scattering):
         ellipticity = 0.5 * np.arcsin(np.clip(2 * np.imag(ratio) / (1 + abs2), -1, 1))
         return Q_(rotation, u.rad).to("deg"), Q_(ellipticity, u.rad).to("deg")
 
+    # ---- eigenmodes and assembly of the stack -----------------------------------
+
+    def calc_modes(self, eps):
+        """calc_modes
+
+        Calculates the eigenmodes of a homogeneous layer with the dielectric
+        tensor ``eps`` for all photon energies and incidence angles. Must be
+        overwritten by the child classes.
+
+        Args:
+            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
+
+        Returns:
+            (tuple):
+            - *A (ndarray[complex])* - boundary matrix of shape (M, N, 4, 4).
+            - *A_phi (ndarray[complex])* - boundary matrix for opposite
+              magnetization.
+            - *q (ndarray[complex])* - normal wave-vector components
+              :math:`k_{z,j} / k` of the down and up modes of shape (M, N, 4).
+            - *q_phi (ndarray[complex])* - normal wave-vector components for
+              opposite magnetization.
+            - *k_z (ndarray[complex])* - mean normal wave-vector component
+              :math:`k_z / k` of shape (M, N) for the roughness.
+
+        """
+        raise NotImplementedError
+
+    def calc_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
+        """calc_layer_dielectric_tensor
+
+        Dielectric tensor of a layer at the photon energies of the simulation,
+        see :meth:`.Layer.get_dielectric_tensor`.
+
+        Args:
+            layer (Layer): homogeneous layer.
+            strain (float, optional): strain of the layer. Defaults to 0.
+            magnetization (ndarray[float], optional): cartesian
+                magnetization ``(x, y, z)``. Defaults to the magnetization of
+                the layer.
+
+        Returns:
+            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
+
+        """
+        return layer.get_dielectric_tensor(self.experiment.energy.magnitude, strain, magnetization)
+
+    def calc_homogeneous_layers(self, strains=np.array([]), magnetizations=np.array([])):
+        """calc_homogeneous_layers
+
+        List of all layers of the stack from the superstrate to the substrate
+        with their strain and magnetization for homogeneous strains and
+        magnetizations of the sub-structures.
+
+        Args:
+            strains (ndarray[float], optional): strain of each sub-structure.
+            magnetizations (ndarray[float], optional): cartesian magnetization
+                of each sub-structure.
+
+        Returns:
+            layers (list[tuple]): layer, strain, and magnetization.
+
+        """
+        return _flatten_layers(self._homogeneous_layer_tree(strains, magnetizations))
+
+    def calc_inhomogeneous_layers(self, strains, magnetizations):
+        """calc_inhomogeneous_layers
+
+        List of all layers of the stack from the superstrate to the substrate
+        with their strain and magnetization for a single delay of the
+        ``strain_map`` and ``magnetization_map``.
+
+        Args:
+            strains (ndarray[float]): strain of every layer.
+            magnetizations (ndarray[float]): magnetization of every layer.
+
+        Returns:
+            layers (list[tuple]): layer, strain, and magnetization.
+
+        """
+        _, _, handles = self.S.get_layer_vectors()
+        superstrate, substrate = self._superstrate_and_substrate()
+        return (
+            [superstrate]
+            + [(handles[i], strains[i], magnetizations[i]) for i in range(len(handles))]
+            + substrate
+        )
+
+    def calc_jones_matrices(self, layers, cache=None):
+        """calc_jones_matrices
+
+        Calculates the Jones matrices of the reflection and transmission of a
+        stack of layers in the linear :math:`(\\sigma, \\pi)` basis for the
+        given and the opposite magnetization.
+
+        Args:
+            layers (list[tuple]): layer, strain, and magnetization from the
+                superstrate to the substrate, see :meth:`calc_homogeneous_layers`,
+                where repeated parts of the stack are assembled only once and
+                raised to the power of their repetitions by the transfer
+                matrices or the scattering matrices.
+            cache (dict, optional): cache of the eigenmodes of identical
+                layers. Defaults to None.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
+              (M, N, 2, 2).
+            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
+              opposite magnetization.
+            - *T (ndarray[complex])* - Jones matrix of the transmission.
+            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
+              opposite magnetization.
+
+        """
+        k = self.experiment.k.magnitude[:, np.newaxis]
+        self._check_superstrate(layers[0])
+        top = self._layer_modes(*layers[0], cache=cache)
+        # state of the assembly from the superstrate to the substrate for the
+        # given and the opposite magnetization:
+        # - stack: transfer or scattering matrices of the layers assembled so far
+        # - last: boundary matrix A and normal wave vector k_z of the last layer
+        # - eps: dielectric tensor of the last layer for the transmitted field
+        state = {
+            "stack": [None, None],
+            "last": [(top[0], top[4]), (top[1], top[4])],
+            "eps": top[7],
+        }
+        self._assemble(layers[1:], state, cache, k)
+        stack, stack_phi = state["stack"]
+        eps = state["eps"]
+
+        if self._assembly == "transfer":
+            R, T = self.jones_from_transfer_matrix(stack)
+            R_phi, T_phi = self.jones_from_transfer_matrix(stack_phi)
+        else:
+            R, R_phi = circular_to_linear(stack[2]), circular_to_linear(stack_phi[2])
+            T, T_phi = circular_to_linear(stack[0]), circular_to_linear(stack_phi[0])
+        T, T_phi = self.transmitted_field(T, eps), self.transmitted_field(T_phi, eps)
+        R, T = self.incident_field(R, T, top[7])
+        R_phi, T_phi = self.incident_field(R_phi, T_phi, top[7])
+        return R, R_phi, T, T_phi
+
     @staticmethod
     def jones_from_transfer_matrix(RT):
         """jones_from_transfer_matrix
@@ -670,158 +843,6 @@ class MultilayerScattering(Scattering):
         W[:, :, 3, 3] = rugosn
 
         return W
-
-    def _pi_incident(self):
-        """True for an incoming pi and False for a sigma polarization, which
-        define the rotation and ellipticity."""
-        if self.pol_in_state not in (3, 4):
-            raise ValueError(
-                "The rotation and ellipticity are defined for an incoming sigma or pi "
-                f"polarization, but it is {self.polarizations[self.pol_in_state]}!"
-            )
-        return self.pol_in_state == 4
-
-    # ---- eigenmodes and assembly of the stack -----------------------------------
-
-    def calc_modes(self, eps):
-        """calc_modes
-
-        Calculates the eigenmodes of a homogeneous layer with the dielectric
-        tensor ``eps`` for all photon energies and incidence angles. Must be
-        overwritten by the child classes.
-
-        Args:
-            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
-
-        Returns:
-            (tuple):
-            - *A (ndarray[complex])* - boundary matrix of shape (M, N, 4, 4).
-            - *A_phi (ndarray[complex])* - boundary matrix for opposite
-              magnetization.
-            - *q (ndarray[complex])* - normal wave-vector components
-              :math:`k_{z,j} / k` of the down and up modes of shape (M, N, 4).
-            - *q_phi (ndarray[complex])* - normal wave-vector components for
-              opposite magnetization.
-            - *k_z (ndarray[complex])* - mean normal wave-vector component
-              :math:`k_z / k` of shape (M, N) for the roughness.
-
-        """
-        raise NotImplementedError
-
-    def get_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
-        """get_layer_dielectric_tensor
-
-        Dielectric tensor of a layer at the photon energies of the simulation,
-        see :meth:`.Layer.get_dielectric_tensor`.
-
-        Args:
-            layer (Layer): homogeneous layer.
-            strain (float, optional): strain of the layer. Defaults to 0.
-            magnetization (ndarray[float], optional): cartesian
-                magnetization ``(x, y, z)``. Defaults to the magnetization of
-                the layer.
-
-        Returns:
-            eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
-
-        """
-        return layer.get_dielectric_tensor(self.experiment.energy.magnitude, strain, magnetization)
-
-    def get_homogeneous_layers(self, strains=np.array([]), magnetizations=np.array([])):
-        """get_homogeneous_layers
-
-        List of all layers of the stack from the superstrate to the substrate
-        with their strain and magnetization for homogeneous strains and
-        magnetizations of the sub-structures.
-
-        Args:
-            strains (ndarray[float], optional): strain of each sub-structure.
-            magnetizations (ndarray[float], optional): cartesian magnetization
-                of each sub-structure.
-
-        Returns:
-            layers (list[tuple]): layer, strain, and magnetization.
-
-        """
-        return _flatten_layers(self._homogeneous_layer_tree(strains, magnetizations))
-
-    def get_inhomogeneous_layers(self, strains, magnetizations):
-        """get_inhomogeneous_layers
-
-        List of all layers of the stack from the superstrate to the substrate
-        with their strain and magnetization for a single delay of the
-        ``strain_map`` and ``magnetization_map``.
-
-        Args:
-            strains (ndarray[float]): strain of every layer.
-            magnetizations (ndarray[float]): magnetization of every layer.
-
-        Returns:
-            layers (list[tuple]): layer, strain, and magnetization.
-
-        """
-        _, _, handles = self.S.get_layer_vectors()
-        superstrate, substrate = self._superstrate_and_substrate()
-        return (
-            [superstrate]
-            + [(handles[i], strains[i], magnetizations[i]) for i in range(len(handles))]
-            + substrate
-        )
-
-    def calc_jones_matrices(self, layers, cache=None):
-        """calc_jones_matrices
-
-        Calculates the Jones matrices of the reflection and transmission of a
-        stack of layers in the linear :math:`(\\sigma, \\pi)` basis for the
-        given and the opposite magnetization.
-
-        Args:
-            layers (list[tuple]): layer, strain, and magnetization from the
-                superstrate to the substrate, see :meth:`get_homogeneous_layers`,
-                where repeated parts of the stack are assembled only once and
-                raised to the power of their repetitions by the transfer
-                matrices or the scattering matrices.
-            cache (dict, optional): cache of the eigenmodes of identical
-                layers. Defaults to None.
-
-        Returns:
-            (tuple):
-            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
-              (M, N, 2, 2).
-            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
-              opposite magnetization.
-            - *T (ndarray[complex])* - Jones matrix of the transmission.
-            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
-              opposite magnetization.
-
-        """
-        k = self.experiment.k.magnitude[:, np.newaxis]
-        self._check_superstrate(layers[0])
-        top = self._layer_modes(*layers[0], cache=cache)
-        # state of the assembly from the superstrate to the substrate for the
-        # given and the opposite magnetization:
-        # - stack: transfer or scattering matrices of the layers assembled so far
-        # - last: boundary matrix A and normal wave vector k_z of the last layer
-        # - eps: dielectric tensor of the last layer for the transmitted field
-        state = {
-            "stack": [None, None],
-            "last": [(top[0], top[4]), (top[1], top[4])],
-            "eps": top[7],
-        }
-        self._assemble(layers[1:], state, cache, k)
-        stack, stack_phi = state["stack"]
-        eps = state["eps"]
-
-        if self._assembly == "transfer":
-            R, T = self.jones_from_transfer_matrix(stack)
-            R_phi, T_phi = self.jones_from_transfer_matrix(stack_phi)
-        else:
-            R, R_phi = circular_to_linear(stack[2]), circular_to_linear(stack_phi[2])
-            T, T_phi = circular_to_linear(stack[0]), circular_to_linear(stack_phi[0])
-        T, T_phi = self.transmitted_field(T, eps), self.transmitted_field(T_phi, eps)
-        R, T = self.incident_field(R, T, top[7])
-        R_phi, T_phi = self.incident_field(R_phi, T_phi, top[7])
-        return R, R_phi, T, T_phi
 
     @staticmethod
     def incident_field(R, T, eps):
@@ -915,7 +936,7 @@ class MultilayerScattering(Scattering):
         key = (id(layer), strain, magnetization)
         if cache is not None and key in cache:
             return cache[key]
-        eps = self.get_layer_dielectric_tensor(layer, strain, magnetization)
+        eps = self.calc_layer_dielectric_tensor(layer, strain, magnetization)
         modes = self.calc_modes(eps)
         result = modes + (
             layer.structural.thickness.magnitude * (1 + strain),
@@ -1115,28 +1136,65 @@ class MultilayerScattering(Scattering):
                 Defaults to False.
 
         Returns:
+            result (Result): with the Jones matrices of the reflection
+            ``jones_reflection`` and the transmission ``jones_transmission``,
+            see :meth:`transmitted_field`, also for opposite magnetization
+            ``jones_reflection_phi`` and ``jones_transmission_phi``, of the
+            dimensions ``energy`` and ``angles`` and shape (M, N, 2, 2), see
+            :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
+
+        """
+        results = self._timed(
+            "homogeneous_jones_matrices",
+            self.calc_homogeneous_jones_matrices,
+            strains,
+            magnetizations,
+            temps,
+            polar=polar,
+        )
+        return self._scattering_result("homogeneous Jones matrices", JONES_NAMES, results)
+
+    def calc_homogeneous_jones_matrices(
+        self,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+    ):
+        """calc_homogeneous_jones_matrices
+
+        Plain arrays of :meth:`homogeneous_jones_matrices` without the
+        metadata of a :class:`~udkm1Dsim.simulations.result.Result`, e.g. for
+        fits with many calls.
+
+        Args:
+            strains (ndarray[float], optional): strain of each sub-structure.
+            magnetizations (ndarray[float], optional): magnetization of each
+                sub-structure.
+            temps (ndarray[float], optional): temperature of each
+                sub-structure, which raises a ``NotImplementedError`` yet.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates. Defaults to False.
+
+        Returns:
             (tuple):
             - *R (ndarray[complex])* - Jones matrix of the reflection of shape
               (M, N, 2, 2).
-            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
-              opposite magnetization.
-            - *T (ndarray[complex])* - Jones matrix of the transmission, see
-              :meth:`transmitted_field`.
-            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
-              opposite magnetization.
+            - *R_phi (ndarray[complex])* - the same Jones matrix for opposite
+              magnetization.
+            - *T (ndarray[complex])* - Jones matrix of the transmission.
+            - *T_phi (ndarray[complex])* - the same Jones matrix for opposite
+              magnetization.
 
         """
         self._check_experiment()
         self._reject_temperatures(temps, "temps")
         if np.size(magnetizations) > 0:
             magnetizations = self.parse_magnetization_map(magnetizations, polar)
-        t1 = time()
-        self.disp_message("Calculating _homogeneous_jones_matrices_ ...")
-        results = self.calc_jones_matrices(
+        return self.calc_jones_matrices(
             self._homogeneous_layer_tree(strains, magnetizations), cache={}
         )
-        self.disp_message(f"Elapsed time for _homogeneous_jones_matrices_: {time() - t1:f} s")
-        return results
 
     def homogeneous_reflectivity_transmissivity(
         self,
@@ -1172,6 +1230,40 @@ class MultilayerScattering(Scattering):
                 Defaults to False.
 
         Returns:
+            result (Result): with the ``reflectivity`` and ``transmissivity``,
+            also for opposite magnetization ``reflectivity_phi`` and
+            ``transmissivity_phi``, of the dimensions ``energy`` and ``angles``, see
+            :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
+
+        """
+        results = self._timed(
+            "homogeneous_reflectivity_transmissivity",
+            self.calc_homogeneous_reflectivity_transmissivity,
+            strains,
+            magnetizations,
+            temps,
+            polar=polar,
+        )
+        return self._scattering_result(
+            "homogeneous reflectivity and transmissivity", REFLECTIVITY_NAMES, results
+        )
+
+    def calc_homogeneous_reflectivity_transmissivity(
+        self,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+    ):
+        """calc_homogeneous_reflectivity_transmissivity
+
+        Plain arrays of :meth:`homogeneous_reflectivity_transmissivity`
+        without the metadata of a
+        :class:`~udkm1Dsim.simulations.result.Result`, e.g. for fits with many
+        calls, see :meth:`calc_homogeneous_jones_matrices` for the arguments.
+
+        Returns:
             (tuple):
             - *R (ndarray[float])* - reflectivity.
             - *R_phi (ndarray[float])* - reflectivity for opposite
@@ -1181,12 +1273,8 @@ class MultilayerScattering(Scattering):
               magnetization.
 
         """
-        Ref, Ref_phi, Trans, Trans_phi = self.homogeneous_jones_matrices(
-            strains, magnetizations, temps, polar=polar
-        )
-        R, T = self.calc_reflectivity_transmissivity(Ref, Trans)
-        R_phi, T_phi = self.calc_reflectivity_transmissivity(Ref_phi, Trans_phi)
-        return R, R_phi, T, T_phi
+        jones = self.calc_homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar)
+        return self._reduce_reflectivity_transmissivity(self, jones)
 
     def homogeneous_rotation_ellipticity(
         self,
@@ -1223,20 +1311,50 @@ class MultilayerScattering(Scattering):
                 Defaults to False.
 
         Returns:
-            (tuple):
-            - *R (tuple[Quantity])* - rotation and ellipticity of the
-              reflection, e.g. the Kerr effect.
-            - *R_phi (tuple[Quantity])* - rotation and ellipticity of the
-              reflection for opposite magnetization.
-            - *T (tuple[Quantity])* - rotation and ellipticity of the
-              transmission, e.g. the Faraday effect.
-            - *T_phi (tuple[Quantity])* - rotation and ellipticity of the
-              transmission for opposite magnetization.
+            result (Result): with the ``reflection_rotation`` and
+            ``reflection_ellipticity``, e.g. the Kerr effect, and the
+            ``transmission_rotation`` and ``transmission_ellipticity``, e.g.
+            the Faraday effect, also for opposite magnetization with the
+            suffix ``_phi``, in (deg) of the dimensions ``energy`` and ``angles``, see
+            :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
 
         """
-        pi_incident = self._pi_incident()
-        jones = self.homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar)
-        return tuple(self.calc_rotation_ellipticity(j, pi_incident) for j in jones)
+        results = self._timed(
+            "homogeneous_rotation_ellipticity",
+            self.calc_homogeneous_rotation_ellipticity,
+            strains,
+            magnetizations,
+            temps,
+            polar=polar,
+        )
+        return self._scattering_result(
+            "homogeneous rotation and ellipticity", ROTATION_NAMES, results, "deg"
+        )
+
+    def calc_homogeneous_rotation_ellipticity(
+        self,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+    ):
+        """calc_homogeneous_rotation_ellipticity
+
+        Plain arrays of :meth:`homogeneous_rotation_ellipticity` without the
+        metadata of a :class:`~udkm1Dsim.simulations.result.Result`, e.g. for
+        fits with many calls, see :meth:`calc_homogeneous_jones_matrices` for
+        the arguments.
+
+        Returns:
+            (tuple): rotation and ellipticity (deg) of the reflection, of the
+            reflection for opposite magnetization, of the transmission, and of
+            the transmission for opposite magnetization.
+
+        """
+        self._pi_incident()
+        jones = self.calc_homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar)
+        return self._reduce_rotation_ellipticity(self, jones)
 
     # ---- inhomogeneous simulations ----------------------------------------------
 
@@ -1260,16 +1378,18 @@ class MultilayerScattering(Scattering):
         cache, as they need much more memory than these.
 
         Args:
-            strain_map (ndarray[float], optional): spatio-temporal strain
-                profile.
-            magnetization_map (ndarray[float], optional): spatio-temporal
+            strain_map (ndarray[float], Result, optional): spatio-temporal
+                strain profile or result of
+                :meth:`~udkm1Dsim.simulations.phonons.Phonon.get_strain_map`.
+            magnetization_map (ndarray[float], Result, optional): spatio-temporal
                 magnetization profile :math:`M \times N \times 3` with
                 :math:`M` delays and :math:`N` layers. The magnetization is
                 given in cartesian coordinates ``(x, y, z)`` by default, as
                 returned by
                 :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
                 Its amplitude scales the magnetic part of the dielectric tensor.
-            temp_map (ndarray[float], optional): spatio-temporal temperature
+                For its result, the metadata ``polar`` overrides ``polar``.
+            temp_map (ndarray[float], Result, optional): spatio-temporal temperature
                 profile :math:`M \times N` or :math:`M \times N \times K` of
                 :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map` with
                 :math:`K` sub-systems, e.g. electrons and phonons. The
@@ -1287,172 +1407,30 @@ class MultilayerScattering(Scattering):
                 - *dask_client (Dask.Client)* - Dask client.
 
         Returns:
-            (tuple):
-            - *R (ndarray[complex])* - Jones matrix of the reflection of shape
-              (D, M, N, 2, 2) for D delays.
-            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
-              opposite magnetization.
-            - *T (ndarray[complex])* - Jones matrix of the transmission.
-            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
-              opposite magnetization.
+            result (Result): with the Jones matrices ``jones_reflection``,
+            ``jones_reflection_phi``, ``jones_transmission``, and
+            ``jones_transmission_phi`` of the dimensions ``delays``,
+            ``energy``, and ``angles`` and shape (D, M, N, 2, 2) for D
+            delays, see :meth:`homogeneous_jones_matrices`.
 
         """
+        strain_map, magnetization_map, temp_map, polar, source = self.parse_result_maps(
+            strain_map, magnetization_map, temp_map, polar
+        )
         strain_map, magnetization_map = self._parse_maps(
             strain_map, magnetization_map, temp_map, polar
         )
-        t1 = time()
-        self.disp_message("Calculating _inhomogeneous_jones_matrices_ ...")
-        results = self._calc_inhomogeneous(strain_map, magnetization_map, None, **kwargs)
-        self.disp_message(f"Elapsed time for _inhomogeneous_jones_matrices_: {time() - t1:f} s")
-        return results
-
-    def inhomogeneous_reflectivity_transmissivity(
-        self,
-        strain_map=np.array([]),
-        magnetization_map=np.array([]),
-        temp_map=np.array([]),
-        *,
-        polar=False,
-        **kwargs,
-    ):
-        r"""inhomogeneous_reflectivity_transmissivity
-
-        Returns the reflectivity and transmissivity of an inhomogeneously
-        strained and magnetized sample structure for a given ``strain_map``
-        and ``magnetization_map`` in space and time for each layer of the
-        sample structure and the incoming and analyzer polarization. If no
-        result is saved in the cache it is calculated, see
-        :meth:`inhomogeneous_jones_matrices`.
-
-        Args:
-            strain_map (ndarray[float], optional): spatio-temporal strain
-                profile.
-            magnetization_map (ndarray[float], optional): spatio-temporal
-                magnetization profile :math:`M \times N \times 3` with
-                :math:`M` delays and :math:`N` layers. The magnetization is
-                given in cartesian coordinates ``(x, y, z)`` by default, as
-                returned by
-                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
-                Its amplitude scales the magnetic part of the dielectric tensor.
-            temp_map (ndarray[float], optional): spatio-temporal temperature
-                profile :math:`M \times N` or :math:`M \times N \times K` of
-                :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map` with
-                :math:`K` sub-systems, e.g. electrons and phonons. The
-                temperature dependence of the dielectric tensor is planned for
-                a future version, so that a given ``temp_map`` raises a
-                ``NotImplementedError``.
-            polar (bool, optional): the ``magnetization_map`` is given in polar
-                coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
-                as before version 2.6.1. Defaults to False.
-            **kwargs:
-                - *calc_type (str)* - ``sequential`` (default) or ``parallel``
-                  over blocks of delays utilizing `Dask <https://dask.org/>`_
-                  on a local machine or a cluster, depending on the
-                  ``dask_client``.
-                - *dask_client (Dask.Client)* - Dask client.
-
-        Returns:
-            (tuple):
-            - *R (ndarray[float])* - reflectivity.
-            - *R_phi (ndarray[float])* - reflectivity for opposite
-              magnetization.
-            - *T (ndarray[float])* - transmissivity.
-            - *T_phi (ndarray[float])* - transmissivity for opposite
-              magnetization.
-
-        """
-        return self._cached_inhomogeneous(
-            "reflectivity_transmissivity",
-            ("R", "R_phi", "T", "T_phi"),
-            MultilayerScattering._reduce_reflectivity_transmissivity,
+        results = self._timed(
+            "inhomogeneous_jones_matrices",
+            self._calc_inhomogeneous,
             strain_map,
             magnetization_map,
-            temp_map,
-            polar,
-            kwargs,
+            None,
+            **kwargs,
         )
-
-    def inhomogeneous_rotation_ellipticity(
-        self,
-        strain_map=np.array([]),
-        magnetization_map=np.array([]),
-        temp_map=np.array([]),
-        *,
-        polar=False,
-        **kwargs,
-    ):
-        r"""inhomogeneous_rotation_ellipticity
-
-        Returns the rotation and ellipticity of the polarization of the
-        reflected and transmitted light, e.g. the time-resolved Kerr and
-        Faraday effect, of an inhomogeneously strained and magnetized sample
-        structure for a given ``strain_map`` and ``magnetization_map`` for the
-        incoming :math:`\sigma` or :math:`\pi` polarization. If no result is
-        saved in the cache it is calculated, see
-        :meth:`inhomogeneous_jones_matrices`.
-
-        Args:
-            strain_map (ndarray[float], optional): spatio-temporal strain
-                profile.
-            magnetization_map (ndarray[float], optional): spatio-temporal
-                magnetization profile :math:`M \times N \times 3` with
-                :math:`M` delays and :math:`N` layers. The magnetization is
-                given in cartesian coordinates ``(x, y, z)`` by default, as
-                returned by
-                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
-                Its amplitude scales the magnetic part of the dielectric tensor.
-            temp_map (ndarray[float], optional): spatio-temporal temperature
-                profile :math:`M \times N` or :math:`M \times N \times K` of
-                :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map` with
-                :math:`K` sub-systems, e.g. electrons and phonons. The
-                temperature dependence of the dielectric tensor is planned for
-                a future version, so that a given ``temp_map`` raises a
-                ``NotImplementedError``.
-            polar (bool, optional): the ``magnetization_map`` is given in polar
-                coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
-                as before version 2.6.1. Defaults to False.
-            **kwargs:
-                - *calc_type (str)* - ``sequential`` (default) or ``parallel``
-                  over blocks of delays utilizing `Dask <https://dask.org/>`_
-                  on a local machine or a cluster, depending on the
-                  ``dask_client``.
-                - *dask_client (Dask.Client)* - Dask client.
-
-        Returns:
-            (tuple):
-            - *R (tuple[Quantity])* - rotation and ellipticity of the
-              reflection, e.g. the Kerr effect.
-            - *R_phi (tuple[Quantity])* - rotation and ellipticity of the
-              reflection for opposite magnetization.
-            - *T (tuple[Quantity])* - rotation and ellipticity of the
-              transmission, e.g. the Faraday effect.
-            - *T_phi (tuple[Quantity])* - rotation and ellipticity of the
-              transmission for opposite magnetization.
-
-        """
-        self._pi_incident()
-        keys = (
-            "rot_R",
-            "ell_R",
-            "rot_R_phi",
-            "ell_R_phi",
-            "rot_T",
-            "ell_T",
-            "rot_T_phi",
-            "ell_T_phi",
+        return self._scattering_result(
+            "inhomogeneous Jones matrices", JONES_NAMES, results, inhomogeneous=True, source=source
         )
-        results = self._cached_inhomogeneous(
-            "rotation_ellipticity",
-            keys,
-            MultilayerScattering._reduce_rotation_ellipticity,
-            strain_map,
-            magnetization_map,
-            temp_map,
-            polar,
-            kwargs,
-        )
-        angles = [Q_(value, u.deg) for value in results]
-        return tuple((angles[i], angles[i + 1]) for i in range(0, 8, 2))
 
     def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map, temp_map=None):
         """calc_inhomogeneous_jones_matrices
@@ -1475,18 +1453,229 @@ class MultilayerScattering(Scattering):
             (tuple):
             - *R (ndarray[complex])* - Jones matrix of the reflection of shape
               (D, M, N, 2, 2) for D delays.
-            - *R_phi (ndarray[complex])* - Jones matrix of the reflection for
-              opposite magnetization.
+            - *R_phi (ndarray[complex])* - the same Jones matrix for opposite
+              magnetization.
             - *T (ndarray[complex])* - Jones matrix of the transmission.
-            - *T_phi (ndarray[complex])* - Jones matrix of the transmission for
-              opposite magnetization.
+            - *T_phi (ndarray[complex])* - the same Jones matrix for opposite
+              magnetization.
 
         """
         results = [
-            self.calc_jones_matrices(self.get_inhomogeneous_layers(strains, magnetizations))
+            self.calc_jones_matrices(self.calc_inhomogeneous_layers(strains, magnetizations))
             for strains, magnetizations in zip(strain_map, magnetization_map)
         ]
         return tuple(np.stack(result) for result in zip(*results))
+
+    def inhomogeneous_reflectivity_transmissivity(
+        self,
+        strain_map=np.array([]),
+        magnetization_map=np.array([]),
+        temp_map=np.array([]),
+        *,
+        polar=False,
+        **kwargs,
+    ):
+        r"""inhomogeneous_reflectivity_transmissivity
+
+        Returns the reflectivity and transmissivity of an inhomogeneously
+        strained and magnetized sample structure for a given ``strain_map``
+        and ``magnetization_map`` in space and time for each layer of the
+        sample structure and the incoming and analyzer polarization. If no
+        result is saved in the cache it is calculated, see
+        :meth:`inhomogeneous_jones_matrices`.
+
+        Args:
+            strain_map (ndarray[float], Result, optional): spatio-temporal
+                strain profile or result of
+                :meth:`~udkm1Dsim.simulations.phonons.Phonon.get_strain_map`.
+            magnetization_map (ndarray[float], Result, optional): spatio-temporal
+                magnetization profile :math:`M \times N \times 3` with
+                :math:`M` delays and :math:`N` layers. The magnetization is
+                given in cartesian coordinates ``(x, y, z)`` by default, as
+                returned by
+                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
+                Its amplitude scales the magnetic part of the dielectric tensor.
+                For its result, the metadata ``polar`` overrides ``polar``.
+            temp_map (ndarray[float], Result, optional): spatio-temporal temperature
+                profile :math:`M \times N` or :math:`M \times N \times K` of
+                :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map` with
+                :math:`K` sub-systems, e.g. electrons and phonons. The
+                temperature dependence of the dielectric tensor is planned for
+                a future version, so that a given ``temp_map`` raises a
+                ``NotImplementedError``.
+            polar (bool, optional): the ``magnetization_map`` is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
+                as before version 2.6.1. Defaults to False.
+            **kwargs:
+                - *calc_type (str)* - ``sequential`` (default) or ``parallel``
+                  over blocks of delays utilizing `Dask <https://dask.org/>`_
+                  on a local machine or a cluster, depending on the
+                  ``dask_client``.
+                - *dask_client (Dask.Client)* - Dask client.
+
+        Returns:
+            result (Result): with the ``reflectivity`` and ``transmissivity``,
+            also for opposite magnetization ``reflectivity_phi`` and
+            ``transmissivity_phi``, of the dimensions ``delays``, ``energy``, and ``angles``,
+            whose ``delays`` are taken from a given upstream result, see
+            :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
+
+        """
+        return self._cached_inhomogeneous(
+            "reflectivity_transmissivity",
+            REFLECTIVITY_NAMES,
+            "",
+            MultilayerScattering._reduce_reflectivity_transmissivity,
+            strain_map,
+            magnetization_map,
+            temp_map,
+            polar,
+            kwargs,
+        )
+
+    def calc_inhomogeneous_reflectivity_transmissivity(
+        self,
+        strain_map=np.array([]),
+        magnetization_map=np.array([]),
+        temp_map=np.array([]),
+        *,
+        polar=False,
+        **kwargs,
+    ):
+        """calc_inhomogeneous_reflectivity_transmissivity
+
+        Plain arrays of :meth:`inhomogeneous_reflectivity_transmissivity`,
+        which are always calculated without the cache and the metadata of a
+        :class:`~udkm1Dsim.simulations.result.Result`, e.g. for fits with many
+        calls, see :meth:`inhomogeneous_reflectivity_transmissivity` for the
+        arguments.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - reflectivity.
+            - *R_phi (ndarray[float])* - reflectivity for opposite
+              magnetization.
+            - *T (ndarray[float])* - transmissivity.
+            - *T_phi (ndarray[float])* - transmissivity for opposite
+              magnetization.
+
+        """
+        strain_map, magnetization_map = self._parse_result_maps_to_arrays(
+            strain_map, magnetization_map, temp_map, polar
+        )
+        return self._calc_inhomogeneous(
+            strain_map,
+            magnetization_map,
+            MultilayerScattering._reduce_reflectivity_transmissivity,
+            **kwargs,
+        )
+
+    def inhomogeneous_rotation_ellipticity(
+        self,
+        strain_map=np.array([]),
+        magnetization_map=np.array([]),
+        temp_map=np.array([]),
+        *,
+        polar=False,
+        **kwargs,
+    ):
+        r"""inhomogeneous_rotation_ellipticity
+
+        Returns the rotation and ellipticity of the polarization of the
+        reflected and transmitted light, e.g. the time-resolved Kerr and
+        Faraday effect, of an inhomogeneously strained and magnetized sample
+        structure for a given ``strain_map`` and ``magnetization_map`` for the
+        incoming :math:`\sigma` or :math:`\pi` polarization. If no result is
+        saved in the cache it is calculated, see
+        :meth:`inhomogeneous_jones_matrices`.
+
+        Args:
+            strain_map (ndarray[float], Result, optional): spatio-temporal
+                strain profile or result of
+                :meth:`~udkm1Dsim.simulations.phonons.Phonon.get_strain_map`.
+            magnetization_map (ndarray[float], Result, optional): spatio-temporal
+                magnetization profile :math:`M \times N \times 3` with
+                :math:`M` delays and :math:`N` layers. The magnetization is
+                given in cartesian coordinates ``(x, y, z)`` by default, as
+                returned by
+                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
+                Its amplitude scales the magnetic part of the dielectric tensor.
+                For its result, the metadata ``polar`` overrides ``polar``.
+            temp_map (ndarray[float], Result, optional): spatio-temporal temperature
+                profile :math:`M \times N` or :math:`M \times N \times K` of
+                :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map` with
+                :math:`K` sub-systems, e.g. electrons and phonons. The
+                temperature dependence of the dielectric tensor is planned for
+                a future version, so that a given ``temp_map`` raises a
+                ``NotImplementedError``.
+            polar (bool, optional): the ``magnetization_map`` is given in polar
+                coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
+                as before version 2.6.1. Defaults to False.
+            **kwargs:
+                - *calc_type (str)* - ``sequential`` (default) or ``parallel``
+                  over blocks of delays utilizing `Dask <https://dask.org/>`_
+                  on a local machine or a cluster, depending on the
+                  ``dask_client``.
+                - *dask_client (Dask.Client)* - Dask client.
+
+        Returns:
+            result (Result): with the ``reflection_rotation`` and
+            ``reflection_ellipticity``, e.g. the Kerr effect, and the
+            ``transmission_rotation`` and ``transmission_ellipticity``, e.g.
+            the Faraday effect, also for opposite magnetization with the
+            suffix ``_phi``, in (deg) of the dimensions ``delays``, ``energy``, and ``angles``,
+            whose ``delays`` are taken from a given upstream result, see
+            :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
+
+        """
+        self._pi_incident()
+        return self._cached_inhomogeneous(
+            "rotation_ellipticity",
+            ROTATION_NAMES,
+            "deg",
+            MultilayerScattering._reduce_rotation_ellipticity,
+            strain_map,
+            magnetization_map,
+            temp_map,
+            polar,
+            kwargs,
+        )
+
+    def calc_inhomogeneous_rotation_ellipticity(
+        self,
+        strain_map=np.array([]),
+        magnetization_map=np.array([]),
+        temp_map=np.array([]),
+        *,
+        polar=False,
+        **kwargs,
+    ):
+        """calc_inhomogeneous_rotation_ellipticity
+
+        Plain arrays of :meth:`inhomogeneous_rotation_ellipticity`, which are
+        always calculated without the cache and the metadata of a
+        :class:`~udkm1Dsim.simulations.result.Result`, e.g. for fits with many
+        calls, see :meth:`inhomogeneous_rotation_ellipticity` for the
+        arguments.
+
+        Returns:
+            (tuple): rotation and ellipticity (deg) of the reflection, of the
+            reflection for opposite magnetization, of the transmission, and of
+            the transmission for opposite magnetization.
+
+        """
+        self._pi_incident()
+        strain_map, magnetization_map = self._parse_result_maps_to_arrays(
+            strain_map, magnetization_map, temp_map, polar
+        )
+        return self._calc_inhomogeneous(
+            strain_map,
+            magnetization_map,
+            MultilayerScattering._reduce_rotation_ellipticity,
+            **kwargs,
+        )
+
+    # ---- input maps and results -------------------------------------------------
 
     @staticmethod
     def parse_magnetization_map(magnetization_map, polar=False):
@@ -1517,15 +1706,51 @@ class MultilayerScattering(Scattering):
             return magnetization_map
         return convert_polar_to_cartesian(magnetization_map)
 
-    @staticmethod
-    def _reject_temperatures(temps, name):
-        """The temperature dependence of the dielectric tensor is planned, so
-        that only empty temperatures are accepted yet."""
-        if np.size(temps) > 0:
-            raise NotImplementedError(
-                "The temperature dependence of the dielectric tensor is planned for a future "
-                f"version, so that the {name} of the multilayer formalisms must be empty!"
-            )
+    def parse_result_maps(self, strain_map, magnetization_map, temp_map, polar=False):
+        """parse_result_maps
+
+        The input maps given as arrays or as the
+        :class:`~udkm1Dsim.simulations.result.Result` of the upstream
+        simulations, e.g. of
+        :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`,
+        whose metadata ``polar`` overrides the given ``polar``.
+
+        Args:
+            strain_map (ndarray[float], Result): spatio-temporal strain
+                profile.
+            magnetization_map (ndarray[float], Result): spatio-temporal
+                magnetization profile.
+            temp_map (ndarray[float], Result): spatio-temporal temperature
+                profile.
+            polar (bool, optional): the ``magnetization_map`` array is given
+                in polar coordinates. Defaults to False.
+
+        Returns:
+            (tuple):
+            - *strain_map (ndarray[float])* - strain map.
+            - *magnetization_map (ndarray[float])* - magnetization map.
+            - *temp_map (ndarray[float])* - temperature map.
+            - *polar (bool)* - the magnetization map is in polar coordinates.
+            - *source (Result, None)* - first given result for its coordinates.
+
+        """
+        source = find_source(strain_map, magnetization_map, temp_map)
+        if isinstance(magnetization_map, Result):
+            polar = bool(magnetization_map.attrs.get("polar", polar))
+        return (
+            get_entry(strain_map, "strain_map"),
+            get_entry(magnetization_map, "magnetization_map"),
+            get_entry(temp_map, "temp_map"),
+            polar,
+            source,
+        )
+
+    def _parse_result_maps_to_arrays(self, strain_map, magnetization_map, temp_map, polar):
+        """strain and cartesian magnetization map of arrays or results"""
+        strain_map, magnetization_map, temp_map, polar, _ = self.parse_result_maps(
+            strain_map, magnetization_map, temp_map, polar
+        )
+        return self._parse_maps(strain_map, magnetization_map, temp_map, polar)
 
     def _parse_maps(self, strain_map, magnetization_map, temp_map, polar):
         """strain and cartesian magnetization map with the same delays"""
@@ -1552,6 +1777,18 @@ class MultilayerScattering(Scattering):
             )
         return strain_map, magnetization_map
 
+    @staticmethod
+    def _reject_temperatures(temps, name):
+        """The temperature dependence of the dielectric tensor is planned, so
+        that only empty temperatures are accepted yet."""
+        if np.size(temps) > 0:
+            raise NotImplementedError(
+                "The temperature dependence of the dielectric tensor is planned for a future "
+                f"version, so that the {name} of the multilayer formalisms must be empty!"
+            )
+
+    # ---- delay blocks, cache, and parallel calculation --------------------------
+
     def _delay_block_size(self):
         """number of delays, which are calculated at once"""
         return 1
@@ -1568,31 +1805,30 @@ class MultilayerScattering(Scattering):
         return [slice(i, min(i + size, M)) for i in range(0, M, size)]
 
     def _cached_inhomogeneous(
-        self, name, keys, reduce, strain_map, magnetization_map, temp_map, polar, kwargs
+        self, name, names, unit, reduce, strain_map, magnetization_map, temp_map, polar, kwargs
     ):
-        """Results of :meth:`_calc_inhomogeneous`, which are saved to and
-        loaded from the cache by their ``name`` and ``keys``."""
+        """Result of :meth:`_calc_inhomogeneous` with the ``names`` and
+        ``unit``, which is saved to and loaded from the cache by its
+        ``name``."""
+        strain_map, magnetization_map, temp_map, polar, source = self.parse_result_maps(
+            strain_map, magnetization_map, temp_map, polar
+        )
         strain_map, magnetization_map = self._parse_maps(
             strain_map, magnetization_map, temp_map, polar
         )
-        filename = (
-            f"inhomogeneous_{name}_{type(self).__name__}_"
-            + self.get_hash(
+
+        def calc():
+            results = self._calc_inhomogeneous(strain_map, magnetization_map, reduce, **kwargs)
+            title = f"inhomogeneous {name.replace('_', ' and ')}"
+            return self._scattering_result(title, names, results, unit, True, source)
+
+        return self._cached_result(
+            f"inhomogeneous_{name}_{type(self).__name__}",
+            self.get_hash(
                 strain_map=strain_map, magnetization_map=magnetization_map, temp_map=temp_map
-            )
-            + ".npz"
+            ),
+            calc,
         )
-        full_filename = path.abspath(path.join(self.cache_dir, filename))
-        if path.exists(full_filename) and not self.force_recalc:
-            tmp = np.load(full_filename)
-            self.disp_message(f"_inhomogeneous_{name}_ loaded from file:\n\t" + filename)
-            return tuple(tmp[key] for key in keys)
-        t1 = time()
-        self.disp_message(f"Calculating _inhomogeneous_{name}_ ...")
-        results = self._calc_inhomogeneous(strain_map, magnetization_map, reduce, **kwargs)
-        self.disp_message(f"Elapsed time for _inhomogeneous_{name}_: {time() - t1:f} s")
-        self.save(full_filename, dict(zip(keys, results)), f"_inhomogeneous_{name}_")
-        return results
 
     def _calc_inhomogeneous(self, strain_map, magnetization_map, reduce, **kwargs):
         """Results of :meth:`calc_inhomogeneous_jones_matrices` for all blocks
