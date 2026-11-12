@@ -51,7 +51,7 @@ def multilayer(request, structure, tmp_path_factory):
         progress_bar=False,
     )
     multilayer.energy = np.r_[700, 800] * u.eV
-    multilayer.qz = np.r_[0.01:5:0.02] / u.nm
+    multilayer.qz = np.r_[0.01:5:0.05] / u.nm
     return multilayer
 
 
@@ -68,6 +68,14 @@ def strain_map_mixed(structure):
     L = structure.get_number_of_layers()
     M = 1  # delay steps
     return 0.01 * np.ones((M, L))
+
+
+@pytest.fixture(scope="module")
+def strain_map_delays(structure):
+    L = structure.get_number_of_layers()
+    M = 10  # delay steps
+    rng = np.random.default_rng(0)
+    return 0.01 * rng.random((M, L))
 
 
 @pytest.fixture(scope="module")
@@ -93,7 +101,7 @@ def polarizations():
 
 @pytest.mark.benchmark
 def test_xray_kin_homogeneous_reflectivity(xray_kin):
-    xray_kin.homogeneous_reflectivity()
+    xray_kin.calc_homogeneous_reflectivity()
 
 
 # XrayDyn
@@ -101,18 +109,18 @@ def test_xray_kin_homogeneous_reflectivity(xray_kin):
 
 @pytest.mark.benchmark
 def test_xray_dyn_homogeneous_reflectivity(xray_dyn):
-    xray_dyn.homogeneous_reflectivity()
+    xray_dyn.calc_homogeneous_reflectivity()
 
 
 @pytest.mark.benchmark
 def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map_crystalline):
-    xray_dyn.inhomogeneous_reflectivity(strain_map_crystalline)
+    xray_dyn.calc_inhomogeneous_reflectivity(strain_map_crystalline)
 
 
 @pytest.mark.benchmark
 def test_xray_dyn_inhomogeneous_reflectivity_strain_vectors(xray_dyn, strain_map_crystalline):
     strain_vectors = [np.linspace(0, 0.01, 20)] * xray_dyn.S.get_number_of_unique_layers()
-    xray_dyn.inhomogeneous_reflectivity(strain_map_crystalline, strain_vectors=strain_vectors)
+    xray_dyn.calc_inhomogeneous_reflectivity(strain_map_crystalline, strain_vectors=strain_vectors)
 
 
 # multilayer formalisms
@@ -121,13 +129,13 @@ def test_xray_dyn_inhomogeneous_reflectivity_strain_vectors(xray_dyn, strain_map
 @pytest.mark.benchmark
 def test_multilayer_homogeneous_reflectivity(multilayer):
     multilayer.set_polarization(3, 0)
-    multilayer.homogeneous_reflectivity_transmissivity()
+    multilayer.calc_homogeneous_reflectivity_transmissivity()
 
 
 @pytest.mark.benchmark
 def test_multilayer_inhomogeneous_reflectivity(multilayer, strain_map_mixed, magnetization_map):
     multilayer.set_polarization(3, 0)
-    multilayer.inhomogeneous_reflectivity_transmissivity(
+    multilayer.calc_inhomogeneous_reflectivity_transmissivity(
         strain_map=strain_map_mixed, magnetization_map=magnetization_map
     )
 
@@ -135,4 +143,28 @@ def test_multilayer_inhomogeneous_reflectivity(multilayer, strain_map_mixed, mag
 @pytest.mark.benchmark
 def test_multilayer_homogeneous_reflectivity_elliptical(multilayer, polarizations):
     multilayer.set_polarization(5, 0, polarization_in=polarizations)
-    multilayer.homogeneous_reflectivity_transmissivity()
+    multilayer.calc_homogeneous_reflectivity_transmissivity()
+
+
+@pytest.mark.benchmark
+def test_multilayer_homogeneous_rotation_ellipticity(multilayer):
+    multilayer.set_polarization(3, 0)
+    multilayer.calc_homogeneous_rotation_ellipticity()
+
+
+def test_parratt_inhomogeneous_reflectivity_delays(
+    benchmark, structure, strain_map_delays, tmp_path_factory
+):
+    """the recursion of Parratt over the layers for a block of delays at once"""
+    parratt = Parratt(
+        structure,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=False,
+        disp_messages=False,
+        progress_bar=False,
+    )
+    parratt.energy = np.r_[700, 800] * u.eV
+    parratt.qz = np.r_[0.01:5:0.05] / u.nm
+    parratt.set_polarization(3, 0)
+    benchmark(parratt.calc_inhomogeneous_reflectivity_transmissivity, strain_map=strain_map_delays)

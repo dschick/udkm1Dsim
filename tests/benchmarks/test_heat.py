@@ -22,6 +22,24 @@ def heat(structure, tmp_path_factory):
     )
 
 
+@pytest.fixture(scope="module")
+def heat_excited(structure_amorph, tmp_path_factory):
+    heat = Heat(
+        structure_amorph,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=False,
+        disp_messages=False,
+        progress_bar=False,
+    )
+    heat.excitation = {
+        "fluence": [5] * u.mJ / u.cm**2,
+        "delay_pump": [0] * u.ps,
+        "pulse_width": [0.1] * u.ps,
+    }
+    return heat
+
+
 # benchmarks
 
 
@@ -37,7 +55,7 @@ def test_get_multilayers_absorption_profile(heat):
 
 @pytest.mark.benchmark
 def test_get_temperature_after_delta_excitation(heat):
-    heat.get_temperature_after_delta_excitation(10, 300)
+    heat.calc_temperature_after_delta_excitation(10, 300)
 
 
 def test_calc_energy_map(benchmark, heat):
@@ -106,3 +124,15 @@ def test_odefunc(benchmark, heat):
         None,
         None,
     )
+
+
+@pytest.mark.benchmark
+def test_calc_temp_map(heat_excited):
+    heat_excited.heat_diffusion = False
+    heat_excited.calc_temp_map(np.r_[-1:10:0.1] * u.ps, 300)
+
+
+@pytest.mark.benchmark
+def test_calc_temp_map_heat_diffusion(heat_excited):
+    heat_excited.heat_diffusion = True
+    heat_excited.calc_temp_map(np.r_[-1:10:0.1] * u.ps, 300)
