@@ -10,6 +10,7 @@ dielectric
 layers
 structure
 simulation
+result
 solvers
 heat
 phonons

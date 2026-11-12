@@ -4,6 +4,7 @@ from .simulations.heat import Heat
 from .simulations.magnetization import LLB, LLG, Magnetization, iLLG
 from .simulations.parameter_groups import ExperimentParameters
 from .simulations.phonons import Phonon, PhononAna, PhononNum
+from .simulations.result import Result
 from .simulations.scattering import (
     BerremanElzo,
     BerremanStepanov,
@@ -56,6 +57,7 @@ __all__ = [
     "Dispersion",
     "Structure",
     "Simulation",
+    "Result",
     "Heat",
     "Parameter",
     "Phonon",
