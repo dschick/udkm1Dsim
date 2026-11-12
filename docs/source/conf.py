@@ -80,6 +80,24 @@ myst_sphinx_gallery_config = GalleryConfig(
     ),
 )
 
+
+def _copy_example_images():
+    """Copy the images of the examples, e.g. sketches in their markdown,
+    next to the notebooks of the gallery, which copies only the notebooks
+    themselves. The gallery sections are named without the number prefix of
+    the folders of the examples."""
+    import shutil
+
+    root = Path(__file__).parent
+    for image in sorted((root / "../../examples").resolve().glob("*/*")):
+        if image.suffix.lower() in (".svg", ".png"):
+            section = root / "examples" / re.sub(r"^\d+-", "", image.parent.name)
+            section.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(image, section / image.name)
+
+
+_copy_example_images()
+
 # A notebook can select an image of its markdown as gallery thumbnail by an
 # html image with the class gallery_thumbnail, which is otherwise the last
 # image of its code cells. For an svg image, the png image of the same name

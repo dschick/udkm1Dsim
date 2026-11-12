@@ -21,6 +21,8 @@ docs/jupyter_execute
 # docs myst-sphinx-gallery
 docs/source/examples/**/*.ipynb
 docs/source/examples/**/*.rst
+docs/source/examples/**/*.svg
+docs/source/examples/**/*.png
 
 # ipython checkpoints
 docs/source/**/.ipynb_checkpoints
