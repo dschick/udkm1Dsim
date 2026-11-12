@@ -4,9 +4,9 @@ overview example, which is also its gallery thumbnail.
 The sketch is saved to the given paths or, by default, to
 ``multilayer_sketch.svg`` and ``multilayer_sketch.png`` next to this script,
 e.g. by ``python multilayer_sketch.py``. The labels use the font Fira Sans,
-which must be installed, and are converted to paths in the svg. The svg must
-also be copied to ``docs/source/examples/scattering/`` for the documentation,
-while the png is used for the gallery thumbnail.
+which must be installed, and are converted to paths in the svg. The svg is
+copied to the documentation by ``docs/source/conf.py``, while the png is used
+for the gallery thumbnail.
 """
 
 import sys

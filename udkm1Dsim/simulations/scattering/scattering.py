@@ -23,7 +23,7 @@
 
 """Base class of all scattering simulations."""
 
-__all__ = ["Scattering"]
+__all__ = ["ALIASES", "Scattering"]
 
 __docformat__ = "restructuredtext"
 
@@ -37,10 +37,34 @@ from tqdm.auto import tqdm
 from ...helpers import make_hash_md5
 from ...structures.layers import Layer, UnitCell, Vacuum
 from ..parameter_groups import ExperimentParameters
+from ..result import Result
 from ..simulation import Simulation
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
+
+
+#: short aliases of the entries of the results of the scattering simulations
+ALIASES = {
+    "reflectivity": "R",
+    "reflectivity_phi": "R_phi",
+    "transmissivity": "T",
+    "transmissivity_phi": "T_phi",
+    "jones_reflection": "jones_R",
+    "jones_reflection_phi": "jones_R_phi",
+    "jones_transmission": "jones_T",
+    "jones_transmission_phi": "jones_T_phi",
+    "reflection_rotation": "rot_R",
+    "reflection_ellipticity": "ell_R",
+    "reflection_rotation_phi": "rot_R_phi",
+    "reflection_ellipticity_phi": "ell_R_phi",
+    "transmission_rotation": "rot_T",
+    "transmission_ellipticity": "ell_T",
+    "transmission_rotation_phi": "rot_T_phi",
+    "transmission_ellipticity_phi": "ell_T_phi",
+    "sub_structure_fields": "A",
+    "sub_structure_matrices": "A",
+}
 
 
 class Scattering(Simulation):
@@ -115,6 +139,53 @@ class Scattering(Simulation):
         self._pol_out_state = 0  # no analyzer
         self.pol_in = self.calc_incoming_polarization(self._pol_in_state)
         self.pol_out = self.calc_outgoing_polarization(self._pol_out_state)
+
+    def new_scattering_result(self, title, num_delays=None, source=None):
+        """new_scattering_result
+
+        New :class:`~udkm1Dsim.simulations.result.Result` with the
+        coordinates ``energy``, ``qz``, and ``theta`` of the experiment, see
+        :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`. The
+        ``qz`` and ``theta`` have the dimensions ``energy`` and ``angles``.
+        The ``delays`` are taken from an upstream ``source`` result, if
+        their number agrees.
+
+        Args:
+            title (str): title of the result.
+            num_delays (int, optional): number of delays of an inhomogeneous
+                result.
+            source (Result, optional): upstream result.
+
+        Returns:
+            result (Result): empty result.
+
+        """
+        result = self.new_result(title)
+        if (
+            isinstance(source, Result)
+            and "delays" in source.coords
+            and np.size(source["delays"]) == num_delays
+        ):
+            result.copy_coords(source, ["delays"])
+        result.add_coord("energy", np.atleast_1d(self.energy.to("eV").magnitude), "eV")
+        dims = ("energy", "angles")
+        result.add_coord("qz", np.atleast_2d(self.qz.to("1/nm").magnitude), "1/nm", dims)
+        result.add_coord("theta", np.atleast_2d(self.theta.to("deg").magnitude), "deg", dims)
+        return result
+
+    def _scattering_result(self, title, names, values, unit="", inhomogeneous=False, source=None):
+        """result of the ``values`` with the ``names`` and their
+        :data:`ALIASES`, which have a first axis of the delays for
+        ``inhomogeneous=True`` with the coordinates of an upstream ``source``
+        result, see :meth:`new_scattering_result`"""
+        num_delays = np.size(values[0], 0) if inhomogeneous else None
+        result = self.new_scattering_result(title, num_delays, source)
+        dims = ("delays", "energy", "angles") if inhomogeneous else ("energy", "angles")
+        for name, value in zip(names, values):
+            # e.g. the lists of the sub-structures have no dimensions
+            value_dims = dims if isinstance(value, np.ndarray) else ()
+            result.add(name, value, value_dims, unit, ALIASES.get(name, ()))
+        return result
 
     def _check_experiment(self):
         """Warn for scattering vectors beyond :math:`2k`, which have no
@@ -265,7 +336,7 @@ class Scattering(Simulation):
         """calc_incoming_polarization
 
         Calculates the incoming polarization factor :math:`\\mbox{pol}` of
-        :meth:`get_polarization_factor` for sigma, pi, and unpolarized X-rays.
+        :meth:`calc_polarization_factor` for sigma, pi, and unpolarized X-rays.
 
         Args:
             pol_in_state (int): incoming polarization state id.
@@ -378,8 +449,8 @@ class Scattering(Simulation):
 
         return self.S.get_hash(types="xray") + "_" + make_hash_md5(param)
 
-    def get_polarization_factor(self, theta):
-        r"""get_polarization_factor
+    def calc_polarization_factor(self, theta):
+        r"""calc_polarization_factor
 
         Calculates the polarization factor :math:`P(\vartheta)` for a given
         incident angle :math:`\vartheta` for the case of `s`-polarization

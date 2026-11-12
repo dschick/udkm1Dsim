@@ -15,7 +15,8 @@ on:
 jobs:
   benchmarks:
     name: Run benchmarks
-    runs-on: ubuntu-latest
+    # the instrumentation of CodSpeed does not support ubuntu-26.04 of ubuntu-latest yet
+    runs-on: ubuntu-24.04
 
     permissions:
       contents: read

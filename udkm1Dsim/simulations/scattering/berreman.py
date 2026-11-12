@@ -333,7 +333,7 @@ class _BerremanModes:
         layer, strain, magnetization = entry
         strain, magnetization = self._parse_layer_inputs(layer, strain, magnetization)
         if not np.all(
-            _is_isotropic(self.get_layer_dielectric_tensor(layer, strain, magnetization))
+            _is_isotropic(self.calc_layer_dielectric_tensor(layer, strain, magnetization))
         ):
             raise ValueError(
                 f"The superstrate '{layer.id}' of {type(self).__name__} must be isotropic!"

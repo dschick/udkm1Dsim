@@ -67,8 +67,8 @@ class _ElzoModes:
         """
         return elzo_modes(eps, self._in_plane_wavevector())
 
-    def get_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
-        """get_layer_dielectric_tensor
+    def calc_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
+        """calc_layer_dielectric_tensor
 
         Dielectric tensor of a layer at the photon energies of the simulation,
         which must be isotropic except for its gyrotropic part, see

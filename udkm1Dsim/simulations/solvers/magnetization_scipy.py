@@ -377,7 +377,7 @@ def interlayer_exchange_field(m, mag, exch_stiffnesses, thicknesses):
 
     with the thicknesses :math:`\Delta z` and the directional exchange
     stiffnesses :math:`A` of the layers, see
-    :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_directional_exchange_stiffnesses`.
+    :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.calc_directional_exchange_stiffnesses`.
     Missing neighbours at the top and bottom as well as sublattices, which
     do not exist in the neighbouring layer, do not contribute.
 

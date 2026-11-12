@@ -93,12 +93,12 @@ def test_get_hash(phonon, delays, distances, temp_map, delta_temp_map):
     phonon.get_hash(delays, temp_map, delta_temp_map)
 
 
-def test_get_all_strains_per_unique_layer(phonon, strain_map):
-    assert np.allclose(phonon.get_all_strains_per_unique_layer(strain_map), [])
+def test_calc_all_strains_per_unique_layer(phonon, strain_map):
+    assert np.allclose(phonon.calc_all_strains_per_unique_layer(strain_map), [])
 
 
-def test_get_reduced_strains_per_unique_layer(phonon, strain_map):
-    assert np.allclose(phonon.get_reduced_strains_per_unique_layer(strain_map), [])
+def test_calc_reduced_strains_per_unique_layer(phonon, strain_map):
+    assert np.allclose(phonon.calc_reduced_strains_per_unique_layer(strain_map), [])
 
 
 def test_check_temp_maps(phonon, temp_map, delays, delta_temp_map):
@@ -110,6 +110,14 @@ def test_calc_sticks_from_temp_map(phonon, temp_map, delta_temp_map):
 
 
 # PhononNum
+
+
+def test_phonon_num_default_tolerances(structure):
+    """the absolute tolerance is set for the shifts of the layers of a few
+    picometers"""
+    pnum = PhononNum(structure, True, save_data=False)
+    assert pnum.ode_options["atol"] == 1e-12
+    assert pnum.ode_options["rtol"] == 1e-3
 
 
 def test_phonon_num_repr(phonon_num):
@@ -168,8 +176,14 @@ def test_phonon_ana_get_strain_map(phonon_ana, delays, temp_map, delta_temp_map)
 
 
 def test_phonon_ana_get_energy_per_eigenmode(phonon_ana, delays, temp_map, delta_temp_map):
-    _, A, B = phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
-    phonon_ana.get_energy_per_eigenmode(A, B)
+    strain = phonon_ana.get_strain_map(delays, temp_map, delta_temp_map)
+    omega, E = phonon_ana.calc_energy_per_eigenmode(strain.coefficients_A, strain.coefficients_B)
+    result = phonon_ana.get_energy_per_eigenmode(strain)
+    np.testing.assert_array_equal(result.energy_per_eigenmode, E)
+    np.testing.assert_array_equal(result.eigenfrequencies, omega)
+    np.testing.assert_array_equal(result.delays, strain.delays)
+    assert result.E is result.energy_per_eigenmode and result.omega is result.eigenfrequencies
+    assert strain.A is strain.coefficients_A and strain.B is strain.coefficients_B
 
 
 @pytest.mark.parametrize("phonon_class", [PhononNum, PhononAna])
@@ -270,7 +284,10 @@ def test_phonon_ana_zero_mode(reference_structure, tmp_path):
     phonon_ana = PhononAna(
         reference_structure, True, cache_dir=tmp_path, save_data=False, disp_messages=False
     )
-    Xi, omega = phonon_ana.solve_eigenproblem()
+    res = phonon_ana.get_eigenproblem()
+    Xi, omega = res.eigenvectors, res.eigenfrequencies
+    np.testing.assert_array_equal(phonon_ana.calc_eigenproblem()[1], omega)
+    assert res.dims("eigenvectors") == ("distances", "eigenmodes")
     assert np.all(np.isreal(omega)) and np.all(omega >= 0)
     assert np.sum(omega == 0) == 1
     # the eigenvectors are orthonormal with respect to the masses

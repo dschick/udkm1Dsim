@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="830" viewBox="0 0 1080 830" role="img" aria-labelledby="title">
+  <title id="title">Flow of the simulations and their results</title>
+  <defs>
+    <marker id="head" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 L 3 5 z" fill="#5b6472"/>
+    </marker>
+  </defs>
+
+  <!-- ===== structure and simulations ===== -->
+  <g font-family="'Fira Sans', 'Helvetica Neue', Arial, sans-serif">
+    <rect x="50" y="20" width="350" height="70" rx="14" fill="#dde7fb" stroke="#a8bdec" stroke-width="3"/>
+    <text x="74" y="66" font-size="30" font-weight="500" fill="#1f2328">Structure</text>
+
+    <g stroke-width="3">
+      <rect x="50" y="130" width="350" height="170" rx="14" fill="#d6ebe4" stroke="#8cbfae"/>
+      <rect x="50" y="340" width="350" height="170" rx="14" fill="#d6ebe4" stroke="#8cbfae"/>
+      <rect x="50" y="550" width="350" height="170" rx="14" fill="#e6e0f5" stroke="#ad9fdb"/>
+    </g>
+    <g font-size="24" font-style="italic" fill="#4d5562">
+      <text x="74" y="168">heat</text>
+      <text x="74" y="378">phonons</text>
+      <text x="74" y="588">scattering</text>
+    </g>
+    <g font-size="30" font-weight="500" fill="#1f2328">
+      <text x="74" y="206">Heat</text>
+      <text x="74" y="416">PhononNum</text>
+      <text x="74" y="626">XrayDyn</text>
+    </g>
+  </g>
+  <g font-family="'Fira Mono', 'DejaVu Sans Mono', Menlo, Consolas, monospace" font-size="16" fill="#1f2328">
+    <text x="74" y="244">get_temp_map(delays, init_temp)</text>
+    <text x="74" y="454">get_strain_map(delays, res_temp)</text>
+    <text x="74" y="658">homogeneous_reflectivity()</text>
+    <text x="74" y="682">inhomogeneous_reflectivity(</text>
+    <text x="112" y="704">res_strain)</text>
+  </g>
+
+  <!-- ===== results and cache: offset by half a card ===== -->
+  <g transform="translate(20 85)">
+    <g font-family="'Fira Sans', 'Helvetica Neue', Arial, sans-serif">
+      <!-- column headings -->
+      <g font-size="24" font-style="italic" fill="#5c6470">
+        <text x="460" y="110">Result objects</text>
+        <text x="800" y="110">cache_dir</text>
+      </g>
+
+      <!-- results -->
+      <g fill="#ffffff">
+        <rect x="460" y="130" width="280" height="170" rx="14"/>
+        <rect x="460" y="340" width="280" height="170" rx="14"/>
+        <rect x="460" y="550" width="280" height="170" rx="14"/>
+      </g>
+      <!-- coordinate section of each result -->
+      <g fill="#eceef1">
+        <path d="M 460 264 H 740 V 286 A 14 14 0 0 1 726 300 H 474 A 14 14 0 0 1 460 286 Z"/>
+        <path d="M 460 474 H 740 V 496 A 14 14 0 0 1 726 510 H 474 A 14 14 0 0 1 460 496 Z"/>
+        <path d="M 460 684 H 740 V 706 A 14 14 0 0 1 726 720 H 474 A 14 14 0 0 1 460 706 Z"/>
+      </g>
+      <g fill="none" stroke="#9aa1ab" stroke-width="2">
+        <path d="M 460 264 H 740 M 460 474 H 740 M 460 684 H 740" stroke="#c9ced6"/>
+        <rect x="460" y="130" width="280" height="170" rx="14"/>
+        <rect x="460" y="340" width="280" height="170" rx="14"/>
+        <rect x="460" y="550" width="280" height="170" rx="14"/>
+      </g>
+      <g font-size="28" font-weight="500" fill="#1f2328">
+        <text x="484" y="170">res_temp</text>
+        <text x="484" y="380">res_strain</text>
+        <text x="484" y="590">res_transient</text>
+      </g>
+      <g font-size="16" font-style="italic" fill="#5c6470">
+        <text x="484" y="288">delays, distances</text>
+        <text x="484" y="498">delays, distances</text>
+        <text x="484" y="708">delays, energy, qz, theta</text>
+      </g>
+
+      <!-- cache -->
+      <rect x="800" y="130" width="240" height="590" rx="22" fill="#f1f2f4" stroke="#9aa1ab" stroke-width="3" stroke-dasharray="10 6"/>
+      <g fill="#ffffff" stroke="#c9ced6" stroke-width="2">
+        <rect x="816" y="175" width="208" height="80" rx="10"/>
+        <rect x="816" y="385" width="208" height="80" rx="10"/>
+        <rect x="816" y="595" width="208" height="80" rx="10"/>
+      </g>
+    </g>
+
+    <g font-family="'Fira Mono', 'DejaVu Sans Mono', Menlo, Consolas, monospace" font-size="19" font-weight="500" fill="#1f2328">
+      <text x="484" y="204">temp_map</text>
+      <text x="484" y="228">delta_temp_map</text>
+      <text x="484" y="252">init_temp</text>
+      <text x="484" y="414">strain_map</text>
+      <text x="484" y="624">reflectivity</text>
+    </g>
+    <g font-family="'Fira Mono', 'DejaVu Sans Mono', Menlo, Consolas, monospace" font-size="15" fill="#1f2328">
+      <text x="830" y="210">temp_map_</text>
+      <text x="830" y="232">&lt;hash&gt;.h5</text>
+      <text x="830" y="420">strain_map_num_</text>
+      <text x="830" y="442">&lt;hash&gt;.h5</text>
+      <text x="830" y="620">inhomogeneous_</text>
+      <text x="830" y="642">reflectivity_dyn_</text>
+      <text x="830" y="664">&lt;hash&gt;.h5</text>
+    </g>
+
+    <!-- results are cached -->
+    <g stroke="#5b6472" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 8" fill="none" marker-start="url(#head)" marker-end="url(#head)">
+      <path d="M 750 215 L 806 215"/>
+      <path d="M 750 425 L 806 425"/>
+      <path d="M 750 635 L 806 635"/>
+    </g>
+  </g>
+
+  <!-- ===== arrows between the columns ===== -->
+  <g stroke="#5b6472" stroke-linecap="round" fill="none" marker-end="url(#head)">
+    <!-- the structure is passed to every simulation -->
+    <g stroke-width="4">
+      <path d="M 44 55 H 26 V 215 H 40"/>
+      <path d="M 26 215 V 425 H 40"/>
+      <path d="M 26 425 V 635 H 40"/>
+    </g>
+    <g stroke-width="6">
+      <!-- simulations return results -->
+      <path d="M 410 238 L 466 278"/>
+      <path d="M 410 448 L 466 488"/>
+      <path d="M 410 658 L 466 698"/>
+      <!-- results are passed on -->
+      <path d="M 470 342 L 414 382"/>
+      <path d="M 470 552 L 414 592"/>
+    </g>
+  </g>
+</svg>

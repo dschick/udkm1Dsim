@@ -26,7 +26,6 @@ __all__ = ["Heat"]
 __docformat__ = "restructuredtext"
 
 import warnings
-from os import path
 from time import time
 
 import numpy as np
@@ -36,6 +35,7 @@ from scipy.optimize import brentq
 
 from ..helpers import finderb, make_hash_md5
 from ..structures.layers import Layer
+from .result import find_source, get_entry
 from .simulation import Simulation
 from .solvers import HAS_NUMBA
 
@@ -749,7 +749,38 @@ class Heat(Simulation):
         return dAdz, Ints, R_total, T_total
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp, distances=[]):
-        r"""get_temperature_after_delta_excitation
+        """get_temperature_after_delta_excitation
+
+        Returns the final temperature and temperature change for each layer of
+        the sample structure or the given ``distances`` after an optical
+        excitation, see :meth:`calc_temperature_after_delta_excitation`.
+
+        Args:
+            fluence (float, Quantity): incident fluence (J/m²).
+            init_temp (float, Quantity, ndarray[float, Quantity]): initial
+                temperature scalar or array (K).
+            distances (ndarray[float], optional): spatial grid for calculation.
+
+        Returns:
+            result (Result): with the final temperature ``final_temp`` and
+            the temperature change ``delta_temp`` (K) of the dimensions
+            ``distances`` (m) of the layer centers or of the given grid and
+            ``subsystems``, see :class:`~udkm1Dsim.simulations.result.Result`.
+
+        """
+        final_temp, delta_temp = self.calc_temperature_after_delta_excitation(
+            fluence, init_temp, distances
+        )
+        result = self.new_map_result(
+            "temperature after delta excitation",
+            distances=distances if len(distances) > 0 else None,
+        )
+        result.add("final_temp", final_temp, ("distances", "subsystems"), "K")
+        result.add("delta_temp", delta_temp, ("distances", "subsystems"), "K")
+        return result
+
+    def calc_temperature_after_delta_excitation(self, fluence, init_temp, distances=[]):
+        r"""calc_temperature_after_delta_excitation
 
         Calculate the final temperature and temperature change for each layer
         of the sample structure after an optical excitation with a fluence
@@ -823,7 +854,7 @@ class Heat(Simulation):
 
         # check the initial temperature
         init_temp = self.check_initial_temperature(init_temp, distances)
-        final_temp = init_temp
+        final_temp = init_temp.copy()
         # traverse layers
         for i, dist in enumerate(distances):
             idx = finderb(dist, d_start)[0]
@@ -861,30 +892,29 @@ class Heat(Simulation):
                 temperature scalar or array (K).
 
         Returns:
-            (tuple):
-            - *temp_map (ndarray[float])* - spatio-temporal temperature map.
-            - *delta_temp_map (ndarray[float])* - spatio-temporal temperature
-              change map.
+            result (Result): with the spatio-temporal ``temp_map`` and its
+            change ``delta_temp_map`` (K) of the dimensions ``delays``,
+            ``distances`` of the layer centers, and ``subsystems``, as well
+            as the checked initial temperature ``init_temp``, see
+            :class:`~udkm1Dsim.simulations.result.Result`.
 
         """
         init_temp = self.check_initial_temperature(init_temp)  # check the initial temperature
-        filename = "temp_map_" + self.get_hash(delays, init_temp) + ".npz"
-        full_filename = path.abspath(path.join(self.cache_dir, filename))
-        if path.exists(full_filename) and not self.force_recalc:
-            # found something so load it
-            tmp = np.load(full_filename)
-            temp_map = tmp["temp_map"]
-            delta_temp_map = tmp["delta_temp_map"]
-            self.disp_message("_temp_map_ loaded from file:\n\t" + filename)
-        else:
-            # file does not exist so calculate and save
+
+        def calc():
             temp_map, delta_temp_map, _ = self.calc_temp_map(delays, init_temp)
-            self.save(
-                full_filename,
-                {"temp_map": temp_map, "delta_temp_map": delta_temp_map},
-                "_temp_map_",
-            )
-        return temp_map, delta_temp_map
+            result = self.new_map_result("temperature map", delays)
+            # the singleton dimensions are squeezed out of the maps
+            sizes = (np.size(delays), self.S.get_number_of_layers(), np.shape(init_temp)[-1])
+            dims = [
+                dim for dim, size in zip(("delays", "distances", "subsystems"), sizes) if size > 1
+            ]
+            result.add("temp_map", temp_map, dims, "K")
+            result.add("delta_temp_map", delta_temp_map, dims, "K")
+            result.add("init_temp", init_temp, ("distances", "subsystems"), "K")
+            return result
+
+        return self._cached_result("temp_map", self.get_hash(delays, init_temp), calc, False)
 
     def calc_temp_map(self, delays, input_init_temp):
         """calc_temp_map
@@ -1026,7 +1056,7 @@ class Heat(Simulation):
                 # excitation with no heat diffusion -> only delta excitation
                 # possible in this case OR excitation with heat diffusion and
                 # pulse_width equal to 0
-                temp, _ = self.get_temperature_after_delta_excitation(
+                temp, _ = self.calc_temperature_after_delta_excitation(
                     fluence, init_temp, distances
                 )
                 temp = np.reshape(temp, [1, np.size(temp, 0), np.size(temp, 1)])
@@ -1166,6 +1196,74 @@ class Heat(Simulation):
 
         return temp_map
 
+    def get_energy_map(self, temp_map, init_temp=None):
+        """get_energy_map
+
+        Returns the energy map for a given temperature map and initial
+        temperature, see :meth:`calc_energy_map`.
+
+        Args:
+            temp_map (ndarray[float], Result): spatio-temporal temperature map
+                or result of :meth:`get_temp_map`.
+            init_temp (float, Quantity, ndarray[float, Quantity], optional):
+                initial temperature scalar or array (K), which is taken from a
+                given result of :meth:`get_temp_map` by default.
+
+        Returns:
+            result (Result): with the spatio-temporal ``energy_map`` (J) of
+            the dimensions ``delays``, ``distances``, and ``subsystems``, see
+            :class:`~udkm1Dsim.simulations.result.Result`.
+
+        """
+        source = find_source(temp_map)
+        if init_temp is None:
+            if source is None:
+                raise ValueError("init_temp must be given for a temp_map array!")
+            init_temp = source["init_temp"]
+        energy_map = self.calc_energy_map(get_entry(temp_map, "temp_map"), init_temp)
+        result = self.new_map_result("energy map", source=source)
+        result.add("energy_map", energy_map, ("delays", "distances", "subsystems"), "J")
+        return result
+
+    def get_energy_flux_map(self, temp_map, delta_temp_map=None, delays=None):
+        """get_energy_flux_map
+
+        Returns the energy flux maps for a given temperature map, see
+        :meth:`calc_energy_flux_map`.
+
+        Args:
+            temp_map (ndarray[float], Result): spatio-temporal temperature map
+                or result of :meth:`get_temp_map`.
+            delta_temp_map (ndarray[float], optional): spatio-temporal
+                differential temperature map, which is taken from a given
+                result by default.
+            delays (ndarray[Quantity], optional): delays range of simulation
+                (s), which are taken from a given result by default.
+
+        Returns:
+            result (Result): with the spatio-temporal total energy flux
+            ``total_energy_flux_map`` into the sub-systems, the one due to
+            their coupling ``coupling_energy_flux_map``, and the one due to
+            diffusion ``diffusion_energy_flux_map`` (W) of the dimensions
+            ``delays``, ``distances``, and ``subsystems``, see
+            :class:`~udkm1Dsim.simulations.result.Result`.
+
+        """
+        source = find_source(temp_map)
+        if source is not None:
+            delta_temp_map = source["delta_temp_map"] if delta_temp_map is None else delta_temp_map
+            delays = source.quantity("delays") if delays is None else delays
+        if delta_temp_map is None or delays is None:
+            raise ValueError("delta_temp_map and delays must be given for a temp_map array!")
+        flux_map = self.calc_energy_flux_map(
+            get_entry(temp_map, "temp_map"), delta_temp_map, delays
+        )
+        result = self.new_map_result("energy flux map", delays, source=source)
+        dims = ("delays", "distances", "subsystems")
+        for i, name in enumerate(("total", "coupling", "diffusion")):
+            result.add(f"{name}_energy_flux_map", flux_map[..., i], dims, "W")
+        return result
+
     def calc_energy_map(self, temp_map, init_temp):
         r"""calc_energy_map
 
@@ -1217,8 +1315,6 @@ class Heat(Simulation):
         index 2 - energy flux due to diffusion into each subsystems
 
         Args:
-            init_temp (float, Quantity, ndarray[float, Quantity]): initial
-                temperature scalar or array (K).
             temp_map (ndarray[float]): spatio-temporal temperature map.
             delta_temp_map (ndarray[float]): spatio-temporal differential
               temperature map.

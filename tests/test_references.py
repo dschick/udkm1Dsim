@@ -81,7 +81,8 @@ def jones(cls, S, data, meta):
     sim.theta = data["theta"] * u.deg
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        R, _, T, _ = sim.homogeneous_jones_matrices()
+        res = sim.homogeneous_jones_matrices()
+        R, T = res.jones_reflection, res.jones_transmission
     return R[0], T[0]
 
 
@@ -293,7 +294,7 @@ def test_bragg_reflection_against_gid_sl(pol, key):
     sim.energy = np.r_[meta["energy"]] * u.eV
     sim.theta = data["theta"] * u.deg
     sim.set_polarization(pol, "none")
-    R = sim.homogeneous_reflectivity()[0][0]
+    R = sim.homogeneous_reflectivity().reflectivity[0]
     reference = data[key]
     deviation = np.abs(R - reference) / np.max(reference)
     assert np.sqrt(np.mean(deviation**2)) < 1e-2

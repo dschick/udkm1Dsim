@@ -23,6 +23,23 @@ def phonon_num(structure, tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
+def phonon_num_numba(structure, tmp_path_factory, delays, temp_map, delta_temp_map):
+    pytest.importorskip("numba")
+    phonon_num = PhononNum(
+        structure,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=False,
+        disp_messages=False,
+        progress_bar=False,
+        backend="numba",
+    )
+    # compile the numba functions once, which is not benchmarked
+    phonon_num.calc_strain_map(delays[:10], temp_map[:10], delta_temp_map[:10])
+    return phonon_num
+
+
+@pytest.fixture(scope="module")
 def delays():
     return np.r_[-1:10:0.01] * u.ps
 
@@ -91,3 +108,8 @@ def test_phonon_num_ode_func(benchmark, structure, delays, sticks):
 @pytest.mark.benchmark
 def test_phonon_num_calc_strain_map(phonon_num, delays, temp_map, delta_temp_map):
     phonon_num.calc_strain_map(delays, temp_map, delta_temp_map)
+
+
+@pytest.mark.benchmark
+def test_phonon_num_calc_strain_map_numba(phonon_num_numba, delays, temp_map, delta_temp_map):
+    phonon_num_numba.calc_strain_map(delays, temp_map, delta_temp_map)

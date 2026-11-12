@@ -26,13 +26,13 @@ __all__ = ["Phonon", "PhononNum", "PhononAna"]
 __docformat__ = "restructuredtext"
 
 import warnings
-from os import path
 from time import time
 
 import numpy as np
 from tqdm.auto import trange
 
 from ..helpers import make_hash_md5
+from .result import find_source, get_entry
 from .simulation import Simulation
 from .solvers import HAS_NUMBA, phonon_scipy
 
@@ -109,18 +109,54 @@ class Phonon(Simulation):
 
         return self.S.get_hash(types="phonon") + "_" + make_hash_md5(param)
 
-    def get_all_strains_per_unique_layer(self, strain_map):
-        """get_all_strains_per_unique_layer
+    @staticmethod
+    def parse_temp_maps(temp_map, delta_temp_map):
+        """parse_temp_maps
+
+        Temperature maps given as arrays or as the
+        :class:`~udkm1Dsim.simulations.result.Result` of
+        :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map`, which holds
+        both maps, so that ``delta_temp_map`` can be omitted.
+
+        Args:
+            temp_map (ndarray[float], Result): spatio-temporal temperature map
+                or result of the heat simulation.
+            delta_temp_map (ndarray[float], None): spatio-temporal
+                differential temperature map.
+
+        Returns:
+            (tuple):
+            - *temp_map (ndarray[float])* - spatio-temporal temperature map.
+            - *delta_temp_map (ndarray[float])* - spatio-temporal
+              differential temperature map.
+
+        """
+        if delta_temp_map is None:
+            delta_temp_map = get_entry(temp_map, "delta_temp_map")
+            if delta_temp_map is temp_map:
+                raise ValueError("delta_temp_map must be given for a temp_map array!")
+        return get_entry(temp_map, "temp_map"), get_entry(delta_temp_map, "delta_temp_map")
+
+    def _strain_result(self, title, delays, strain_map):
+        """Result with the ``strain_map`` and its coordinates"""
+        result = self.new_map_result(title, delays)
+        result.add("strain_map", strain_map, ("delays", "distances"))
+        return result
+
+    def calc_all_strains_per_unique_layer(self, strain_map):
+        """calc_all_strains_per_unique_layer
 
         Determines all values of the strain per unique layer.
 
         Args:
-            strain_map (ndarray[float]): spatio-temporal strain profile.
+            strain_map (ndarray[float], Result): spatio-temporal strain
+                profile or result of :meth:`get_strain_map`.
 
         Returns:
             strains (list[ndarray[float]]: all strains per unique layer.
 
         """
+        strain_map = get_entry(strain_map, "strain_map")
         # get the position indices of all unique layers in the sample structure
         positions = self.S.get_all_positions_per_unique_layer()
         strains = []
@@ -130,8 +166,8 @@ class Phonon(Simulation):
 
         return strains
 
-    def get_reduced_strains_per_unique_layer(self, strain_map, N=100):
-        """get_reduced_strains_per_unique_layer
+    def calc_reduced_strains_per_unique_layer(self, strain_map, N=100):
+        """calc_reduced_strains_per_unique_layer
 
         Calculates all strains per unique layer that are given by the
         input ``strain_map``, but with a reduced number. The reduction is done
@@ -140,7 +176,8 @@ class Phonon(Simulation):
         :math:`len(N) = L`, where :math:`L` is the number of unique layers.
 
         Args:
-            strain_map (ndarray[float]): spatio-temporal strain profile.
+            strain_map (ndarray[float], Result): spatio-temporal strain
+                profile or result of :meth:`get_strain_map`.
             N (int, optional): number of reduced strains. Defaults to 100.
 
         Returns:
@@ -148,7 +185,7 @@ class Phonon(Simulation):
 
         """
         # initialize
-        all_strains = self.get_all_strains_per_unique_layer(strain_map)
+        all_strains = self.calc_all_strains_per_unique_layer(strain_map)
         L = len(all_strains)  # Nb. of unique layers
         strains = []
 
@@ -351,8 +388,10 @@ class PhononNum(Phonon):
         only_heat (boolean): true when including only thermal expansion without
             coherent phonon dynamics.
         backend (str): ode solver backend - either default scipy or numba.
-        ode_options (dict): options for scipy solve_ivp ode solver. The numba
-            backend uses ``rtol``, ``atol``, ``max_step`` and ``first_step``.
+        ode_options (dict): options for scipy solve_ivp ode solver with the
+            absolute tolerance ``atol`` of 1 pm for the shifts of the layers
+            by default. The numba backend uses ``rtol``, ``atol``,
+            ``max_step`` and ``first_step``.
 
     """
 
@@ -366,14 +405,14 @@ class PhononNum(Phonon):
             "first_step": None,
             "max_step": np.inf,
             "rtol": 1e-3,
-            "atol": 1e-6,
+            "atol": 1e-12,  # (m) for shifts of the layers of a few picometers
         }
 
     def _property_rows(self):
         """[parameter, value] rows of the simulation properties"""
         return super()._property_rows() + [["backend", self.backend]]
 
-    def get_strain_map(self, delays, temp_map, delta_temp_map):
+    def get_strain_map(self, delays, temp_map, delta_temp_map=None):
         """get_strain_map
 
         Returns a strain profile for the sample structure for given temperature
@@ -382,26 +421,27 @@ class PhononNum(Phonon):
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation (s).
-            temp_map (ndarray[float]): spatio-temporal temperature map.
-            delta_temp_map (ndarray[float]): spatio-temporal differential
-            temperature map.
+            temp_map (ndarray[float], Result): spatio-temporal temperature map
+                or result of :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map`.
+            delta_temp_map (ndarray[float], optional): spatio-temporal
+                differential temperature map, which is taken from a given
+                result of the heat simulation by default.
 
         Returns:
-            strain_map (ndarray[float]): spatio-temporal strain profile.
+            result (Result): with the spatio-temporal ``strain_map`` of the
+            dimensions ``delays`` and ``distances`` of the layer centers, see
+            :class:`~udkm1Dsim.simulations.result.Result`.
 
         """
-        filename = "strain_map_num_" + self.get_hash(delays, temp_map, delta_temp_map) + ".npz"
-        full_filename = path.abspath(path.join(self.cache_dir, filename))
-        if path.exists(full_filename) and not self.force_recalc:
-            # found something so load it
-            tmp = np.load(full_filename)
-            strain_map = tmp["strain_map"]
-            self.disp_message("_strain_map_ loaded from file:\n\t" + filename)
-        else:
-            # file does not exist so calculate and save
+        temp_map, delta_temp_map = self.parse_temp_maps(temp_map, delta_temp_map)
+
+        def calc():
             strain_map, _, _ = self.calc_strain_map(delays, temp_map, delta_temp_map)
-            self.save(full_filename, {"strain_map": strain_map}, "_strain_map_num_")
-        return strain_map
+            return self._strain_result("strain map", delays, strain_map)
+
+        return self._cached_result(
+            "strain_map_num", self.get_hash(delays, temp_map, delta_temp_map), calc, False
+        )
 
     def calc_strain_map(self, delays, temp_map, delta_temp_map):
         r"""calc_strain_map
@@ -585,7 +625,7 @@ class PhononAna(Phonon):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
 
-    def get_strain_map(self, delays, temp_map, delta_temp_map):
+    def get_strain_map(self, delays, temp_map, delta_temp_map=None):
         """get_strain_map
 
         Returns a strain profile for the sample structure for given temperature
@@ -594,33 +634,32 @@ class PhononAna(Phonon):
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation (s).
-            temp_map (ndarray[float]): spatio-temporal temperature map.
-            delta_temp_map (ndarray[float]): spatio-temporal differential
-            temperature map.
+            temp_map (ndarray[float], Result): spatio-temporal temperature map
+                or result of :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map`.
+            delta_temp_map (ndarray[float], optional): spatio-temporal
+                differential temperature map, which is taken from a given
+                result of the heat simulation by default.
 
         Returns:
-            (tuple):
-            - *strain_map (ndarray[float])* - spatio-temporal strain profile.
-            - *A (ndarray[float])* - coefficient vector A of general solution.
-            - *B (ndarray[float])* - coefficient vector B of general solution.
+            result (Result): with the spatio-temporal ``strain_map`` of the
+            dimensions ``delays`` and ``distances`` of the layer centers and
+            the coefficient vectors ``coefficients_A`` and ``coefficients_B``
+            of the general solution of the dimensions ``delays`` and
+            ``eigenmodes``, see :class:`~udkm1Dsim.simulations.result.Result`.
 
         """
-        filename = "strain_map_ana_" + self.get_hash(delays, temp_map, delta_temp_map) + ".npz"
-        full_filename = path.abspath(path.join(self.cache_dir, filename))
-        if path.exists(full_filename) and not self.force_recalc:
-            # found something so load it
-            tmp = np.load(full_filename)
-            strain_map = tmp["strain_map"]
-            A = tmp["A"]
-            B = tmp["B"]
-            self.disp_message("_strain_map_ loaded from file:\n\t" + filename)
-        else:
-            # file does not exist so calculate and save
+        temp_map, delta_temp_map = self.parse_temp_maps(temp_map, delta_temp_map)
+
+        def calc():
             strain_map, A, B = self.calc_strain_map(delays, temp_map, delta_temp_map)
-            self.save(
-                full_filename, {"strain_map": strain_map, "A": A, "B": B}, "_strain_map_ana_"
-            )
-        return strain_map, A, B
+            result = self._strain_result("analytical strain map", delays, strain_map)
+            result.add("coefficients_A", A, ("delays", "eigenmodes"), aliases="A")
+            result.add("coefficients_B", B, ("delays", "eigenmodes"), aliases="B")
+            return result
+
+        return self._cached_result(
+            "strain_map_ana", self.get_hash(delays, temp_map, delta_temp_map), calc, False
+        )
 
     def calc_strain_map(self, delays, temp_map, delta_temp_map):
         r"""calc_strain_map
@@ -774,7 +813,9 @@ class PhononAna(Phonon):
             # solve the eigenproblem for the structure to obtains the
             # eigenvectors X_i and eigenfreqeuencies omega for the L
             # coupled differential equations
-            Xi, omega = self.solve_eigenproblem()
+            eigenproblem = self.get_eigenproblem()
+            Xi = eigenproblem.eigenvectors
+            omega = eigenproblem.eigenfrequencies
             # calculate the actual strain map with the solution of the
             # eigenproblem and the external force (sticks, thermal stress)
             self.disp_message("Calculating _strain_map_ ...")
@@ -847,14 +888,37 @@ class PhononAna(Phonon):
 
         return strain_map, A, B
 
-    def solve_eigenproblem(self):
-        r"""solve_eigenproblem
+    def get_eigenproblem(self):
+        """get_eigenproblem
+
+        Returns the eigenvectors and eigenfrequencies of the linear chain of
+        the structure, see :meth:`calc_eigenproblem`. The result is saved to
+        and loaded from the cache.
+
+        Returns:
+            result (Result): with the ``eigenvectors`` :math:`\\Xi` of the
+            dimensions ``distances`` and ``eigenmodes`` and the
+            ``eigenfrequencies`` :math:`\\omega` (rad/s) of the dimension
+            ``eigenmodes``, see :class:`~udkm1Dsim.simulations.result.Result`.
+
+        """
+
+        def calc():
+            Xi, omega = self.calc_eigenproblem()
+            result = self.new_map_result("eigenproblem")
+            result.add("eigenvectors", Xi, ("distances", "eigenmodes"), aliases="Xi")
+            result.add("eigenfrequencies", omega, ("eigenmodes",), "rad/s", aliases="omega")
+            return result
+
+        return self._cached_result("eigenproblem", self.S.get_hash(types="phonon"), calc)
+
+    def calc_eigenproblem(self):
+        r"""calc_eigenproblem
 
         Creates the tri-diagonal :math:`K` matrix (:math:`L \times L`) of
         spring constants :math:`k_i` and masses :math:`m_i` and calculates the
         eigenvectors :math:`\Xi_j` and eigenfrequencies :math:`\omega_j` for the
         matrix which are used to calculate the ``strain_map`` of the structure.
-        If the result has been save to file, load it from there.
 
         The spring :math:`k_i` connects the layers :math:`i` and :math:`i+1`,
         so that the :math:`L` layers are coupled by :math:`L-1` springs and
@@ -872,60 +936,78 @@ class PhononAna(Phonon):
         Returns:
             (tuple):
             - *Xi (ndarray[float])* - eigenvectors.
-            - *omega (ndarray[float])* - eigenfrequencies.
+            - *omega (ndarray[float])* - eigenfrequencies (rad/s).
 
         """
-        # create the file name to look for
-        filename = "eigenvalues_" + self.S.get_hash(types="phonon") + ".npz"
-        full_filename = path.abspath(path.join(self.cache_dir, filename))
-        if path.exists(full_filename) and not self.force_recalc:
-            # found something so load it
-            tmp = np.load(full_filename)
-            Xi = tmp["Xi"]
-            omega = tmp["omega"]
-            self.disp_message("_eigen_values_ loaded from file:\n\t" + filename)
-        else:
-            # file does not exist so calculate and save
-            t1 = time()
-            self.disp_message("Calculating _eigen_values_ ...")
-            # initialize
-            L = self.S.get_number_of_layers()
-            # initializing the symmetric three-diagonal springs-masses matrix
-            K = np.zeros([L, L])
+        # initialize
+        L = self.S.get_number_of_layers()
+        # initializing the symmetric three-diagonal springs-masses matrix
+        K = np.zeros([L, L])
 
-            masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
-            spring_consts = self.S.get_layer_property_vector("elastic.spring_const.magnitude")
-            # the spring k_i connects the layers i and i+1, so the first
-            # layer has no spring on its left and the last layer none on
-            # its right - free surface and backside
-            spring_consts = np.r_[0, spring_consts[:-1], 0]
+        masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
+        spring_consts = self.S.get_layer_property_vector("elastic.spring_const.magnitude")
+        # the spring k_i connects the layers i and i+1, so the first
+        # layer has no spring on its left and the last layer none on
+        # its right - free surface and backside
+        spring_consts = np.r_[0, spring_consts[:-1], 0]
 
-            for i in range(L):  # defining main diagonal
-                K[i, i] = -(spring_consts[i] + spring_consts[i + 1]) / masses[i]
+        for i in range(L):  # defining main diagonal
+            K[i, i] = -(spring_consts[i] + spring_consts[i + 1]) / masses[i]
 
-            # defining the two other diagonals - nearest neighbor interaction
-            for i in range(1, L):
-                K[i, i - 1] = spring_consts[i] / np.sqrt(masses[i] * masses[i - 1])
-                K[i - 1, i] = K[i, i - 1]
+        # defining the two other diagonals - nearest neighbor interaction
+        for i in range(1, L):
+            K[i, i - 1] = spring_consts[i] / np.sqrt(masses[i] * masses[i - 1])
+            K[i - 1, i] = K[i, i - 1]
 
-            # determining the eigenvalues and orthonormal eigenvectors
-            lambd, U = np.linalg.eigh(K)
+        # determining the eigenvalues and orthonormal eigenvectors
+        lambd, U = np.linalg.eigh(K)
 
-            # calculate the eigenfrequencies from the eigenvalues, which are
-            # zero for the free modes within the numerical precision
-            omega = np.sqrt(np.clip(-lambd, 0, None))
-            omega[-lambd <= L * np.finfo(float).eps * np.max(np.abs(lambd))] = 0
-            # transform the eigenvectors back to the shifts of the layers
-            Xi = U / np.sqrt(masses)[:, None]
-
-            self.disp_message(f"Elapsed time for _eigen_values_: {time() - t1:f} s")
-            # save the result to file
-            self.save(full_filename, {"Xi": Xi, "omega": omega}, "_eigen_values_")
+        # calculate the eigenfrequencies from the eigenvalues, which are
+        # zero for the free modes within the numerical precision
+        omega = np.sqrt(np.clip(-lambd, 0, None))
+        omega[-lambd <= L * np.finfo(float).eps * np.max(np.abs(lambd))] = 0
+        # transform the eigenvectors back to the shifts of the layers
+        Xi = U / np.sqrt(masses)[:, None]
 
         return Xi, omega
 
-    def get_energy_per_eigenmode(self, A, B):
-        r"""get_energy_per_eigenmode
+    def get_energy_per_eigenmode(self, A, B=None):
+        """get_energy_per_eigenmode
+
+        Returns the sorted energy per eigenmode of the coherent phonons of the
+        1D sample, see :meth:`calc_energy_per_eigenmode`.
+
+        Args:
+            A (ndarray[float], Result): coefficient vector A of general
+                solution or result of :meth:`get_strain_map`.
+            B (ndarray[float], optional): coefficient vector B of general
+                solution, which is taken from a given result by default.
+
+        Returns:
+            result (Result): with the sorted ``eigenfrequencies`` (rad/s)
+            and the ``energy_per_eigenmode`` (J) of the dimensions ``delays``
+            and ``eigenmodes`` for the unit area of 1 Å² of the
+            ``mass_unit_area`` of the :class:`.StructuralParameters`, see
+            :class:`~udkm1Dsim.simulations.result.Result`.
+
+        """
+        source = find_source(A)
+        if B is None:
+            if source is None:
+                raise ValueError("B must be given for a coefficient array A!")
+            B = A["coefficients_B"]
+        omega, E = self.calc_energy_per_eigenmode(
+            get_entry(A, "coefficients_A"), get_entry(B, "coefficients_B")
+        )
+        result = self.new_result("energy per eigenmode")
+        if source is not None:
+            result.copy_coords(source, ["delays"])
+        result.add("eigenfrequencies", omega, ("eigenmodes",), "rad/s", aliases="omega")
+        result.add("energy_per_eigenmode", E, ("delays", "eigenmodes"), "J", aliases="E")
+        return result
+
+    def calc_energy_per_eigenmode(self, A, B):
+        r"""calc_energy_per_eigenmode
 
         Returns the sorted energy per Eigenmode of the coherent phonons of
         the 1D sample.
@@ -958,8 +1040,8 @@ class PhononAna(Phonon):
 
         Returns:
             (tuple):
-            - *omega (ndarray[float])* - eigenfrequencies in Hz.
-            - *E (ndarray[float])* - energy per eigenmode in J for the unit
+            - *omega (ndarray[float])* - sorted eigenfrequencies (rad/s).
+            - *E (ndarray[float])* - energy per eigenmode (J) for the unit
               area of 1 Å² of the ``mass_unit_area`` of the
               :class:`.StructuralParameters`.
 
@@ -971,7 +1053,9 @@ class PhononAna(Phonon):
         masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
 
         # get the eigenVectors and eigenFrequencies
-        Xi, omega = self.solve_eigenproblem()
+        eigenproblem = self.get_eigenproblem()
+        Xi = eigenproblem.eigenvectors
+        omega = eigenproblem.eigenfrequencies
 
         # sort the frequencies
         idx = np.argsort(omega)

@@ -86,9 +86,9 @@ def solve(
     The time step is limited to the
     :func:`~udkm1Dsim.simulations.solvers.phonon_scipy.stability_time_step`
     of the chain, which the explicit scheme must not exceed - the error control alone does
-    not catch the instability, since the shifts of the layers are of the
-    order of picometers and therefore far below the absolute tolerance
-    ``atol`` that is set in meters.
+    not catch the instability, since the shifts of the layers of the order
+    of picometers are close to the absolute tolerance ``atol`` that is set
+    in meters.
 
     Args:
         x0 (ndarray[float]): initial shifts and velocities of all :math:`L`
@@ -127,7 +127,7 @@ def solve(
     X[0] = y
 
     rtol = float(ode_options.get("rtol", 1e-3))
-    atol = float(ode_options.get("atol", 1e-6))
+    atol = float(ode_options.get("atol", 1e-12))
     max_step = ode_options.get("max_step", np.inf)
     max_step = np.inf if max_step is None else float(max_step)
     max_step = min(max_step, stability_time_step(spring_consts, masses, damping=damping))

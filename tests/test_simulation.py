@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from udkm1Dsim import Simulation
+from udkm1Dsim import Result, Simulation
 
 # fixtures
 
@@ -41,9 +41,15 @@ def test_disp_message(simulation, capsys):
 
 def test_simulation_save(simulation, tmp_path_factory):
     test_array = np.r_[1, 2, 3]
-    filename = tmp_path_factory.mktemp("data") / "test"
-    simulation.save(filename, {"test_array": test_array})
-    with pytest.raises(TypeError):
+    filename = tmp_path_factory.mktemp("data") / "test.h5"
+    result = simulation.new_result("test", "hash")
+    result.add("test_array", test_array)
+    simulation.save(filename, result)
+    loaded = Result.load(filename)
+    assert np.all(loaded.test_array == test_array)
+    assert loaded.attrs["hash"] == "hash"
+    assert loaded.attrs["simulation"] == "Simulation"
+    with pytest.raises(AttributeError):
         simulation.save(filename, test_array)
 
 

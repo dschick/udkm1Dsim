@@ -46,7 +46,7 @@ together with all required dependencies using your preferred package manager.
 :reverse:
 
 :::{grid-item}
-```{image} _static/structure.png
+```{image} _static/structure.svg
 :width: 400px
 :class: sd-m-auto
 ```
@@ -65,9 +65,13 @@ All simulation modules operate on the same
 {py:class}`Structure <udkm1Dsim.structures.structure.Structure>` 
 instance, ensuring consistency and reproducibility across different calculations.
 
-The simulation framework is highly modular. Each module returns standard `numpy` 
-arrays that can be inspected, modified, or used directly as input for 
-subsequent simulations, allowing users to build customized workflows with ease.
+The simulation framework is highly modular. The simulations return their results 
+as a dedicted {py:class}`Result <udkm1Dsim.simulations.result.Result>` class, which holds plain 
+`numpy` arrays together with their coordinates, units, and the parameters of the 
+simulation. Results can be inspected, saved to HDF5 files, or passed on directly 
+as input of subsequent simulations, which accept plain `numpy` arrays as well, 
+allowing users to build customized workflows with ease, see the 
+[simulations and results example](#example_simulations_and_results).
 
 :::
 ::::
