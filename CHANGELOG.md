@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Result` as dict-like container of the results of the simulations, which are accessed by name, e.g. `result["temp_map"]` or `result.temp_map`, or as dicts `result.data` and `result.coords`, as plain numpy arrays with their coordinates, e.g. `delays`, `distances`, `energy`, `qz`, and `theta`, the names of their dimensions, their units, e.g. by `result.quantity("temp_map")` or converted by `result.quantity("delays", "ps")`, and the metadata of the simulation, i.e. its class, the version, the hash, the sample structure, and its parameters, see [#166]
+- short aliases of the entries of the results, e.g. `result.R` for `result.reflectivity`, `R_phi`, `T`, `jones_R`, `rot_R`, and `ell_R` of the scattering results, `A`, `B`, `Xi`, `omega`, and `E` of `PhononAna`, and `mf_mag_map` of the mean-field magnetization, which are listed by `Result.aliases` and in the table of a result, but not by its `keys()`, and saved to its HDF5 file
+- `Result.save()` and `Result.load()` for HDF5 files with the data and coordinates as datasets, the 1D coordinates as dimension scales, and the units and metadata as attributes, which can be read by any HDF5 viewer, and `Result.to_xarray()`, see [#165] and [#166]
+- `Simulation.new_result()`, `Simulation.new_map_result()`, and `Scattering.new_scattering_result()` for results with the metadata of the simulation and the coordinates of the maps or of the experiment, which are shared by all simulations
+- the maps of the upstream simulations can be passed on as their `Result`, e.g. `get_strain_map(delays, temp)` for the result `temp` of `get_temp_map()`, where `delta_temp_map` is optional, see `Phonon.parse_temp_maps()` and `MultilayerScattering.parse_result_maps()`, and whose coordinates are passed on, e.g. the `delays` to the inhomogeneous scattering results, while the metadata `polar` of a magnetization map is used by the multilayer formalisms
+- the `temp_map` of `get_mean_field_mag_map()` can be the result of `get_temp_map()`, whose `temp_sub_system` is used, and the result of `get_temp_map()` holds the checked `init_temp`
+- `Heat.get_energy_map()` and `Heat.get_energy_flux_map()` for the result of `get_temp_map()` with the total, coupling, and diffusion energy flux as named entries
+- `calc_equilibrium_magnetization()`, `calc_energy_per_eigenmode()`, and `calc_temperature_after_delta_excitation()` with plain arrays as twins of the `get_*()` methods, where the result of `get_equilibrium_magnetization()` can be passed on as `init_magnetization`
+- `calc_homogeneous_jones_matrices()`, `calc_homogeneous_reflectivity_transmissivity()`, `calc_homogeneous_rotation_ellipticity()`, `calc_inhomogeneous_reflectivity_transmissivity()`, and `calc_inhomogeneous_rotation_ellipticity()` of the multilayer formalisms, as well as `calc_homogeneous_reflectivity()` of `XrayKin` and `XrayDyn` and `calc_inhomogeneous_reflectivity()` of `XrayDyn`, with plain arrays without the cache and the metadata of a `Result`, e.g. for fits, as used in the data fitting example
+- the gallery section basics with the new example on the simulations and their results, i.e. the naming convention, the `Result`, its HDF5 files, passing results on to the following simulations, and a table of the entries and aliases of all results, which is generated from the code, which replaces the section structures
+- `h5py` as dependency and `xarray` in the test dependencies
+
+### Changed
+
+- **breaking:** the methods of the simulations are named by what they return: the `get_*()` methods return a `Result`, which cannot be unpacked, e.g. `get_temp_map()`, `get_strain_map()`, `get_energy_per_eigenmode()`, `get_temperature_after_delta_excitation()`, `get_magnetization_map()`, `get_sublattice_magnetization_map()`, `get_equilibrium_magnetization()`, `get_mean_field_mag_map()`, and `get_sublattice_mean_field_mag_map()`, as well as the `homogeneous_*()` and `inhomogeneous_*()` methods of all scattering formalisms, while the `calc_*()` methods return plain arrays; the `get_*()` methods of the structures, layers, and atoms keep returning plain values
+- **breaking:** the entries of the results have descriptive names, e.g. `reflectivity`, `reflectivity_phi`, `transmissivity`, and `transmissivity_phi`, `jones_reflection`, or `reflection_rotation` and `reflection_ellipticity` in (deg) instead of tuples of Quantities, `coefficients_A` and `coefficients_B` of `PhononAna`, and `sub_structure_fields` and `sub_structure_matrices` of `XrayKin` and `XrayDyn`
+- **breaking:** `solve_eigenproblem()` of `PhononAna` is replaced by `get_eigenproblem()` with a `Result` and `calc_eigenproblem()` with the eigenvectors and eigenfrequencies
+- **breaking:** the computing helpers of the simulations are named `calc_*()` instead of `get_*()`, as they return plain arrays: `calc_all_strains_per_unique_layer()` and `calc_reduced_strains_per_unique_layer()` of `Phonon`, `calc_uc_atomic_form_factors()`, `calc_uc_structure_factor()`, `calc_interference_function()`, and `calc_Ep()` of `XrayKin`, `calc_uc_ref_trans_matrix()`, `calc_atom_ref_trans_matrix()`, `calc_atom_reflection_factor()`, `calc_atom_transmission_factor()`, `calc_atom_phase_matrix()`, and `calc_atom_phase_factor()` of `XrayDyn`, `calc_polarization_factor()` of `Scattering`, `calc_layer_dielectric_tensor()`, `calc_homogeneous_layers()`, and `calc_inhomogeneous_layers()` of `MultilayerScattering`, `calc_layer_ref_index()` of `Parratt`, and `calc_directional_exchange_stiffnesses()`, `calc_interlayer_exchange_stiffnesses()`, `calc_magnetic_parameters()`, and `calc_initial_state()` of `Magnetization`, while the cache of `XrayDyn` is private as `_get_all_ref_trans_matrices()`
+- **breaking:** the former `calc_inhomogeneous_reflectivity()` of `XrayDyn` for a single delay is renamed to `calc_delay_reflectivity()`, as `calc_inhomogeneous_reflectivity()` is now the plain-array twin of `inhomogeneous_reflectivity()` for all delays
+- the default absolute tolerance `atol` of the `ode_options` of `PhononNum` is 1 pm instead of 1 µm for the shifts of the layers, which are of the order of picometers, so that the error of the solvers is no longer only controlled by the relative tolerance `rtol`, and the `scipy` and `numba` backends agree to about 1e-7 instead of 1e-2 relative to the largest strain at the same run time, which changes the strain maps and their hashes slightly
+- **breaking:** the results are cached as HDF5 files `{name}_{hash}.h5` instead of `.npz` files, so that former caches are recalculated, and `Simulation.save()` saves a `Result`
+- all examples use the results of the simulations, named with the prefix `res_`, pass them on to the following simulations, and plot them against their coordinates as pint quantities, e.g. `result.quantity("delays", "ps")`, as well as the aliases of the scattering results, e.g. `result.R`
+- the strain pulse example compares the run times of the `numba` and `scipy` backends of `PhononNum`
+- the energy spectrum of the eigenmodes in the strain pulse example is plotted against the angular frequency in (rad/s) instead of the mislabeled frequency in (Hz)
+
+### Fixed
+
+- the temperature change of `get_temperature_after_delta_excitation()` was always zero, as the final temperature was calculated in place of the initial one
+
 ## [3.0.0a2] 2026-11-11
 
 ### Added
@@ -74,6 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the analytical eigenmodes of `Elzo` divide the gyrotropic part of the dielectric tensor by its diagonal in the first-order inverse permittivity, which Eq. (20) of Elzo et al. (2012) omits, as corrected in Dyna after version 6.13.1; it changes the conversion between σ and π polarization by about 1-2 % at soft X-ray resonances and by orders of magnitude for visible light, which now agree with the exact Berreman eigenmodes
 
 [#136]: https://github.com/dschick/udkm1Dsim/issues/136
+[#165]: https://github.com/dschick/udkm1Dsim/pull/165
+[#166]: https://github.com/dschick/udkm1Dsim/issues/166
 [#201]: https://github.com/dschick/udkm1Dsim/issues/201
 
 ## [3.0.0a1] 2026-11-09
