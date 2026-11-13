@@ -157,6 +157,9 @@ class Atom:
         self._magnetic_form_factor_source = (
             os.path.basename(magnetic_path) if magnetic_path else f"{self.symbol}.mf"
         )
+        # the given paths of the form factors, e.g. for Structure.to_yaml()
+        self._atomic_form_factor_path = atomic_path
+        self._magnetic_form_factor_path = magnetic_path
         self._read_cromer_mann_coeff()
         # changes of the parameters, e.g. of the ionicity, are notified to the atom
         self.atomic._owner = self
@@ -731,6 +734,8 @@ class AtomMixed(Atom):
             filename=magnetic_path
         )
         self._magnetic_form_factor_source = os.path.basename(magnetic_path)
+        self._atomic_form_factor_path = atomic_path
+        self._magnetic_form_factor_path = magnetic_path
 
     def form_factor_source(self, magnetic=False):
         """form_factor_source

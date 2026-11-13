@@ -249,6 +249,65 @@ class Structure:
         # there is only one repetition of the superstrate layer
         self.superstrate = [layer, 1]
 
+    def to_yaml(self, filename=None, embed=False, check=True):
+        """to_yaml
+
+        Write the structure with all its atoms, layers, and nested structures
+        to YAML, e.g. to share or archive it, see :mod:`.yaml_io` for the
+        format:
+
+        .. code-block:: python
+
+            S.to_yaml("sample.yml")
+            text = S.to_yaml()
+            S = Structure.from_yaml("sample.yml")
+
+        Only the parameters, which differ from their defaults, are written.
+        Dispersions are written by their source, e.g. the refractive index,
+        the file, or the page of refractiveindex.info, where paths of files
+        are written relative to the YAML file. With ``embed``, the tabulated
+        values of all files are written instead, so that the YAML file is
+        self-contained.
+
+        By default, the YAML is read back and compared, which raises an error
+        if the structure is not written exactly, e.g. for a parameter, which
+        cannot be written as text, so that the hash of the structure and
+        hence the cached results are kept.
+
+        Args:
+            filename (str, optional): path of the YAML file. Defaults to None
+                for the YAML text.
+            embed (bool, optional): write the tabulated values of files
+                instead of their paths. Defaults to False.
+            check (bool, optional): read the YAML back and compare it.
+                Defaults to True.
+
+        Returns:
+            text (str, None): YAML text without filename.
+
+        """
+        from .yaml_io import structure_to_yaml
+
+        return structure_to_yaml(self, filename, embed=embed, check=check)
+
+    @classmethod
+    def from_yaml(cls, source):
+        """from_yaml
+
+        Read a structure from a YAML file or text, see :meth:`to_yaml`.
+        Relative paths of files are taken relative to the YAML file.
+
+        Args:
+            source (str, PathLike): path of the YAML file or YAML text.
+
+        Returns:
+            structure (Structure): structure.
+
+        """
+        from .yaml_io import structure_from_yaml
+
+        return structure_from_yaml(source)
+
     def check_num_sub_systems(self, *property_names):
         """check_num_sub_systems
 

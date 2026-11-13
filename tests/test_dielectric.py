@@ -129,7 +129,9 @@ def test_dispersion_from_file(tmp_path):
     for filename in (whitespace, comma):
         d = Dispersion.from_file(filename)
         np.testing.assert_allclose(d.chi(0.4 * u.um), [(2 + 0.1j) ** 2 - 1])
-        assert str(filename) in repr(d)
+        # the hash of the results depends on the values, not on the location of the file
+        assert str(filename) not in repr(d)
+        assert filename.name in d._label()
     d = Dispersion.from_file(whitespace, x_unit="nm")
     assert d.energy_range[0] > 1000
 

@@ -7,13 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Structure.to_yaml()` and `Structure.from_yaml()` to save and load a sample structure with all its atoms, layers, and nested structures as human-readable YAML, e.g. to share or archive it, see [#249]; shared objects are written once by their id, only the parameters differing from their defaults are written as quantities with readable units, e.g. `3.905 Å`, which are read back exactly, the temperature-dependent parameters as their formula strings, and the dispersions by their source, e.g. the refractive index, a file relative to the YAML file, or a page of refractiveindex.info, or with `embed=True` by their tabulated values; on writing, the YAML is read back and compared, so that the hashes of the structure and hence the cached results are kept, and anything that cannot be written exactly raises an error
+- `PyYAML` as dependency
+
 ### Changed
 
+- the representation of a `Dispersion` from a file and from refractiveindex.info, which is part of the hash of the simulation results, no longer contains the path of the file or the version of the database, but only the md5 digest of its values, so that the hashes do not depend on the location of the file, which changes the hashes of results with such dispersions
 - **breaking:** the argument-free getters of the structures are read-only properties: `Structure.num_sub_structures`, `num_layers`, `num_unique_layers`, `unique_layers`, `layer_vectors`, `positions_per_unique_layer`, `layer_distances`, and `interface_distances` instead of `get_number_of_sub_structures()`, `get_number_of_layers()`, `get_number_of_unique_layers()`, `get_unique_layers()`, `get_layer_vectors()`, `get_all_positions_per_unique_layer()`, `get_distances_of_layers()`, and `get_distances_of_interfaces()`, as well as `UnitCell.atom_ids` instead of `get_atom_ids()`, where the distances are always returned as Quantities, while the `get_*()` methods with arguments are kept, e.g. `get_layer_property_vector()` and `get_atom_positions()`
 
 ### Fixed
 
 - the homogeneous reflectivity of `XrayKin` failed for nested sub-structures, as it called the removed `Structure.get_length()` instead of using the thickness of the sub-structure
+
+[#249]: https://github.com/dschick/udkm1Dsim/issues/249
 
 ## [3.0.0a3] 2026-11-13
 
