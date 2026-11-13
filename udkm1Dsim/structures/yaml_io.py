@@ -56,6 +56,7 @@ __docformat__ = "restructuredtext"
 
 import os
 import warnings
+from pathlib import PurePath
 
 import numpy as np
 import pint
@@ -420,12 +421,13 @@ class _Writer:
         return key, True
 
     def _path(self, path):
-        """Path relative to the YAML file, or as given without file."""
+        """Path relative to the YAML file with forward slashes on all
+        operating systems, or as given without file."""
         path = str(path)
         if self.base_dir is None:
             return path
         try:
-            return os.path.relpath(os.path.abspath(path), self.base_dir)
+            return PurePath(os.path.relpath(os.path.abspath(path), self.base_dir)).as_posix()
         except ValueError:
             # e.g. another drive on Windows
             return os.path.abspath(path)
