@@ -17,6 +17,7 @@ from udkm1Dsim import (
     Structure,
     UnitCell,
     Vacuum,
+    VectorParameter,
     u,
 )
 from udkm1Dsim.structures import yaml_io
@@ -203,6 +204,31 @@ structure:
     for read in (Structure.from_yaml(str(filename)), Structure.from_yaml(text)):
         for types in HASH_TYPES:
             assert read.get_hash(types=types) == S.get_hash(types=types)
+    # written with the a- and b-axis, which differ from the c-axis
+    lattice = yaml.safe_load(S.to_yaml())["layers"]["SRO"]["lattice"]
+    assert lattice == {"a_axis": "3.905 Å", "b_axis": "3.905 Å", "c_axis": "3.94897 Å"}
+
+
+def test_hand_written_table_and_substrate():
+    text = """
+format_version: 1
+layers:
+  layer:
+    structural: {thickness: 1 nm}
+    optical:
+      dielectric:
+        table: {kind: n, energy: [1, 2], values: [2, 2.1+0.1j]}
+structure:
+  sub_structures: [[layer, 1]]
+  substrate: layer
+"""
+    S = Structure.from_yaml(text)
+    layer, N = S.substrate
+    assert N == 1 and layer is S.unique_layers[1][0]
+    assert layer.get_ref_index(1) == pytest.approx(2)
+    assert layer.get_ref_index(2) == pytest.approx(2.1 + 0.1j)
+    _, read = round_trip(S)
+    assert_same_structure(S, read)
 
 
 # atoms
@@ -600,6 +626,92 @@ def test_check_raises_for_differences(monkeypatch):
 def test_invalid_yaml_raises(data, match):
     with pytest.raises(ValueError, match=match):
         yaml_io.structure_from_dict(data)
+
+
+def doc(layer, atoms=None, structures=None, sub_structure="a"):
+    """Dict of a structure with the layer a, the atoms, and the structures."""
+    data = {"format_version": 1, "layers": {"a": layer}}
+    if atoms is not None:
+        data["atoms"] = atoms
+    if structures is not None:
+        data["structures"] = structures
+    data["structure"] = {"sub_structures": [[sub_structure, 1]]}
+    return data
+
+
+AMORPHOUS = {"type": "AmorphousLayer", "atom": "X"}
+
+
+@pytest.mark.parametrize(
+    "data, match",
+    [
+        (doc(AMORPHOUS, {"X": {"type": "Other", "symbol": "Fe"}}), "Unknown type 'Other' of an"),
+        (doc(AMORPHOUS, {"X": {"type": "AtomMixed", "symbol": "X", "ionicity": 1}}), "ionicity"),
+        (doc(AMORPHOUS, {"X": {"symbol": "Fe", "atomic_form_factors": 5}}), "form_factors 5"),
+        (doc(AMORPHOUS, {"X": {"symbol": "Fe", "atoms": [["Y", 1]]}}), "Only a mixed atom"),
+        (
+            doc(AMORPHOUS, {"X": {"type": "AtomMixed", "symbol": "X", "cromer_mann_coeff": [1]}}),
+            "no Cromer-Mann",
+        ),
+        (doc(AMORPHOUS, {"X": {"name": "iron"}}), "symbol of the atom is missing"),
+        (doc({}, structures={"a": {}}), "defined as layer and as structure"),
+        (doc({"atom": "X"}), "Only an AmorphousLayer"),
+        (doc({"atoms": [["X", 0]]}), "Only a UnitCell"),
+        (doc({"type": "UnitCell"}), "lattice of the UnitCell is missing"),
+        (doc({"structural": 5}), "must be a mapping"),
+        (doc({"magnetic": {"anisotropy": {"value": [1, 2, 3]}}}), "value and unit"),
+        (doc({"optical": {"dielectric": 5}}), "dielectric must be given as mapping"),
+        (doc({"optical": {"dielectric": {"eps0": 5}}}), "dispersion must be given as mapping"),
+        (doc({"optical": {"dielectric": {"a": 1, "b": 2}}}), "Unknown dispersion"),
+        (
+            doc(
+                {
+                    "optical": {
+                        "dielectric": {"table": {"energy": [1, 2], "values": [1, 2], "x": 1}}
+                    }
+                }
+            ),
+            "Unknown entries",
+        ),
+        (
+            doc(
+                {
+                    "optical": {
+                        "dielectric": {
+                            "table": {
+                                "energy": [1, 2],
+                                "values": [1, 2],
+                                "input_kind": "n",
+                                "x": 1,
+                            }
+                        }
+                    }
+                }
+            ),
+            "Unknown entries",
+        ),
+        (doc({}, structures={"s": {"sub_structures": [["s", 1]]}}, sub_structure="s"), "itself"),
+        (
+            {"format_version": 1, "layers": [1], "structure": {"sub_structures": [["a", 1]]}},
+            "mapping by the keys",
+        ),
+        ({"format_version": 1, "structure": 5}, "section 'structure' must be a mapping"),
+        ([1], "YAML mapping"),
+    ],
+)
+def test_invalid_entries_raise(data, match):
+    with pytest.raises(ValueError, match=match):
+        yaml_io.structure_from_dict(data)
+
+
+def test_unsupported_values_raise():
+    with pytest.raises(TypeError, match="Only a Structure"):
+        yaml_io.structure_to_dict(Layer("a", "a"))
+    with pytest.raises(TypeError, match="Only dimensionless vectors"):
+        yaml_io._write_vector(VectorParameter("T", (0, 0, 1)))
+    for value in (True, "1"):
+        with pytest.raises(TypeError, match="as a number"):
+            yaml_io._number(value)
 
 
 def test_missing_file_raises():

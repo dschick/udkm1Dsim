@@ -983,8 +983,6 @@ class _Reader:
                 values[name] = _read_temperature(value, target.unit)
             elif name == "sub_system_labels":
                 values[name] = value
-            elif isinstance(target, VectorParameter):
-                values[name] = _read_vector(value)
             else:
                 values[name] = _read_quantity(value)
         return values
