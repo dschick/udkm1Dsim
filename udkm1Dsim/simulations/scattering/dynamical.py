@@ -198,7 +198,7 @@ class XrayDyn(Scattering):
         """
         if isinstance(S, Structure):
             sub_structures = S.sub_structures
-            L = S.get_number_of_sub_structures()
+            L = S.num_sub_structures
         elif isinstance(S[0], (Vacuum, UnitCell)):
             sub_structures = [S]
             L = 1
@@ -264,12 +264,12 @@ class XrayDyn(Scattering):
             elif isinstance(sub_structure[0], Structure):
                 # its a structure
                 # make a recursive call
-                idx = np.r_[counter : (counter + sub_structure[0].get_number_of_sub_structures())]
+                idx = np.r_[counter : (counter + sub_structure[0].num_sub_structures)]
                 tmp, tmp2 = self.homogeneous_ref_trans_matrix(
                     sub_structure[0], strains[idx], temps[idx, :]
                 )
                 A.append([tmp2, sub_structure[0].name + " substructures"])
-                counter = counter + sub_structure[0].get_number_of_sub_structures()
+                counter = counter + sub_structure[0].num_sub_structures
                 A.append([tmp, f"{sub_structure[1]:d}x {sub_structure[0].name:s}"])
                 # calculate the ref-trans matrices for N sub structures
                 tmp = m_power_x(tmp, sub_structure[1])
@@ -501,7 +501,7 @@ class XrayDyn(Scattering):
             RTS = RTU
 
         if len(strain_vectors) > 0:
-            uc_indices, _, _ = self.S.get_layer_vectors()
+            uc_indices, _, _ = self.S.layer_vectors
             # make RTM available for all works
             shared = dask_client.scatter((uc_indices, RTU, strain_vectors, RTM, RTS), hash=False)
             results = self._compute_in_parallel(
@@ -579,7 +579,7 @@ class XrayDyn(Scattering):
         # initialize ref_trans_matrix
         N = np.shape(self.experiment.qz.magnitude)[1]  # number of q_z
         M = np.shape(self.experiment.qz.magnitude)[0]  # number of energies
-        uc_indices, _, _ = self.S.get_layer_vectors()
+        uc_indices, _, _ = self.S.layer_vectors
 
         # initialize ref_trans_matrix
         RTU = np.tile(np.eye(2, 2)[np.newaxis, np.newaxis, :, :], (M, N, 1, 1))
@@ -618,7 +618,7 @@ class XrayDyn(Scattering):
             RT (ndarray[complex]): reflection-transmission matrix.
 
         """
-        _, _, uc_handles = self.S.get_layer_vectors()
+        _, _, uc_handles = self.S.layer_vectors
 
         N = np.shape(self.experiment.qz.magnitude)[1]  # number of q_z
         M = np.shape(self.experiment.qz.magnitude)[0]  # number of energies
@@ -688,7 +688,7 @@ class XrayDyn(Scattering):
 
         """
         if len(args) == 0:
-            strain_vectors = [np.array([1])] * self.S.get_number_of_unique_layers()
+            strain_vectors = [np.array([1])] * self.S.num_unique_layers
         else:
             strain_vectors = args[0]
 
@@ -723,7 +723,7 @@ class XrayDyn(Scattering):
         t1 = time()
         self.disp_message("Calculate all _ref_trans_matrices_ ...")
         # initialize
-        uc_ids, uc_handles = self.S.get_unique_layers()
+        uc_ids, uc_handles = self.S.unique_layers
         # if no strain_vectors are given we just do it for no strain (1)
         if len(args) == 0:
             strain_vectors = [np.array([1])] * len(uc_ids)

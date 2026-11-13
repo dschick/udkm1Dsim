@@ -29,7 +29,10 @@ def test_thickness(structure):
     assert_allclose(structure.thickness, 150 * u.nm, rtol=1e-2)
 
 
-# test_visualize() fails on certain virtual machine due to TCL error
+@pytest.mark.filterwarnings("ignore:FigureCanvasAgg is non-interactive")
+def test_structure_visualize(structure, agg_backend):
+    structure.visualize(show=False)
+    structure.visualize(unit="um", block=False)
 
 
 def test_structure_get_hash(structure):
@@ -75,43 +78,96 @@ def test_structure_add_substrate(request, fixture_name, structure):
         struc_copy.add_substrate(substructure)
 
 
-def test_get_number_of_sub_structures(structure):
-    assert structure.get_number_of_sub_structures() == 5
+def test_num_sub_structures(structure):
+    assert structure.num_sub_structures == 5
 
 
-def test_get_number_of_layers(structure):
-    assert structure.get_number_of_layers() == 280
+def test_num_layers(structure):
+    assert structure.num_layers == 280
 
 
-def test_get_number_of_unique_layers(structure):
-    assert structure.get_number_of_unique_layers() == 4
+def test_num_unique_layers(structure):
+    assert structure.num_unique_layers == 4
 
 
-def test_get_unique_layers(structure):
-    layer_ids, _ = structure.get_unique_layers()
+def test_unique_layers(structure):
+    layer_ids, _ = structure.unique_layers
     assert layer_ids == ["amorphous_layer_Fe", "amorphous_layer_O", "unit_cell_Fe", "unit_cell_O"]
 
 
-def test_get_layer_vectors(structure):
-    structure.get_layer_vectors()
+def test_layer_vectors(structure, unit_cell_iron, unit_cell_oxygen):
+    indices, layer_ids, handles = structure.layer_vectors
+    assert len(indices) == len(layer_ids) == len(handles) == structure.num_layers
+    # 10 + 10 + 20 layers before the 20 repetitions of the nested double layer
+    assert np.array_equal(indices[:40], [0] * 10 + [1] * 10 + [2] * 20)
+    assert np.array_equal(indices[40:], ([2] * 5 + [3] * 7) * 20)
+    assert layer_ids[40:52] == ["unit_cell_Fe"] * 5 + ["unit_cell_O"] * 7
+    assert handles[40] is unit_cell_iron
+    assert handles[-1] is unit_cell_oxygen
+    assert [structure.get_layer_handle(i) for i in [0, 45, -1]] == [
+        handles[0],
+        handles[45],
+        handles[-1],
+    ]
 
 
-def test_get_all_positions_per_unique_layer(structure):
-    pos = structure.get_all_positions_per_unique_layer()
+def test_positions_per_unique_layer(structure):
+    pos = structure.positions_per_unique_layer
     assert np.allclose(pos["amorphous_layer_Fe"], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
 
-def test_get_distances_of_layers(structure):
-    d_start, _, _ = structure.get_distances_of_layers()
+def test_layer_distances(structure):
+    d_start, _, _ = structure.layer_distances
     assert_allclose(np.sum(d_start), 2.22e-05 * u.m, rtol=1e-2)
 
 
-def test_get_distances_of_interfaces(structure):
-    assert_allclose(np.sum(structure.get_distances_of_interfaces()), 3.68e-6 * u.m, rtol=1e-2)
+def test_layer_distances_are_consistent(structure):
+    d_start, d_end, d_mid = structure.layer_distances
+    assert_allclose(d_end[-1], structure.thickness)
+    assert_allclose(d_start[1:], d_end[:-1])
+    assert_allclose(d_mid, (d_start + d_end) / 2)
+    np.testing.assert_allclose(structure._layer_distances()[2], d_mid.to("m").magnitude)
+
+
+def test_interface_distances(structure):
+    interfaces = structure.interface_distances
+    assert_allclose(np.sum(interfaces), 3.68e-6 * u.m, rtol=1e-2)
+    # the surface, the 2 interfaces of the amorphous layers, the 20 Fe/O and
+    # 19 O/Fe interfaces of the double layers, whose first one continues the
+    # Fe unit cells, and the bottom
+    assert len(interfaces) == 1 + 2 + 20 + 19 + 1
+    assert interfaces[0] == 0 * u.m
+    assert_allclose(interfaces[-1], structure.thickness)
+    np.testing.assert_allclose(structure._interface_distances(), interfaces.to("m").magnitude)
+
+
+@pytest.mark.parametrize(
+    "prop",
+    [
+        "num_sub_structures",
+        "num_layers",
+        "num_unique_layers",
+        "unique_layers",
+        "layer_vectors",
+        "positions_per_unique_layer",
+        "layer_distances",
+        "interface_distances",
+        "thickness",
+    ],
+)
+def test_structure_properties_are_read_only(structure, prop):
+    with pytest.raises(AttributeError):
+        setattr(structure, prop, 1)
 
 
 def test_interp_distance_at_interfaces(structure):
-    structure.interp_distance_at_interfaces(N=11)
+    distances, original = structure.interp_distance_at_interfaces(N=11)
+    _, _, d_mid = structure.layer_distances
+    # the distances of the layers are kept
+    assert_allclose(distances[original], d_mid)
+    # an even number of points is increased to the next odd number
+    even, _ = structure.interp_distance_at_interfaces(N=10, units=False)
+    np.testing.assert_allclose(even, distances.to("m").magnitude)
 
 
 def test_get_layer_property_vector(structure):
@@ -152,10 +208,10 @@ def test_structure_get_hash_depends_on_properties(structure, types, prop, value)
 
 def test_get_layer_property_vector_padding(structure):
     """layers without higher order spring constants get zeros for them"""
-    _, layers = structure.get_unique_layers()
+    _, layers = structure.unique_layers
     anharmonic = layers[2]
-    anharmonic_pos = structure.get_all_positions_per_unique_layer()[anharmonic.id]
-    harmonic_pos = np.setdiff1d(np.r_[0 : structure.get_number_of_layers()], anharmonic_pos)
+    anharmonic_pos = structure.positions_per_unique_layer[anharmonic.id]
+    harmonic_pos = np.setdiff1d(np.r_[0 : structure.num_layers], anharmonic_pos)
     anharmonic.set_ho_spring_constants([-7e11, 1e20])
     try:
         spring_consts = structure.get_layer_property_vector("_spring_const")
@@ -163,7 +219,7 @@ def test_get_layer_property_vector_padding(structure):
         # reset to the harmonic spring constant for the following tests
         anharmonic.set_ho_spring_constants([])
 
-    assert spring_consts.shape == (structure.get_number_of_layers(), 3)
+    assert spring_consts.shape == (structure.num_layers, 3)
     assert np.all(spring_consts[harmonic_pos, 1:] == 0)
     assert np.allclose(spring_consts[anharmonic_pos, 0], anharmonic.spring_const[0].magnitude)
     assert np.allclose(spring_consts[anharmonic_pos, 1:], [-7e11, 1e20])
@@ -207,7 +263,7 @@ def test_structure_check_num_sub_systems():
 def test_get_hash_does_not_depend_on_symbols_and_labels(structure):
     S = copy.deepcopy(structure)  # do not alter the module-scoped fixture
     hashes = [S.get_hash(types="heat"), S.get_hash(types="phonon")]
-    for layer in S.get_unique_layers()[1]:
+    for layer in S.unique_layers[1]:
         layer.thermal.heat_capacity.symbol = "C"
         layer.structural.thickness.symbol = "t"
         layer.thermal.sub_system_labels = ["x"]

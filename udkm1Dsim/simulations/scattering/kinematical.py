@@ -194,7 +194,7 @@ class XrayKin(Scattering):
         self._check_experiment()
         self._warn_ignored_superstrate_and_substrate()
         if strains == 0:
-            strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
+            strains = np.zeros([self.S.num_sub_structures, 1])
 
         # get the reflected field of the structure for each energy
         R = np.zeros_like(self.experiment.qz.magnitude)
@@ -283,7 +283,7 @@ class XrayKin(Scattering):
         # if no strains are given we assume no strain (1)
         if np.isscalar(strains) and strains == 0:
             try:
-                strains = np.zeros([self.S.get_number_of_sub_structures(), 1])
+                strains = np.zeros([self.S.num_sub_structures, 1])
             except AttributeError:
                 # its a single Layer
                 strains = np.array([0])
@@ -305,7 +305,7 @@ class XrayKin(Scattering):
             elif isinstance(sub_structure[0], Structure):
                 # the substructure is a structure, so we do a recursive
                 # call of this method
-                d = sub_structure[0].get_number_of_sub_structures()
+                d = sub_structure[0].num_sub_structures
                 Ep, temp = self.homogeneous_reflected_field(
                     sub_structure[0],
                     energy,
@@ -313,7 +313,7 @@ class XrayKin(Scattering):
                     theta,
                     strains[strainCounter : (strainCounter + d)],
                 )
-                z = sub_structure[0].get_length().magnitude
+                z = sub_structure[0].thickness.to("m").magnitude
                 strainCounter = strainCounter + d
                 A.append([temp, [sub_structure[0].name + " substructures"]])
                 A.append([Ep, f"{1:d}x {sub_structure[0].name:s}"])

@@ -26,7 +26,6 @@ __all__ = ["Structure"]
 __docformat__ = "restructuredtext"
 
 
-import itertools
 import warnings
 from operator import attrgetter
 
@@ -172,138 +171,9 @@ class Structure:
                 )
         return class_str
 
-    def visualize(
-        self, block=True, unit="nm", fig_size=[20, 1], cmap="Set3", linewidth=0.1, show=True
-    ):
-        """visualize
-
-        Simple visualization of the :class:`Structure`.
-
-        Args:
-            unit (str): SI unit of the distance of the Structure. Defaults to
-                'nm'.
-            fig_size (list[float]): figure size of the visualization plot.
-                Defaults to [20, 1].
-            cmap (str): Matplotlib colormap for colors of Layer.
-            linewidth (float): line width of the patches.
-            show (boolean): show visualization plot at the end.
-
-        """
-        import matplotlib.pyplot as plt
-        from matplotlib import colormaps, patches
-
-        _, d_end, _ = self.get_distances_of_layers(True)  # distance vector of all layers
-        layer_interfaces = np.append(0, d_end.to(unit).magnitude)  # Append zero at the start
-        thickness = np.max(layer_interfaces)
-
-        layer_ids = self.get_unique_layers()[0]
-        N = len(layer_ids)  # number of unique layers
-
-        cm = colormaps[cmap]
-        colortable = {}
-        for i in range(N):
-            colortable[layer_ids[i]] = cm(i / (N - 1))
-
-        plt.figure(figsize=fig_size)
-        ax = plt.axes()
-
-        for i, name in enumerate(self.get_layer_vectors()[1]):
-            col = colortable.get(name, "k")
-            rect = patches.Rectangle(
-                (layer_interfaces[i], 0),
-                np.diff(layer_interfaces)[i],
-                1,
-                linewidth=linewidth,
-                facecolor=col,
-                edgecolor="k",
-            )
-            ax.add_patch(rect)
-
-        plt.xlim(0, thickness)
-        plt.ylim(0, 1)
-        plt.xlabel(f"Distance ({unit:s})")
-        plt.yticks([], [])
-
-        # add labels for legend
-        for layer_id, col in colortable.items():
-            plt.plot(0, 0, color=col, label=layer_id)
-
-        leg = plt.legend(bbox_to_anchor=(0.0, 1.08, 1, 0.102), frameon=False, ncol=8)
-
-        for line in leg.get_lines():
-            line.set_linewidth(8.0)
-
-        if show:
-            plt.show(block=block)
-
-    def get_hash(self, **kwargs):
-        """get_hash
-
-        Create an unique hash from all layer IDs in the correct order in the
-        Structure as well as the corresponding material properties which are
-        given by the `kwargs`.
-
-        `types='all'` is problematic, as function handles will be include,
-        which will always change on recreation. Following errors from the
-        GitHub test-suite, hashes do not seem to match across different OS
-        and/or python versions.
-
-        Args:
-            **kwargs (list[str]): types of requested properties..
-
-        Returns:
-            hash (str): unique hash.
-
-        """
-        param = []
-        layers = self.get_unique_layers()
-        for layer in layers[1]:
-            param.append(layer.get_property_dict(**kwargs))
-
-        _, IDs, _ = self.get_layer_vectors()
-        param.append(IDs)
-        return make_hash_md5(param)
-
-    @property
-    def num_sub_systems(self):
-        """int: number of subsystems, given by the layer with the most subsystems."""
-        _, layers = self.get_unique_layers()
-        return max((layer.num_sub_systems for layer in layers), default=1)
-
-    @num_sub_systems.setter
-    def num_sub_systems(self, value):
-        raise AttributeError(
-            "'num_sub_systems' is derived from the thermal parameters of the layers "
-            "and cannot be set directly."
-        )
-
-    def check_num_sub_systems(self, *property_names):
-        """check_num_sub_systems
-
-        Checks that the given temperature-dependent thermal parameters of all
-        layers have the same number of subsystems as the :class:`Structure`.
-
-        Args:
-            *property_names (str): names of the thermal parameters, e.g.
-                'heat_capacity'.
-
-        Raises:
-            ValueError: if any parameter has a different number of subsystems.
-
-        """
-        K = self.num_sub_systems
-        mismatches = []
-        for layer in self.get_unique_layers()[1]:
-            for name in property_names:
-                num = getattr(layer.thermal, name).num_sub_systems
-                if num != K:
-                    mismatches.append(f"layer '{layer.id}': '{name}' has {num}")
-        if mismatches:
-            raise ValueError(
-                f"All of {', '.join(repr(name) for name in property_names)} must have "
-                f"{K} subsystem(s) for all layers of the structure, but\n  "
-                + "\n  ".join(mismatches)
-            )
+    # ============================================================================
+    # Methods
+    # ============================================================================
 
     def add_sub_structure(self, sub_structure, N=1):
         """add_sub_structure
@@ -339,26 +209,6 @@ class Structure:
         # add a sub_structure of N repetitions to the structure with
         self.sub_structures.append([sub_structure, N])
 
-    def add_superstrate(self, layer):
-        """add_superstrate
-
-        Add :class:`.Layer` or its sub-classes as static superstrate to the sample.
-
-        Args:
-            sub_structure (Layer): superstrate Layer or its sub-classes.
-
-        """
-        if not isinstance(layer, Layer):
-            raise TypeError(
-                "Class "
-                + type(layer).__name__
-                + " is no possible superstrate. "
-                + "Only Layer or its sub-classes is allowed!"
-            )
-
-        # there is only one repetition of the superstrate layer
-        self.superstrate = [layer, 1]
-
     def add_substrate(self, layer, N=1):
         """add_substrate
 
@@ -379,313 +229,96 @@ class Structure:
 
         self.substrate = [layer, N]
 
-    def get_number_of_sub_structures(self):
-        """get_number_of_sub_structures
+    def add_superstrate(self, layer):
+        """add_superstrate
 
-        This methods does not return the number of all :class:`.Layer` in the
-        :class:`Structure`, see :meth:`.get_number_of_layers`.
-
-        Returns:
-            N (int): number of all sub structures.
-
-        """
-        N = 0
-        for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], Layer):
-                N = N + 1
-            else:
-                N = N + self.sub_structures[i][0].get_number_of_sub_structures()
-        return N
-
-    def get_number_of_layers(self):
-        """get_number_of_layers
-
-        Determines the number of all :class:`.Layer` in the :class:`Structure`.
-
-        Returns:
-            L (int): number of all Layer in the Structure.
-
-        """
-        L = 0
-        # traverse the substructures
-        for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], Layer):
-                L = L + self.sub_structures[i][1]
-            else:
-                # its a structure, so call the method recursively
-                L = (
-                    L
-                    + self.sub_structures[i][0].get_number_of_layers() * self.sub_structures[i][1]
-                )
-
-        return L
-
-    def get_number_of_unique_layers(self):
-        """get_number_of_unique_layers
-
-        Determines the number of unique :class:`.Layer` in the :class:`Structure`.
-
-        Returns:
-            N (int): number of unique layers in the Structure.
-
-        """
-        N = len(self.get_unique_layers()[0])
-        return N
-
-    def get_unique_layers(self):
-        """get_unique_layers
-
-        The uniqueness is determined by the handle of each :class:`.Layer`.
-
-        Returns:
-            (tuple):
-            - *layer_ids (list[str])* - ids of all unique Layer instances in
-              the Structure.
-            - *layer_handles (list[Layer, Structure])* -
-              handles of all unique Layer instances in the Structure.
-
-        """
-        layer_ids = []
-        layer_handles = []
-        # traverse the sub_structures
-        for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], Layer):
-                # its a AmorphousLayer or UnitCell
-                layer_id = self.sub_structures[i][0].id
-                if not layer_ids:
-                    # the list is empty at the beginning so add
-                    # the first layer
-                    layer_ids = layer_ids + [layer_id]
-                    layer_handles = layer_handles + [self.sub_structures[i][0]]
-                else:
-                    # the list is not empty so check if the id is
-                    # already in the layers id list
-                    if layer_id not in layer_ids:
-                        # if id not in list, so add it
-                        layer_ids = layer_ids + [layer_id]
-                        layer_handles = layer_handles + [self.sub_structures[i][0]]
-            else:
-                # its a sub_structure
-                if not layer_ids:
-                    # the list is empty at the beginning so call
-                    # the method recursively and add the result to the
-                    # layers list
-                    layer_ids = self.sub_structures[i][0].get_unique_layers()[0]
-                    layer_handles = self.sub_structures[i][0].get_unique_layers()[1]
-                else:
-                    # the list is not empty so check if the ids
-                    # from the recursive call are already in the layers id
-                    # list.
-                    temp1 = self.sub_structures[i][0].get_unique_layers()[0]
-                    temp2 = self.sub_structures[i][0].get_unique_layers()[1]
-                    for j in range(len(temp1)):
-                        # check all ids from recursive call
-                        if temp1[j] not in layer_ids:
-                            # ids not in list, so add them
-                            layer_ids = layer_ids + [temp1[j]]
-                            layer_handles = layer_handles + [temp2[j]]
-
-        return layer_ids, layer_handles
-
-    def get_layer_vectors(self, *args):
-        """get_layer_vectors
-
-        Returns three lists with the numeric index of all :class:`.Layer`
-        in a :class:`Structure` given by the :meth:`get_unique_layers()`
-        method and additionally vectors with the ids and Handles of the
-        corresponding layer instances.
-        The list and order of the unique :class:`.Layer` can be either handed
-        as an input parameter or is requested at the beginning.
+        Add :class:`.Layer` or its sub-classes as static superstrate to the sample.
 
         Args:
-            layers (Optional[list]): list of unique Layer including
-               ids and handles
-
-        Returns:
-            (tuple):
-            - *indices (list[int])* - numeric index of all Layer in a
-              Structure.
-            - *layer_ids (list[str])* - ids of all unique Layer instances in
-              the Structure.
-            - *layer_handles (list[Layer, Structure])* -
-              handles of all unique Layers instances in the Structure.
+            sub_structure (Layer): superstrate Layer or its sub-classes.
 
         """
-        indices = []
-        layer_ids = []
-        layer_handles = []
-        # if no layers (unique layers) are given, we have to get them
-        if len(args) < 1:
-            layers = self.get_unique_layers()
-        else:
-            layers = args[0]
-        # traverse the substructres
-        for i in range(len(self.sub_structures)):
-            if isinstance(self.sub_structures[i][0], Layer):
-                # its a Layer or sub-class
-                # find the index of the current layer id in the unique
-                # layer list
-                Index = layers[0].index(self.sub_structures[i][0].id)
-                # add the index N times to the indices vector
-                indices = np.append(indices, Index * np.ones(self.sub_structures[i][1]))
-                # create a list of N layer ids and add them to
-                # the ids list
-                temp1 = list(
-                    itertools.repeat(self.sub_structures[i][0].id, self.sub_structures[i][1])
-                )
-                layer_ids = layer_ids + list(temp1)
-                # create a list of N layer handles and add them to
-                # the Handles list
-                temp2 = list(
-                    itertools.repeat(self.sub_structures[i][0], self.sub_structures[i][1])
-                )
-                layer_handles = layer_handles + list(temp2)
-            else:
-                # its a structure
-                # make a recursive call and hand in the same unique
-                # layer vector as we used before
-                [temp1, temp2, temp3] = self.sub_structures[i][0].get_layer_vectors(layers)
-                temp11 = []
-                temp22 = []
-                temp33 = []
-                # concat the temporary arrays N times
-                for _ in range(self.sub_structures[i][1]):
-                    temp11 = temp11 + list(temp1)
-                    temp22 = temp22 + list(temp2)
-                    temp33 = temp33 + list(temp3)
-                # add the temporary arrays to the outputs
-                indices = np.append(indices, temp11)
-                layer_ids = layer_ids + list(temp22)
-                layer_handles = layer_handles + list(temp33)
-        return indices, layer_ids, layer_handles
+        if not isinstance(layer, Layer):
+            raise TypeError(
+                "Class "
+                + type(layer).__name__
+                + " is no possible superstrate. "
+                + "Only Layer or its sub-classes is allowed!"
+            )
 
-    def get_all_positions_per_unique_layer(self):
-        """get_all_positions_per_unique_layer
+        # there is only one repetition of the superstrate layer
+        self.superstrate = [layer, 1]
 
-        Determines the position indices for each unique :class:`.Layer` in the :class:`Structure`.
+    def check_num_sub_systems(self, *property_names):
+        """check_num_sub_systems
 
-        Returns:
-            pos (dict{ndarray[int]}): position indices for each unique Layer in
-            the Structure.
-
-        """
-        layers = self.get_unique_layers()
-        indices = self.get_layer_vectors()[0]
-        pos = {}  # Dictionary used instead of array
-        for i, layer in enumerate(layers[0]):
-            pos[layer] = np.flatnonzero(indices == i)
-        # Each element accessible through layer id
-        return pos
-
-    def get_distances_of_layers(self, units=True):
-        """get_distances_of_layers
-
-        Returns a vector of the distance from the surface for each :class:`.Layer`
-        starting at 0 (`d_start`) and starting at the end of the first
-        layer (`d_end`) and from the center of each layer (`d_mid`).
+        Checks that the given temperature-dependent thermal parameters of all
+        layers have the same number of subsystems as the :class:`Structure`.
 
         Args:
-            units (boolean, optional): whether units should be returned or not.
-                Defaults to True.
+            *property_names (str): names of the thermal parameters, e.g.
+                'heat_capacity'.
 
-        Returns:
-            (tuple):
-            - *d_start (ndarray[float, Quantity])* - distances from the surface
-              of each Layer starting at 0.
-            - *d_end (ndarray[float, Quantity])* - distances from the bottom
-              of each Layer.
-            - *d_mid (ndarray[float, Quantity])*: distance from the middle of
-              each Layer.
+        Raises:
+            ValueError: if any parameter has a different number of subsystems.
 
         """
-        thickness = self.get_layer_property_vector("structural.thickness.magnitude")
-        d_end = np.cumsum(thickness)
-        d_start = np.hstack([[0], d_end[0:-1]])
-        d_mid = d_start + thickness / 2
-        if units:
-            return Q_(d_start, u.m), Q_(d_end, u.m), Q_(d_mid, u.m)
-        else:
-            return d_start, d_end, d_mid
+        K = self.num_sub_systems
+        mismatches = []
+        for layer in self.unique_layers[1]:
+            for name in property_names:
+                num = getattr(layer.thermal, name).num_sub_systems
+                if num != K:
+                    mismatches.append(f"layer '{layer.id}': '{name}' has {num}")
+        if mismatches:
+            raise ValueError(
+                f"All of {', '.join(repr(name) for name in property_names)} must have "
+                f"{K} subsystem(s) for all layers of the structure, but\n  "
+                + "\n  ".join(mismatches)
+            )
 
-    def get_distances_of_interfaces(self, units=True):
-        """get_distances_of_interfaces
+    def get_hash(self, **kwargs):
+        """get_hash
 
-        Calculates the distances of the interafaces of the :class:`Structure`.
+        Create an unique hash from all layer IDs in the correct order in the
+        Structure as well as the corresponding material properties which are
+        given by the `kwargs`.
+
+        `types='all'` is problematic, as function handles will be include,
+        which will always change on recreation. Following errors from the
+        GitHub test-suite, hashes do not seem to match across different OS
+        and/or python versions.
 
         Args:
-            units (boolean, optional): whether units should be returned or not.
-                Defaults to True.
+            **kwargs (list[str]): types of requested properties..
 
         Returns:
-            res (ndarray[float, Quantity]): distances from the surface of each
-            interface of the Structure.
+            hash (str): unique hash.
 
         """
+        param = []
+        layers = self.unique_layers
+        for layer in layers[1]:
+            param.append(layer.get_property_dict(**kwargs))
 
-        d_start, d_end, _ = self.get_distances_of_layers(False)
-        indices = np.r_[1, np.diff(self.get_layer_vectors()[0])]
-        res = np.append(d_start[np.nonzero(indices)], d_end[-1])
-        if units:
-            return Q_(res, u.m)
-        else:
-            return res
+        _, IDs, _ = self.layer_vectors
+        param.append(IDs)
+        return make_hash_md5(param)
 
-    def interp_distance_at_interfaces(self, N, units=True):
-        """interp_distance_at_interfaces
+    def get_layer_handle(self, i):
+        """get_layer_handle
 
-        Interpolates the distances at the :class:`.Layer` interfaces by an odd number
-        :math:`N`.
+        Returns the handle to a :class:`.Layer` at a given position index.
 
         Args:
-            N (int): number of point of interpolation at interface
-            units (boolean, optional): whether units should be returned or not.
-                Defaults to True.
+            i (int): index of the Layer to return.
 
         Returns:
-            (tuple):
-            - *dist_interp (ndarray[float, Quantity])* - distance array of the
-              middle of each Layer interpolated by an odd number :math:`N` at
-              the interfaces
-            - *original_indicies (ndarray[int])* - indicies of the original
-              distances in the interpolated array
+            handle (Layer): handle to the Layer at position `i` in the Structure.
 
         """
-
-        [d_start, d_end, d_mid] = self.get_distances_of_layers(False)
-        # these are the distances of the interfaces
-        dist_intf = self.get_distances_of_interfaces(False)
-        # start with the distances of the centers of the layers
-        dist_interp = d_mid
-
-        N = int(N)  # make N an integer
-        if N % 2 == 0:
-            # odd numbers are required
-            N += 1
-
-        # traverse all distances
-        for z in dist_intf:
-            inda = finderb(z, d_start)  # this is the index of a layer after the interface
-            indb = inda - 1  # this is the index of a layer before the interface
-
-            # interpolate linearly N new distances at the interface
-            if indb == -1:  # this is the surface interface
-                dist_interp = np.append(
-                    dist_interp, np.linspace(0, d_mid[inda], int(2 + (N - 1) / 2))
-                )
-            elif inda >= (len(d_mid) - 1):  # this is the bottom interface
-                dist_interp = np.append(
-                    dist_interp, np.linspace(d_mid[inda], d_end[-1], int(2 + (N - 1) / 2))
-                )
-            else:  # this is a surface inside the structure
-                dist_interp = np.append(dist_interp, np.linspace(d_mid[indb], d_mid[inda], 2 + N))
-
-        dist_interp = np.unique(np.sort(dist_interp))  # sort and unify the distances
-        # these are the indicies of the original distances in the interpolated new array
-        original_indicies = finderb(d_mid, dist_interp)
-        if units:
-            return Q_(dist_interp, u.m), original_indicies
-        else:
-            return dist_interp, original_indicies
+        handles = self.layer_vectors[2]
+        return handles[i]
 
     def get_layer_property_vector(self, property_name):
         """get_layer_property_vector
@@ -702,8 +335,8 @@ class Structure:
             in the Structure.
 
         """
-        handles = self.get_layer_vectors()[2]
-        N = self.get_number_of_layers()
+        handles = self.layer_vectors[2]
+        N = self.num_layers
 
         # a leading underscore means "find this parameter inside whichever
         # ParameterGroup owns it" and read its magnitude in base units
@@ -731,7 +364,7 @@ class Structure:
             Shape/dtype are inferred from the unique layers only. Shorter
             values are padded with zeros, e.g. the missing higher orders of
             the spring constants."""
-            _, unique_layers = self.get_unique_layers()
+            _, unique_layers = self.unique_layers
             set_dtype = float
             max_dim = 1
             for layer in unique_layers:
@@ -799,20 +432,62 @@ class Structure:
             )
         return numel
 
-    def get_layer_handle(self, i):
-        """get_layer_handle
+    def interp_distance_at_interfaces(self, N, units=True):
+        """interp_distance_at_interfaces
 
-        Returns the handle to a :class:`.Layer` at a given position index.
+        Interpolates the distances at the :class:`.Layer` interfaces by an odd number
+        :math:`N`.
 
         Args:
-            i (int): index of the Layer to return.
+            N (int): number of point of interpolation at interface
+            units (boolean, optional): whether units should be returned or not.
+                Defaults to True.
 
         Returns:
-            handle (Layer): handle to the Layer at position `i` in the Structure.
+            (tuple):
+            - *dist_interp (ndarray[float, Quantity])* - distance array of the
+              middle of each Layer interpolated by an odd number :math:`N` at
+              the interfaces
+            - *original_indicies (ndarray[int])* - indicies of the original
+              distances in the interpolated array
 
         """
-        handles = self.get_layer_vectors()[2]
-        return handles[i]
+
+        [d_start, d_end, d_mid] = self._layer_distances()
+        # these are the distances of the interfaces
+        dist_intf = self._interface_distances()
+        # start with the distances of the centers of the layers
+        dist_interp = d_mid
+
+        N = int(N)  # make N an integer
+        if N % 2 == 0:
+            # odd numbers are required
+            N += 1
+
+        # traverse all distances
+        for z in dist_intf:
+            inda = finderb(z, d_start)  # this is the index of a layer after the interface
+            indb = inda - 1  # this is the index of a layer before the interface
+
+            # interpolate linearly N new distances at the interface
+            if indb == -1:  # this is the surface interface
+                dist_interp = np.append(
+                    dist_interp, np.linspace(0, d_mid[inda], int(2 + (N - 1) / 2))
+                )
+            elif inda >= (len(d_mid) - 1):  # this is the bottom interface
+                dist_interp = np.append(
+                    dist_interp, np.linspace(d_mid[inda], d_end[-1], int(2 + (N - 1) / 2))
+                )
+            else:  # this is a surface inside the structure
+                dist_interp = np.append(dist_interp, np.linspace(d_mid[indb], d_mid[inda], 2 + N))
+
+        dist_interp = np.unique(np.sort(dist_interp))  # sort and unify the distances
+        # these are the indicies of the original distances in the interpolated new array
+        original_indicies = finderb(d_mid, dist_interp)
+        if units:
+            return Q_(dist_interp, u.m), original_indicies
+        else:
+            return dist_interp, original_indicies
 
     def reverse(self):
         """reverse
@@ -855,7 +530,272 @@ class Structure:
                 pass
         return structure
 
+    def visualize(
+        self, block=True, unit="nm", fig_size=[20, 1], cmap="Set3", linewidth=0.1, show=True
+    ):
+        """visualize
+
+        Simple visualization of the :class:`Structure`.
+
+        Args:
+            unit (str): SI unit of the distance of the Structure. Defaults to
+                'nm'.
+            fig_size (list[float]): figure size of the visualization plot.
+                Defaults to [20, 1].
+            cmap (str): Matplotlib colormap for colors of Layer.
+            linewidth (float): line width of the patches.
+            show (boolean): show visualization plot at the end.
+
+        """
+        import matplotlib.pyplot as plt
+        from matplotlib import colormaps, patches
+
+        _, d_end, _ = self.layer_distances  # distance vector of all layers
+        layer_interfaces = np.append(0, d_end.to(unit).magnitude)  # Append zero at the start
+        thickness = np.max(layer_interfaces)
+
+        layer_ids = self.unique_layers[0]
+        N = len(layer_ids)  # number of unique layers
+
+        cm = colormaps[cmap]
+        colortable = {}
+        for i in range(N):
+            colortable[layer_ids[i]] = cm(i / (N - 1))
+
+        plt.figure(figsize=fig_size)
+        ax = plt.axes()
+
+        for i, name in enumerate(self.layer_vectors[1]):
+            col = colortable.get(name, "k")
+            rect = patches.Rectangle(
+                (layer_interfaces[i], 0),
+                np.diff(layer_interfaces)[i],
+                1,
+                linewidth=linewidth,
+                facecolor=col,
+                edgecolor="k",
+            )
+            ax.add_patch(rect)
+
+        plt.xlim(0, thickness)
+        plt.ylim(0, 1)
+        plt.xlabel(f"Distance ({unit:s})")
+        plt.yticks([], [])
+
+        # add labels for legend
+        for layer_id, col in colortable.items():
+            plt.plot(0, 0, color=col, label=layer_id)
+
+        leg = plt.legend(bbox_to_anchor=(0.0, 1.08, 1, 0.102), frameon=False, ncol=8)
+
+        for line in leg.get_lines():
+            line.set_linewidth(8.0)
+
+        if show:
+            plt.show(block=block)
+
+    # ============================================================================
+    # Properties
+    # ============================================================================
+
+    @property
+    def interface_distances(self):
+        """Quantity: distances from the surface of each interface of the
+        :class:`Structure`."""
+        return Q_(self._interface_distances(), u.m)
+
+    def _interface_distances(self):
+        """_interface_distances
+
+        Returns the :attr:`interface_distances` as plain array in (m).
+
+        Returns:
+            res (ndarray[float]): distances from the surface of each interface
+            of the Structure.
+
+        """
+        d_start, d_end, _ = self._layer_distances()
+        indices = np.r_[1, np.diff(self.layer_vectors[0])]
+        return np.append(d_start[np.nonzero(indices)], d_end[-1])
+
+    @property
+    def layer_distances(self):
+        """tuple: distances from the surface of each :class:`.Layer`.
+
+        - *d_start (Quantity)* - distances of the top of each Layer, starting
+          at 0.
+        - *d_end (Quantity)* - distances of the bottom of each Layer.
+        - *d_mid (Quantity)* - distances of the middle of each Layer.
+
+        """
+        return tuple(Q_(d, u.m) for d in self._layer_distances())
+
+    def _layer_distances(self):
+        """_layer_distances
+
+        Returns the :attr:`layer_distances` as plain arrays in (m).
+
+        Returns:
+            (tuple):
+            - *d_start (ndarray[float])* - distances of the top of each Layer,
+              starting at 0.
+            - *d_end (ndarray[float])* - distances of the bottom of each Layer.
+            - *d_mid (ndarray[float])* - distances of the middle of each Layer.
+
+        """
+        thickness = self.get_layer_property_vector("structural.thickness.magnitude")
+        d_end = np.cumsum(thickness)
+        d_start = np.hstack([[0], d_end[0:-1]])
+        d_mid = d_start + thickness / 2
+        return d_start, d_end, d_mid
+
+    @property
+    def layer_vectors(self):
+        """tuple: numeric indices of all :class:`.Layer` in the
+        :class:`Structure` in the order of :attr:`unique_layers`, as well as
+        the ids and handles of the corresponding layer instances.
+
+        - *indices (ndarray[float])* - numeric index of all Layer in the
+          Structure.
+        - *layer_ids (list[str])* - ids of all Layer in the Structure.
+        - *layer_handles (list[Layer])* - handles of all Layer in the
+          Structure.
+
+        """
+        return self._layer_vectors(self.unique_layers)
+
+    def _layer_vectors(self, layers):
+        """_layer_vectors
+
+        Returns the :attr:`layer_vectors` for the given list of unique
+        :class:`.Layer`, which is handed on to the recursive calls of the
+        nested sub structures.
+
+        Args:
+            layers (tuple): ids and handles of the unique Layer, see
+                :attr:`unique_layers`.
+
+        Returns:
+            (tuple):
+            - *indices (ndarray[float])* - numeric index of all Layer in the
+              Structure.
+            - *layer_ids (list[str])* - ids of all Layer in the Structure.
+            - *layer_handles (list[Layer])* - handles of all Layer in the
+              Structure.
+
+        """
+        indices = []
+        layer_ids = []
+        layer_handles = []
+        # traverse the substructres
+        for sub_structure, repetitions in self.sub_structures:
+            if isinstance(sub_structure, Layer):
+                # its a Layer or sub-class
+                # find the index of the current layer id in the unique
+                # layer list and add it N times to the indices vector
+                index = layers[0].index(sub_structure.id)
+                indices = np.append(indices, index * np.ones(repetitions))
+                # add N layer ids and handles to the lists
+                layer_ids = layer_ids + [sub_structure.id] * repetitions
+                layer_handles = layer_handles + [sub_structure] * repetitions
+            else:
+                # its a structure
+                # make a recursive call and hand in the same unique
+                # layer vector as we used before
+                temp1, temp2, temp3 = sub_structure._layer_vectors(layers)
+                # concat the temporary arrays N times
+                indices = np.append(indices, list(temp1) * repetitions)
+                layer_ids = layer_ids + list(temp2) * repetitions
+                layer_handles = layer_handles + list(temp3) * repetitions
+        return indices, layer_ids, layer_handles
+
+    @property
+    def num_layers(self):
+        """int: number of all :class:`.Layer` in the :class:`Structure`."""
+        L = 0
+        # traverse the substructures
+        for sub_structure, repetitions in self.sub_structures:
+            if isinstance(sub_structure, Layer):
+                L += repetitions
+            else:
+                # its a structure, so get its number of layers recursively
+                L += sub_structure.num_layers * repetitions
+        return L
+
+    @property
+    def num_sub_structures(self):
+        """int: number of all sub structures.
+
+        This is not the number of all :class:`.Layer` in the
+        :class:`Structure`, see :attr:`num_layers`.
+
+        """
+        N = 0
+        for sub_structure, _ in self.sub_structures:
+            if isinstance(sub_structure, Layer):
+                N += 1
+            else:
+                N += sub_structure.num_sub_structures
+        return N
+
+    @property
+    def num_sub_systems(self):
+        """int: number of subsystems, given by the layer with the most subsystems."""
+        _, layers = self.unique_layers
+        return max((layer.num_sub_systems for layer in layers), default=1)
+
+    @num_sub_systems.setter
+    def num_sub_systems(self, value):
+        raise AttributeError(
+            "'num_sub_systems' is derived from the thermal parameters of the layers "
+            "and cannot be set directly."
+        )
+
+    @property
+    def num_unique_layers(self):
+        """int: number of unique :class:`.Layer` in the :class:`Structure`."""
+        return len(self.unique_layers[0])
+
+    @property
+    def positions_per_unique_layer(self):
+        """dict{ndarray[int]}: position indices of each unique :class:`.Layer`
+        in the :class:`Structure`, accessible by the layer id."""
+        layer_ids, _ = self.unique_layers
+        indices = self.layer_vectors[0]
+        return {layer_id: np.flatnonzero(indices == i) for i, layer_id in enumerate(layer_ids)}
+
     @property
     def thickness(self):
-        _, d_end, _ = self.get_distances_of_layers(True)
+        _, d_end, _ = self.layer_distances
         return d_end[-1]
+
+    @property
+    def unique_layers(self):
+        """tuple: ids and handles of all unique :class:`.Layer` in the
+        :class:`Structure`.
+
+        The uniqueness is determined by the id of each :class:`.Layer`.
+
+        - *layer_ids (list[str])* - ids of all unique Layer instances in
+          the Structure.
+        - *layer_handles (list[Layer])* - handles of all unique Layer
+          instances in the Structure.
+
+        """
+        layer_ids = []
+        layer_handles = []
+        # traverse the sub_structures
+        for sub_structure, _ in self.sub_structures:
+            if isinstance(sub_structure, Layer):
+                # its a AmorphousLayer or UnitCell
+                ids, handles = [sub_structure.id], [sub_structure]
+            else:
+                # its a sub_structure, so get its unique layers recursively
+                ids, handles = sub_structure.unique_layers
+            for layer_id, handle in zip(ids, handles):
+                # add only the ids which are not in the list yet
+                if layer_id not in layer_ids:
+                    layer_ids.append(layer_id)
+                    layer_handles.append(handle)
+
+        return layer_ids, layer_handles

@@ -59,14 +59,14 @@ def test_get_temperature_after_delta_excitation(heat):
 
 
 def test_calc_energy_map(benchmark, heat):
-    dists, _, _ = heat.S.get_distances_of_layers()
+    dists, _, _ = heat.S.layer_distances
     temp_map = 1000 * np.ones((100, len(dists)))
     benchmark(heat.calc_energy_map, temp_map, 300)
 
 
 def test_calc_energy_flux_map(benchmark, heat):
     delays = np.r_[-1:10:0.01] * u.ps
-    dists, _, _ = heat.S.get_distances_of_layers()
+    dists, _, _ = heat.S.layer_distances
 
     temp_map = 1000 * np.ones((100, len(dists)))
     delta_map = temp_map
@@ -77,7 +77,7 @@ def test_odefunc(benchmark, heat):
     distances, _ = heat.S.interp_distance_at_interfaces(heat.intp_at_interface, False)
     N = len(distances)
     K = heat.S.num_sub_systems
-    d_start, _, _ = heat.S.get_distances_of_layers(False)
+    d_start, _, _ = heat.S._layer_distances()
     d_distances = np.diff(distances)
     dAdz = np.zeros_like(distances)
     fluence = 0
@@ -85,8 +85,8 @@ def test_odefunc(benchmark, heat):
     pulse_width = 0
 
     # prepare the inputs per unique layer as in Heat.calc_heat_diffusion
-    _, unique_layers = heat.S.get_unique_layers()
-    unique_indices = np.asarray(heat.S.get_layer_vectors()[0], dtype=int)
+    _, unique_layers = heat.S.unique_layers
+    unique_indices = np.asarray(heat.S.layer_vectors[0], dtype=int)
     indices = unique_indices[finderb(distances, d_start)]
     groups = [(idx, np.flatnonzero(indices == idx)) for idx in np.unique(indices)]
     therm_conds = [layer.thermal.therm_cond.functional for layer in unique_layers]

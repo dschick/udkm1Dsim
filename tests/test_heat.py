@@ -263,14 +263,14 @@ def test_get_diffusion_temp_map_numba(heat):
 
 
 def test_calc_energy_map(heat):
-    dists, _, _ = heat.S.get_distances_of_layers()
+    dists, _, _ = heat.S.layer_distances
     temp_map = np.zeros((10, len(dists)))
     heat.calc_energy_map(temp_map, 0)
 
 
 def test_calc_energy_flux_map(heat):
     delays = np.r_[-1:10:0.01] * u.ps
-    dists, _, _ = heat.S.get_distances_of_layers()
+    dists, _, _ = heat.S.layer_distances
 
     temp_map = np.zeros((len(delays), len(dists)))
     delta_map = temp_map

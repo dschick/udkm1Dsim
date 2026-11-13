@@ -204,7 +204,7 @@ class Simulation:
                 if name in source.coords and (size is None or np.size(source[name]) == size):
                     result.copy_coords(source, [name])
         if "distances" not in result:
-            layers = self.S.get_distances_of_layers(False)[2]
+            layers = self.S._layer_distances()[2]
             if num_distances is None or np.size(layers) == num_distances:
                 result.add_coord("distances", layers, "m")
         return result
