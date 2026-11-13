@@ -313,7 +313,7 @@ class XrayKin(Scattering):
                     theta,
                     strains[strainCounter : (strainCounter + d)],
                 )
-                z = sub_structure[0].get_length().magnitude
+                z = sub_structure[0].thickness.to("m").magnitude
                 strainCounter = strainCounter + d
                 A.append([temp, [sub_structure[0].name + " substructures"]])
                 A.append([Ep, f"{1:d}x {sub_structure[0].name:s}"])
