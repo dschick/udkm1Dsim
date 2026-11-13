@@ -143,6 +143,12 @@ def test_layer_deb_wal_fac_expr(layer):
 # ============================================================================
 
 
+def test_layer_set_deb_wal_fac(layer):
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    layer.deb_wal_fac = 2e-20 * u.m**2
+    assert_approx(layer.deb_wal_fac[0](300), 2e-20)
+
+
 def test_layer_sound_vel(layer):
     assert_equal(layer.sound_vel, 6 * u.nm / u.ps)
 
@@ -230,6 +236,30 @@ def test_layer_mag_saturation(layer):
     assert_equal(layer.mag_saturation, 1 * u.J / u.T / u.m**3)
 
 
+def test_layer_exch_relax_rate_and_concentration(layer):
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    layer.exch_relax_rate = 0.5
+    layer.concentration = 0.25
+    assert_approx(layer.exch_relax_rate, 0.5 * u.dimensionless)
+    assert_approx(layer.concentration, 0.25 * u.dimensionless)
+    assert layer.magnetic.exch_relax_rate.magnitude == 0.5
+    assert layer.magnetic.concentration.magnitude == 0.25
+
+
+def test_layer_dielectric_tensor_of_sublattices_needs_magnetization():
+    layer = Layer(
+        "AFM",
+        "AFM",
+        eff_spin=[0.5, 0.5],
+        magnetization=[(1, 0, 0), (-1, 0, 0)],
+        dielectric=Dispersion.from_ref_index(1.5),
+    )
+    with pytest.raises(NotImplementedError, match="several sublattices"):
+        layer.get_dielectric_tensor(1.55 * u.eV)
+    tensor = layer.get_dielectric_tensor(1.55 * u.eV, magnetization=(0, 0, 0))
+    assert np.allclose(tensor, 1.5**2 * np.eye(3))
+
+
 def test_layer_get_property_dict(layer):
     assert layer.get_property_dict(types="all") == vars(layer)
     for types in ["heat", "phonon", "xray", "optical", "magnetic"]:
@@ -315,6 +345,8 @@ def test_layer_spring_const_and_acoustic_impedance(amorphous_layer):
         "spring_const",
         "acoustic_impedance",
         "num_sub_systems",
+        "int_lin_therm_exp",
+        "int_heat_capacity",
     ],
 )
 def test_layer_derived_parameters_are_read_only(layer, prop):
@@ -457,6 +489,22 @@ def test_unit_cell_atoms(unit_cell):
     assert unit_cell.atom_ids == ["Sr", "O", "Ti"]
     assert np.allclose(unit_cell.get_atom_positions(), [0, 0.5, 1])
     assert np.allclose(unit_cell.get_atom_positions(0.1), [0, 0.55, 1.1])
+
+
+def test_unit_cell_without_atoms_has_no_dielectric_from_atoms():
+    uc = UnitCell("empty", "empty", c_axis=1 * u.nm)
+    assert uc.atom_ids == []
+    with pytest.raises(TypeError, match="has no atoms"):
+        uc.dielectric_from_atoms()
+
+
+@pytest.mark.filterwarnings("ignore:FigureCanvasAgg is non-interactive")
+def test_unit_cell_visualize(unit_cell, atom_oxygen, agg_backend):
+    uc = copy.deepcopy(unit_cell)  # do not alter the module-scoped fixture
+    # a repeated atom is labeled only once
+    uc.add_atom(atom_oxygen, 0.75)
+    uc.visualize(block=False)
+    uc.visualize(block=False, strain=0.1)
 
 
 def test_unit_cell_add_multiple_atoms(unit_cell, atom_oxygen):

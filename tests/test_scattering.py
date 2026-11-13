@@ -1254,6 +1254,39 @@ def test_xray_kin_homogeneous_reflectivity(xray_kin):
     xray_kin.homogeneous_reflectivity()
 
 
+@pytest.mark.parametrize("sim_class", [ud.XrayKin, ud.XrayDyn])
+def test_xray_homogeneous_reflectivity_of_nested_structures(
+    sim_class, unit_cell_iron, unit_cell_oxygen, tmp_path
+):
+    """a nested sub-structure reflects as its layers in a flat structure"""
+    inner = ud.Structure("double layer")
+    inner.add_sub_structure(unit_cell_iron, 3)
+    inner.add_sub_structure(unit_cell_oxygen, 2)
+    nested = ud.Structure("nested")
+    nested.add_sub_structure(unit_cell_oxygen, 4)
+    nested.add_sub_structure(inner, 5)
+    flat = ud.Structure("flat")
+    flat.add_sub_structure(unit_cell_oxygen, 4)
+    for _ in range(5):
+        flat.add_sub_structure(unit_cell_iron, 3)
+        flat.add_sub_structure(unit_cell_oxygen, 2)
+    R = []
+    for S in [nested, flat]:
+        sim = sim_class(S, True, cache_dir=tmp_path, disp_messages=False)
+        sim.energy = 8000 * u.eV
+        sim.qz = np.r_[1:5:50j] / u.angstrom
+        R.append(sim.calc_homogeneous_reflectivity()[0])
+    assert nested.num_sub_structures == 3
+    np.testing.assert_allclose(R[0], R[1], rtol=1e-6)
+
+
+def test_xray_dyn_all_ref_trans_matrices_without_strains(xray_dyn):
+    xray_dyn.energy = 8000 * u.eV
+    xray_dyn.qz = np.r_[1:5:10j] / u.angstrom
+    RTM = xray_dyn._get_all_ref_trans_matrices()
+    assert len(RTM) == xray_dyn.S.num_unique_layers
+
+
 def test_xray_dyn_repr(xray_dyn):
     xray_dyn.energy = 8000 * u.eV
     xray_dyn.theta = np.r_[1:10] * u.deg

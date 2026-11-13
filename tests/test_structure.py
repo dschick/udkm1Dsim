@@ -29,7 +29,10 @@ def test_thickness(structure):
     assert_allclose(structure.thickness, 150 * u.nm, rtol=1e-2)
 
 
-# test_visualize() fails on certain virtual machine due to TCL error
+@pytest.mark.filterwarnings("ignore:FigureCanvasAgg is non-interactive")
+def test_structure_visualize(structure, agg_backend):
+    structure.visualize(show=False)
+    structure.visualize(unit="um", block=False)
 
 
 def test_structure_get_hash(structure):
@@ -92,8 +95,20 @@ def test_unique_layers(structure):
     assert layer_ids == ["amorphous_layer_Fe", "amorphous_layer_O", "unit_cell_Fe", "unit_cell_O"]
 
 
-def test_layer_vectors(structure):
-    structure.layer_vectors
+def test_layer_vectors(structure, unit_cell_iron, unit_cell_oxygen):
+    indices, layer_ids, handles = structure.layer_vectors
+    assert len(indices) == len(layer_ids) == len(handles) == structure.num_layers
+    # 10 + 10 + 20 layers before the 20 repetitions of the nested double layer
+    assert np.array_equal(indices[:40], [0] * 10 + [1] * 10 + [2] * 20)
+    assert np.array_equal(indices[40:], ([2] * 5 + [3] * 7) * 20)
+    assert layer_ids[40:52] == ["unit_cell_Fe"] * 5 + ["unit_cell_O"] * 7
+    assert handles[40] is unit_cell_iron
+    assert handles[-1] is unit_cell_oxygen
+    assert [structure.get_layer_handle(i) for i in [0, 45, -1]] == [
+        handles[0],
+        handles[45],
+        handles[-1],
+    ]
 
 
 def test_positions_per_unique_layer(structure):
@@ -106,12 +121,53 @@ def test_layer_distances(structure):
     assert_allclose(np.sum(d_start), 2.22e-05 * u.m, rtol=1e-2)
 
 
+def test_layer_distances_are_consistent(structure):
+    d_start, d_end, d_mid = structure.layer_distances
+    assert_allclose(d_end[-1], structure.thickness)
+    assert_allclose(d_start[1:], d_end[:-1])
+    assert_allclose(d_mid, (d_start + d_end) / 2)
+    np.testing.assert_allclose(structure._layer_distances()[2], d_mid.to("m").magnitude)
+
+
 def test_interface_distances(structure):
-    assert_allclose(np.sum(structure.interface_distances), 3.68e-6 * u.m, rtol=1e-2)
+    interfaces = structure.interface_distances
+    assert_allclose(np.sum(interfaces), 3.68e-6 * u.m, rtol=1e-2)
+    # the surface, the 2 interfaces of the amorphous layers, the 20 Fe/O and
+    # 19 O/Fe interfaces of the double layers, whose first one continues the
+    # Fe unit cells, and the bottom
+    assert len(interfaces) == 1 + 2 + 20 + 19 + 1
+    assert interfaces[0] == 0 * u.m
+    assert_allclose(interfaces[-1], structure.thickness)
+    np.testing.assert_allclose(structure._interface_distances(), interfaces.to("m").magnitude)
+
+
+@pytest.mark.parametrize(
+    "prop",
+    [
+        "num_sub_structures",
+        "num_layers",
+        "num_unique_layers",
+        "unique_layers",
+        "layer_vectors",
+        "positions_per_unique_layer",
+        "layer_distances",
+        "interface_distances",
+        "thickness",
+    ],
+)
+def test_structure_properties_are_read_only(structure, prop):
+    with pytest.raises(AttributeError):
+        setattr(structure, prop, 1)
 
 
 def test_interp_distance_at_interfaces(structure):
-    structure.interp_distance_at_interfaces(N=11)
+    distances, original = structure.interp_distance_at_interfaces(N=11)
+    _, _, d_mid = structure.layer_distances
+    # the distances of the layers are kept
+    assert_allclose(distances[original], d_mid)
+    # an even number of points is increased to the next odd number
+    even, _ = structure.interp_distance_at_interfaces(N=10, units=False)
+    np.testing.assert_allclose(even, distances.to("m").magnitude)
 
 
 def test_get_layer_property_vector(structure):

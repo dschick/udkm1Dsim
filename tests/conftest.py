@@ -19,6 +19,18 @@ from udkm1Dsim import (
 
 # fixtures
 
+
+@pytest.fixture
+def agg_backend():
+    """Non-interactive backend of matplotlib for the visualizations, which
+    neither needs a display nor Tcl/Tk."""
+    import matplotlib.pyplot as plt
+
+    plt.switch_backend("Agg")
+    yield
+    plt.close("all")
+
+
 # parameters
 
 
