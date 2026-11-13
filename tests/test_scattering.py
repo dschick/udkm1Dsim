@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pytest
 from pint.testing import assert_allclose as assert_quantity_allclose
+from scipy.integrate import simpson
 
 import udkm1Dsim as ud
 from udkm1Dsim import (
@@ -1385,3 +1386,370 @@ def test_aliases_of_scattering_results(xray_kin, magnetic_multilayer):
             assert result.aliases_of(name) == (ALIASES[name],)
             assert result[ALIASES[name]] is result[name]
     assert np.all(sim.homogeneous_reflectivity_transmissivity().R_phi >= 0)
+
+
+# ============================================================================
+# fields and absorption
+# ============================================================================
+
+POLARIZATIONS = {
+    "sigma": np.array([1, 0]),
+    "pi": np.array([0, 1]),
+    "circ +": MultilayerScattering.calc_incoming_polarization(1),
+    "circ -": MultilayerScattering.calc_incoming_polarization(2),
+}
+
+
+def flux(matrix, pol):
+    """normal component of the Poynting vector for the polarization"""
+    return np.real(np.einsum("...ij,i,j->...", matrix, pol.conj(), pol))
+
+
+def reflectivity(sim, pol):
+    """reflectivity without analyzer from the Jones matrices"""
+    R, _, T, _ = sim.calc_homogeneous_jones_matrices()
+    return sim.calc_reflectivity_transmissivity(R, T, pol_in=pol, pol_out=np.array([]))[0]
+
+
+def check_energy_conservation(sim, points=2001):
+    """the flux in the superstrate is 1 - R and the absorption integrated
+    over each layer plus the flux through the bottom equals the flux below
+    the surface"""
+    interfaces = sim.S.interface_distances.to("m").magnitude
+    # the depths of each layer without its bottom interface, which belongs to
+    # the layer below
+    grids = [
+        top + (bottom - top) * np.linspace(0, 1 - 1e-10, points)
+        for top, bottom in zip(interfaces[:-1], interfaces[1:])
+    ]
+    z = np.concatenate([[-1e-12], *grids, [interfaces[-1]]])
+    fields = sim.calc_stack_fields(sim.calc_homogeneous_layers(), z, cache={}, dichroic=True)
+    for suffix in ("", "_phi"):
+        S, K = fields["S" + suffix], fields["K" + suffix]
+        np.testing.assert_allclose(
+            K, np.conj(np.swapaxes(K, -1, -2)), atol=1e-12 * np.abs(K).max()
+        )
+        for pol in POLARIZATIONS.values():
+            if suffix == "":
+                np.testing.assert_allclose(flux(S[:, :, 0], pol), 1 - reflectivity(sim, pol))
+            dAdz = sim.calc_absorption(K, pol)
+            absorbed = sum(
+                simpson(dAdz[:, :, 1 + i * points : 1 + (i + 1) * points], x=grid, axis=-1)
+                for i, grid in enumerate(grids)
+            )
+            np.testing.assert_allclose(
+                absorbed + flux(S[:, :, -1], pol), flux(S[:, :, 1], pol), rtol=1e-6
+            )
+
+
+@pytest.mark.parametrize("cls", FORMALISMS)
+@pytest.mark.parametrize("thickness", [1, 100], ids=["thin", "thick"])
+def test_absorption_conserves_energy(cls, thickness):
+    """energy conservation of the absorption of an optical stack, also for
+    micrometer thick absorbing layers, where the transfer matrices of the up
+    modes grow exponentially"""
+    S = optical_stack(substrate_layer(), thickness)
+    sim = simulation(cls, S, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg)
+    check_energy_conservation(sim)
+
+
+@pytest.mark.parametrize("cls", MAGNETIC)
+@pytest.mark.parametrize(
+    "magnetization", [(0, 0, 1), (0, 1, 0), (1, 0, 0)], ids=["polar", "longitudinal", "transverse"]
+)
+def test_magnetic_absorption(cls, magnetization):
+    """energy conservation and circular dichroism of a magnetic film, whose
+    absorption of circularly polarized light reverses with the
+    magnetization for the polar and longitudinal geometry"""
+    S = magnetic_film(magnetization)
+    sim = simulation(cls, S, np.r_[1.55] * u.eV, np.r_[30, 60, 90] * u.deg)
+    check_energy_conservation(sim)
+    K, K_phi = sim.calc_homogeneous_absorption(np.linspace(0, 10e-9, 101), dichroic=True)[2:4]
+    plus = sim.calc_absorption(K, POLARIZATIONS["circ +"])
+    minus = sim.calc_absorption(K, POLARIZATIONS["circ -"])
+    if magnetization != (1, 0, 0):
+        assert np.max(np.abs(plus - minus)) > 1e-3 * np.max(plus)
+        np.testing.assert_allclose(
+            sim.calc_absorption(K_phi, POLARIZATIONS["circ -"]),
+            plus,
+            rtol=1e-10,
+            atol=1e-12 * np.max(plus),
+        )
+
+
+@pytest.mark.parametrize("cls", MAGNETIC)
+def test_dichroic_absorption(cls):
+    """the opposite magnetization is calculated only for dichroic=True and
+    equals the absorption of the reversed magnetization"""
+    z = np.linspace(0, 10e-9, 11)
+    sim = simulation(cls, magnetic_film((0, 0.6, 0.8)), np.r_[1.55] * u.eV, np.r_[30, 60] * u.deg)
+    res = sim.homogeneous_absorption(z)
+    assert "absorption_phi" not in res
+    res = sim.homogeneous_absorption(z, dichroic=True)
+    reversed_sim = simulation(
+        cls, magnetic_film((0, -0.6, -0.8)), np.r_[1.55] * u.eV, np.r_[30, 60] * u.deg
+    )
+    np.testing.assert_allclose(res.K_phi, reversed_sim.homogeneous_absorption(z).K, rtol=1e-12)
+    assert relative(res.K_phi, res.K) > 1e-4
+
+
+@pytest.mark.parametrize("magnetization", [(0, 0, 1), (0, 1, 0)], ids=["polar", "longitudinal"])
+def test_magnetic_absorption_of_elzo_and_berreman(magnetization):
+    """the first-order modes of Elzo agree with the exact modes of Berreman for
+    a weak gyrotropy"""
+    S = magnetic_film(magnetization)
+    K = [
+        simulation(
+            cls, S, np.r_[1.55] * u.eV, np.r_[30, 60] * u.deg
+        ).calc_homogeneous_absorption()[2]
+        for cls in (Elzo, BerremanStepanov)
+    ]
+    assert relative(K[0], K[1]) < 1e-3
+
+
+@pytest.mark.parametrize("cls", [BerremanElzo, BerremanStepanov])
+def test_anisotropic_absorption(cls):
+    """energy conservation for a tilted uniaxial absorbing layer, which mixes
+    the sigma and pi polarizations"""
+    layer = substrate_layer(Dispersion.from_ref_index([1.66 + 0.05j, 1.49 + 0.1j]), (30, 20, 0))
+    layer.structural.thickness = 200 * u.nm
+    S = Structure("birefringent")
+    S.add_sub_structure(layer, 1)
+    S.add_substrate(substrate_layer(Dispersion.from_ref_index(1.5)))
+    sim = simulation(cls, S, np.r_[1.55] * u.eV, np.r_[20, 50, 90] * u.deg)
+    check_energy_conservation(sim)
+    K = sim.calc_homogeneous_absorption(np.linspace(0, 200e-9, 201))[2]
+    assert np.max(np.abs(K[..., 0, 1])) > 1e-3 * np.max(np.abs(K))
+
+
+def test_absorption_of_formalisms_agree():
+    """all formalisms give the same absorption of an isotropic stack"""
+    S = optical_stack(substrate_layer())
+    K = [
+        simulation(cls, S, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg)
+        .homogeneous_absorption()
+        .absorption_matrix
+        for cls in FORMALISMS
+    ]
+    for other in K[1:]:
+        assert relative(other, K[0]) < 1e-12
+
+
+@pytest.mark.parametrize("cls", FORMALISMS)
+def test_absorption_of_semi_infinite_absorber(cls):
+    """the absorption of a semi-infinite absorber decays exponentially with the
+    transmitted fraction 1 - R"""
+    theta = np.r_[15, 45, 90]
+    sim = simulation(cls, interface(substrate_layer()), np.r_[1.55] * u.eV, theta * u.deg)
+    z = np.linspace(0, 1e-6, 11)
+    k = sim.experiment.k.magnitude[0]
+    alpha = 2 * k * np.imag(np.sqrt(N_SUB**2 - np.cos(np.radians(theta)) ** 2))
+    for pol in POLARIZATIONS.values():
+        dAdz = sim.calc_absorption(sim.calc_homogeneous_absorption(z)[2], pol)[0]
+        expected = ((1 - reflectivity(sim, pol)[0]) * alpha)[:, np.newaxis] * np.exp(
+            -alpha[:, np.newaxis] * z
+        )
+        np.testing.assert_allclose(dAdz, expected, rtol=1e-10)
+
+
+@pytest.mark.parametrize("polarization", ["s", "p"])
+def test_absorption_matches_heat(polarization):
+    """the absorption of Parratt equals the multilayer absorption of Heat"""
+    S = optical_stack(substrate_layer())
+    sim = simulation(Parratt, S, np.r_[1.55] * u.eV, np.r_[30, 60, 90] * u.deg)
+    heat = ud.Heat(S, True, disp_messages=False, save_data=False)
+    # the bottom of the stack belongs to the substrate
+    z = np.linspace(0, S.interface_distances[-1].to("m").magnitude, 101)[:-1]
+    K = sim.calc_homogeneous_absorption(z)[2]
+    index = 0 if polarization == "s" else 1
+    for i, theta in enumerate(sim.theta[0]):
+        heat.excitation = {
+            "fluence": [1] * u.mJ / u.cm**2,
+            "wavelength": sim.wl[0],
+            "theta": theta,
+            "polarization": polarization,
+            "multilayer_absorption": True,
+        }
+        dAdz = heat.get_multilayers_absorption_profile(z)[0]
+        np.testing.assert_allclose(
+            np.real(K[0, i, :, index, index]), dAdz, rtol=1e-10, atol=1e-12 * np.max(dAdz)
+        )
+
+
+@pytest.mark.parametrize("cls", FORMALISMS)
+def test_fields_of_vacuum_and_interface(cls):
+    """an incident field of unit amplitude in vacuum and the continuity of the
+    in-plane fields and the normal displacement at an interface"""
+    theta = np.r_[20, 45, 90]
+    S = Structure("vacuum")
+    S.add_sub_structure(Vacuum(thickness=10 * u.nm), 1)
+    S.add_substrate(Vacuum())
+    sim = simulation(cls, S, np.r_[1.55] * u.eV, theta * u.deg)
+    res = sim.homogeneous_fields(np.r_[-5, 0, 5, 20] * u.nm)
+    np.testing.assert_allclose(np.linalg.norm(res.E, axis=-2), 1, rtol=1e-12)
+    np.testing.assert_allclose(sim.homogeneous_absorption().absorption, 0, atol=1e-6)
+
+    sim = simulation(cls, interface(substrate_layer()), np.r_[1.55] * u.eV, theta * u.deg)
+    E, _, H, _ = sim.calc_homogeneous_fields(np.r_[-1e-15, 1e-15])
+    np.testing.assert_allclose(E[:, :, 0, :2], E[:, :, 1, :2], atol=1e-12)
+    np.testing.assert_allclose(H[:, :, 0], H[:, :, 1], atol=1e-12)
+    np.testing.assert_allclose(E[:, :, 0, 2], N_SUB**2 * E[:, :, 1, 2], atol=1e-12)
+
+
+def test_fields_of_formalisms_agree():
+    """all formalisms give the same electric and magnetic fields of an
+    isotropic stack in the sample frame"""
+    S = optical_stack(substrate_layer())
+    z = np.linspace(-5e-9, 20e-9, 51)
+    fields = [
+        simulation(cls, S, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg).homogeneous_fields(
+            z
+        )
+        for cls in FORMALISMS
+    ]
+    for other in fields[1:]:
+        assert relative(other.E, fields[0].E) < 1e-12
+        assert relative(other.H, fields[0].H) < 1e-12
+
+
+@pytest.mark.parametrize("cls", FORMALISMS)
+def test_incident_polarizations(cls):
+    """the incident sigma polarization is along x and the pi polarization is
+    k x sigma for the wave vector k into the sample"""
+    theta = np.radians(np.r_[20, 45, 90])
+    S = Structure("vacuum")
+    S.add_sub_structure(Vacuum(thickness=10 * u.nm), 1)
+    S.add_substrate(Vacuum())
+    sim = simulation(cls, S, np.r_[1.55] * u.eV, np.degrees(theta) * u.deg)
+    E = sim.calc_homogeneous_fields(np.r_[0])[0][0, :, 0]
+    k = np.stack([np.zeros_like(theta), np.cos(theta), -np.sin(theta)], axis=-1)
+    np.testing.assert_allclose(E[..., 0], np.r_[1, 0, 0] * np.ones((3, 1)), atol=1e-12)
+    np.testing.assert_allclose(E[..., 1], np.cross(k, E[..., 0]), atol=1e-12)
+
+
+@pytest.mark.parametrize("cls", FORMALISMS)
+def test_transmitted_field(cls):
+    """the field in the substrate below a periodic stack with rough
+    interfaces equals the Jones matrix of the transmission"""
+    S = optical_stack()
+    for layer in S.unique_layers[1]:
+        layer.structural.roughness = 0.5 * u.nm
+    stack = Structure("periodic")
+    stack.add_sub_structure(S, 5)
+    stack.add_substrate(substrate_layer())
+    sim = simulation(cls, stack, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg)
+    T = sim.calc_homogeneous_jones_matrices()[2]
+    bottom = stack.interface_distances[-1].to("m").magnitude
+    E = sim.calc_homogeneous_fields(np.r_[bottom])[0][:, :, 0]
+    # pi polarization k x sigma of the transmitted wave
+    q = np.sqrt(N_SUB**2 - np.cos(sim.theta.to("rad").magnitude) ** 2) / N_SUB
+    np.testing.assert_allclose(E[..., 0, 0], T[..., 0, 0], rtol=1e-10)
+    np.testing.assert_allclose(E[..., 1, 1], -q * T[..., 1, 1], rtol=1e-10)
+
+
+@pytest.mark.parametrize("cls", FORMALISMS)
+@pytest.mark.parametrize("roughness", [0, 0.5])
+def test_layer_absorption(cls, roughness):
+    """the absorption of each layer equals the integrated absorption profile
+    and, for smooth interfaces, the layers and the substrate absorb 1 - R"""
+    S = optical_stack(substrate_layer())
+    for layer in S.unique_layers[1]:
+        layer.structural.roughness = roughness * u.nm
+    sim = simulation(cls, S, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg)
+    sim.set_polarization("circ +", "none")
+    res = sim.homogeneous_absorption()
+    assert res.A_layers.shape == (2, 3, S.num_layers)
+    assert res.K_layers.shape == (2, 3, S.num_layers, 2, 2)
+    assert res.dims("layer_absorption") == ("energy", "angles", "layers")
+    np.testing.assert_allclose(res.A_layers, sim.calc_absorption(res.K_layers))
+    tops, bottoms = (d.to("m").magnitude for d in S.layer_distances[:2])
+    points = 2001
+    for j, (top, bottom) in enumerate(zip(tops, bottoms)):
+        z = top + (bottom - top) * np.linspace(0, 1 - 1e-10, points)
+        absorbed = simpson(sim.calc_homogeneous_absorption(z)[0], x=z, axis=-1)
+        np.testing.assert_allclose(res.A_layers[..., j], absorbed, rtol=1e-6, atol=1e-12)
+    S_sub = sim.calc_stack_fields(sim.calc_homogeneous_layers(), np.r_[bottoms[-1]])["S"]
+    np.testing.assert_allclose(res.S_sub, flux(S_sub[:, :, 0], sim.pol_in), rtol=1e-12)
+    np.testing.assert_allclose(res.S_sub, sim.calc_absorption(res.S_sub_matrix))
+    assert res.dims("substrate_flux") == ("energy", "angles")
+    if roughness == 0:
+        R = reflectivity(sim, sim.pol_in)
+        np.testing.assert_allclose(res.A_layers.sum(axis=-1) + res.S_sub, 1 - R, rtol=1e-12)
+
+
+@pytest.mark.parametrize("cls", FORMALISMS)
+def test_absorption_with_roughness(cls):
+    """the reflected flux in the superstrate agrees with the reflectivity also
+    for rough interfaces and repeated sub-structures"""
+    S = optical_stack(substrate_layer())
+    for layer in S.unique_layers[1]:
+        layer.structural.roughness = 0.5 * u.nm
+    stack = Structure("periodic")
+    stack.add_sub_structure(S, 20)
+    stack.add_substrate(substrate_layer())
+    sim = simulation(cls, stack, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg)
+    S = sim.calc_stack_fields(sim.calc_homogeneous_layers(), np.r_[-1e-12])["S"]
+    for pol in POLARIZATIONS.values():
+        np.testing.assert_allclose(flux(S[:, :, 0], pol), 1 - reflectivity(sim, pol), rtol=1e-10)
+
+
+def test_homogeneous_absorption_result():
+    """result of the absorption and the fields with their coordinates,
+    aliases, units, and polarizations"""
+    S = optical_stack(substrate_layer())
+    sim = simulation(Elzo, S, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg)
+    res = sim.homogeneous_absorption()
+    assert res.dims("absorption") == ("energy", "angles", "distances")
+    assert res.unit("absorption") == "1/m"
+    centers = S.layer_distances[2].to("m").magnitude
+    np.testing.assert_allclose(res["distances"], centers)
+    assert res.absorption.shape == (2, 3, S.num_layers)
+    assert res.absorption_matrix.shape == (2, 3, S.num_layers, 2, 2)
+    np.testing.assert_array_equal(res.dAdz, sim.calc_homogeneous_absorption()[0])
+    np.testing.assert_allclose(res.dAdz, np.real(res.K[..., 0, 0]))
+    # the opposite magnetization only on request
+    assert "absorption_phi" not in res and "absorption_matrix_phi" not in res
+    assert sim.calc_homogeneous_absorption()[1] is None
+    assert sim.calc_homogeneous_fields()[3] is None
+    res_phi = sim.homogeneous_absorption(dichroic=True)
+    np.testing.assert_allclose(res_phi.dAdz_phi, res.dAdz)
+    np.testing.assert_allclose(res_phi.K_phi, res.K)
+
+    sim.set_polarization("unpolarized", "none")
+    np.testing.assert_allclose(
+        sim.homogeneous_absorption().dAdz, np.real(res.K[..., 0, 0] + res.K[..., 1, 1]) / 2
+    )
+    pols = [(0 * u.deg, 0), (90 * u.deg, 0), (45 * u.deg, 1)]
+    sim.set_polarization("elliptical", "none", pols)
+    assert sim.homogeneous_absorption().dAdz.shape == (2, 3, S.num_layers, 3)
+
+    res = sim.homogeneous_fields(np.r_[0, 1, 2] * u.nm)
+    assert res.E.shape == res.H.shape == (2, 3, 3, 3, 2)
+    # the fields together with the absorption
+    res_both = sim.homogeneous_absorption(np.r_[0, 1, 2] * u.nm, fields=True)
+    np.testing.assert_allclose(res_both.E, res.E)
+    np.testing.assert_allclose(res_both.H, res.H)
+    assert "electric_field_phi" not in res_both
+    assert len(sim.calc_homogeneous_absorption()) == 12
+    assert len(sim.calc_homogeneous_absorption(fields=True)) == 16
+    np.testing.assert_allclose(res["distances"], [0, 1e-9, 2e-9])
+    np.testing.assert_array_equal(res.E, sim.calc_homogeneous_fields(np.r_[0, 1e-9, 2e-9])[0])
+
+    strained = sim.homogeneous_absorption(strains=np.full((S.num_sub_structures, 1), 0.01))
+    np.testing.assert_allclose(strained["distances"], 1.01 * centers)
+    with pytest.raises(NotImplementedError):
+        sim.homogeneous_absorption(temps=np.full(S.num_sub_structures, 300))
+
+
+def test_aliases_of_field_results(magnetic_multilayer):
+    """the field and absorption results have the short aliases of ALIASES"""
+    from udkm1Dsim.simulations.scattering.scattering import ALIASES
+
+    sim = simulation(Elzo, magnetic_multilayer, np.r_[707] * u.eV, np.r_[5, 10] * u.deg)
+    for result in (
+        sim.homogeneous_fields(dichroic=True),
+        sim.homogeneous_absorption(dichroic=True, fields=True),
+    ):
+        for name in result.keys():
+            assert result.aliases_of(name) == (ALIASES[name],)
+            assert result[ALIASES[name]] is result[name]

@@ -49,7 +49,10 @@ polarization, e.g. the Kerr and Faraday effect, follow by
 ``homogeneous_reflectivity_transmissivity()``,
 ``inhomogeneous_reflectivity_transmissivity()``,
 ``homogeneous_rotation_ellipticity()``, and
-``inhomogeneous_rotation_ellipticity()``.
+``inhomogeneous_rotation_ellipticity()``. The fields inside the structure and
+the absorption profile, e.g. for the optical excitation of :class:`.Heat`,
+follow from :meth:`~MultilayerScattering.homogeneous_fields` and
+:meth:`~MultilayerScattering.homogeneous_absorption`.
 
 The photon energies and angles of a simulation are held by its
 :class:`~udkm1Dsim.simulations.parameter_groups.ExperimentParameters` in

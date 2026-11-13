@@ -47,6 +47,10 @@ or by the numerically stable scattering-matrix recursion of
 :cite:t:`stepanov2000`, which avoids the exponentially growing terms of the
 upward modes in thick and absorbing stacks.
 
+The fields inside the stack and the absorption from their Poynting vector
+follow from :meth:`MultilayerScattering.homogeneous_fields` and
+:meth:`MultilayerScattering.homogeneous_absorption`.
+
 """
 
 __all__ = ["MultilayerScattering", "circular_to_linear", "compose_scattering_stacks"]
@@ -62,7 +66,7 @@ from ...helpers import convert_polar_to_cartesian, make_hash_md5
 from ...structures.layers import Layer, Vacuum
 from ...structures.structure import Structure
 from ..result import Result, find_source, get_entry
-from .scattering import Scattering
+from .scattering import ALIASES, Scattering
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -147,6 +151,30 @@ JONES_NAMES = (
 )
 #: names of the reflectivities and transmissivities of a result
 REFLECTIVITY_NAMES = ("reflectivity", "reflectivity_phi", "transmissivity", "transmissivity_phi")
+#: names of the fields of a result
+FIELD_NAMES = ("electric_field", "electric_field_phi", "magnetic_field", "magnetic_field_phi")
+#: names of the absorptions of a result
+ABSORPTION_NAMES = (
+    "absorption",
+    "absorption_phi",
+    "absorption_matrix",
+    "absorption_matrix_phi",
+    "layer_absorption",
+    "layer_absorption_phi",
+    "layer_absorption_matrix",
+    "layer_absorption_matrix_phi",
+    "substrate_flux",
+    "substrate_flux_phi",
+    "substrate_flux_matrix",
+    "substrate_flux_matrix_phi",
+)
+#: units of the fields and absorptions of a result
+FIELD_UNITS = {
+    "absorption": "1/m",
+    "absorption_phi": "1/m",
+    "absorption_matrix": "1/m",
+    "absorption_matrix_phi": "1/m",
+}
 #: names of the rotations and ellipticities of a result
 ROTATION_NAMES = (
     "reflection_rotation",
@@ -209,6 +237,11 @@ class MultilayerScattering(Scattering):
     _pol_out_states = (0, 1, 2, 3, 4, 5)
     # assembly of the stack, either "transfer" or "scattering"
     _assembly = "scattering"
+    # signs of the in-plane fields (E_x, E_y, H_x, H_y) of the modes in the
+    # sample frame of Elzo et al., see calc_stack_fields()
+    _field_frame = np.ones(4)
+    # the fields depend on the magnetization
+    _magnetic_fields = True
 
     def get_hash(self, **kwargs):
         """get_hash
@@ -1356,6 +1389,505 @@ class MultilayerScattering(Scattering):
         jones = self.calc_homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar)
         return self._reduce_rotation_ellipticity(self, jones)
 
+    # ---- fields and absorption --------------------------------------------------
+
+    def calc_absorption(self, K, pol_in=None):
+        r"""calc_absorption
+
+        Absorption :math:`p^\dagger K p` for the Jones vector :math:`p` of the
+        incoming polarization from the hermitian absorption matrix :math:`K`
+        in the linear :math:`(\sigma, \pi)` basis, e.g. of
+        :meth:`homogeneous_absorption`, and :math:`(K_{\sigma\sigma} +
+        K_{\pi\pi}) / 2` for unpolarized light.
+
+        For partially polarized light with the coherency matrix :math:`J`
+        :cite:p:`born1999`, the absorption is :math:`\mathrm{tr}(K J)`. Hence,
+        the four real parameters of :math:`K` are the absorption of
+        unpolarized light :math:`\mathrm{tr}(K) / 2`, the linear dichroism
+        :math:`K_{\sigma\sigma} - K_{\pi\pi}` and :math:`2\,\mathrm{Re}\,
+        K_{\sigma\pi}` along :math:`\pm 45°`, and the circular dichroism
+        :math:`2\,\mathrm{Im}\, K_{\sigma\pi}`.
+
+        Args:
+            K (ndarray[complex]): absorption matrices of shape (..., 2, 2).
+            pol_in (ndarray[complex], optional): incoming polarization factor.
+                Defaults to the one of the simulation.
+
+        Returns:
+            A (ndarray[float]): absorption of shape (...) or (..., P) for P
+            polarizations.
+
+        """
+        pol_in = np.atleast_2d(self.pol_in if pol_in is None else pol_in)
+        num_pol = pol_in.shape[0]
+        A = np.empty(K.shape[:-2] + (num_pol,))
+        for i in range(num_pol):
+            vector = pol_in[i, :]
+            if np.any(vector):
+                A[..., i] = np.real(np.einsum("...ij,i,j->...", K, vector.conj(), vector))
+            else:
+                # unpolarized: incoherent average of sigma and pi
+                A[..., i] = np.real(K[..., 0, 0] + K[..., 1, 1]) / 2
+        if num_pol == 1:
+            return A[..., 0]
+        return A
+
+    def homogeneous_fields(
+        self,
+        distances=None,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+        dichroic=False,
+    ):
+        r"""homogeneous_fields
+
+        Electric field :math:`E` and magnetic field :math:`Z_0 H` inside the
+        sample structure with homogeneous strain and magnetization for an
+        incident :math:`\sigma` or :math:`\pi` polarization of unit amplitude,
+        see :meth:`calc_homogeneous_fields`.
+
+        Args:
+            distances (ndarray[float, Quantity], optional): depths below the
+                surface (m), negative in the superstrate. Defaults to the
+                centers of the layers.
+            strains (ndarray[float], optional): strain of each sub-structure.
+            magnetizations (ndarray[float], optional): magnetization of each
+                sub-structure, see :meth:`homogeneous_jones_matrices`.
+            temps (ndarray[float], optional): temperature of each
+                sub-structure, which raises a ``NotImplementedError`` yet.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates. Defaults to False.
+            dichroic (bool, optional): also for the opposite magnetization,
+                which needs a second calculation for magnetic layers.
+                Defaults to False.
+
+        Returns:
+            result (Result): ``electric_field`` and ``magnetic_field`` of
+            shape (M, N, Z, 3, 2) for the components :math:`(x, y, z)` in the
+            frame of the sample and the incident :math:`\sigma` and
+            :math:`\pi` polarization, and with the suffix ``_phi`` for the
+            opposite magnetization.
+
+        """
+        distances, results = self._timed(
+            "homogeneous_fields",
+            self._calc_homogeneous_fields,
+            distances,
+            strains,
+            magnetizations,
+            temps,
+            polar=polar,
+            dichroic=dichroic,
+            absorption=False,
+        )
+        return self._field_result("homogeneous fields", FIELD_NAMES, results, distances)
+
+    def calc_homogeneous_fields(
+        self,
+        distances=None,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+        dichroic=False,
+    ):
+        r"""calc_homogeneous_fields
+
+        Plain arrays of :meth:`homogeneous_fields`.
+
+        The fields are the superposition of the eigenmodes of each layer.
+        Their amplitudes follow from the reflection matrices of the stack
+        below each layer from the substrate upwards and the transmission from
+        the superstrate downwards, as in the scattering matrices of
+        :cite:t:`ko1988,stepanov2000`, so that no exponentially growing terms
+        appear for any formalism.
+
+        Returns:
+            (tuple):
+            - *E (ndarray[complex])* - electric field of shape (M, N, Z, 3, 2).
+            - *E_phi (ndarray[complex])* - for opposite magnetization or None.
+            - *H (ndarray[complex])* - magnetic field :math:`Z_0 H`.
+            - *H_phi (ndarray[complex])* - for opposite magnetization or None.
+
+        """
+        return self._calc_homogeneous_fields(
+            distances,
+            strains,
+            magnetizations,
+            temps,
+            polar=polar,
+            dichroic=dichroic,
+            absorption=False,
+        )[1]
+
+    def homogeneous_absorption(
+        self,
+        distances=None,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+        dichroic=False,
+        fields=False,
+    ):
+        r"""homogeneous_absorption
+
+        Absorption profile :math:`\mathrm{d}A/\mathrm{d}z`, absorption of
+        each layer, and flux into the substrate of the sample structure with
+        homogeneous strain and magnetization for the incoming polarization,
+        see :meth:`calc_homogeneous_absorption`.
+
+        Args:
+            distances (ndarray[float, Quantity], optional): depths below the
+                surface (m). Defaults to the centers of the layers.
+            strains (ndarray[float], optional): strain of each sub-structure.
+            magnetizations (ndarray[float], optional): magnetization of each
+                sub-structure, see :meth:`homogeneous_jones_matrices`.
+            temps (ndarray[float], optional): temperature of each
+                sub-structure, which raises a ``NotImplementedError`` yet.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates. Defaults to False.
+            dichroic (bool, optional): also for the opposite magnetization,
+                which needs a second calculation for magnetic layers.
+                Defaults to False.
+            fields (bool, optional): also return the fields of
+                :meth:`homogeneous_fields` at the ``distances``. Defaults to
+                False.
+
+        Returns:
+            result (Result): ``absorption`` (1/m) of shape (M, N, Z) and its
+            ``absorption_matrix`` of shape (M, N, Z, 2, 2), the absorbed
+            fraction ``layer_absorption`` of each layer of shape (M, N, L)
+            and its ``layer_absorption_matrix``, the ``substrate_flux`` of
+            shape (M, N), i.e. the absorption of a semi-infinite absorbing
+            substrate, and its ``substrate_flux_matrix``, and with the suffix
+            ``_phi`` for the opposite magnetization.
+
+        """
+        distances, results = self._timed(
+            "homogeneous_absorption",
+            self._calc_homogeneous_fields,
+            distances,
+            strains,
+            magnetizations,
+            temps,
+            polar=polar,
+            dichroic=dichroic,
+            absorption=True,
+            fields=fields,
+        )
+        names = ABSORPTION_NAMES + (FIELD_NAMES if fields else ())
+        return self._field_result("homogeneous absorption", names, results, distances)
+
+    def calc_homogeneous_absorption(
+        self,
+        distances=None,
+        strains=np.array([]),
+        magnetizations=np.array([]),
+        temps=np.array([]),
+        *,
+        polar=False,
+        dichroic=False,
+        fields=False,
+    ):
+        r"""calc_homogeneous_absorption
+
+        Plain arrays of :meth:`homogeneous_absorption`.
+
+        The absorption is the decrease of the normal component of the
+        Poynting vector :math:`S_z = \mathrm{Re}(E_y H_x^* - E_x H_y^*) / 2`
+        of the fields of :meth:`calc_homogeneous_fields` into the sample,
+        relative to the incident flux, see :cite:t:`passler2020` and
+        :cite:t:`byrnes2016`. It is consistent with the reflectivity, except
+        for rough interfaces, which do not conserve the flux. As :math:`S_z`
+        is quadratic in the fields, the absorption for any incoming
+        polarization follows from the hermitian absorption matrix :math:`K`,
+        see :meth:`calc_absorption`. The absorption of each layer is the
+        difference of :math:`S_z` at its top and bottom, and the flux into
+        the substrate is :math:`S_z` at its top, which is absorbed for a
+        semi-infinite absorbing substrate and transmitted otherwise.
+
+        Returns:
+            (tuple):
+            - *A (ndarray[float])* - absorption profile (1/m) of shape
+              (M, N, Z) or (M, N, Z, P) for P polarizations.
+            - *A_phi (ndarray[float])* - for opposite magnetization or None.
+            - *K (ndarray[complex])* - absorption matrix (1/m) of shape
+              (M, N, Z, 2, 2).
+            - *K_phi (ndarray[complex])* - for opposite magnetization or None.
+            - *A_layers (ndarray[float])* - absorption of each layer of shape
+              (M, N, L) or (M, N, L, P).
+            - *A_layers_phi (ndarray[float])* - for opposite magnetization or
+              None.
+            - *K_layers (ndarray[complex])* - absorption matrix of each layer
+              of shape (M, N, L, 2, 2).
+            - *K_layers_phi (ndarray[complex])* - for opposite magnetization
+              or None.
+            - *S_sub (ndarray[float])* - flux into the substrate of shape
+              (M, N) or (M, N, P).
+            - *S_sub_phi (ndarray[float])* - for opposite magnetization or
+              None.
+            - *S_sub_matrix (ndarray[complex])* - flux matrix into the
+              substrate of shape (M, N, 2, 2).
+            - *S_sub_matrix_phi (ndarray[complex])* - for opposite
+              magnetization or None.
+            - *E, E_phi, H, H_phi (ndarray[complex])* - the fields of
+              :meth:`calc_homogeneous_fields` for ``fields=True`` only.
+
+        """
+        return self._calc_homogeneous_fields(
+            distances,
+            strains,
+            magnetizations,
+            temps,
+            polar=polar,
+            dichroic=dichroic,
+            absorption=True,
+            fields=fields,
+        )[1]
+
+    def _calc_homogeneous_fields(
+        self,
+        distances,
+        strains,
+        magnetizations,
+        temps,
+        *,
+        polar,
+        dichroic,
+        absorption,
+        fields=False,
+    ):
+        """distances and the fields or, for ``absorption=True``, the absorptions
+        and, for ``fields=True``, also the fields"""
+        self._check_experiment()
+        self._reject_temperatures(temps, "temps")
+        if np.size(magnetizations) > 0:
+            magnetizations = self.parse_magnetization_map(magnetizations, polar)
+        layers = _flatten_layers(self._homogeneous_layer_tree(strains, magnetizations))
+        tops, bottoms = self._layer_bounds(layers)
+        if distances is None:
+            distances = (tops + bottoms) / 2
+        elif isinstance(distances, Q_):
+            distances = distances.to("m").magnitude
+        distances = np.atleast_1d(np.asarray(distances, dtype=float))
+        if not absorption:
+            stack = self._stack_fields(layers, distances, {}, dichroic)
+            return distances, (stack["E"], stack.get("E_phi"), stack["H"], stack.get("H_phi"))
+        # the flux at the top and bottom of each layer within the layer and at
+        # the top of the substrate within the substrate
+        Z, L = len(distances), len(tops)
+        centers = (tops + bottoms) / 2
+        substrate = bottoms[-1:] if L > 0 else np.zeros(1)
+        stack = self._stack_fields(
+            layers,
+            np.concatenate([distances, tops, bottoms, substrate]),
+            {},
+            dichroic,
+            z_slab=np.concatenate([distances, centers, centers, substrate]),
+        )
+        results = {}
+        for suffix in ("", "_phi"):
+            if "K" + suffix not in stack:
+                results[suffix] = [None] * 6
+                continue
+            K, S = stack["K" + suffix][:, :, :Z], stack["S" + suffix]
+            K_layers = S[:, :, Z : Z + L] - S[:, :, Z + L : Z + 2 * L]
+            S_sub = S[:, :, -1]
+            results[suffix] = [
+                self.calc_absorption(K),
+                K,
+                self.calc_absorption(K_layers),
+                K_layers,
+                self.calc_absorption(S_sub),
+                S_sub,
+            ]
+        # order of ABSORPTION_NAMES: each value followed by its opposite magnetization
+        values = [value for pair in zip(results[""], results["_phi"]) for value in pair]
+        if fields:
+            values += [stack["E"][:, :, :Z], None, stack["H"][:, :, :Z], None]
+            if "E_phi" in stack:
+                values[-3], values[-1] = stack["E_phi"][:, :, :Z], stack["H_phi"][:, :, :Z]
+        return distances, tuple(values)
+
+    def _field_result(self, title, names, values, distances):
+        """result of the fields or absorptions with the dimensions
+        ``energy``, ``angles``, and ``distances`` or ``layers``"""
+        result = self.new_scattering_result(title)
+        result.add_coord("distances", distances, "m")
+        for name, value in zip(names, values):
+            if value is None:
+                # no opposite magnetization for dichroic=False
+                continue
+            if name.startswith("layer"):
+                dims = ("energy", "angles", "layers")
+            elif name.startswith("substrate"):
+                dims = ("energy", "angles")
+            else:
+                dims = ("energy", "angles", "distances")
+            result.add(name, value, dims, FIELD_UNITS.get(name, ""), ALIASES.get(name, ()))
+        return result
+
+    def _layer_bounds(self, layers):
+        """tops and bottoms of the layers of the structure without the
+        superstrate and the substrate (m) for the strains of the ``layers``"""
+        num_substrate = len(_flatten_layers(self._superstrate_and_substrate()[1]))
+        thickness = [
+            layer.structural.thickness.magnitude
+            * (1 + self._parse_layer_inputs(layer, strain, magnetization)[0])
+            for layer, strain, magnetization in layers[1 : len(layers) - num_substrate]
+        ]
+        bottoms = np.cumsum(np.asarray(thickness, dtype=float))
+        return bottoms - thickness, bottoms
+
+    def calc_stack_fields(self, layers, distances, cache=None, dichroic=False):
+        r"""calc_stack_fields
+
+        Fields, Poynting flux, and absorption matrices of a stack of layers at
+        the given depths for incident :math:`\sigma` and :math:`\pi`
+        polarization of unit amplitude, see :meth:`calc_homogeneous_fields`.
+
+        Args:
+            layers (list[tuple]): layer, strain, and magnetization from the
+                superstrate to the substrate, see :meth:`calc_homogeneous_layers`.
+            distances (ndarray[float]): depths below the surface (m).
+            cache (dict, optional): cache of the eigenmodes. Defaults to None.
+            dichroic (bool, optional): also for the opposite magnetization.
+                Defaults to False.
+
+        Returns:
+            fields (dict): ``E`` and ``H`` of shape (M, N, Z, 3, 2), the
+            absorption matrices ``K`` (1/m), and the flux matrices ``S``
+            relative to the incident flux of shape (M, N, Z, 2, 2), with the
+            suffix ``_phi`` for the opposite magnetization.
+
+        """
+        return self._stack_fields(layers, distances, cache, dichroic)
+
+    def _stack_fields(self, layers, distances, cache=None, dichroic=False, z_slab=None):
+        """:meth:`calc_stack_fields`, where the slab of each depth is the one
+        at ``z_slab``"""
+        layers = _flatten_layers(layers)
+        self._check_superstrate(layers[0])
+        k = self.experiment.k.magnitude[:, np.newaxis]
+        b = np.broadcast_to(self._in_plane_wavevector(), self.experiment.theta.magnitude.shape)
+        z = np.atleast_1d(np.asarray(distances, dtype=float))
+        magnetizations = [self._parse_layer_inputs(*entry)[1] for entry in layers]
+        stacks = {"": layers}
+        magnetic = self._magnetic_fields and any(np.any(m) for m in magnetizations)
+        if dichroic and magnetic:
+            # the opposite magnetization from the modes of the reversed
+            # magnetizations, as the modes of calc_modes() for the opposite
+            # magnetization are not given in the sample frame for all formalisms
+            stacks["_phi"] = [
+                (layer, strain, tuple(-m for m in magnetization))
+                for (layer, strain, _), magnetization in zip(layers, magnetizations)
+            ]
+        result = {}
+        for suffix, stack in stacks.items():
+            slabs, interfaces = self._field_slabs(stack, cache)
+            result.update(
+                {
+                    name + suffix: value
+                    for name, value in self._slab_stack_fields(
+                        slabs, interfaces, z, k, b, z_slab
+                    ).items()
+                }
+            )
+        if dichroic and not magnetic:
+            for name in ("E", "H", "K", "S"):
+                result[name + "_phi"] = result[name]
+        return result
+
+    def _slab_stack_fields(self, slabs, interfaces, z, k, b, z_slab=None):
+        """fields, flux matrices, and absorption matrices at the depths ``z``
+        of the slabs ``(A, q, thickness, eps)`` and their interface
+        matrices, see :meth:`calc_stack_fields`, where the slab of each depth
+        is the one at ``z_slab``, e.g. to evaluate the bottom of a layer in
+        its own slab"""
+        A = [slab[0] for slab in slabs]
+        q = [slab[1] for slab in slabs]
+        thickness = np.array([slab[2] for slab in slabs])
+        tops = np.zeros(len(slabs))
+        tops[1:] = np.concatenate([[0.0], np.cumsum(thickness[1:-1])])
+        # depths at an interface belong to the slab below, also for the
+        # rounding errors of the sums of the thicknesses
+        z_slab = z if z_slab is None else z_slab
+        z_tol = z_slab + 64 * np.finfo(float).eps * max(np.max(tops), np.max(np.abs(z_slab)))
+        index = np.where(z_tol < 0, 0, np.searchsorted(tops[1:], z_tol, side="right"))
+        frame = self._field_frame[:, np.newaxis]
+
+        incident = self._incident_amplitudes(A[0], slabs[0][3], b)
+        d_top, u_bot = _mode_amplitudes(interfaces, q, thickness, k, incident)
+        psi = np.zeros(b.shape + (len(z), 4, 2), dtype=np.complex128)
+        dpsi = np.zeros_like(psi)
+        E = np.zeros(b.shape + (len(z), 3, 2), dtype=np.complex128)
+        H = np.zeros_like(E)
+        for j in np.unique(index):
+            mask = index == j
+            # no up modes in the semi-infinite substrate
+            u_j = None if j == len(slabs) - 1 else u_bot[j]
+            psi_j, dpsi_j = _slab_fields(
+                A[j], q[j], k, z[mask] - tops[j], thickness[j], d_top[j], u_j
+            )
+            psi[:, :, mask], dpsi[:, :, mask] = psi_j * frame, dpsi_j * frame
+            E[:, :, mask], H[:, :, mask] = _full_fields(psi_j * frame, b, slabs[j][3])
+        # normalization to an incident electric field of unit amplitude and to
+        # the incident flux
+        psi_in = _slab_fields(A[0], q[0], k, np.zeros(1), 0.0, incident, None)[0] * frame
+        E_in = _full_fields(psi_in, b, slabs[0][3])[0][:, :, 0]
+        norm = np.sqrt(np.sum(np.abs(E_in) ** 2, axis=-2))
+        psi_in = psi_in[:, :, 0] / norm[:, :, np.newaxis, :]
+        flux_in = np.real(np.trace(_flux_matrix(psi_in, psi_in), axis1=-2, axis2=-1)) / 2
+        flux_in = flux_in[:, :, np.newaxis, np.newaxis, np.newaxis]
+        norm = norm[:, :, np.newaxis, np.newaxis, :]
+        psi, dpsi = psi / norm, dpsi / norm
+        return {
+            "E": E / norm,
+            "H": H / norm,
+            "S": _flux_matrix(psi, psi) / flux_in,
+            "K": -(_flux_matrix(dpsi, psi) + _flux_matrix(psi, dpsi)) / flux_in,
+        }
+
+    def _field_slabs(self, layers, cache=None):
+        """eigenmodes ``(A, q, thickness, eps)`` of the homogeneous slabs of a
+        flat list of layers from the superstrate to the substrate, where
+        consecutive identical layers are combined, and the interface matrices
+        :math:`X` from the amplitudes at the bottom of a slab to the ones at
+        the top of the next slab including the roughness, see
+        :meth:`_assemble`. The superstrate has no thickness."""
+        k = self.experiment.k.magnitude[:, np.newaxis]
+        slabs, interfaces, keys = [], [], []
+        for i, entry in enumerate(layers):
+            layer, strain, magnetization = entry
+            key = (id(layer), *self._parse_layer_inputs(layer, strain, magnetization))
+            A, _, q, _, k_z, thickness, roughness, eps = self._layer_modes(*entry, cache=cache)
+            if i > 1 and key == keys[-1]:
+                # identical layers have no interface and no roughness
+                slabs[-1][2] += thickness
+                continue
+            if i > 0:
+                X = np.linalg.solve(A, slabs[-1][0])
+                if roughness > 0:
+                    X = X * self.calc_roughness_matrix(roughness, k * k_z, k * slabs[-1][4])
+                interfaces.append(X)
+            slabs.append([A, q, 0.0 if i == 0 else thickness, eps, k_z])
+            keys.append(key)
+        return slabs, interfaces
+
+    def _incident_amplitudes(self, A, eps, b):
+        """amplitudes of the down modes of the superstrate for the incident
+        sigma and pi polarization of shape (M, N, 2, 2), which follow from
+        the conversion of the Jones matrices by :meth:`incident_field`"""
+        identity = np.broadcast_to(np.eye(2, dtype=np.complex128), b.shape + (2, 2))
+        incident = self.incident_field(identity, identity, eps)[1]
+        return np.matmul(_LINEAR_TO_CIRCULAR, incident)
+
     # ---- inhomogeneous simulations ----------------------------------------------
 
     def inhomogeneous_jones_matrices(
@@ -1948,3 +2480,121 @@ def _scattering_stack_power(stack, n):
 def _repeat_scattering_stack(stack, n):
     """Repeat a scattering stack ``n`` times by binary powers."""
     return _scattering_stack_power(stack, n)
+
+
+# weights of the in-plane fields (E_x, E_y, Z_0 H_x, Z_0 H_y) for the normal
+# component S_z = Re(E_y (Z_0 H_x)^* - E_x (Z_0 H_y)^*) / 2 of the Poynting
+# vector into the sample, i.e. along -z of the sample frame, as bilinear form
+_FLUX_WEIGHTS = (
+    np.array([[0, 0, 0, -1], [0, 0, 1, 0], [0, 1, 0, 0], [-1, 0, 0, 0]], dtype=np.complex128) / 4
+)
+
+
+def _mode_amplitudes(interfaces, q, thickness, k, incident):
+    r"""Amplitudes of the down modes at the top and of the up modes at the
+    bottom of all slabs for the given amplitudes of the incident down modes
+    at the bottom of the superstrate.
+
+    The reflection matrices :math:`\Gamma_j` of the stack below each slab,
+    i.e. :math:`u_j = \Gamma_j d_j` at the bottom of the slab, follow from
+    the substrate, where no up modes are incident, to the superstrate by
+
+    .. math::
+
+        \Gamma_{j-1} = (\Gamma'_j X_{tr} - X_{rr})^{-1}
+        (X_{rt} - \Gamma'_j X_{tt}), \quad
+        \Gamma'_j = P_u^{-1} \Gamma_j P_d
+
+    with the blocks of the interface matrix :math:`X` from the amplitudes at
+    the bottom of slab :math:`j-1` to the ones at the top of slab :math:`j`
+    and the decaying propagations :math:`P_d` of the down and
+    :math:`P_u^{-1}` of the up modes through slab :math:`j`. The down
+    amplitudes then follow from the superstrate by
+    :math:`d_j = (X_{tt} + X_{tr} \Gamma_{j-1}) P_d d_{j-1}`. All terms are
+    bounded, also for thick and absorbing slabs.
+
+    Args:
+        interfaces (list[ndarray[complex]]): interface matrices of shape
+            (M, N, 4, 4) above the slabs 1 to J-1.
+        q (list[ndarray[complex]]): normal wave-vector components of the
+            modes of the J slabs of shape (M, N, 4).
+        thickness (ndarray[float]): thickness of the slabs (m).
+        k (ndarray[float]): wavenumbers of shape (M, 1).
+        incident (ndarray[complex]): amplitudes of the incident down modes of
+            shape (M, N, 2, P).
+
+    Returns:
+        (tuple):
+        - *d_top (list[ndarray[complex]])* - amplitudes of the down modes at
+          the top of the slabs of shape (M, N, 2, P).
+        - *u_bot (list[ndarray[complex]])* - amplitudes of the up modes at the
+          bottom of the slabs.
+
+    """
+    J = len(q)
+    k = k[..., np.newaxis]
+    down = [np.exp(1j * k * q[j][..., :2] * thickness[j]) for j in range(J)]
+    up_inv = [np.exp(-1j * k * q[j][..., 2:] * thickness[j]) for j in range(J)]
+    gamma = [None] * J
+    # no up modes are incident from the semi-infinite substrate
+    gamma[-1] = np.zeros(q[-1].shape[:-1] + (2, 2), dtype=np.complex128)
+    for j in range(J - 1, 0, -1):
+        gamma_top = up_inv[j][..., :, np.newaxis] * gamma[j] * down[j][..., np.newaxis, :]
+        X = interfaces[j - 1]
+        Xtt, Xtr, Xrt, Xrr = X[..., :2, :2], X[..., :2, 2:], X[..., 2:, :2], X[..., 2:, 2:]
+        gamma[j - 1] = np.linalg.solve(gamma_top @ Xtr - Xrr, Xrt - gamma_top @ Xtt)
+    d_top = [incident]
+    u_bot = [gamma[0] @ incident]
+    d_bot = incident
+    for j in range(1, J):
+        X = interfaces[j - 1]
+        d_top.append((X[..., :2, :2] + X[..., :2, 2:] @ gamma[j - 1]) @ d_bot)
+        d_bot = down[j][..., :, np.newaxis] * d_top[j]
+        u_bot.append(gamma[j] @ d_bot)
+    return d_top, u_bot
+
+
+def _slab_fields(A, q, k, zeta, thickness, d_top, u_bot):
+    """in-plane fields of the modes of a slab and their derivatives along the
+    depth of shape (M, N, Z, 4, P) at the depths ``zeta`` below its top for
+    the amplitudes of its down modes at the top and of its up modes at the
+    bottom, which are neglected for ``u_bot=None``, e.g. in the
+    semi-infinite substrate"""
+    k = k[..., np.newaxis, np.newaxis]
+    zeta = zeta[:, np.newaxis]
+    q = q[:, :, np.newaxis, :]
+    down = np.exp(1j * k * q[..., :2] * zeta)[..., np.newaxis] * d_top[:, :, np.newaxis]
+    if u_bot is None:
+        up = np.zeros_like(down)
+    else:
+        up = np.exp(1j * k * q[..., 2:] * (zeta - thickness))[..., np.newaxis]
+        up = up * u_bot[:, :, np.newaxis]
+    amplitudes = np.concatenate([down, up], axis=-2)
+    derivatives = 1j * k[..., np.newaxis] * q[..., np.newaxis] * amplitudes
+    A = A[:, :, np.newaxis]
+    return A @ amplitudes, A @ derivatives
+
+
+def _full_fields(psi, b, eps):
+    r"""electric field :math:`E` and magnetic field :math:`Z_0 H` of shape
+    (M, N, Z, 3, P) in the sample frame from the in-plane fields ``psi`` of
+    shape (M, N, Z, 4, P), the in-plane wave vector :math:`b = k_y / k` of
+    shape (M, N), and the dielectric tensor of shape (M, 3, 3) by
+    :math:`\varepsilon_{zx} E_x + \varepsilon_{zy} E_y + \varepsilon_{zz} E_z
+    = b Z_0 H_x` and :math:`Z_0 H_z = -b E_x`"""
+    b = b[:, :, np.newaxis, np.newaxis]
+    eps = eps[:, np.newaxis, np.newaxis]
+    E_x, E_y, H_x, H_y = psi[..., 0, :], psi[..., 1, :], psi[..., 2, :], psi[..., 3, :]
+    E_z = (b * H_x - eps[..., 2, 0, np.newaxis] * E_x - eps[..., 2, 1, np.newaxis] * E_y) / eps[
+        ..., 2, 2, np.newaxis
+    ]
+    E = np.stack([E_x, E_y, E_z], axis=-2)
+    H = np.stack([H_x, H_y, -b * E_x], axis=-2)
+    return E, H
+
+
+def _flux_matrix(psi_1, psi_2):
+    """hermitian bilinear form of the normal component of the Poynting
+    vector into the sample of shape (..., P, P) of the in-plane fields of
+    shape (..., 4, P), see :data:`_FLUX_WEIGHTS`"""
+    return np.einsum("...ia,ij,...jb->...ab", psi_1.conj(), _FLUX_WEIGHTS, psi_2)
