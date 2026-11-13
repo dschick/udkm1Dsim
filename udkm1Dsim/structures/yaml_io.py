@@ -54,6 +54,7 @@ __all__ = [
 
 __docformat__ = "restructuredtext"
 
+import functools
 import os
 import warnings
 from pathlib import PurePath
@@ -221,7 +222,16 @@ def _quantity_text(magnitude, unit):
     """Shortest text of a scalar quantity, which gives the same magnitude in
     the unit of its parameter on reading, as the unit of the parameter or a
     more readable unit, e.g. ``3.905 Å`` instead of ``3.905e-10 m``."""
-    original = _number_text(magnitude)
+    # the text of the number is part of the key of the cache, e.g. to tell
+    # -0.0 from 0.0
+    return _cached_quantity_text(_number_text(magnitude), magnitude, unit)
+
+
+@functools.lru_cache(maxsize=4096)
+def _cached_quantity_text(original, magnitude, unit):
+    """:func:`_quantity_text` of the text ``original`` of the magnitude,
+    which is cached, since the same quantities, e.g. the default
+    parameters, are written many times."""
     quantity = Q_(magnitude, unit)
     candidates = [unit] + [
         p for p in _PREFERRED_UNITS if p != unit and p.dimensionality == unit.dimensionality
@@ -404,6 +414,7 @@ class _Writer:
         # the objects are kept, so that their id() is not reused
         self._objects = []
         self._default_groups = {}
+        self._default_vacuum = None
 
     def _reserve(self, obj, base, namespace):
         """Key of an object and true if it is new, where the keys of
@@ -729,7 +740,9 @@ class _Writer:
     def _is_default_vacuum(self, layer):
         if type(layer) is not Vacuum:
             return False
-        return _same(self._write_layer(layer, layer.id), self._write_layer(Vacuum(), "vacuum"))
+        if self._default_vacuum is None:
+            self._default_vacuum = self._write_layer(Vacuum(), "vacuum")
+        return _same(self._write_layer(layer, layer.id), self._default_vacuum)
 
 
 def _write_angle(angle):

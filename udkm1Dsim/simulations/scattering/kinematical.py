@@ -172,7 +172,10 @@ class XrayKin(Scattering):
         """
         R, A = self._timed("homogeneous_reflectivity", self.calc_homogeneous_reflectivity, strains)
         return self._scattering_result(
-            "homogeneous reflectivity", ("reflectivity", "sub_structure_fields"), (R, A)
+            "homogeneous reflectivity",
+            ("reflectivity", "sub_structure_fields"),
+            (R, A),
+            inputs={"strains": strains},
         )
 
     def calc_homogeneous_reflectivity(self, strains=0):

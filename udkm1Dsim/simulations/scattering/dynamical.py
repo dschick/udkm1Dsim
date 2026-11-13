@@ -128,7 +128,10 @@ class XrayDyn(Scattering):
             "homogeneous_reflectivity", self.calc_homogeneous_reflectivity, strains, temps
         )
         return self._scattering_result(
-            "homogeneous reflectivity", ("reflectivity", "sub_structure_matrices"), (R, A)
+            "homogeneous reflectivity",
+            ("reflectivity", "sub_structure_matrices"),
+            (R, A),
+            inputs={"strains": strains, "temps": temps},
         )
 
     def calc_homogeneous_reflectivity(self, strains=[], temps=[]):
@@ -338,6 +341,8 @@ class XrayDyn(Scattering):
                 (R,),
                 inhomogeneous=True,
                 source=source,
+                inputs={"strain_vectors": strain_vectors},
+                input_maps={"strain_map": strain_map, "temp_map": temp_map},
             )
 
         return self._cached_result(

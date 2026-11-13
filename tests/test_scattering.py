@@ -22,6 +22,7 @@ from udkm1Dsim import (
     Vacuum,
     u,
 )
+from udkm1Dsim.simulations.result import array_hash
 from udkm1Dsim.simulations.scattering.berreman import berreman_modes
 from udkm1Dsim.simulations.scattering.elzo import elzo_modes
 from udkm1Dsim.simulations.scattering.multilayer import (
@@ -577,6 +578,12 @@ def test_inhomogeneous_equals_homogeneous(cls, magnetic_multilayer, tmp_path):
     )
     for a, b in zip(result.values(), (R, R_phi, T, T_phi)):
         np.testing.assert_allclose(a[1], b, rtol=1e-10)
+    assert result.attrs["inputs"] == {"polar": True}
+    assert result.attrs["input_hashes"] == {
+        "strain_map": array_hash(np.zeros((2, L))),
+        "magnetization_map": array_hash(magnetization_map),
+    }
+    assert res.attrs["inputs"] == {"polar": False}
     # cached results
     sim.save_data = True
     sim.force_recalc = False
@@ -1306,7 +1313,10 @@ def test_xray_dyn_homogeneous_reflectivity(xray_dyn):
     xray_dyn.homogeneous_reflectivity()
     xray_dyn.homogeneous_reflectivity(strains=np.zeros([2]))
     xray_dyn.homogeneous_reflectivity(temps=300 * np.ones([2]))
-    xray_dyn.homogeneous_reflectivity(strains=np.zeros([2]), temps=300 * np.ones([2]))
+    result = xray_dyn.homogeneous_reflectivity(strains=np.zeros([2]), temps=300 * np.ones([2]))
+    np.testing.assert_array_equal(result.attrs["inputs"]["strains"], np.zeros([2]))
+    np.testing.assert_array_equal(result.attrs["inputs"]["temps"], 300 * np.ones([2]))
+    assert "inputs" not in xray_dyn.homogeneous_reflectivity().attrs
     with pytest.raises(IndexError):
         xray_dyn.homogeneous_reflectivity(strains=np.zeros([3]))
     with pytest.raises(IndexError):
@@ -1326,10 +1336,15 @@ def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, atomistic_maps):
         xray_dyn.inhomogeneous_reflectivity(
             strain_map, strain_vectors=strain_vectors, temp_map=temp_map
         )
-    xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors)
+    result = xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors)
     xray_dyn.force_recalc = False
-    xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors)
+    cached = xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=strain_vectors)
     xray_dyn.force_recalc = True
+    for res in (result, cached):
+        assert res.attrs["input_hashes"] == {"strain_map": array_hash(strain_map)}
+        for a, b in zip(res.attrs["inputs"]["strain_vectors"], strain_vectors):
+            np.testing.assert_array_equal(a, b)
+    assert cached.attrs["parameters"]["incoming_polarization"] == "sigma"
     with pytest.raises(ValueError):
         xray_dyn.inhomogeneous_reflectivity(
             strain_map, strain_vectors=strain_vectors, calc_type="parallel"

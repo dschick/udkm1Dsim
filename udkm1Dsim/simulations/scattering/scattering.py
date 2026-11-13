@@ -156,7 +156,9 @@ class Scattering(Simulation):
         self.pol_in = self.calc_incoming_polarization(self._pol_in_state)
         self.pol_out = self.calc_outgoing_polarization(self._pol_out_state)
 
-    def new_scattering_result(self, title, num_delays=None, source=None):
+    def new_scattering_result(
+        self, title, num_delays=None, source=None, inputs=None, input_maps=None
+    ):
         """new_scattering_result
 
         New :class:`~udkm1Dsim.simulations.result.Result` with the
@@ -171,12 +173,16 @@ class Scattering(Simulation):
             num_delays (int, optional): number of delays of an inhomogeneous
                 result.
             source (Result, optional): upstream result.
+            inputs (dict, optional): inputs of the method, see
+                :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`.
+            input_maps (dict, optional): input maps of the method, see
+                :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`.
 
         Returns:
             result (Result): empty result.
 
         """
-        result = self.new_result(title)
+        result = self.new_result(title, inputs=inputs, input_maps=input_maps)
         if (
             isinstance(source, Result)
             and "delays" in source.coords
@@ -189,13 +195,24 @@ class Scattering(Simulation):
         result.add_coord("theta", np.atleast_2d(self.theta.to("deg").magnitude), "deg", dims)
         return result
 
-    def _scattering_result(self, title, names, values, unit="", inhomogeneous=False, source=None):
+    def _scattering_result(
+        self,
+        title,
+        names,
+        values,
+        unit="",
+        inhomogeneous=False,
+        source=None,
+        inputs=None,
+        input_maps=None,
+    ):
         """result of the ``values`` with the ``names`` and their
         :data:`ALIASES`, which have a first axis of the delays for
         ``inhomogeneous=True`` with the coordinates of an upstream ``source``
-        result, see :meth:`new_scattering_result`"""
+        result and the ``inputs`` and ``input_maps`` of the method, see
+        :meth:`new_scattering_result`"""
         num_delays = np.size(values[0], 0) if inhomogeneous else None
-        result = self.new_scattering_result(title, num_delays, source)
+        result = self.new_scattering_result(title, num_delays, source, inputs, input_maps)
         dims = ("delays", "energy", "angles") if inhomogeneous else ("energy", "angles")
         for name, value in zip(names, values):
             # e.g. the lists of the sub-structures have no dimensions
@@ -316,6 +333,17 @@ class Scattering(Simulation):
             ["analyzer polarization", self.polarizations[self.pol_out_state]],
         ]
         return super()._property_rows() + output
+
+    def _parameters(self):
+        """dict of the parameters of the simulation, whose photon energies
+        and angles are the coordinates of the results"""
+        return {
+            **super()._parameters(),
+            "incoming_polarization": self.polarizations[self.pol_in_state],
+            "analyzer_polarization": self.polarizations[self.pol_out_state],
+            "pol_in": self.pol_in,
+            "pol_out": self.pol_out,
+        }
 
     @property
     def pol_in_state(self):

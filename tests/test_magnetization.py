@@ -1272,3 +1272,35 @@ def test_all_optical_switching(gdfeco, tmp_path):
     assert np.any((switched[:, 0] < -0.01) & (switched[:, 1] < -0.01))
     assert m_z(low, exchange_relaxation=True)[-1, 0] > 0.3
     assert m_z(high)[-1, 0] > 0
+
+
+def test_magnetization_map_inputs(tmp_path):
+    """the inputs, which are no maps, are saved in the metadata of the
+    result and the input maps by their hashes, also for a cached result"""
+    S = make_structure((make_layer("m", lamda=0.1), 2))
+    llb = simulation(LLB, S, tmp_path)
+    llb.save_data = True
+    delays = np.r_[0:2:0.5] * u.ps
+    temp = Result("temperature map")
+    temp.add("temp_map", 400 * np.ones((len(delays), 2, 1)), ("delays", "distances"), "K")
+    kwargs = dict(temp_map=temp, init_magnetization=ALONG_X, B_ext=np.r_[0, 0, 10] * u.mT)
+    result = llb.get_magnetization_map(delays, **kwargs)
+    inputs = result.attrs["inputs"]
+    assert set(inputs) == {"B_ext", "init_magnetization"}
+    np.testing.assert_allclose(inputs["B_ext"].to("T").magnitude, [0, 0, 0.01])
+    np.testing.assert_array_equal(
+        inputs["init_magnetization"], llb.parse_initial_magnetization(ALONG_X)
+    )
+    assert result.attrs["input_hashes"] == {"temp_map": temp.entry_hash("temp_map")}
+    assert result.attrs["parameters"]["ode_options"] == llb.ode_options
+    llb.force_recalc = False
+    cached = llb.get_magnetization_map(delays, polar=True, **kwargs)
+    assert cached.attrs["input_hashes"] == result.attrs["input_hashes"]
+    np.testing.assert_array_equal(cached.attrs["inputs"]["B_ext"], inputs["B_ext"])
+    # the mean-field magnetization map
+    mf = llb.get_mean_field_mag_map(temp)
+    assert mf.attrs["input_hashes"] == {"temp_map": temp.entry_hash("temp_map")}
+    # the ode_options change the hash
+    hash = llb.get_hash(delays=delays)
+    llb.ode_options["rtol"] = 1e-6
+    assert llb.get_hash(delays=delays) != hash

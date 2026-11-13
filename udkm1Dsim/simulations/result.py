@@ -24,10 +24,11 @@
 """Results of the simulations with their coordinates, units, and metadata,
 which can be saved to and loaded from HDF5 files."""
 
-__all__ = ["Result", "get_entry", "find_source"]
+__all__ = ["Result", "get_entry", "find_source", "array_hash"]
 
 __docformat__ = "restructuredtext"
 
+import hashlib
 import warnings
 
 import numpy as np
@@ -63,8 +64,15 @@ class Result:
 
     A result cannot be unpacked as a tuple, since the order of its entries
     is not part of its meaning. The metadata in :attr:`attrs` hold the title,
-    the simulation, the version of udkm1Dsim, the hash, the sample structure,
-    and the parameters of the simulation.
+    the simulation, the version of udkm1Dsim, the time of creation, the hash,
+    the sample structure as YAML, see
+    :meth:`~udkm1Dsim.structures.structure.Structure.to_yaml`, and the
+    ``parameters`` of the simulation. Results of methods with arguments,
+    which are no maps, e.g. the external magnetic field, hold them in the
+    ``inputs`` and the :func:`array_hash` of their input maps, e.g. of the
+    ``temp_map`` of the phonon simulations, in the ``input_hashes``, see
+    :meth:`entry_hash`. Parameters and inputs with units are pint
+    Quantities.
 
     Args:
         title (str, optional): title of the result.
@@ -289,6 +297,22 @@ class Result:
         quantity = u.Quantity(self[name], self.unit(name) or "dimensionless")
         return quantity if unit is None else quantity.to(unit)
 
+    def entry_hash(self, name):
+        """entry_hash
+
+        Hash of the values of an entry or coordinate, see :func:`array_hash`,
+        e.g. to compare the ``temp_map`` of a heat result with the
+        ``input_hashes`` of a phonon result calculated from it.
+
+        Args:
+            name (str): name of the entry or coordinate.
+
+        Returns:
+            hash (str): md5 hash of the values.
+
+        """
+        return array_hash(self[name])
+
     def _resolve(self, name):
         """name of an entry, coordinate, or of the entry of an alias"""
         if name in self._data or name in self._coords:
@@ -370,9 +394,10 @@ class Result:
         and the coordinates in the group ``coords``. The units and
         dimension names are attributes of the datasets and 1D coordinates
         are attached to the data as dimension scales. The metadata are
-        attributes of the file and the parameters of the simulation are
-        attributes of the group ``parameters``. Entries, which are no arrays,
-        are skipped with a warning.
+        attributes of the file, except for the dicts of metadata, e.g. the
+        ``parameters`` of the simulation, which are groups of the same name
+        with a dataset for each value with its ``units`` as attribute.
+        Entries, which are no arrays, are skipped with a warning.
 
         Args:
             filename (str): name of the HDF5 file.
@@ -382,10 +407,10 @@ class Result:
 
         with h5py.File(filename, "w", track_order=True) as file:
             for key, value in self.attrs.items():
-                if key == "parameters":
-                    group = file.create_group("parameters", track_order=True)
-                    for name, parameter in value.items():
-                        group.attrs[name] = self._attr_value(parameter)
+                if isinstance(value, dict):
+                    if key in ("coords", "data"):
+                        raise KeyError(f"the metadata {key} is reserved for a group!")
+                    _write_group(file.create_group(key, track_order=True), value)
                 else:
                     file.attrs[key] = self._attr_value(value)
             coords = file.create_group("coords", track_order=True)
@@ -428,24 +453,22 @@ class Result:
         """
         import h5py
 
-        def text(value):
-            return value.decode() if isinstance(value, bytes) else value
-
         def dims(dataset):
-            return tuple(text(dim) for dim in dataset.attrs.get("dims", []))
+            return tuple(_text(dim) for dim in dataset.attrs.get("dims", []))
 
         result = cls()
         with h5py.File(filename, "r") as file:
-            result.attrs = {key: text(value) for key, value in file.attrs.items()}
-            if "parameters" in file:
-                result.attrs["parameters"] = {
-                    key: text(value) for key, value in file["parameters"].attrs.items()
-                }
+            result.attrs = {key: _text(value) for key, value in file.attrs.items()}
+            for key, group in file.items():
+                if key not in ("coords", "data"):
+                    result.attrs[key] = _read_group(group)
             for name, dataset in file["coords"].items():
-                result.add_coord(name, dataset[()], text(dataset.attrs["units"]), dims(dataset))
+                result.add_coord(name, dataset[()], _text(dataset.attrs["units"]), dims(dataset))
             for name, dataset in file["data"].items():
-                aliases = tuple(text(alias) for alias in dataset.attrs.get("aliases", []))
-                result.add(name, dataset[()], dims(dataset), text(dataset.attrs["units"]), aliases)
+                aliases = tuple(_text(alias) for alias in dataset.attrs.get("aliases", []))
+                result.add(
+                    name, dataset[()], dims(dataset), _text(dataset.attrs["units"]), aliases
+                )
         return result
 
     def to_xarray(self):
@@ -507,3 +530,103 @@ def find_source(*values):
 
     """
     return next((value for value in values if isinstance(value, Result)), None)
+
+
+def array_hash(value):
+    """array_hash
+
+    md5 hash of the values, the shape, and the data type of an array, e.g. of
+    an input map of a simulation, see :meth:`Result.entry_hash`. In contrast
+    to the hashes of the simulations, all values are hashed.
+
+    Args:
+        value (ndarray, Quantity): array, a Quantity is hashed by its
+            magnitude.
+
+    Returns:
+        hash (str): md5 hash.
+
+    """
+    if isinstance(value, u.Quantity):
+        value = value.magnitude
+    value = np.ascontiguousarray(value)
+    if value.dtype == object:
+        raise TypeError("arrays of objects cannot be hashed!")
+    hasher = hashlib.md5()
+    hasher.update(f"{value.dtype.str}{value.shape}".encode())
+    hasher.update(value.tobytes())
+    return hasher.hexdigest()
+
+
+#: attribute of the groups of lists of metadata
+_SEQUENCE = "sequence"
+
+
+def _text(value):
+    """text of a HDF5 string, which may be read as bytes"""
+    return value.decode() if isinstance(value, bytes) else value
+
+
+def _write_group(group, values):
+    """Write a dict of metadata to a HDF5 group with a dataset for each value
+    and a sub-group for each dict or list, which is no array, e.g. of
+    arrays of different shapes. Quantities are written by their magnitude
+    with the ``units`` as attribute of the dataset and None as empty
+    dataset."""
+    import h5py
+
+    for name, value in values.items():
+        name = str(name)
+        if isinstance(value, dict):
+            _write_group(group.create_group(name, track_order=True), value)
+            continue
+        if value is None:
+            group.create_dataset(name, data=h5py.Empty("f"))
+            continue
+        unit = ""
+        if isinstance(value, u.Quantity):
+            unit = f"{value.units:~}"
+            value = value.magnitude
+        if isinstance(value, (list, tuple)):
+            try:
+                array = np.asarray(value)
+            except ValueError:
+                array = None  # ragged lists
+            if array is None or array.dtype == object:
+                subgroup = group.create_group(name, track_order=True)
+                subgroup.attrs[_SEQUENCE] = True
+                _write_group(subgroup, {str(i): item for i, item in enumerate(value)})
+                continue
+            value = array
+        if not isinstance(value, (str, bool, int, float, complex, np.ndarray, np.generic)):
+            value = str(value)
+        dataset = group.create_dataset(name, data=value)
+        dataset.attrs["units"] = unit
+
+
+def _read_dataset(dataset):
+    """value of a dataset of metadata, see :func:`_write_group`"""
+    if dataset.shape is None:
+        return None
+    value = dataset[()]
+    if isinstance(value, np.ndarray) and value.dtype == object:
+        value = np.vectorize(_text, otypes=[object])(value)
+    elif isinstance(value, np.generic):
+        value = value.item()
+    value = _text(value)
+    unit = _text(dataset.attrs.get("units", ""))
+    return u.Quantity(value, unit) if unit else value
+
+
+def _read_group(group):
+    """dict or list of metadata of a HDF5 group, see :func:`_write_group`.
+    The attributes of the group are read as well, e.g. the parameters of
+    files of previous versions."""
+    import h5py
+
+    values = {key: _text(value) for key, value in group.attrs.items() if key != _SEQUENCE}
+    for name, item in group.items():
+        values[name] = _read_group(item) if isinstance(item, h5py.Group) else _read_dataset(item)
+    if group.attrs.get(_SEQUENCE, False):
+        return [values[str(i)] for i in range(len(values))]
+    return values

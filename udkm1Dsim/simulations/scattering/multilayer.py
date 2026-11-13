@@ -1185,7 +1185,17 @@ class MultilayerScattering(Scattering):
             temps,
             polar=polar,
         )
-        return self._scattering_result("homogeneous Jones matrices", JONES_NAMES, results)
+        return self._scattering_result(
+            "homogeneous Jones matrices",
+            JONES_NAMES,
+            results,
+            inputs={
+                "strains": strains,
+                "magnetizations": magnetizations,
+                "temps": temps,
+                "polar": polar,
+            },
+        )
 
     def calc_homogeneous_jones_matrices(
         self,
@@ -1278,7 +1288,15 @@ class MultilayerScattering(Scattering):
             polar=polar,
         )
         return self._scattering_result(
-            "homogeneous reflectivity and transmissivity", REFLECTIVITY_NAMES, results
+            "homogeneous reflectivity and transmissivity",
+            REFLECTIVITY_NAMES,
+            results,
+            inputs={
+                "strains": strains,
+                "magnetizations": magnetizations,
+                "temps": temps,
+                "polar": polar,
+            },
         )
 
     def calc_homogeneous_reflectivity_transmissivity(
@@ -1361,7 +1379,16 @@ class MultilayerScattering(Scattering):
             polar=polar,
         )
         return self._scattering_result(
-            "homogeneous rotation and ellipticity", ROTATION_NAMES, results, "deg"
+            "homogeneous rotation and ellipticity",
+            ROTATION_NAMES,
+            results,
+            "deg",
+            inputs={
+                "strains": strains,
+                "magnetizations": magnetizations,
+                "temps": temps,
+                "polar": polar,
+            },
         )
 
     def calc_homogeneous_rotation_ellipticity(
@@ -1483,7 +1510,13 @@ class MultilayerScattering(Scattering):
             dichroic=dichroic,
             absorption=False,
         )
-        return self._field_result("homogeneous fields", FIELD_NAMES, results, distances)
+        return self._field_result(
+            "homogeneous fields",
+            FIELD_NAMES,
+            results,
+            distances,
+            {"strains": strains, "magnetizations": magnetizations, "temps": temps, "polar": polar},
+        )
 
     def calc_homogeneous_fields(
         self,
@@ -1582,7 +1615,13 @@ class MultilayerScattering(Scattering):
             fields=fields,
         )
         names = ABSORPTION_NAMES + (FIELD_NAMES if fields else ())
-        return self._field_result("homogeneous absorption", names, results, distances)
+        return self._field_result(
+            "homogeneous absorption",
+            names,
+            results,
+            distances,
+            {"strains": strains, "magnetizations": magnetizations, "temps": temps, "polar": polar},
+        )
 
     def calc_homogeneous_absorption(
         self,
@@ -1715,10 +1754,11 @@ class MultilayerScattering(Scattering):
                 values[-3], values[-1] = stack["E_phi"][:, :, :Z], stack["H_phi"][:, :, :Z]
         return distances, tuple(values)
 
-    def _field_result(self, title, names, values, distances):
+    def _field_result(self, title, names, values, distances, inputs=None):
         """result of the fields or absorptions with the dimensions
-        ``energy``, ``angles``, and ``distances`` or ``layers``"""
-        result = self.new_scattering_result(title)
+        ``energy``, ``angles``, and ``distances`` or ``layers`` and the
+        ``inputs`` of the method"""
+        result = self.new_scattering_result(title, inputs=inputs)
         result.add_coord("distances", distances, "m")
         for name, value in zip(names, values):
             if value is None:
@@ -1949,6 +1989,11 @@ class MultilayerScattering(Scattering):
         strain_map, magnetization_map, temp_map, polar, source = self.parse_result_maps(
             strain_map, magnetization_map, temp_map, polar
         )
+        input_maps = {
+            "strain_map": strain_map,
+            "magnetization_map": magnetization_map,
+            "temp_map": temp_map,
+        }
         strain_map, magnetization_map = self._parse_maps(
             strain_map, magnetization_map, temp_map, polar
         )
@@ -1961,7 +2006,13 @@ class MultilayerScattering(Scattering):
             **kwargs,
         )
         return self._scattering_result(
-            "inhomogeneous Jones matrices", JONES_NAMES, results, inhomogeneous=True, source=source
+            "inhomogeneous Jones matrices",
+            JONES_NAMES,
+            results,
+            inhomogeneous=True,
+            source=source,
+            inputs={"polar": polar},
+            input_maps=input_maps,
         )
 
     def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map, temp_map=None):
@@ -2345,6 +2396,11 @@ class MultilayerScattering(Scattering):
         strain_map, magnetization_map, temp_map, polar, source = self.parse_result_maps(
             strain_map, magnetization_map, temp_map, polar
         )
+        input_maps = {
+            "strain_map": strain_map,
+            "magnetization_map": magnetization_map,
+            "temp_map": temp_map,
+        }
         strain_map, magnetization_map = self._parse_maps(
             strain_map, magnetization_map, temp_map, polar
         )
@@ -2352,7 +2408,16 @@ class MultilayerScattering(Scattering):
         def calc():
             results = self._calc_inhomogeneous(strain_map, magnetization_map, reduce, **kwargs)
             title = f"inhomogeneous {name.replace('_', ' and ')}"
-            return self._scattering_result(title, names, results, unit, True, source)
+            return self._scattering_result(
+                title,
+                names,
+                results,
+                unit,
+                True,
+                source,
+                inputs={"polar": polar},
+                input_maps=input_maps,
+            )
 
         return self._cached_result(
             f"inhomogeneous_{name}_{type(self).__name__}",

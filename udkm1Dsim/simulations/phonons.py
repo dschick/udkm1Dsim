@@ -78,11 +78,21 @@ class Phonon(Simulation):
         """[parameter, value] rows of the simulation properties"""
         return super()._property_rows() + [["only heat", self.only_heat]]
 
+    def _parameters(self):
+        """dict of the parameters of the simulation"""
+        return {**super()._parameters(), "only_heat": self.only_heat}
+
+    def _hash_params(self):
+        """parameters of the simulation for its hash"""
+        return [self.only_heat]
+
     def get_hash(self, delays, temp_map, delta_temp_map, **kwargs):
         """get_hash
 
         Calculates an unique hash given by the ``delays``, and ``temp_map``
-        and ``delta_temp_map`` as well as the sample structure hash for
+        and ``delta_temp_map``, the parameters of the simulation, e.g. the
+        ``ode_options`` of :class:`PhononNum`, but not its ``backend``, which
+        yields the same results, as well as the sample structure hash for
         relevant lattice parameters.
 
         Args:
@@ -96,7 +106,7 @@ class Phonon(Simulation):
             hash (str): unique hash.
 
         """
-        param = [delays, self.only_heat]
+        param = [delays] + self._hash_params()
 
         if np.size(temp_map) > 1e6:
             temp_map = temp_map.flatten()[0:1000000]
@@ -137,9 +147,14 @@ class Phonon(Simulation):
                 raise ValueError("delta_temp_map must be given for a temp_map array!")
         return get_entry(temp_map, "temp_map"), get_entry(delta_temp_map, "delta_temp_map")
 
-    def _strain_result(self, title, delays, strain_map):
-        """Result with the ``strain_map`` and its coordinates"""
-        result = self.new_map_result(title, delays)
+    def _strain_result(self, title, delays, strain_map, temp_map, delta_temp_map):
+        """Result with the ``strain_map`` and its coordinates and the hashes
+        of the input maps"""
+        result = self.new_map_result(
+            title,
+            delays,
+            input_maps={"temp_map": temp_map, "delta_temp_map": delta_temp_map},
+        )
         result.add("strain_map", strain_map, ("delays", "distances"))
         return result
 
@@ -412,6 +427,18 @@ class PhononNum(Phonon):
         """[parameter, value] rows of the simulation properties"""
         return super()._property_rows() + [["backend", self.backend]]
 
+    def _parameters(self):
+        """dict of the parameters of the simulation"""
+        return {
+            **super()._parameters(),
+            "backend": self.backend,
+            "ode_options": dict(self.ode_options),
+        }
+
+    def _hash_params(self):
+        """parameters of the simulation for its hash"""
+        return super()._hash_params() + [self.ode_options]
+
     def get_strain_map(self, delays, temp_map, delta_temp_map=None):
         """get_strain_map
 
@@ -437,7 +464,7 @@ class PhononNum(Phonon):
 
         def calc():
             strain_map, _, _ = self.calc_strain_map(delays, temp_map, delta_temp_map)
-            return self._strain_result("strain map", delays, strain_map)
+            return self._strain_result("strain map", delays, strain_map, temp_map, delta_temp_map)
 
         return self._cached_result(
             "strain_map_num", self.get_hash(delays, temp_map, delta_temp_map), calc, False
@@ -652,7 +679,9 @@ class PhononAna(Phonon):
 
         def calc():
             strain_map, A, B = self.calc_strain_map(delays, temp_map, delta_temp_map)
-            result = self._strain_result("analytical strain map", delays, strain_map)
+            result = self._strain_result(
+                "analytical strain map", delays, strain_map, temp_map, delta_temp_map
+            )
             result.add("coefficients_A", A, ("delays", "eigenmodes"), aliases="A")
             result.add("coefficients_B", B, ("delays", "eigenmodes"), aliases="B")
             return result
@@ -996,10 +1025,11 @@ class PhononAna(Phonon):
             if source is None:
                 raise ValueError("B must be given for a coefficient array A!")
             B = A["coefficients_B"]
-        omega, E = self.calc_energy_per_eigenmode(
-            get_entry(A, "coefficients_A"), get_entry(B, "coefficients_B")
+        A, B = get_entry(A, "coefficients_A"), get_entry(B, "coefficients_B")
+        omega, E = self.calc_energy_per_eigenmode(A, B)
+        result = self.new_result(
+            "energy per eigenmode", input_maps={"coefficients_A": A, "coefficients_B": B}
         )
-        result = self.new_result("energy per eigenmode")
         if source is not None:
             result.copy_coords(source, ["delays"])
         result.add("eigenfrequencies", omega, ("eigenmodes",), "rad/s", aliases="omega")
