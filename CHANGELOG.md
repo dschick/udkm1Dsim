@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0a3] 2026-11-13
+
 ### Added
 
 - `Result` as dict-like container of the results of the simulations, which are accessed by name, e.g. `result["temp_map"]` or `result.temp_map`, or as dicts `result.data` and `result.coords`, as plain numpy arrays with their coordinates, e.g. `delays`, `distances`, `energy`, `qz`, and `theta`, the names of their dimensions, their units, e.g. by `result.quantity("temp_map")` or converted by `result.quantity("delays", "ps")`, and the metadata of the simulation, i.e. its class, the version, the hash, the sample structure, and its parameters, see [#166]
