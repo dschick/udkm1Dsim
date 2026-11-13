@@ -300,6 +300,9 @@ class Dispersion:
     """
 
     scalar = True
+    # how the dispersion was created, e.g. from a file, for its YAML
+    # representation instead of the tabulated values, see Structure.to_yaml()
+    _recipe = None
 
     @property
     def kinds(self):
@@ -579,6 +582,13 @@ class Dispersion:
             dispersion (Dispersion): dispersion.
 
         """
+        recipe = {
+            "file": str(filename),
+            "x_unit": x_unit,
+            "kind": kind,
+            "delimiter": delimiter,
+            "molar_mass": molar_mass,
+        }
         if x_unit is None:
             x_unit = "eV" if kind in ("delta_beta", "f", "m") else "um"
         data = read_columns(filename, delimiter)
@@ -590,12 +600,13 @@ class Dispersion:
                 invalid_below=_INVALID_FORM_FACTOR,
                 source=os.path.basename(str(filename)),
             )
-            return _FormFactors(table, molar_mass, magnetic=kind == "m")
-        data = data[~np.isnan(data[:, 1:3]).any(axis=1)]
-        values = data[:, 1] + 1j * data[:, 2]
-        dispersion = cls.from_array(data[:, 0] * u(x_unit), values, kind=kind)
-        dispersion._source = str(filename)
-        dispersion._origin = os.path.basename(str(filename))
+            dispersion = _FormFactors(table, molar_mass, magnetic=kind == "m")
+        else:
+            data = data[~np.isnan(data[:, 1:3]).any(axis=1)]
+            values = data[:, 1] + 1j * data[:, 2]
+            dispersion = cls.from_array(data[:, 0] * u(x_unit), values, kind=kind)
+            dispersion._origin = os.path.basename(str(filename))
+        dispersion._recipe = recipe
         return dispersion
 
     @classmethod
@@ -698,9 +709,11 @@ class Dispersion:
         if url is not None:
             query = parse_qs(urlparse(url).query)
             shelf, book, page = (query.get(key, ["?"])[0] for key in ("shelf", "book", "page"))
-        version = getattr(refractiveindex, "DATABASE_VERSION", "unknown")
-        dispersion._source = f"refractiveindex.info {version}: {shelf}/{book}/{page}"
         dispersion._origin = f"refractiveindex.info: {shelf}/{book}/{page}"
+        dispersion._recipe = {
+            "refractiveindex": {"shelf": shelf, "book": book, "page": page, "num": int(num)},
+            "version": getattr(refractiveindex, "DATABASE_VERSION", "unknown"),
+        }
         return dispersion
 
     @classmethod
@@ -861,7 +874,6 @@ class _Table(Dispersion):
         self.scalar = scalar
         self._kind = kind
         self._input_kind = input_kind
-        self._source = ""
         self._origin = ""
 
     @property
@@ -885,11 +897,13 @@ class _Table(Dispersion):
         )
 
     def __repr__(self):
+        # the repr is part of the hash of the simulation results, which must
+        # not depend on the location of the file of the table, but only on
+        # its values given by their md5 digest
         lo, hi = self.energy_range
-        source = f", source={self._source}" if self._source else ""
         return (
             f"Dispersion({self._input_kind}: {len(self._energy)} values from {lo:.4g} eV "
-            f"to {hi:.4g} eV{source}, md5={self._table.md5})"
+            f"to {hi:.4g} eV, md5={self._table.md5})"
         )
 
 
