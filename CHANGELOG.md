@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- the multilayer absorption profile of `Heat` for $s$-polarized light, which used the field components of $p$-polarized light and did not conserve the energy, also at normal incidence, so that the absorbed energy was too small
 - the homogeneous reflectivity of `XrayKin` failed for nested sub-structures, as it called the removed `Structure.get_length()` instead of using the thickness of the sub-structure
 
 ## [3.0.0a3] 2026-11-13
