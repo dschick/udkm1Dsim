@@ -52,7 +52,7 @@ def delays():
 
 @pytest.fixture(scope="module")
 def distances(structure):
-    dists, _, _ = structure.get_distances_of_layers()
+    dists, _, _ = structure.layer_distances
     return dists
 
 
@@ -201,7 +201,7 @@ def test_phonon_inconsistent_num_sub_systems_raises(tmp_path, phonon_class):
     S.add_sub_structure(layer, 10)
     phonon = phonon_class(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
     delays = np.r_[0:1:0.1] * u.ps
-    temp_map = 300 * np.ones([len(delays), S.get_number_of_layers(), 2])
+    temp_map = 300 * np.ones([len(delays), S.num_layers, 2])
     with pytest.raises(ValueError, match="'lin_therm_exp' has 1"):
         phonon.get_strain_map(delays, temp_map, np.zeros_like(temp_map))
 
@@ -224,7 +224,7 @@ def _heating(S, delays, two_steps=True):
     the top 10 layers at t = 3 ps to test the re-initialization of the
     analytical solution at each temperature change"""
     t = delays.to("s").magnitude
-    temp_map = 300 * np.ones((len(t), S.get_number_of_layers()))
+    temp_map = 300 * np.ones((len(t), S.num_layers))
     temp_map[np.ix_(t >= 0, np.r_[0:20])] += 100
     if two_steps:
         temp_map[np.ix_(t >= 3e-12, np.r_[0:10])] += 50
@@ -241,7 +241,7 @@ def reference_structure(request):
     """the reference structures without phonon damping, which the analytical
     solution neglects"""
     S = request.getfixturevalue(request.param)
-    layers = S.get_unique_layers()[1]
+    layers = S.unique_layers[1]
     dampings = [layer.phonon_damping for layer in layers]
     for layer in layers:
         layer.phonon_damping = 0 * u.kg / u.s

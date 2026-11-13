@@ -46,7 +46,7 @@ def delays():
 
 @pytest.fixture(scope="module")
 def temp_map(structure, delays):
-    L = structure.get_number_of_layers()
+    L = structure.num_layers
     M = len(delays)
     temp_map = np.ones((M, L))
     for i in range(temp_map.shape[0]):
@@ -83,7 +83,7 @@ def test_calc_sticks_from_temp_map(phonon_num, temp_map, delta_temp_map):
 
 
 def test_phonon_num_ode_func(benchmark, structure, delays, sticks):
-    L = structure.get_number_of_layers()
+    L = structure.num_layers
     masses = structure.get_layer_property_vector("structural.mass_unit_area.magnitude")
     spring_consts = structure.get_layer_property_vector("elastic.spring_const.magnitude")
     damping = structure.get_layer_property_vector("elastic.phonon_damping.magnitude")

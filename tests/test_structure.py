@@ -75,39 +75,39 @@ def test_structure_add_substrate(request, fixture_name, structure):
         struc_copy.add_substrate(substructure)
 
 
-def test_get_number_of_sub_structures(structure):
-    assert structure.get_number_of_sub_structures() == 5
+def test_num_sub_structures(structure):
+    assert structure.num_sub_structures == 5
 
 
-def test_get_number_of_layers(structure):
-    assert structure.get_number_of_layers() == 280
+def test_num_layers(structure):
+    assert structure.num_layers == 280
 
 
-def test_get_number_of_unique_layers(structure):
-    assert structure.get_number_of_unique_layers() == 4
+def test_num_unique_layers(structure):
+    assert structure.num_unique_layers == 4
 
 
-def test_get_unique_layers(structure):
-    layer_ids, _ = structure.get_unique_layers()
+def test_unique_layers(structure):
+    layer_ids, _ = structure.unique_layers
     assert layer_ids == ["amorphous_layer_Fe", "amorphous_layer_O", "unit_cell_Fe", "unit_cell_O"]
 
 
-def test_get_layer_vectors(structure):
-    structure.get_layer_vectors()
+def test_layer_vectors(structure):
+    structure.layer_vectors
 
 
-def test_get_all_positions_per_unique_layer(structure):
-    pos = structure.get_all_positions_per_unique_layer()
+def test_positions_per_unique_layer(structure):
+    pos = structure.positions_per_unique_layer
     assert np.allclose(pos["amorphous_layer_Fe"], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
 
-def test_get_distances_of_layers(structure):
-    d_start, _, _ = structure.get_distances_of_layers()
+def test_layer_distances(structure):
+    d_start, _, _ = structure.layer_distances
     assert_allclose(np.sum(d_start), 2.22e-05 * u.m, rtol=1e-2)
 
 
-def test_get_distances_of_interfaces(structure):
-    assert_allclose(np.sum(structure.get_distances_of_interfaces()), 3.68e-6 * u.m, rtol=1e-2)
+def test_interface_distances(structure):
+    assert_allclose(np.sum(structure.interface_distances), 3.68e-6 * u.m, rtol=1e-2)
 
 
 def test_interp_distance_at_interfaces(structure):
@@ -152,10 +152,10 @@ def test_structure_get_hash_depends_on_properties(structure, types, prop, value)
 
 def test_get_layer_property_vector_padding(structure):
     """layers without higher order spring constants get zeros for them"""
-    _, layers = structure.get_unique_layers()
+    _, layers = structure.unique_layers
     anharmonic = layers[2]
-    anharmonic_pos = structure.get_all_positions_per_unique_layer()[anharmonic.id]
-    harmonic_pos = np.setdiff1d(np.r_[0 : structure.get_number_of_layers()], anharmonic_pos)
+    anharmonic_pos = structure.positions_per_unique_layer[anharmonic.id]
+    harmonic_pos = np.setdiff1d(np.r_[0 : structure.num_layers], anharmonic_pos)
     anharmonic.set_ho_spring_constants([-7e11, 1e20])
     try:
         spring_consts = structure.get_layer_property_vector("_spring_const")
@@ -163,7 +163,7 @@ def test_get_layer_property_vector_padding(structure):
         # reset to the harmonic spring constant for the following tests
         anharmonic.set_ho_spring_constants([])
 
-    assert spring_consts.shape == (structure.get_number_of_layers(), 3)
+    assert spring_consts.shape == (structure.num_layers, 3)
     assert np.all(spring_consts[harmonic_pos, 1:] == 0)
     assert np.allclose(spring_consts[anharmonic_pos, 0], anharmonic.spring_const[0].magnitude)
     assert np.allclose(spring_consts[anharmonic_pos, 1:], [-7e11, 1e20])
@@ -207,7 +207,7 @@ def test_structure_check_num_sub_systems():
 def test_get_hash_does_not_depend_on_symbols_and_labels(structure):
     S = copy.deepcopy(structure)  # do not alter the module-scoped fixture
     hashes = [S.get_hash(types="heat"), S.get_hash(types="phonon")]
-    for layer in S.get_unique_layers()[1]:
+    for layer in S.unique_layers[1]:
         layer.thermal.heat_capacity.symbol = "C"
         layer.structural.thickness.symbol = "t"
         layer.thermal.sub_system_labels = ["x"]

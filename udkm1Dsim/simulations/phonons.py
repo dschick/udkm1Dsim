@@ -158,7 +158,7 @@ class Phonon(Simulation):
         """
         strain_map = get_entry(strain_map, "strain_map")
         # get the position indices of all unique layers in the sample structure
-        positions = self.S.get_all_positions_per_unique_layer()
+        positions = self.S.positions_per_unique_layer
         strains = []
 
         for value in positions.values():
@@ -231,7 +231,7 @@ class Phonon(Simulation):
 
         """
         M = len(delays)
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
         K = self.S.num_sub_systems
 
         # check size of delta_temp_map
@@ -307,7 +307,7 @@ class Phonon(Simulation):
         # the linear thermal expansion must be given for all subsystems
         self.S.check_num_sub_systems("lin_therm_exp")
         M = np.size(temp_map, 0)  # nb of delay steps
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
         K = self.S.num_sub_systems
 
         temp_map = np.reshape(temp_map, [M, L, K])
@@ -508,7 +508,7 @@ class PhononNum(Phonon):
         t1 = time()
 
         # initialize
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
         thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
         x0 = np.zeros([2 * L])  # initial condition for the shift of the layers
 
@@ -532,7 +532,7 @@ class PhononNum(Phonon):
             # include coherent dynamics
             self.disp_message("Calculating coherent dynamics with ODE solver ...")
 
-            L = self.S.get_number_of_layers()
+            L = self.S.num_layers
             masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
             thicknesses = self.S.get_layer_property_vector("structural.thickness.magnitude")
             spring_consts = self.S.get_layer_property_vector("elastic.spring_const.magnitude")
@@ -783,7 +783,7 @@ class PhononAna(Phonon):
         t1 = time()
 
         # initialize
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
         M = len(delays)
 
         try:
@@ -940,7 +940,7 @@ class PhononAna(Phonon):
 
         """
         # initialize
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
         # initializing the symmetric three-diagonal springs-masses matrix
         K = np.zeros([L, L])
 
@@ -1047,7 +1047,7 @@ class PhononAna(Phonon):
 
         """
         # initialize
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
         M = A.shape[0]  # nb of delays
         E = np.zeros([M, L])
         masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")

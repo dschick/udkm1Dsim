@@ -48,7 +48,7 @@ def delays():
 @pytest.fixture(scope="module")
 def temp_map(structure_magnetic, delays):
     """heating below the Curie temperature, which decays into the film"""
-    L = structure_magnetic.get_number_of_layers()
+    L = structure_magnetic.num_layers
     temp_map = 300 * np.ones((len(delays), L))
     temp_map[delays.magnitude >= 0, :] += 300 * np.exp(-np.r_[0:L] / 5)
     return temp_map

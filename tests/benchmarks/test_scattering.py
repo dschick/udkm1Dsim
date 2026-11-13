@@ -57,7 +57,7 @@ def multilayer(request, structure, tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def strain_map_crystalline(structure_crystalline):
-    L = structure_crystalline.get_number_of_layers()
+    L = structure_crystalline.num_layers
     M = 10  # delay steps
     rng = np.random.default_rng(0)
     return 0.01 * rng.random((M, L))
@@ -65,14 +65,14 @@ def strain_map_crystalline(structure_crystalline):
 
 @pytest.fixture(scope="module")
 def strain_map_mixed(structure):
-    L = structure.get_number_of_layers()
+    L = structure.num_layers
     M = 1  # delay steps
     return 0.01 * np.ones((M, L))
 
 
 @pytest.fixture(scope="module")
 def strain_map_delays(structure):
-    L = structure.get_number_of_layers()
+    L = structure.num_layers
     M = 10  # delay steps
     rng = np.random.default_rng(0)
     return 0.01 * rng.random((M, L))
@@ -80,7 +80,7 @@ def strain_map_delays(structure):
 
 @pytest.fixture(scope="module")
 def magnetization_map(structure):
-    L = structure.get_number_of_layers()
+    L = structure.num_layers
     M = 1  # delay steps
     magnetization_map = np.zeros((M, L, 3))
     magnetization_map[:, :, 2] = 0.5  # cartesian m_z
@@ -119,7 +119,7 @@ def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, strain_map_crystalline):
 
 @pytest.mark.benchmark
 def test_xray_dyn_inhomogeneous_reflectivity_strain_vectors(xray_dyn, strain_map_crystalline):
-    strain_vectors = [np.linspace(0, 0.01, 20)] * xray_dyn.S.get_number_of_unique_layers()
+    strain_vectors = [np.linspace(0, 0.01, 20)] * xray_dyn.S.num_unique_layers
     xray_dyn.calc_inhomogeneous_reflectivity(strain_map_crystalline, strain_vectors=strain_vectors)
 
 

@@ -91,7 +91,7 @@ class _Period:
     its repetitions with :math:`\\mathcal{O}(\\log N)` matrix products. This
     tree is not available from the :class:`.Structure`, which only provides
     flattened vectors of all layers, e.g. by
-    :meth:`.Structure.get_layer_vectors`, as used by the inhomogeneous
+    :attr:`.Structure.layer_vectors`, as used by the inhomogeneous
     simulations with a strain or magnetization per layer.
     """
 
@@ -701,7 +701,7 @@ class MultilayerScattering(Scattering):
             layers (list[tuple]): layer, strain, and magnetization.
 
         """
-        _, _, handles = self.S.get_layer_vectors()
+        _, _, handles = self.S.layer_vectors
         superstrate, substrate = self._superstrate_and_substrate()
         return (
             [superstrate]
@@ -958,7 +958,7 @@ class MultilayerScattering(Scattering):
                 entries += _repeated([entry], repetitions)
                 counter += 1
             else:
-                num = sub_structure.get_number_of_sub_structures()
+                num = sub_structure.num_sub_structures
                 entries += _repeated(
                     self._expand_sub_structures(
                         sub_structure,
@@ -996,7 +996,7 @@ class MultilayerScattering(Scattering):
         """
         if not isinstance(self.S, Structure):
             raise TypeError("The sample must be a Structure!")
-        L = self.S.get_number_of_sub_structures()
+        L = self.S.num_sub_structures
         if np.size(strains) == 0:
             strains = np.zeros([L, 1])
         if np.size(magnetizations) == 0:

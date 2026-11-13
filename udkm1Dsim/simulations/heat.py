@@ -248,7 +248,7 @@ class Heat(Simulation):
 
         N = len(distances)
         if N == 0:
-            N = self.S.get_number_of_layers()
+            N = self.S.num_layers
 
         K = self.S.num_sub_systems
         # check size of initTemp
@@ -473,15 +473,15 @@ class Heat(Simulation):
         if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
-            d_start, _, distances = structure.get_distances_of_layers(False)
+            d_start, _, distances = structure._layer_distances()
         else:
-            d_start, d_end, _ = structure.get_distances_of_layers(False)
+            d_start, d_end, _ = structure._layer_distances()
             if backside:
                 # np.clip() prevents negative distances after flipping
                 # due to floating point rounding errors
                 distances = np.clip(np.flip(d_end[-1] - distances), 0, d_end[-1])
 
-        interfaces = structure.get_distances_of_interfaces(False)
+        interfaces = structure._interface_distances()
 
         N = len(distances)
         dAdz = np.zeros(N)  # initialize relative absorbed energies
@@ -560,15 +560,15 @@ class Heat(Simulation):
         if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
-            d_start, _, distances = structure.get_distances_of_layers(False)
+            d_start, _, distances = structure._layer_distances()
         else:
-            d_start, d_end, _ = structure.get_distances_of_layers(False)
+            d_start, d_end, _ = structure._layer_distances()
             if backside:
                 # np.clip() prevents negative distances after flipping
                 # due to floating point rounding errors
                 distances = np.clip(np.flip(d_end[-1] - distances), 0, d_end[-1])
 
-        interfaces = structure.get_distances_of_interfaces(False)
+        interfaces = structure._interface_distances()
         N = len(interfaces)
 
         opt_ref_indices = np.empty(N + 1, dtype=np.complex128)
@@ -828,9 +828,9 @@ class Heat(Simulation):
         if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
-            d_start, _, distances = self.S.get_distances_of_layers(False)
+            d_start, _, distances = self.S._layer_distances()
         else:
-            d_start, _, _ = self.S.get_distances_of_layers(False)
+            d_start, _, _ = self.S._layer_distances()
 
         # absorption profile from Lambert-Beer's law or multilayer absorption
         dAdz = self.get_absorption_profile(distances=distances, backside=backside)
@@ -905,7 +905,7 @@ class Heat(Simulation):
             temp_map, delta_temp_map, _ = self.calc_temp_map(delays, init_temp)
             result = self.new_map_result("temperature map", delays)
             # the singleton dimensions are squeezed out of the maps
-            sizes = (np.size(delays), self.S.get_number_of_layers(), np.shape(init_temp)[-1])
+            sizes = (np.size(delays), self.S.num_layers, np.shape(init_temp)[-1])
             dims = [
                 dim for dim, size in zip(("delays", "distances", "subsystems"), sizes) if size > 1
             ]
@@ -940,7 +940,7 @@ class Heat(Simulation):
         # all thermal parameters of the heat simulation must have the same number of subsystems
         self.S.check_num_sub_systems("heat_capacity", "therm_cond", "sub_system_coupling")
         # initialize
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
         K = self.S.num_sub_systems
         F = len(self._excitation["fluence"])  # total number of excitations
 
@@ -948,7 +948,7 @@ class Heat(Simulation):
         # check the initial temperature
         input_init_temp = self.check_initial_temperature(input_init_temp)
         checked_excitation, _, _, _ = self.check_excitation(delays)  # check excitation
-        _, _, d_mid = self.S.get_distances_of_layers(False)
+        _, _, d_mid = self.S._layer_distances()
 
         if self.heat_diffusion:
             # in case heat diffusion is enabled all calculation are first done
@@ -1139,7 +1139,7 @@ class Heat(Simulation):
         t1 = time()
         backside = self._excitation["backside"]
         init_temp = self.check_initial_temperature(init_temp, distances)
-        d_start, _, _ = self.S.get_distances_of_layers(False)
+        d_start, _, _ = self.S._layer_distances()
 
         if np.any(fluence):
             dAdz = self.get_absorption_profile(distances=distances, backside=backside)
@@ -1148,8 +1148,8 @@ class Heat(Simulation):
 
         # indices of the unique layers in respect to the spatial grid, so that
         # the solver can group the grid points of identical layers
-        _, unique_layers = self.S.get_unique_layers()
-        unique_indices = np.asarray(self.S.get_layer_vectors()[0], dtype=int)
+        _, unique_layers = self.S.unique_layers
+        unique_indices = np.asarray(self.S.layer_vectors[0], dtype=int)
         indices = unique_indices[finderb(distances, d_start)]
         # properties of the unique layers
         therm_conds = [layer.thermal.therm_cond.functional for layer in unique_layers]

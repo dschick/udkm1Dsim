@@ -263,7 +263,7 @@ def test_parratt_x_rays_equal_berreman_stepanov(magnetic_multilayer):
     energy, theta = np.r_[700, 707] * u.eV, np.r_[0.5:30:2] * u.deg
     parratt = simulation(Parratt, magnetic_multilayer, energy, theta)
     reference = simulation(BerremanStepanov, magnetic_multilayer, energy, theta)
-    L = magnetic_multilayer.get_number_of_sub_structures()
+    L = magnetic_multilayer.num_sub_structures
     no_magnetization = np.zeros([L, 3])
     for pol_in, pol_out in [(0, 0), (1, 0), (3, 0), (4, 0), (1, 2), (3, 4)]:
         parratt.set_polarization(pol_in, pol_out)
@@ -375,7 +375,7 @@ def test_rotation_ellipticity_from_one_calculation(cls, magnetic_multilayer):
     polarization, and a homogeneous map gives the homogeneous result for all
     delays"""
     sim = simulation(cls, magnetic_multilayer, np.r_[700, 707] * u.eV, np.r_[5, 10] * u.deg)
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     res = sim.homogeneous_jones_matrices()
     R, R_phi, T, T_phi = (
         res.jones_reflection,
@@ -566,7 +566,7 @@ def test_inhomogeneous_equals_homogeneous(cls, magnetic_multilayer, tmp_path):
         res.transmissivity,
         res.transmissivity_phi,
     )
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     magnetization_map = np.zeros((2, L, 3))
     magnetization_map[..., 0] = 1
     magnetization_map[..., 1] = np.pi / 2
@@ -597,7 +597,7 @@ def test_calc_methods_equal_results(cls, magnetic_multilayer):
     """the calc_* methods return the plain arrays of the results of the
     homogeneous and inhomogeneous methods"""
     sim = simulation(cls, magnetic_multilayer, np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg)
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     strain_map = np.linspace(0, 0.01, 3)[:, np.newaxis] * np.ones((1, L))
     magnetization_map = np.zeros((3, L, 3))
     magnetization_map[..., 1] = 0.5
@@ -640,7 +640,7 @@ def test_inhomogeneous_results_of_upstream_simulations(magnetic_multilayer):
     """results of the upstream simulations are accepted as maps, with the
     polar coordinates of the magnetization and the delays passed on"""
     sim = simulation(Elzo, magnetic_multilayer, np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg)
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     delays = np.r_[0, 1] * u.ps
     polar = np.zeros((2, L, 3))
     polar[..., 0] = 1
@@ -670,7 +670,7 @@ def test_results_of_polarization_lists(magnetic_multilayer):
     hom = sim.homogeneous_reflectivity_transmissivity()
     assert hom.reflectivity.shape == (2, 5, 3)
     assert hom.dims("reflectivity") == ("energy", "angles")
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     inhom = sim.inhomogeneous_reflectivity_transmissivity(np.zeros((4, L)))
     assert inhom.reflectivity.shape == (4, 2, 5, 3)
     assert inhom.dims("reflectivity") == ("delays", "energy", "angles")
@@ -682,7 +682,7 @@ def test_inhomogeneous_close_to_berreman_stepanov(cls, magnetic_multilayer):
     with BerremanStepanov, exactly for the same modes of BerremanElzo and to
     second order in the gyrotropic part for Elzo and Stepanov"""
     energy, theta = np.r_[707] * u.eV, np.r_[1:20:4] * u.deg
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     rng = np.random.default_rng(0)
     strain_map = rng.uniform(-0.01, 0.01, (3, L))
     magnetization_map = np.stack(
@@ -717,7 +717,7 @@ def test_parratt_inhomogeneous_for_all_delays_at_once(pol_in):
     S = optical_stack(substrate_layer(Dispersion.from_ref_index(1.5 + 0.01j)))
     S.get_layer_handle(0).roughness = 0.5 * u.nm
     energy, theta = np.r_[1.55, 2.5] * u.eV, np.r_[10:80:20] * u.deg
-    L = S.get_number_of_layers()
+    L = S.num_layers
     strain_map = np.random.default_rng(1).uniform(-0.02, 0.02, (5, L))
     parratt = simulation(Parratt, S, energy, theta)
     stepanov = simulation(Stepanov, S, energy, theta)
@@ -742,7 +742,7 @@ def test_parratt_inhomogeneous_for_all_delays_at_once(pol_in):
 
 def test_inhomogeneous_input_validation(magnetic_multilayer):
     sim = simulation(Stepanov, magnetic_multilayer, np.r_[707] * u.eV, np.r_[5] * u.deg)
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     with pytest.raises(ValueError, match="At least"):
         sim.inhomogeneous_reflectivity_transmissivity()
     with pytest.raises(ValueError, match="same number of delay steps"):
@@ -764,7 +764,7 @@ def test_temperatures_are_not_implemented(magnetic_multilayer):
     """the temperature dependence of the dielectric tensor is planned, while
     an empty temp_map or temps keep the results and their cache"""
     sim = simulation(Stepanov, magnetic_multilayer, np.r_[707] * u.eV, np.r_[5] * u.deg)
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     strain_map = np.zeros((2, L))
     for method in (
         sim.inhomogeneous_jones_matrices,
@@ -775,7 +775,7 @@ def test_temperatures_are_not_implemented(magnetic_multilayer):
             method(strain_map, temp_map=np.full((2, L), 300.0))
     with pytest.raises(TypeError, match="temp_map"):
         sim.inhomogeneous_reflectivity_transmissivity(strain_map, temp_map=[300.0])
-    N = magnetic_multilayer.get_number_of_sub_structures()
+    N = magnetic_multilayer.num_sub_structures
     for method in (
         sim.homogeneous_jones_matrices,
         sim.homogeneous_reflectivity_transmissivity,
@@ -942,7 +942,7 @@ def test_get_hash_of_elliptical_polarizations(elzo):
 
 
 def test_inhomogeneous_for_several_polarizations(elzo, magnetic_multilayer):
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     strain_map = np.full((2, L), 0.01)
     magnetization_map = np.zeros((2, L, 3))
     elzo.set_incoming_polarization(5, [(0 * u.deg, 0), (45 * u.deg, 0), (90 * u.deg, 0)])
@@ -963,7 +963,7 @@ def test_polar_and_cartesian_magnetization_maps(elzo, magnetic_multilayer):
     """the magnetization_map is cartesian by default and polar for
     polar=True, which give the same results"""
     elzo.set_polarization("circ +", "none")
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     strain_map = np.full((2, L), 0.01)
     polar = np.zeros([2, L, 3])
     polar[..., 0] = np.linspace(0.2, 1, L)
@@ -981,7 +981,7 @@ def test_polar_and_cartesian_magnetization_maps(elzo, magnetic_multilayer):
     R_zero = res.reflectivity
     assert not np.allclose(R, R_zero)
     # the homogeneous reflectivity of the sub-structures
-    N = magnetic_multilayer.get_number_of_sub_structures()
+    N = magnetic_multilayer.num_sub_structures
     res = elzo.homogeneous_reflectivity_transmissivity(np.zeros(N), cartesian[0, :N])
     R_hom = res.reflectivity
     res = elzo.homogeneous_reflectivity_transmissivity(np.zeros(N), polar[0, :N], polar=True)
@@ -1016,7 +1016,7 @@ def test_unpolarized_light_is_an_incoherent_average(cls, magnetic_multilayer):
     # without a transverse magnetization along x, reversing the magnetization
     # switches the helicity, while a transverse one changes the reflectivity of
     # pi itself, which differs then for the unpolarized light of both directions
-    N = magnetic_multilayer.get_number_of_sub_structures()
+    N = magnetic_multilayer.num_sub_structures
     for magnetization, equal in [((0, 0.6, 0.8), True), ((1, 0, 0), False)]:
         res = sim.homogeneous_jones_matrices(np.zeros(N), np.tile(magnetization, (N, 1)))
         R_m, R_m_phi = res.jones_reflection, res.jones_reflection_phi
@@ -1065,7 +1065,7 @@ def test_inhomogeneous_parallel_equals_sequential(cls, magnetic_multilayer, tmp_
     energy, theta = np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg
     sim = simulation(cls, magnetic_multilayer, energy, theta)
     sim.cache_dir = tmp_path
-    L = magnetic_multilayer.get_number_of_layers()
+    L = magnetic_multilayer.num_layers
     rng = np.random.default_rng(0)
     strain_map = rng.uniform(-0.01, 0.01, (3, L))
     magnetization_map = rng.uniform(-0.5, 0.5, (3, L, 3))
@@ -1185,7 +1185,7 @@ def xray_dyn(structure_crystalline, tmp_path_factory):
 @pytest.fixture(scope="module")
 def atomistic_maps(structure_amorph):
     """homogeneous strain and temperature maps for 11 delays"""
-    distances, _, _ = structure_amorph.get_distances_of_layers()
+    distances, _, _ = structure_amorph.layer_distances
     return 0.01 * np.ones([11, len(distances)]), 50 * np.ones([11, len(distances)])
 
 

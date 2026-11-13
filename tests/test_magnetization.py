@@ -50,7 +50,7 @@ def delays():
 
 @pytest.fixture(scope="module")
 def distances(structure_amorph):
-    dists, _, _ = structure_amorph.get_distances_of_layers()
+    dists, _, _ = structure_amorph.layer_distances
     return dists
 
 
@@ -229,7 +229,7 @@ def test_llb_mean_field_mag_map(llb, temp_map):
     assert mf.shape == temp_map.shape[0:2]
     assert np.all(mf > 0)
     assert np.allclose(mf, mf[0, 0])
-    layer = llb.S.get_unique_layers()[1][0]
+    layer = llb.S.unique_layers[1][0]
     Tc = layer.curie_temp.magnitude
     temps = np.r_[0, 0.5 * Tc, 0.999 * Tc, Tc, 2 * Tc]
     mf = llb.calc_mean_field_mag_map(np.tile(temps[:, np.newaxis], (1, mf.shape[1])))
@@ -683,7 +683,7 @@ def test_uncoupled_sublattices_are_independent_layers(tmp_path):
         (make_layer("a", lamda=0.01, eff_spin=0.5, curie_temp=630 * u.K, gilbert_damping=0.05), 1),
         (make_layer("b", lamda=0.02, eff_spin=3.5, curie_temp=1000 * u.K, gilbert_damping=0.1), 1),
     )
-    reference.get_layer_vectors()[2][1].magnetization = (0, 1, 0)
+    reference.layer_vectors[2][1].magnetization = (0, 1, 0)
     B_ext = np.r_[0, 0, 0.5]
     temp_map = pulse(delays)
     # LLB
@@ -1257,7 +1257,7 @@ def test_all_optical_switching(gdfeco, tmp_path):
     a transient ferromagnetic-like state, which the conventional LLB does
     not, see Raposo et al. 2022"""
     S, delays, (low, high) = gdfeco
-    assert S.get_layer_vectors()[2][0].curie_temp.magnitude == pytest.approx(603, abs=1)
+    assert S.layer_vectors[2][0].curie_temp.magnitude == pytest.approx(603, abs=1)
     llb = LLB(S, True, save_data=False, disp_messages=False, progress_bar=False)
 
     def m_z(temp_map, **kwargs):

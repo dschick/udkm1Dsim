@@ -271,7 +271,7 @@ class Parratt(MultilayerScattering):
             return super().calc_inhomogeneous_jones_matrices(
                 strain_map, magnetization_map, temp_map
             )
-        _, _, handles = self.S.get_layer_vectors()
+        _, _, handles = self.S.layer_vectors
         superstrate, substrate = self._superstrate_and_substrate()
         layers = (
             [superstrate]

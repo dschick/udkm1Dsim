@@ -454,7 +454,7 @@ def test_unit_cell_axis_setter_keeps_mass(unit_cell, axis, density_factor, sprin
 
 def test_unit_cell_atoms(unit_cell):
     assert unit_cell.num_atoms == 3
-    assert unit_cell.get_atom_ids() == ["Sr", "O", "Ti"]
+    assert unit_cell.atom_ids == ["Sr", "O", "Ti"]
     assert np.allclose(unit_cell.get_atom_positions(), [0, 0.5, 1])
     assert np.allclose(unit_cell.get_atom_positions(0.1), [0, 0.55, 1.1])
 
@@ -463,7 +463,7 @@ def test_unit_cell_add_multiple_atoms(unit_cell, atom_oxygen):
     uc = copy.deepcopy(unit_cell)  # do not alter the module-scoped fixture
     uc.add_multiple_atoms(atom_oxygen, 0.5, 2)
     assert uc.num_atoms == 5
-    assert uc.get_atom_ids() == ["Sr", "O", "Ti"]  # unique ids
+    assert uc.atom_ids == ["Sr", "O", "Ti"]  # unique ids
     assert np.allclose(uc.get_atom_positions(), [0, 0.5, 0.5, 0.5, 1])
     assert_approx(uc.mass, unit_cell.mass + 2 * atom_oxygen.mass)
 

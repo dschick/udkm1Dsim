@@ -136,7 +136,7 @@ def test_chained_results(structure, tmp_path):
     """an upstream result is accepted instead of the arrays, its coordinates
     are passed on, and the result is cached in a HDF5 file"""
     delays = np.r_[-1:5:0.1] * u.ps
-    N = structure.get_number_of_layers()
+    N = structure.num_layers
     temp_map = 300 * np.ones((len(delays), N))
     temp_map[delays.magnitude >= 0, :5] += 100
     delta_temp_map = np.zeros_like(temp_map)
@@ -150,7 +150,7 @@ def test_chained_results(structure, tmp_path):
     reference = pnum.get_strain_map(delays, temp_map, delta_temp_map)
     np.testing.assert_array_equal(strain.strain_map, reference.strain_map)
     assert strain.dims("strain_map") == ("delays", "distances")
-    np.testing.assert_allclose(strain.distances, structure.get_distances_of_layers(False)[2])
+    np.testing.assert_allclose(strain.distances, structure.layer_distances[2].magnitude)
     assert strain.attrs["simulation"] == "PhononNum"
     assert strain.attrs["hash"] == pnum.get_hash(delays, temp_map, delta_temp_map)
     assert "structure mixed" in strain.attrs["structure"]

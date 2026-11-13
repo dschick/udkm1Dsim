@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **breaking:** the argument-free getters of the structures are read-only properties: `Structure.num_sub_structures`, `num_layers`, `num_unique_layers`, `unique_layers`, `layer_vectors`, `positions_per_unique_layer`, `layer_distances`, and `interface_distances` instead of `get_number_of_sub_structures()`, `get_number_of_layers()`, `get_number_of_unique_layers()`, `get_unique_layers()`, `get_layer_vectors()`, `get_all_positions_per_unique_layer()`, `get_distances_of_layers()`, and `get_distances_of_interfaces()`, as well as `UnitCell.atom_ids` instead of `get_atom_ids()`, where the distances are always returned as Quantities, while the `get_*()` methods with arguments are kept, e.g. `get_layer_property_vector()` and `get_atom_positions()`
+
 ## [3.0.0a3] 2026-11-13
 
 ### Added

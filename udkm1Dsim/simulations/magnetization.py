@@ -153,7 +153,7 @@ class Magnetization(Simulation):
     @property
     def num_sublattices(self):
         """int: largest number of magnetic sublattices of all layers."""
-        layers = self.S.get_unique_layers()[1]
+        layers = self.S.unique_layers[1]
         return max((layer.magnetic.num_sublattices for layer in layers), default=1)
 
     def check_initial_magnetization(self, init_magnetization, distances=[]):
@@ -193,7 +193,7 @@ class Magnetization(Simulation):
             :math:`N \times P \times 3` on the according spatial grid.
 
         """
-        layers = self.S.get_unique_layers()
+        layers = self.S.unique_layers
         for layer in layers[1]:
             if isinstance(layer, UnitCell):
                 raise TypeError(
@@ -208,13 +208,13 @@ class Magnetization(Simulation):
         N = len(distances)
         if N == 0:
             # no spatial grid is provided
-            N = self.S.get_number_of_layers()
-            [distances, _, _] = self.S.get_distances_of_layers(False)
+            N = self.S.num_layers
+            [distances, _, _] = self.S._layer_distances()
         # use finderb search to find the corresponding indices between the
         # internal and external spatial grids
-        [d_start, _, _] = self.S.get_distances_of_layers(False)
+        [d_start, _, _] = self.S._layer_distances()
         idx = finderb(distances, d_start)
-        handles = self.S.get_layer_vectors()[2]
+        handles = self.S.layer_vectors[2]
         sizes = np.array([handles[i].magnetic.num_sublattices for i in idx])
         P = int(np.max(sizes, initial=1))
 
@@ -594,7 +594,7 @@ class Magnetization(Simulation):
         """the net mean-field magnetization map M x N and the one of the
         sublattices M x N x P, see :meth:`calc_mean_field_mag_map`"""
         temp_map = np.asarray(temp_map, dtype=float)
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
         layers = self.calc_magnetic_parameters(np.ones(L, dtype=bool))
         temp_grid, tables = magnetization_scipy.tabulate_equilibrium(
             layers, temp_max=float(np.max(temp_map))
@@ -643,7 +643,7 @@ class Magnetization(Simulation):
         """
         exch_stiffnesses = self.S.get_layer_property_vector("magnetic.exch_stiffness.magnitude")
 
-        indices, _, _ = self.S.get_layer_vectors()
+        indices, _, _ = self.S.layer_vectors
 
         A = np.zeros([len(indices), 2])
         interfaces = np.r_[1, np.diff(indices), 1]
@@ -674,7 +674,7 @@ class Magnetization(Simulation):
             magnetic layers.
 
         """
-        handles = self.S.get_layer_vectors()[2]
+        handles = self.S.layer_vectors[2]
         return [handles[i].magnetic for i in np.flatnonzero(is_magnetic)]
 
     def calc_interlayer_exchange_stiffnesses(self, is_magnetic):
@@ -1260,7 +1260,7 @@ class LLG(Magnetization):
         t1 = time()
         delays = self.parse_delays(delays)
         M = len(delays)
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
 
         init_mag = self.check_initial_magnetization(init_magnetization)
         P = init_mag.shape[1]
@@ -1304,7 +1304,7 @@ class LLG(Magnetization):
             strain_map = self.check_map("strain_map", strain_map, M, L)
 
         # magnetic layers carry a saturation magnetization
-        handles = self.S.get_layer_vectors()[2]
+        handles = self.S.layer_vectors[2]
         is_magnetic = np.array(
             [np.any(np.asarray(h.magnetic.mag_saturation.magnitude) > 0) for h in handles],
             dtype=bool,
@@ -1745,7 +1745,7 @@ class LLB(Magnetization):
         t1 = time()
         delays = self.parse_delays(delays)
         M = len(delays)  # nb of delay steps
-        L = self.S.get_number_of_layers()
+        L = self.S.num_layers
 
         temps = self.check_temp_map(temp_map, M, L)
         if strain_map is not None:
