@@ -222,6 +222,10 @@ def berreman_modes(eps, cos_theta):
 class _BerremanModes:
     """eigenmodes of the Berreman formalisms"""
 
+    # the normal axis of the Berreman matrix points into the sample, so that
+    # the in-plane magnetic field flips its sign in the sample frame
+    _field_frame = np.array([1.0, 1.0, -1.0, -1.0])
+
     def calc_modes(self, eps):
         """calc_modes
 

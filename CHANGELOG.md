@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Structure.to_yaml()` and `Structure.from_yaml()` to save and load a sample structure with all its atoms, layers, and nested structures as human-readable YAML, e.g. to share or archive it, see [#249]; shared objects are written once by their id, only the parameters differing from their defaults are written as quantities with readable units, e.g. `3.905 Å`, which are read back exactly, the temperature-dependent parameters as their formula strings, and the dispersions by their source, e.g. the refractive index, a file relative to the YAML file, or a page of refractiveindex.info, or with `embed=True` by their tabulated values; on writing, the YAML is read back and compared, so that the hashes of the structure and hence the cached results are kept, and anything that cannot be written exactly raises an error
 - `PyYAML` as dependency
+- `homogeneous_absorption()` of the multilayer formalisms for the absorption profile $\mathrm{d}A/\mathrm{d}z$, the absorption of each layer, and the flux into the substrate from the Poynting vector, with `calc_absorption()` for any incoming polarization
+- `homogeneous_fields()` of the multilayer formalisms for the electric and magnetic fields inside the structure
 
 ### Changed
 

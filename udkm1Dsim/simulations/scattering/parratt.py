@@ -78,6 +78,8 @@ class Parratt(MultilayerScattering):
     """
 
     _title = "Parratt multilayer scattering simulation"
+    # the magnetization is neglected
+    _magnetic_fields = False
 
     def calc_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
         """calc_layer_dielectric_tensor
@@ -238,6 +240,82 @@ class Parratt(MultilayerScattering):
         R[..., 0, 0], R[..., 1, 1] = X_s, X_p
         T[..., 0, 0], T[..., 1, 1] = t_s, t_p
         return R, R, T, T
+
+    def _field_slabs(self, layers, cache=None):
+        r"""linearly polarized modes :math:`(\sigma_d, \pi_d, \sigma_u, \pi_u)`
+        of the homogeneous slabs in the sample frame and the interface
+        matrices from the reflection coefficients :math:`r_j` and the
+        transmission coefficients :math:`\tau_j` of the electric field of the
+        recursion of :meth:`calc_jones_matrices`, including the roughness,
+
+        .. math:: X_j = \frac{1}{t'_j} \begin{pmatrix} 1 & -r_j \\ -r_j & 1
+            \end{pmatrix}, \quad t'_j = \frac{1 - r_j^2}{\tau_j}
+
+        for each polarization, see
+        :meth:`~udkm1Dsim.simulations.scattering.multilayer.MultilayerScattering._field_slabs`.
+        The modes are normalized to the amplitude of their electric field."""
+        k = self.experiment.k.magnitude[:, np.newaxis]
+        k_y2 = self._in_plane_wavevector() ** 2
+        slabs, interfaces, keys = [], [], []
+        for i, entry in enumerate(layers):
+            layer, strain, magnetization = entry
+            key = (id(layer), self._parse_layer_inputs(layer, strain, magnetization)[0])
+            n, eps, k_z, _, sigma = self._layer_constants(*entry, k, k_y2, cache)
+            thickness = layer.structural.thickness.magnitude * (1 + key[1])
+            if i > 1 and key == keys[-1]:
+                # identical layers have no interface and no roughness
+                slabs[-1][2] += thickness
+                continue
+            q = k_z / k
+            n = np.broadcast_to(n, q.shape)
+            zero, one = np.zeros_like(q), np.ones_like(q)
+            # rows (E_x, E_y, Z_0 H_x, Z_0 H_y) of the modes, where the normal
+            # z of the sample frame points out of the sample, and the pi
+            # polarization of the down modes is k x sigma as for the other
+            # formalisms
+            A = np.stack(
+                [
+                    np.stack([one, zero, one, zero], axis=-1),
+                    np.stack([zero, -q / n, zero, q / n], axis=-1),
+                    np.stack([zero, -n, zero, -n], axis=-1),
+                    np.stack([-q, zero, q, zero], axis=-1),
+                ],
+                axis=-2,
+            )
+            if i > 0:
+                n_a, eps_a, k_a = slabs[-1][4]
+                r_s = (k_a - k_z) / (k_a + k_z)
+                r_p = (eps * k_a - eps_a * k_z) / (eps * k_a + eps_a * k_z)
+                tau_s = 1 + r_s
+                tau_p = (1 + r_p) * (n_a / n)
+                if sigma > 0:
+                    r_s = r_s * np.exp(-2 * k_a * k_z * sigma**2)
+                    r_p = r_p * np.exp(-2 * k_a * k_z * sigma**2)
+                    damping = np.exp((k_z - k_a) ** 2 * sigma**2 / 2)
+                    tau_s = tau_s * damping
+                    tau_p = tau_p * damping
+                X = np.zeros(q.shape + (4, 4), dtype=np.complex128)
+                for m, (r, tau) in enumerate(((r_s, tau_s), (r_p, tau_p))):
+                    t_inv = tau / (1 - r**2)
+                    X[..., m, m] = X[..., m + 2, m + 2] = t_inv
+                    X[..., m, m + 2] = X[..., m + 2, m] = -r * t_inv
+                interfaces.append(X)
+            slabs.append(
+                [
+                    A,
+                    np.stack([q, q, -q, -q], axis=-1),
+                    0.0 if i == 0 else thickness,
+                    eps[:, 0][:, np.newaxis, np.newaxis] * np.eye(3),
+                    (n, eps, k_z),
+                ]
+            )
+            keys.append(key)
+        return slabs, interfaces
+
+    def _incident_amplitudes(self, A, eps, b):
+        """the linear modes of the superstrate are normalized to the
+        amplitude of the electric field"""
+        return np.broadcast_to(np.eye(2, dtype=np.complex128), b.shape + (2, 2)).copy()
 
     def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map, temp_map=None):
         """calc_inhomogeneous_jones_matrices
