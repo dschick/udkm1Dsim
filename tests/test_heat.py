@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pint.testing import assert_allclose
 
-from udkm1Dsim import Heat, Layer, Structure, u
+from udkm1Dsim import Dispersion, Heat, Layer, Structure, u
 from udkm1Dsim.simulations.solvers import HAS_NUMBA
 
 # fixtures
@@ -159,6 +159,34 @@ def test_get_absorption_profile(heat):
         "backside": False,
     }
     heat.get_absorption_profile(distances=np.r_[0:10e-9:1e-10])
+
+
+@pytest.mark.parametrize("polarization", ["s", "p"])
+@pytest.mark.parametrize("theta", [90, 60, 30])
+def test_multilayer_absorption_conserves_energy(tmp_path, polarization, theta):
+    # absorbed fraction from the absorption profile equals 1 - R - T
+    def layer(id, n, thickness=1 * u.nm):
+        return Layer(
+            id, id, thickness=thickness, dielectric=Dispersion.from_ref_index(n), therm_cond=1
+        )
+
+    absorber = layer("absorber", 3.5 + 4.0j)
+    S = Structure("stack")
+    S.add_sub_structure(absorber, 20)
+    S.add_sub_structure(layer("dielectric", 1.5 + 0.01j), 50)
+    S.add_sub_structure(absorber, 10)
+    S.add_substrate(layer("substrate", 3.7 + 0.01j, 0 * u.nm))
+    heat = Heat(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
+    heat.excitation = {
+        "fluence": [10] * u.mJ / u.cm**2,
+        "wavelength": 800 * u.nm,
+        "polarization": polarization,
+        "theta": theta * u.deg,
+        "multilayer_absorption": True,
+    }
+    distances = np.linspace(0, S.interface_distances[-1].to("m").magnitude, 20001)
+    dAdz, _, R, T = heat.get_multilayers_absorption_profile(distances)
+    assert np.isclose(np.trapezoid(dAdz, distances), 1 - R - T, rtol=1e-4)
 
 
 def test_get_temperature_after_delta_excitation(heat):

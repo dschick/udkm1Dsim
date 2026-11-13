@@ -523,8 +523,8 @@ class Heat(Simulation):
         """get_multilayers_absorption_profile
 
         Calculates the intensity, differential absorption and temperature
-        increase profiles in each layer of a multilayers structure for :math:`p`
-        -polarized light.
+        increase profiles in each layer of a multilayers structure for
+        :math:`s`- or :math:`p`-polarized light.
 
         Calculation based on the method by :cite:t:`ohtaishida1990` and code
         developed Matlab by :cite:t:`leguyader2013`.
@@ -721,10 +721,13 @@ class Heat(Simulation):
             # For each layer except the first, compute Intensity, Absorption
             Ep = Dn[0, 0, i] * np.exp(1.0j * k_z[i] * z)
             Em = Dn[1, 0, i] * np.exp(-1.0j * k_z[i] * z)
-            Etx = 0.0 * Ep + 0.0 * Em
-            Ety = np.cos(alpha[i]) * Ep - np.cos(alpha[i]) * Em
-            Etz = -np.sin(alpha[i]) * Ep - np.sin(alpha[i]) * Em
-            Ints[k : k + m] = np.real(Etx * np.conj(Etx) + Ety * np.conj(Ety) + Etz * np.conj(Etz))
+            if self._excitation["polarization"] == "s":
+                # the electric field is perpendicular to the plane of incidence
+                Ints[k : k + m] = np.abs(Ep + Em) ** 2
+            else:  # p-polarization in the plane of incidence
+                Ety = np.cos(alpha[i]) * (Ep - Em)
+                Etz = -np.sin(alpha[i]) * (Ep + Em)
+                Ints[k : k + m] = np.abs(Ety) ** 2 + np.abs(Etz) ** 2
             dAdz[k : k + m] = (
                 np.real(
                     opt_ref_indices[i] * np.cos(alpha[i]) / (opt_ref_indices[0] * np.cos(alpha[0]))
