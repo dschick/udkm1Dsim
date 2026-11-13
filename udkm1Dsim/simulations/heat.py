@@ -190,11 +190,26 @@ class Heat(Simulation):
 
         return super()._property_rows() + output
 
+    def _parameters(self):
+        """dict of the parameters of the simulation"""
+        return {
+            **super()._parameters(),
+            "excitation": self.excitation,
+            "heat_diffusion": self.heat_diffusion,
+            "backend": self.backend,
+            "intp_at_interface": self.intp_at_interface,
+            "distances": self.distances,
+            "boundary_conditions": self.boundary_conditions,
+            "ode_options": dict(self.ode_options),
+        }
+
     def get_hash(self, delays, init_temp, **kwargs):
         """get_hash
 
-        Returns a unique hash given by the ``delays`` and ``init_temp`` as
-        well as the sample structure hash for relevant thermal parameters.
+        Returns a unique hash given by the ``delays`` and ``init_temp``, the
+        parameters of the simulation including the ``ode_options``, but not
+        the ``backend``, which yields the same results, as well as the sample
+        structure hash for relevant thermal parameters.
 
         Args:
             delays (ndarray[float]): delay grid for the simulation.
@@ -213,6 +228,7 @@ class Heat(Simulation):
             self._excitation,
             self._boundary_conditions,
             self.distances,
+            self.ode_options,
         ]
 
         for value in kwargs.values():
@@ -774,9 +790,11 @@ class Heat(Simulation):
         final_temp, delta_temp = self.calc_temperature_after_delta_excitation(
             fluence, init_temp, distances
         )
+        fluence = fluence if isinstance(fluence, Q_) else Q_(fluence, "J/m**2")
         result = self.new_map_result(
             "temperature after delta excitation",
             distances=distances if len(distances) > 0 else None,
+            inputs={"fluence": fluence.to("mJ/cm**2")},
         )
         result.add("final_temp", final_temp, ("distances", "subsystems"), "K")
         result.add("delta_temp", delta_temp, ("distances", "subsystems"), "K")
@@ -1223,8 +1241,15 @@ class Heat(Simulation):
             if source is None:
                 raise ValueError("init_temp must be given for a temp_map array!")
             init_temp = source["init_temp"]
-        energy_map = self.calc_energy_map(get_entry(temp_map, "temp_map"), init_temp)
-        result = self.new_map_result("energy map", source=source)
+        temp_map = get_entry(temp_map, "temp_map")
+        energy_map = self.calc_energy_map(temp_map, init_temp)
+        init_temp = init_temp if isinstance(init_temp, Q_) else Q_(init_temp, "K")
+        result = self.new_map_result(
+            "energy map",
+            source=source,
+            inputs={"init_temp": init_temp},
+            input_maps={"temp_map": temp_map},
+        )
         result.add("energy_map", energy_map, ("delays", "distances", "subsystems"), "J")
         return result
 
@@ -1258,10 +1283,14 @@ class Heat(Simulation):
             delays = source.quantity("delays") if delays is None else delays
         if delta_temp_map is None or delays is None:
             raise ValueError("delta_temp_map and delays must be given for a temp_map array!")
-        flux_map = self.calc_energy_flux_map(
-            get_entry(temp_map, "temp_map"), delta_temp_map, delays
+        temp_map = get_entry(temp_map, "temp_map")
+        flux_map = self.calc_energy_flux_map(temp_map, delta_temp_map, delays)
+        result = self.new_map_result(
+            "energy flux map",
+            delays,
+            source=source,
+            input_maps={"temp_map": temp_map, "delta_temp_map": delta_temp_map},
         )
-        result = self.new_map_result("energy flux map", delays, source=source)
         dims = ("delays", "distances", "subsystems")
         for i, name in enumerate(("total", "coupling", "diffusion")):
             result.add(f"{name}_energy_flux_map", flux_map[..., i], dims, "W")

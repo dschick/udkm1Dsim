@@ -113,16 +113,25 @@ class Magnetization(Simulation):
         """extend the simulation properties by the temperature sub-system"""
         return super()._property_rows() + [["temperature sub-system", self.temp_sub_system]]
 
+    def _parameters(self):
+        """dict of the parameters of the simulation"""
+        return {
+            **super()._parameters(),
+            "temp_sub_system": self.temp_sub_system,
+            "ode_options": dict(self.ode_options),
+            "equilibrium_options": dict(self.equilibrium_options),
+        }
+
     def _hash_params(self):
         """simulation settings that enter the hash of the results"""
-        return [type(self).__name__, self.temp_sub_system]
+        return [type(self).__name__, self.temp_sub_system, self.ode_options]
 
     def get_hash(self, **kwargs):
         """get_hash
 
         Calculates an unique hash given by the delays as well as the sample
         structure hash for relevant magnetic parameters, the type of the
-        simulation and the temperature sub-system.
+        simulation, the temperature sub-system, and the ``ode_options``.
         Optionally, part of the ``strain_map`` and ``temp_map`` are used.
 
         Args:
@@ -363,13 +372,6 @@ class Magnetization(Simulation):
         result.attrs["polar"] = polar
         return result
 
-    def _map_result(self, title, shape, delays=None, source=None):
-        """new result for maps of the ``shape`` (M, N, ...), see
-        :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_map_result`"""
-        return self.new_map_result(
-            title, delays, source=source, num_delays=shape[0], num_distances=shape[1]
-        )
-
     @staticmethod
     def _parse_input_maps(kwargs):
         """the input maps of the ``kwargs`` given as arrays or as results of
@@ -433,8 +435,13 @@ class Magnetization(Simulation):
                 magnetization_map = maps
                 sublattice_map = maps[:, :, np.newaxis, :]
 
-            result = self._map_result(
-                "magnetization map", np.shape(magnetization_map), delays, source
+            result = self.new_map_result(
+                "magnetization map",
+                delays,
+                source=source,
+                num_delays=magnetization_map.shape[0],
+                num_distances=magnetization_map.shape[1],
+                **self._inputs_and_maps(hash_kwargs),
             )
             dims = ("delays", "distances")
             result.add("magnetization_map", magnetization_map, dims + ("components",))
@@ -448,6 +455,21 @@ class Magnetization(Simulation):
         return self._cached_result(
             "magnetization_map", self.get_hash(delays=delays, **hash_kwargs), calc
         )
+
+    @staticmethod
+    def _inputs_and_maps(kwargs):
+        """``inputs`` and ``input_maps`` of the ``kwargs`` of a magnetization
+        simulation for the metadata of its result, see
+        :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`,
+        with the external magnetic field ``B_ext`` (T)"""
+        maps = ("temp_map", "strain_map", "mag_amplitude_map")
+        inputs = {key: value for key, value in kwargs.items() if key not in maps}
+        if inputs.get("B_ext") is not None:
+            inputs["B_ext"] = Q_(inputs["B_ext"], "T")
+        return {
+            "inputs": inputs,
+            "input_maps": {key: value for key, value in kwargs.items() if key in maps},
+        }
 
     def calc_magnetization_map(self, delays, **kwargs):
         """calc_magnetization_map
@@ -535,6 +557,7 @@ class Magnetization(Simulation):
         calculated and cached together, see :meth:`get_mean_field_mag_map`"""
         source = temp_map
         temp_map = get_entry(temp_map, "temp_map")
+        input_maps = {"temp_map": temp_map}
         if isinstance(source, Result) and np.ndim(temp_map) == 3:
             temp_map = temp_map[:, :, self.temp_sub_system]
 
@@ -542,8 +565,12 @@ class Magnetization(Simulation):
             if not isinstance(temp_map, np.ndarray):
                 raise TypeError("temp_map must be a numpy ndarray!")
             mf_mag_map, sublattice_map = self._calc_mean_field_mag_maps(temp_map)
-            result = self._map_result(
-                "mean-field magnetization map", np.shape(mf_mag_map), source=source
+            result = self.new_map_result(
+                "mean-field magnetization map",
+                source=source,
+                num_delays=mf_mag_map.shape[0],
+                num_distances=mf_mag_map.shape[1],
+                input_maps=input_maps,
             )
             dims = ("delays", "distances")
             result.add("mean_field_magnetization_map", mf_mag_map, dims, aliases="mf_mag_map")
@@ -920,7 +947,12 @@ class Magnetization(Simulation):
         equilibrium = self.calc_equilibrium_magnetization(
             B_ext, init_magnetization, polar, **profiles
         )
-        result = self.new_map_result("equilibrium magnetization")
+        inputs = {
+            "B_ext": self.parse_field(B_ext),
+            "init_magnetization": self.parse_initial_magnetization(init_magnetization),
+            **profiles,
+        }
+        result = self.new_map_result("equilibrium magnetization", **self._inputs_and_maps(inputs))
         result.add(
             "equilibrium_magnetization",
             equilibrium,
@@ -1205,6 +1237,10 @@ class LLG(Magnetization):
     def _property_rows(self):
         """extend the simulation properties by the magnetization sub-system"""
         return super()._property_rows() + [["magnetization sub-system", self.mag_sub_system]]
+
+    def _parameters(self):
+        """dict of the parameters of the simulation"""
+        return {**super()._parameters(), "mag_sub_system": self.mag_sub_system}
 
     def _hash_params(self):
         return super()._hash_params() + [self.mag_sub_system]

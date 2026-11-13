@@ -2,7 +2,8 @@
 import numpy as np
 import pytest
 
-from udkm1Dsim import PhononNum, Result, u
+from udkm1Dsim import Layer, PhononNum, Result, Structure, u
+from udkm1Dsim.simulations.result import array_hash
 
 
 @pytest.fixture
@@ -122,6 +123,64 @@ def test_save_load(result, tmp_path):
         assert file["data/temp_map"].dims[1][0].name == "/coords/distances"
 
 
+def test_save_load_metadata(result, tmp_path):
+    """dicts of metadata are saved as groups with Quantities, None, lists of
+    arrays of different shapes, and nested dicts"""
+    pytest.importorskip("h5py")
+    result.attrs["parameters"] = {
+        "fluence": [5, 10] * u.mJ / u.cm**2,
+        "theta": 45 * u.deg,
+        "polarization": "sigma",
+        "diffusion": True,
+        "size": 3,
+        "pol_in": np.r_[1, 1j],
+        "ode_options": {"method": "RK45", "first_step": None, "max_step": np.inf},
+    }
+    result.attrs["inputs"] = {"strain_vectors": [np.r_[0, 1], np.r_[0:3]], "empty": []}
+    filename = tmp_path / "result.h5"
+    result.save(filename)
+    loaded = Result.load(filename)
+    parameters = loaded.attrs["parameters"]
+    assert list(parameters) == list(result.attrs["parameters"])
+    assert parameters["fluence"].units == u.mJ / u.cm**2
+    np.testing.assert_array_equal(parameters["fluence"].magnitude, [5, 10])
+    assert parameters["theta"] == 45 * u.deg
+    assert parameters["polarization"] == "sigma"
+    assert parameters["diffusion"] is True and parameters["size"] == 3
+    np.testing.assert_array_equal(parameters["pol_in"], [1, 1j])
+    assert parameters["ode_options"] == {"method": "RK45", "first_step": None, "max_step": np.inf}
+    strain_vectors = loaded.attrs["inputs"]["strain_vectors"]
+    assert len(strain_vectors) == 2
+    np.testing.assert_array_equal(strain_vectors[1], [0, 1, 2])
+    assert np.size(loaded.attrs["inputs"]["empty"]) == 0
+    result.attrs["data"] = {"reserved": 1}
+    with pytest.raises(KeyError, match="reserved"):
+        result.save(tmp_path / "reserved.h5")
+
+
+def test_load_parameters_of_previous_versions(result, tmp_path):
+    """the parameters were attributes of the group parameters before"""
+    h5py = pytest.importorskip("h5py")
+    filename = tmp_path / "result.h5"
+    del result.attrs["parameters"]
+    result.save(filename)
+    with h5py.File(filename, "a") as file:
+        file.create_group("parameters").attrs["force recalc"] = False
+    assert Result.load(filename).attrs["parameters"] == {"force recalc": False}
+
+
+def test_array_hash(result):
+    values = np.arange(6.0).reshape(2, 3)
+    assert array_hash(values) == array_hash(values.copy())
+    assert array_hash(values) == array_hash(values * u.K)
+    assert array_hash(values) != array_hash(values.reshape(3, 2))
+    assert array_hash(values) != array_hash(values.astype(np.float32))
+    assert array_hash(values.T) == array_hash(np.ascontiguousarray(values.T))
+    assert result.entry_hash("temp_map") == array_hash(np.ones((3, 4)))
+    with pytest.raises(TypeError, match="objects"):
+        array_hash(np.array([np.ones(2), np.ones(3)], dtype=object))
+
+
 def test_to_xarray(result):
     pytest.importorskip("xarray")
     dataset = result.to_xarray()
@@ -153,11 +212,40 @@ def test_chained_results(structure, tmp_path):
     np.testing.assert_allclose(strain.distances, structure.layer_distances[2].magnitude)
     assert strain.attrs["simulation"] == "PhononNum"
     assert strain.attrs["hash"] == pnum.get_hash(delays, temp_map, delta_temp_map)
-    assert "structure mixed" in strain.attrs["structure"]
+    # the structure is saved as YAML and the input maps by their hashes
+    assert Structure.from_yaml(strain.attrs["structure"]).get_hash(
+        types="phonon"
+    ) == structure.get_hash(types="phonon")
+    assert strain.attrs["input_hashes"] == {
+        "temp_map": temp.entry_hash("temp_map"),
+        "delta_temp_map": temp.entry_hash("delta_temp_map"),
+    }
+    assert strain.attrs["parameters"]["ode_options"]["atol"] == 1e-12
     assert any(path.name.startswith("strain_map_num_") for path in tmp_path.iterdir())
     pnum.force_recalc = False
-    np.testing.assert_array_equal(
-        pnum.get_strain_map(delays, temp).strain_map, reference.strain_map
-    )
+    cached = pnum.get_strain_map(delays, temp)
+    np.testing.assert_array_equal(cached.strain_map, reference.strain_map)
+    assert cached.attrs["input_hashes"] == strain.attrs["input_hashes"]
+    assert cached.attrs["parameters"] == strain.attrs["parameters"]
+    assert cached.attrs["structure"] == strain.attrs["structure"]
+    # the ode_options change the hash and hence the cache
+    pnum.ode_options["atol"] = 1e-13
+    assert pnum.get_hash(delays, temp_map, delta_temp_map) != strain.attrs["hash"]
+    pnum.ode_options["atol"] = 1e-12
     with pytest.raises(ValueError, match="delta_temp_map must be given"):
         pnum.get_strain_map(delays, temp_map)
+
+
+def test_structure_without_yaml(tmp_path):
+    """a structure, which cannot be written as YAML, is saved by its text
+    representation with a warning"""
+
+    class Custom(Layer):
+        pass
+
+    S = Structure("custom")
+    S.add_sub_structure(Custom("custom", "custom", thickness=1 * u.nm), 2)
+    pnum = PhononNum(S, True, cache_dir=str(tmp_path), save_data=False, disp_messages=False)
+    with pytest.warns(UserWarning, match="cannot be written as YAML"):
+        result = pnum.new_result("test")
+    assert result.attrs["structure"] == repr(S)

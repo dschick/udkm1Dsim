@@ -201,6 +201,7 @@ def test_get_temperature_after_delta_excitation(heat):
         "backside": False,
     }
     result = heat.get_temperature_after_delta_excitation(10, 300)
+    assert result.attrs["inputs"]["fluence"] == 1 * u.mJ / u.cm**2
     final_temp, delta_temp = heat.calc_temperature_after_delta_excitation(10, 300)
     np.testing.assert_array_equal(result.final_temp, final_temp)
     # the temperature change is the difference to the initial temperature
@@ -226,12 +227,30 @@ def test_get_temp_map(heat):
         "multilayer_absorption": True,
         "backside": False,
     }
-    heat.get_temp_map(delays, init_temp)
+    result = heat.get_temp_map(delays, init_temp)
+    parameters = result.attrs["parameters"]
+    assert parameters["excitation"]["fluence"].units == u.mJ / u.cm**2
+    np.testing.assert_allclose(parameters["excitation"]["fluence"].magnitude, [10])
+    assert parameters["excitation"]["polarization"] == "p"
+    assert parameters["boundary_conditions"]["bottom_type"] == "isolator"
+    assert parameters["ode_options"] == heat.ode_options
+    assert "inputs" not in result.attrs and "input_hashes" not in result.attrs
 
     # load data from cache
     heat.force_recalc = False
-    heat.get_temp_map(delays, init_temp)
+    cached = heat.get_temp_map(delays, init_temp)
+    assert cached.attrs["parameters"]["excitation"] == parameters["excitation"]
     heat.force_recalc = True
+    # the ode_options change the hash
+    hash = heat.get_hash(delays, init_temp)
+    heat.ode_options["rtol"] = 1e-4
+    assert heat.get_hash(delays, init_temp) != hash
+    heat.ode_options["rtol"] = 1e-3
+
+    # the energy maps hold the hash of their input map
+    energy = heat.get_energy_map(result)
+    assert energy.attrs["input_hashes"] == {"temp_map": result.entry_hash("temp_map")}
+    assert energy.attrs["inputs"]["init_temp"].units == u.K
 
 
 def test_get_diffusion_temp_map(heat):

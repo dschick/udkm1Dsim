@@ -33,7 +33,7 @@ from time import time
 import numpy as np
 from tabulate import tabulate
 
-from .result import Result
+from .result import Result, array_hash
 
 
 class Simulation:
@@ -85,6 +85,25 @@ class Simulation:
             ["save data", self.save_data],
             ["progress bar", self.progress_bar],
         ]
+
+    def _parameters(self):
+        """dict of the parameters of the simulation, which change its
+        results, with Quantities for values with units, which are extended
+        by the sub-classes and saved in the metadata of the results"""
+        return {}
+
+    def _structure_yaml(self):
+        """sample structure as YAML text with the tabulated values of all
+        files, or its text representation, if it cannot be written as YAML"""
+        try:
+            return self.S.to_yaml(embed=True, check=False)
+        except (TypeError, ValueError) as error:
+            warnings.warn(
+                f"The structure cannot be written as YAML for the metadata of the results, "
+                f"which hold its text representation instead: {error}",
+                stacklevel=4,
+            )
+            return repr(self.S)
 
     def _table_representation(self, style):
         return tabulate(
@@ -140,17 +159,25 @@ class Simulation:
             filename = os.path.basename(full_filename)
             self.disp_message(f"{var_name:s} saved to file:\n\t {filename:s}")
 
-    def new_result(self, title, hash=""):
+    def new_result(self, title, hash="", inputs=None, input_maps=None):
         """new_result
 
         New :class:`~udkm1Dsim.simulations.result.Result` with the metadata
         of this simulation, i.e. its class, the version of udkm1Dsim, the
-        time of creation, the ``hash``, the sample structure, and the
-        parameters of the simulation.
+        time of creation, the ``hash``, the sample structure as YAML, see
+        :meth:`~udkm1Dsim.structures.structure.Structure.to_yaml`, which is
+        read by :meth:`~udkm1Dsim.structures.structure.Structure.from_yaml`,
+        and the parameters of the simulation, as well as the ``inputs`` of
+        the method, which are no maps, and the hashes of its ``input_maps``,
+        see :meth:`_add_inputs`.
 
         Args:
             title (str): title of the result.
             hash (str, optional): hash of the result.
+            inputs (dict, optional): inputs of the method, e.g. the external
+                magnetic field.
+            input_maps (dict, optional): input maps of the method, e.g. the
+                ``temp_map``.
 
         Returns:
             result (Result): empty result.
@@ -158,20 +185,29 @@ class Simulation:
         """
         from .. import __version__
 
-        return Result(
+        result = Result(
             title,
             {
                 "simulation": type(self).__name__,
                 "version": __version__,
                 "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "hash": hash,
-                "structure": repr(self.S),
-                "parameters": {str(key): value for key, value in self._property_rows()},
+                "structure": self._structure_yaml(),
+                "parameters": self._parameters(),
             },
         )
+        return self._add_inputs(result, inputs, input_maps)
 
     def new_map_result(
-        self, title, delays=None, distances=None, source=None, num_delays=None, num_distances=None
+        self,
+        title,
+        delays=None,
+        distances=None,
+        source=None,
+        num_delays=None,
+        num_distances=None,
+        inputs=None,
+        input_maps=None,
     ):
         """new_map_result
 
@@ -189,12 +225,16 @@ class Simulation:
             source (Result, optional): upstream result.
             num_delays (int, optional): number of delays of the maps.
             num_distances (int, optional): number of distances of the maps.
+            inputs (dict, optional): inputs of the method, see
+                :meth:`new_result`.
+            input_maps (dict, optional): input maps of the method, see
+                :meth:`new_result`.
 
         Returns:
             result (Result): empty result with coordinates.
 
         """
-        result = self.new_result(title)
+        result = self.new_result(title, inputs=inputs, input_maps=input_maps)
         if delays is not None:
             result.add_coord("delays", delays, "s")
         if distances is not None:
@@ -207,6 +247,41 @@ class Simulation:
             layers = self.S._layer_distances()[2]
             if num_distances is None or np.size(layers) == num_distances:
                 result.add_coord("distances", layers, "m")
+        return result
+
+    @staticmethod
+    def _add_inputs(result, inputs=None, input_maps=None):
+        """Add the ``inputs`` of a method, which are no maps, to the metadata
+        ``inputs`` of the ``result`` and the
+        :func:`~udkm1Dsim.simulations.result.array_hash` of the given
+        ``input_maps`` to its metadata ``input_hashes``. Inputs of None and
+        empty inputs and maps, i.e. their defaults, are skipped.
+
+        Args:
+            result (Result): result of the method.
+            inputs (dict, optional): inputs, e.g. the external magnetic field.
+            input_maps (dict, optional): input maps, e.g. the ``temp_map``.
+
+        Returns:
+            result (Result): the same result.
+
+        """
+
+        def empty(value):
+            if isinstance(value, (list, tuple)):
+                return len(value) == 0
+            return value is None or (isinstance(value, np.ndarray) and value.size == 0)
+
+        inputs = {key: value for key, value in (inputs or {}).items() if not empty(value)}
+        hashes = {
+            key: array_hash(value)
+            for key, value in (input_maps or {}).items()
+            if value is not None and np.size(value) > 0
+        }
+        if inputs:
+            result.attrs["inputs"] = inputs
+        if hashes:
+            result.attrs["input_hashes"] = hashes
         return result
 
     def _timed(self, name, calc, *args, **kwargs):
