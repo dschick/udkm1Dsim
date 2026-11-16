@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `homogeneous_fields()` of the multilayer formalisms for the electric and magnetic fields inside the structure
 - the metadata `inputs` of the results with the arguments of the methods, which are no maps, e.g. the external magnetic field `B_ext` (T), the `init_magnetization`, and `equilibrate` of the magnetization simulations, the `strain_vectors` of `XrayDyn`, the `strains`, `magnetizations`, `temps`, and `polar` of the homogeneous scattering simulations, and the `fluence` of `get_temperature_after_delta_excitation()`
 - the metadata `input_hashes` of the results with the md5 hashes of their input maps, e.g. of the `temp_map` and `delta_temp_map` of the phonon simulations, which are not saved again, and `Result.entry_hash()` and `array_hash()` to compare them with the upstream results
+- the `absorption` of the excitation of `Heat` is `lambert_beer` or any multilayer formalism, by default `Parratt`, e.g. `Elzo` or `Stepanov` for magnetic and `BerremanElzo` or `BerremanStepanov` for anisotropic layers, whose absorption profile is `Heat.get_absorption_from_multilayer()`, see `homogeneous_absorption()`; it can also be a configured instance of the formalism, which defines the `wavelength`, `theta`, and `polarization` of the excitation, and `Heat.create_multilayer_formalism()` creates the formalism of the excitation, e.g. for its reflectivity or the fields inside the structure
+- the `fluence`, `delay_pump`, and `pulse_width` of the excitation of `Heat` can also be scalars for a single pulse
+- the `polarization` of the excitation of `Heat` can also be `unpolarized`, `circ +`, or `circ -`
+- `c+`, `c-`, `s`, and `p` as short names of the `circ +`, `circ -`, `sigma`, and `pi` polarization of the scattering simulations and of the excitation of `Heat`
 
 ### Changed
 
@@ -24,10 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - faster `Structure.to_yaml()` by caching the texts of the quantities and the default vacuum
 - the representation of a `Dispersion` from a file and from refractiveindex.info, which is part of the hash of the simulation results, no longer contains the path of the file or the version of the database, but only the md5 digest of its values, so that the hashes do not depend on the location of the file, which changes the hashes of results with such dispersions
 - **breaking:** the argument-free getters of the structures are read-only properties: `Structure.num_sub_structures`, `num_layers`, `num_unique_layers`, `unique_layers`, `layer_vectors`, `positions_per_unique_layer`, `layer_distances`, and `interface_distances` instead of `get_number_of_sub_structures()`, `get_number_of_layers()`, `get_number_of_unique_layers()`, `get_unique_layers()`, `get_layer_vectors()`, `get_all_positions_per_unique_layer()`, `get_distances_of_layers()`, and `get_distances_of_interfaces()`, as well as `UnitCell.atom_ids` instead of `get_atom_ids()`, where the distances are always returned as Quantities, while the `get_*()` methods with arguments are kept, e.g. `get_layer_property_vector()` and `get_atom_positions()`
+- **breaking:** the excitation key `multilayer_absorption` of `Heat` is replaced by `absorption`, i.e. `"absorption": "lambert_beer"` instead of `"multilayer_absorption": False`, and raises a `TypeError`, `Heat.get_multilayers_absorption_profile()` is replaced by `Heat.get_absorption_from_multilayer()`, which returns only the absorption profile, while the intensity, reflectivity, and transmission follow from the formalism of `Heat.create_multilayer_formalism()`, and `Heat.get_Lambert_Beer_absorption_profile()` is renamed to `Heat.get_absorption_from_lambert_beer()`; the `polarization` of the excitation is stored and shown by the names of the multilayer formalisms, i.e. `sigma` and `pi` instead of `s` and `p`, which are still accepted, and an invalid `polarization` raises a `ValueError` instead of a `Warning`
+- the `fluence` of `Heat.get_temperature_after_delta_excitation()` and `calc_temperature_after_delta_excitation()` is documented as the fluence on the surface, i.e. already projected by $\sin\vartheta$, unlike the `fluence` of the excitation, which is projected by `get_temp_map()`
+- the hash of the `Heat` results contains the hash of the multilayer formalism of the excitation, so that the roughness and the magnetization of the layers are taken into account, which changes the hashes of these results
 
 ### Fixed
 
 - the multilayer absorption profile of `Heat` for $s$-polarized light, which used the field components of $p$-polarized light and did not conserve the energy, also at normal incidence, so that the absorbed energy was too small
+- the multilayer absorption profile of `Heat` for a backside excitation at oblique incidence, whose reflectivity did not agree with the transfer matrices, e.g. 15 % instead of 28 % for $s$-polarized light
+- the excitation of `Heat` sorted the `delay_pump` of unsorted pulses, but not their `fluence` and `pulse_width`, which were assigned to the wrong pulses
 - the homogeneous reflectivity of `XrayKin` failed for nested sub-structures, as it called the removed `Structure.get_length()` instead of using the thickness of the sub-structure
 
 [#249]: https://github.com/dschick/udkm1Dsim/issues/249

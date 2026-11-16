@@ -120,7 +120,9 @@ class Scattering(Simulation):
         qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         experiment (ExperimentParameters): photon energies and angles in SI
             units and eV, which also hold the depending quantities.
-        polarizations (dict): polarization states and according names.
+        polarizations (dict): polarization states and according names, where
+            ``c+``, ``c-``, ``s``, and ``p`` can also be given for ``circ +``,
+            ``circ -``, ``sigma``, and ``pi``.
         pol_in_state (int): read-only incoming polarization state as defined
             in polarizations dict, see :meth:`set_incoming_polarization`.
         pol_out_state (int): read-only outgoing polarization state as defined
@@ -142,7 +144,14 @@ class Scattering(Simulation):
         5: "elliptical",
     }
     # the polarization states by their names, where "none" is the no analyzer
-    _polarization_ids = {name: state for state, name in polarizations.items()} | {"none": 0}
+    # and "c+", "c-", "s", and "p" are short names of circ +, circ -, sigma, and pi
+    _polarization_ids = {name: state for state, name in polarizations.items()} | {
+        "none": 0,
+        "c+": 1,
+        "c-": 2,
+        "s": 3,
+        "p": 4,
+    }
     # states of the incoming and analyzer polarization of the formalism
     _pol_in_states = (0, 3, 4)
     _pol_out_states = (0,)

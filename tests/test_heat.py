@@ -4,7 +4,21 @@ import numpy as np
 import pytest
 from pint.testing import assert_allclose
 
-from udkm1Dsim import Dispersion, Heat, Layer, Structure, u
+from udkm1Dsim import (
+    AmorphousLayer,
+    BerremanElzo,
+    BerremanStepanov,
+    Dielectric,
+    Dispersion,
+    Elzo,
+    Heat,
+    Layer,
+    Parratt,
+    Stepanov,
+    Structure,
+    Vacuum,
+    u,
+)
 from udkm1Dsim.simulations.solvers import HAS_NUMBA
 
 # fixtures
@@ -50,7 +64,7 @@ def test_check_excitation(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": True,
+        "absorption": Parratt,
         "backside": False,
     }
     res, fluence, delay_pump, pulse_width = heat.check_excitation(np.r_[-10:10:1] * u.ps)
@@ -66,7 +80,7 @@ def test_check_excitation(heat):
         "wavelength": 800 * u.nm,
         "polarization": "s",
         "theta": 45 * u.deg,
-        "multilayer_absorption": True,
+        "absorption": Parratt,
         "backside": False,
     }
     res, fluence, delay_pump, pulse_width = heat.check_excitation(np.r_[-10:10:1] * u.ps)
@@ -74,7 +88,7 @@ def test_check_excitation(heat):
     assert np.allclose(delay_pump, [0.0])
     assert np.allclose(pulse_width, [1.0e-12])
 
-    with pytest.raises(Warning):
+    with pytest.raises(ValueError, match="polarization"):
         heat.excitation = {
             "fluence": [10] * u.mJ / u.cm**2,
             "delay_pump": [0] * u.ps,
@@ -82,9 +96,32 @@ def test_check_excitation(heat):
             "wavelength": 800 * u.nm,
             "polarization": "elliptical",
             "theta": 45 * u.deg,
-            "multilayer_absorption": True,
+            "absorption": Parratt,
             "backside": False,
         }
+
+
+def test_excitation_pulses(tmp_path):
+    """scalars are a single pulse, and the pulses are sorted by their delays
+    together with their fluences and pulse widths"""
+    heat = optical_heat(optical_stack(), tmp_path)
+    heat.excitation = {
+        "fluence": 5 * u.mJ / u.cm**2,
+        "delay_pump": 1 * u.ps,
+        "pulse_width": 0 * u.ps,
+    }
+    assert_allclose(heat.excitation["fluence"], [5] * u.mJ / u.cm**2)
+    assert_allclose(heat.excitation["delay_pump"], [1] * u.ps)
+    heat.excitation = 3 * u.mJ / u.cm**2
+    assert_allclose(heat.excitation["fluence"], [3] * u.mJ / u.cm**2)
+    heat.excitation = {
+        "fluence": [1, 2, 3] * u.mJ / u.cm**2,
+        "delay_pump": [20, 0, 10] * u.ps,
+        "pulse_width": [0.3, 0.1, 0.2] * u.ps,
+    }
+    assert_allclose(heat.excitation["fluence"], [2, 3, 1] * u.mJ / u.cm**2)
+    assert_allclose(heat.excitation["delay_pump"], [0, 10, 20] * u.ps)
+    assert_allclose(heat.excitation["pulse_width"], [0.1, 0.2, 0.3] * u.ps)
 
 
 def test_get_absorption_profile(heat):
@@ -95,7 +132,7 @@ def test_get_absorption_profile(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": False,
+        "absorption": "lambert_beer",
         "backside": False,
     }
     heat.get_absorption_profile()
@@ -107,7 +144,7 @@ def test_get_absorption_profile(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": False,
+        "absorption": "lambert_beer",
         "backside": True,
     }
     heat.get_absorption_profile()
@@ -119,7 +156,7 @@ def test_get_absorption_profile(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": True,
+        "absorption": Parratt,
         "backside": False,
     }
     heat.get_absorption_profile()
@@ -131,7 +168,7 @@ def test_get_absorption_profile(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": True,
+        "absorption": Parratt,
         "backside": True,
     }
     heat.get_absorption_profile()
@@ -143,7 +180,7 @@ def test_get_absorption_profile(heat):
         "wavelength": 800 * u.nm,
         "polarization": "s",
         "theta": 45 * u.deg,
-        "multilayer_absorption": True,
+        "absorption": Parratt,
         "backside": False,
     }
     heat.get_absorption_profile()
@@ -155,38 +192,188 @@ def test_get_absorption_profile(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": False,
+        "absorption": "lambert_beer",
         "backside": False,
     }
     heat.get_absorption_profile(distances=np.r_[0:10e-9:1e-10])
 
 
-@pytest.mark.parametrize("polarization", ["s", "p"])
-@pytest.mark.parametrize("theta", [90, 60, 30])
-def test_multilayer_absorption_conserves_energy(tmp_path, polarization, theta):
-    # absorbed fraction from the absorption profile equals 1 - R - T
-    def layer(id, n, thickness=1 * u.nm):
-        return Layer(
-            id, id, thickness=thickness, dielectric=Dispersion.from_ref_index(n), therm_cond=1
-        )
+def layer(id, n, thickness=1 * u.nm):
+    return Layer(
+        id, id, thickness=thickness, dielectric=Dispersion.from_ref_index(n), therm_cond=1
+    )
 
+
+def optical_stack(substrate_index=3.7 + 0.01j):
+    """stack of an absorber and a dielectric on an absorbing substrate"""
     absorber = layer("absorber", 3.5 + 4.0j)
     S = Structure("stack")
     S.add_sub_structure(absorber, 20)
     S.add_sub_structure(layer("dielectric", 1.5 + 0.01j), 50)
     S.add_sub_structure(absorber, 10)
-    S.add_substrate(layer("substrate", 3.7 + 0.01j, 0 * u.nm))
+    S.add_substrate(layer("substrate", substrate_index, 0 * u.nm))
+    return S
+
+
+def optical_heat(S, tmp_path, **excitation):
     heat = Heat(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
     heat.excitation = {
         "fluence": [10] * u.mJ / u.cm**2,
         "wavelength": 800 * u.nm,
-        "polarization": polarization,
-        "theta": theta * u.deg,
-        "multilayer_absorption": True,
+        "theta": 60 * u.deg,
+        "polarization": "p",
+        **excitation,
     }
-    distances = np.linspace(0, S.interface_distances[-1].to("m").magnitude, 20001)
-    dAdz, _, R, T = heat.get_multilayers_absorption_profile(distances)
-    assert np.isclose(np.trapezoid(dAdz, distances), 1 - R - T, rtol=1e-4)
+    return heat
+
+
+@pytest.mark.parametrize("polarization", ["s", "p"])
+@pytest.mark.parametrize("theta", [90, 60, 30])
+@pytest.mark.parametrize("backside", [False, True])
+def test_absorption_conserves_energy(tmp_path, polarization, theta, backside):
+    """the absorbed fraction from the absorption profile equals 1 - R - T,
+    also for the reversed structure of a backside excitation with total
+    reflection at the vacuum, for which the incident medium is transparent
+    to separate the incident and reflected flux"""
+    S = optical_stack(3.7 if backside else 3.7 + 0.01j)
+    heat = optical_heat(
+        S, tmp_path, polarization=polarization, theta=theta * u.deg, backside=backside
+    )
+    # midpoint rule, as the absorption jumps at the interfaces
+    thickness = S.interface_distances[-1].to("m").magnitude
+    distances = (np.arange(20000) + 0.5) * thickness / 20000
+    dAdz = heat.get_absorption_profile(distances, backside)
+    formalism = heat.create_multilayer_formalism(backside=backside)
+    R = formalism.calc_homogeneous_reflectivity_transmissivity()[0]
+    T = formalism.calc_homogeneous_absorption()[8]
+    absorbed = np.sum(dAdz) * thickness / 20000
+    assert np.isclose(absorbed, 1 - R.item() - T.item(), rtol=1e-6)
+
+
+def test_absorption_at_interfaces(tmp_path):
+    """the depths at the interfaces belong to the layer below and the bottom
+    of the structure to its last layer, as for the grid of the heat
+    diffusion"""
+    S = optical_stack()
+    heat = optical_heat(S, tmp_path)
+    interfaces = S.interface_distances.to("m").magnitude
+    dAdz = heat.get_absorption_profile(interfaces)
+    formalism = heat.create_multilayer_formalism()
+    inside = interfaces + np.r_[1, 1, 1, -1] * 1e-15
+    np.testing.assert_allclose(dAdz, formalism.calc_homogeneous_absorption(inside)[0][0, 0], 1e-6)
+    assert np.all(dAdz[[0, 2, 3]] > 10 * dAdz[1])
+
+
+@pytest.mark.parametrize("cls", [Elzo, Stepanov, BerremanElzo, BerremanStepanov])
+def test_absorption_formalisms_agree(tmp_path, cls):
+    """all formalisms give the absorption of Parratt for isotropic layers"""
+    heat = optical_heat(optical_stack(), tmp_path, polarization="s")
+    dAdz = heat.get_absorption_profile()
+    heat.excitation = {"absorption": cls}
+    np.testing.assert_allclose(heat.get_absorption_profile(), dAdz, rtol=1e-8)
+
+
+def test_absorption_polarizations(tmp_path):
+    """the absorption of unpolarized light is the mean of s and p, while
+    circular light is absorbed differently by a magnetic film"""
+    heat = optical_heat(optical_stack(), tmp_path)
+    profiles = {}
+    for polarization in ["s", "p", "unpolarized", "sigma", "pi"]:
+        heat.excitation = {"polarization": polarization}
+        profiles[polarization] = heat.get_absorption_profile()
+    np.testing.assert_allclose(
+        profiles["unpolarized"], (profiles["s"] + profiles["p"]) / 2, rtol=1e-12
+    )
+    np.testing.assert_array_equal(profiles["sigma"], profiles["s"])
+    np.testing.assert_array_equal(profiles["pi"], profiles["p"])
+    assert heat.excitation["polarization"] == "pi"
+
+    fe = AmorphousLayer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, therm_cond=1)
+    fe.optical.dielectric = Dielectric(
+        eps0=Dispersion.from_ref_index(2.9 + 3.4j),
+        eps_mag=Dispersion.from_array([0, 10], [0.6 + 0.2j] * 2, kind="eps"),
+    )
+    fe.magnetization = {"r": 1, "phi": 0 * u.deg, "gamma": 0 * u.deg}
+    S = Structure("film")
+    S.add_sub_structure(fe, 10)
+    S.add_substrate(Vacuum())
+    heat = optical_heat(S, tmp_path, absorption=Elzo)
+    circular = []
+    for polarization in ["circ +", "circ -"]:
+        heat.excitation = {"polarization": polarization}
+        circular.append(heat.get_absorption_profile())
+    assert np.max(np.abs(circular[0] - circular[1])) > 1e-3 * np.max(circular[0])
+
+
+def test_absorption_instance(tmp_path):
+    """a configured formalism defines the wavelength, angle, and polarization
+    of the excitation"""
+    S = optical_stack()
+    heat = optical_heat(S, tmp_path)
+    formalism = heat.create_multilayer_formalism(Elzo)
+    formalism.wl = [400] * u.nm
+    formalism.theta = [30] * u.deg
+    formalism.set_incoming_polarization("sigma")
+    heat.excitation = {"absorption": formalism}
+    excitation = heat.excitation
+    assert excitation["absorption"] is formalism
+    assert_allclose(excitation["wavelength"], 400 * u.nm)
+    assert_allclose(excitation["theta"], 30 * u.deg)
+    assert excitation["polarization"] == "sigma"
+    assert heat.create_multilayer_formalism() is formalism
+    dAdz = heat.get_absorption_profile()
+    heat.excitation = {"absorption": Parratt}
+    np.testing.assert_allclose(heat.get_absorption_profile(), dAdz, rtol=1e-8)
+    assert heat._parameters()["excitation"]["absorption"] == "Parratt"
+
+    heat.excitation = {"absorption": formalism}
+    assert heat._parameters()["excitation"]["absorption"] == "Elzo"
+    for key, value in [("wavelength", 800 * u.nm), ("theta", 45 * u.deg), ("polarization", "p")]:
+        with pytest.raises(ValueError, match=key):
+            heat.excitation = {key: value}
+        with pytest.raises(ValueError, match=key):
+            heat.excitation = {"absorption": formalism, key: value}
+    # a backside excitation by a copy of the formalism for the reversed structure
+    dAdz = heat.get_absorption_profile(backside=True)
+    assert formalism.S is S
+    heat.excitation = {"absorption": Elzo}
+    np.testing.assert_allclose(heat.get_absorption_profile(backside=True), dAdz, rtol=1e-12)
+    heat.excitation = {"absorption": formalism}
+    with pytest.raises(ValueError, match="structure"):
+        heat.excitation = {"absorption": Elzo(optical_stack(), True)}
+    formalism.theta = [30, 40] * u.deg
+    with pytest.raises(ValueError, match="single"):
+        heat.excitation = {"absorption": formalism}
+
+
+def test_absorption_errors(tmp_path):
+    heat = optical_heat(optical_stack(), tmp_path)
+    with pytest.raises(TypeError, match="absorption"):
+        heat.excitation = {"multilayer_absorption": True}
+    with pytest.raises(ValueError, match="lambert_beer"):
+        heat.excitation = {"absorption": "Parratt"}
+    with pytest.raises(TypeError, match="multilayer formalism"):
+        heat.excitation = {"absorption": Heat}
+    with pytest.raises(TypeError, match="multilayer formalism"):
+        heat.create_multilayer_formalism("lambert_beer")
+
+
+def test_absorption_hash(tmp_path):
+    """the roughness changes the hash of a heat simulation with a multilayer
+    formalism, but not with Lambert-Beer's law"""
+    absorber = layer("absorber", 3.5 + 4.0j)
+    S = Structure("stack")
+    S.add_sub_structure(absorber, 20)
+    S.add_substrate(layer("substrate", 1.5, 0 * u.nm))
+    heat = optical_heat(S, tmp_path)
+    hashes = {}
+    for absorption in [Parratt, "lambert_beer"]:
+        heat.excitation = {"absorption": absorption}
+        hash = heat.get_hash(np.r_[0:10:1], 300)
+        absorber.roughness = 0.5 * u.nm
+        hashes[absorption] = hash != heat.get_hash(np.r_[0:10:1], 300)
+        absorber.roughness = 0 * u.nm
+    assert hashes == {Parratt: True, "lambert_beer": False}
 
 
 def test_get_temperature_after_delta_excitation(heat):
@@ -197,7 +384,7 @@ def test_get_temperature_after_delta_excitation(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": True,
+        "absorption": Parratt,
         "backside": False,
     }
     result = heat.get_temperature_after_delta_excitation(10, 300)
@@ -224,14 +411,14 @@ def test_get_temp_map(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": True,
+        "absorption": Parratt,
         "backside": False,
     }
     result = heat.get_temp_map(delays, init_temp)
     parameters = result.attrs["parameters"]
     assert parameters["excitation"]["fluence"].units == u.mJ / u.cm**2
     np.testing.assert_allclose(parameters["excitation"]["fluence"].magnitude, [10])
-    assert parameters["excitation"]["polarization"] == "p"
+    assert parameters["excitation"]["polarization"] == "pi"
     assert parameters["boundary_conditions"]["bottom_type"] == "isolator"
     assert parameters["ode_options"] == heat.ode_options
     assert "inputs" not in result.attrs and "input_hashes" not in result.attrs
@@ -266,7 +453,7 @@ def test_get_diffusion_temp_map(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": True,
+        "absorption": Parratt,
         "backside": False,
     }
     heat.boundary_conditions = {"top_type": "isolator", "bottom_type": "isolator"}
@@ -297,7 +484,7 @@ def test_get_diffusion_temp_map_numba(heat):
         "wavelength": 800 * u.nm,
         "polarization": "p",
         "theta": 45 * u.deg,
-        "multilayer_absorption": True,
+        "absorption": Parratt,
         "backside": False,
     }
     heat.backend = "numba"
