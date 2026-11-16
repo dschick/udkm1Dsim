@@ -890,6 +890,10 @@ def test_multilayer_polarization_names_and_invalid_states(cls, magnetic_multilay
         sim.set_incoming_polarization(name)
         assert sim.pol_in_state == state
         np.testing.assert_array_equal(sim.pol_in, by_id)
+    # short names of circ +, circ -, sigma, and pi
+    for alias, state in [("c+", 1), ("c-", 2), ("s", 3), ("p", 4)]:
+        sim.set_polarization(alias, alias)
+        assert (sim.pol_in_state, sim.pol_out_state) == (state, state)
     sim.set_polarization("circ +", "circ +")
     np.testing.assert_allclose(sim.pol_out, np.conj(sim.pol_in))
     sim.set_polarization("sigma", "none")
@@ -1567,30 +1571,6 @@ def test_absorption_of_semi_infinite_absorber(cls):
         np.testing.assert_allclose(dAdz, expected, rtol=1e-10)
 
 
-@pytest.mark.parametrize("polarization", ["s", "p"])
-def test_absorption_matches_heat(polarization):
-    """the absorption of Parratt equals the multilayer absorption of Heat"""
-    S = optical_stack(substrate_layer())
-    sim = simulation(Parratt, S, np.r_[1.55] * u.eV, np.r_[30, 60, 90] * u.deg)
-    heat = ud.Heat(S, True, disp_messages=False, save_data=False)
-    # the bottom of the stack belongs to the substrate
-    z = np.linspace(0, S.interface_distances[-1].to("m").magnitude, 101)[:-1]
-    K = sim.calc_homogeneous_absorption(z)[2]
-    index = 0 if polarization == "s" else 1
-    for i, theta in enumerate(sim.theta[0]):
-        heat.excitation = {
-            "fluence": [1] * u.mJ / u.cm**2,
-            "wavelength": sim.wl[0],
-            "theta": theta,
-            "polarization": polarization,
-            "multilayer_absorption": True,
-        }
-        dAdz = heat.get_multilayers_absorption_profile(z)[0]
-        np.testing.assert_allclose(
-            np.real(K[0, i, :, index, index]), dAdz, rtol=1e-10, atol=1e-12 * np.max(dAdz)
-        )
-
-
 @pytest.mark.parametrize("cls", FORMALISMS)
 def test_fields_of_vacuum_and_interface(cls):
     """an incident field of unit amplitude in vacuum and the continuity of the
@@ -1690,6 +1670,42 @@ def test_layer_absorption(cls, roughness):
     if roughness == 0:
         R = reflectivity(sim, sim.pol_in)
         np.testing.assert_allclose(res.A_layers.sum(axis=-1) + res.S_sub, 1 - R, rtol=1e-12)
+
+
+def birefringent_layer():
+    """vacuum around a tilted uniaxial absorbing layer"""
+    layer = substrate_layer(Dispersion.from_ref_index([1.66 + 0.05j, 1.49 + 0.1j]), (30, 20, 0))
+    layer.structural.thickness = 200 * u.nm
+    S = Structure("birefringent")
+    S.add_sub_structure(layer, 1)
+    S.add_substrate(Vacuum())
+    return S
+
+
+@pytest.mark.parametrize(
+    "sample, classes",
+    [
+        (optical_stack, FORMALISMS),
+        (lambda: magnetic_film((0, 0.6, 0.8)), MAGNETIC),
+        (birefringent_layer, [BerremanElzo, BerremanStepanov]),
+    ],
+    ids=["isotropic", "magnetic", "anisotropic"],
+)
+def test_reflectivity_transmissivity_absorption(sample, classes):
+    """the reflectivity, the transmissivity, and the absorption of the layers
+    add up to 1 between vacuum, and the flux into the vacuum substrate is the
+    transmissivity, for all incoming polarizations"""
+    S = sample()
+    for cls in classes:
+        sim = simulation(cls, S, np.r_[1.2, 1.55, 3.1] * u.eV, np.r_[5, 20, 45, 70, 90] * u.deg)
+        for pol in ["sigma", "pi", "circ +", "circ -", "unpolarized"]:
+            sim.set_polarization(pol, "none")
+            res = sim.homogeneous_reflectivity_transmissivity()
+            absorption = sim.homogeneous_absorption()
+            np.testing.assert_allclose(
+                res.R + res.T + absorption.A_layers.sum(axis=-1), 1, atol=1e-12
+            )
+            np.testing.assert_allclose(absorption.S_sub, res.T, atol=1e-12)
 
 
 @pytest.mark.parametrize("cls", FORMALISMS)

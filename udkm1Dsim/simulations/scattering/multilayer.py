@@ -1642,7 +1642,9 @@ class MultilayerScattering(Scattering):
         Poynting vector :math:`S_z = \mathrm{Re}(E_y H_x^* - E_x H_y^*) / 2`
         of the fields of :meth:`calc_homogeneous_fields` into the sample,
         relative to the incident flux, see :cite:t:`passler2020` and
-        :cite:t:`byrnes2016`. It is consistent with the reflectivity, except
+        :cite:t:`byrnes2016`. For isotropic layers, it equals the absorption
+        :math:`\propto \mathrm{Im}(\varepsilon) |E|^2` of the field intensity
+        of :cite:t:`ohtaishida1990`. It is consistent with the reflectivity, except
         for rough interfaces, which do not conserve the flux. As :math:`S_z`
         is quadratic in the fields, the absorption for any incoming
         polarization follows from the hermitian absorption matrix :math:`K`,

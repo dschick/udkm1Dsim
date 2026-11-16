@@ -44,13 +44,13 @@ def heat_excited(structure_amorph, tmp_path_factory):
 
 
 @pytest.mark.benchmark
-def test_get_Lambert_Beer_absorption_profile(heat):
-    heat.get_Lambert_Beer_absorption_profile()
+def test_get_absorption_from_lambert_beer(heat):
+    heat.get_absorption_from_lambert_beer()
 
 
 @pytest.mark.benchmark
-def test_get_multilayers_absorption_profile(heat):
-    heat.get_multilayers_absorption_profile()
+def test_get_absorption_from_multilayer(heat):
+    heat.get_absorption_from_multilayer()
 
 
 @pytest.mark.benchmark

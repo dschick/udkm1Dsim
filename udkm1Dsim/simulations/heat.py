@@ -26,6 +26,7 @@ __all__ = ["Heat"]
 __docformat__ = "restructuredtext"
 
 import warnings
+from copy import copy
 from time import time
 
 import numpy as np
@@ -34,13 +35,20 @@ from scipy.interpolate import RectBivariateSpline
 from scipy.optimize import brentq
 
 from ..helpers import finderb, make_hash_md5
-from ..structures.layers import Layer
 from .result import find_source, get_entry
+from .scattering.multilayer import MultilayerScattering
+from .scattering.parratt import Parratt
 from .simulation import Simulation
 from .solvers import HAS_NUMBA
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
+
+# incoming polarizations of the excitation by their names, i.e. those of the
+# multilayer formalisms without the elliptical polarization
+_POLARIZATIONS = tuple(MultilayerScattering.polarizations[state] for state in range(5))
+# excitation parameters, which are given by a configured absorption formalism
+_FORMALISM_KEYS = ("wavelength", "theta", "polarization")
 
 
 class Heat(Simulation):
@@ -79,7 +87,14 @@ class Heat(Simulation):
         backend (str): pde solver backend - either default scipy or numba.
         excitation (dict{ndarray[float, Quantity]}): excitation parameters
             fluence, delay_pump, pulse_width, wavelength, theta, polarization,
-            multilayer_absorption, backside
+            absorption, backside. The ``polarization`` is ``sigma`` or ``s``,
+            ``pi`` or ``p``, ``unpolarized``, ``circ +`` or ``c+``, or ``circ -`` or ``c-``, as for
+            the multilayer formalisms, while an ``elliptical`` polarization
+            requires a configured instance as ``absorption``. The ``absorption`` is
+            ``lambert_beer`` or a multilayer formalism, by default
+            :class:`.Parratt`, which can also be a configured instance
+            created for the structure ``S``, which then defines the
+            ``wavelength``, ``theta``, and ``polarization``.
         boundary_conditions (dict{str, float, Quantity}): boundary conditions of
             the top and bottom boundary for the heat diffusion calculation.
             ``top_type`` or ``bottom_type`` must be one of ``boundary_types``.
@@ -109,8 +124,8 @@ class Heat(Simulation):
             "pulse_width": [0],
             "wavelength": 800e-9,
             "theta": np.pi / 2,
-            "polarization": "p",
-            "multilayer_absorption": True,
+            "polarization": "pi",
+            "absorption": Parratt,
             "backside": False,
         }
         self._distances = np.array([])
@@ -132,17 +147,21 @@ class Heat(Simulation):
 
     def _property_rows(self):
         """[parameter, value] rows of the simulation properties"""
+
+        def pulses(value, unit):
+            # a single pulse without the brackets of the array
+            value = value.to(unit)
+            value = value[0] if np.size(value.magnitude) == 1 else value
+            return f"{value:.4g~P}"
+
         output = [
-            ["excitation fluence", "{:.4g~P}".format(self.excitation["fluence"].to("mJ/cm**2"))],
-            ["excitation delay", "{:.4g~P}".format(self.excitation["delay_pump"].to("ps"))],
-            [
-                "excitation pulse length",
-                "{:.4g~P}".format(self.excitation["pulse_width"].to("ps")),
-            ],
+            ["excitation fluence", pulses(self.excitation["fluence"], "mJ/cm**2")],
+            ["excitation delay", pulses(self.excitation["delay_pump"], "ps")],
+            ["excitation pulse length", pulses(self.excitation["pulse_width"], "ps")],
             ["excitation wavelength", "{:.4g~P}".format(self.excitation["wavelength"].to("nm"))],
             ["excitation theta", "{:.4g~P}".format(self.excitation["theta"].to("deg"))],
             ["excitation polarization", self.excitation["polarization"]],
-            ["excitation multilayer absorption", self.excitation["multilayer_absorption"]],
+            ["excitation absorption", self._absorption_name()],
             ["excitation backside", self.excitation["backside"]],
             ["heat diffusion", self.heat_diffusion],
             ["backend", self.backend],
@@ -194,7 +213,7 @@ class Heat(Simulation):
         """dict of the parameters of the simulation"""
         return {
             **super()._parameters(),
-            "excitation": self.excitation,
+            "excitation": {**self.excitation, "absorption": self._absorption_name()},
             "heat_diffusion": self.heat_diffusion,
             "backend": self.backend,
             "intp_at_interface": self.intp_at_interface,
@@ -209,7 +228,8 @@ class Heat(Simulation):
         Returns a unique hash given by the ``delays`` and ``init_temp``, the
         parameters of the simulation including the ``ode_options``, but not
         the ``backend``, which yields the same results, as well as the sample
-        structure hash for relevant thermal parameters.
+        structure hash for relevant thermal parameters and the hash of the
+        absorption formalism of the excitation.
 
         Args:
             delays (ndarray[float]): delay grid for the simulation.
@@ -225,11 +245,15 @@ class Heat(Simulation):
             init_temp,
             self.heat_diffusion,
             self.intp_at_interface,
-            self._excitation,
+            {**self._excitation, "absorption": self._absorption_name()},
             self._boundary_conditions,
             self.distances,
             self.ode_options,
         ]
+        if not isinstance(self._excitation["absorption"], str):
+            # the formalism depends also on the roughness and magnetization
+            formalism = self.create_multilayer_formalism(backside=self._excitation["backside"])
+            param.append(formalism.get_hash())
 
         for value in kwargs.values():
             param.append(value)
@@ -441,18 +465,16 @@ class Heat(Simulation):
 
         Returns:
             dAdz (ndarray[float]): differential absorption within each layer
-            calculated either by Lambert-Beers law or by a multilayer absorption
-            formalism.
+            calculated either by Lambert-Beers law or by the multilayer
+            formalism of the ``absorption`` of the excitation.
 
         """
-        if self._excitation["multilayer_absorption"]:
-            dAdz, _, _, _ = self.get_multilayers_absorption_profile(distances, backside)
-            return dAdz
-        else:
-            return self.get_Lambert_Beer_absorption_profile(distances, backside)
+        if isinstance(self._excitation["absorption"], str):
+            return self.get_absorption_from_lambert_beer(distances, backside)
+        return self.get_absorption_from_multilayer(distances, backside)
 
-    def get_Lambert_Beer_absorption_profile(self, distances=[], backside=False):
-        r"""get_Lambert_Beer_absorption_profile
+    def get_absorption_from_lambert_beer(self, distances=[], backside=False):
+        r"""get_absorption_from_lambert_beer
 
         The transmission is given by:
 
@@ -535,237 +557,114 @@ class Heat(Simulation):
 
         return dAdz
 
-    def get_multilayers_absorption_profile(self, distances=[], backside=False):
-        """get_multilayers_absorption_profile
+    def create_multilayer_formalism(self, cls=None, backside=False):
+        """create_multilayer_formalism
 
-        Calculates the intensity, differential absorption and temperature
-        increase profiles in each layer of a multilayers structure for
-        :math:`s`- or :math:`p`-polarized light.
+        Multilayer formalism for the ``wavelength``, ``theta``, and
+        ``polarization`` of the excitation, e.g. to calculate its
+        reflectivity or the fields inside the structure. A configured
+        instance as ``absorption`` of the excitation is returned as it is,
+        or for a backside excitation as a copy with all its settings for the
+        reversed structure.
 
-        Calculation based on the method by :cite:t:`ohtaishida1990` and code
-        developed Matlab by :cite:t:`leguyader2013`.
+        Args:
+            cls (type[MultilayerScattering], optional): formalism, e.g.
+                :class:`.Parratt`. Defaults to the ``absorption`` of the
+                excitation.
+            backside (boolean, optional): for the reversed structure of a
+                backside excitation. Defaults to False.
 
-        Copyright (2012-2014) Loïc Le Guyader
-        <loic.le_guyader@helmholtz-berlin.de>
+        Returns:
+            formalism (MultilayerScattering): formalism for the excitation.
+
+        """
+        if cls is None:
+            cls = self._excitation["absorption"]
+        if isinstance(cls, MultilayerScattering):
+            if cls.S is not self.S:
+                raise ValueError(
+                    "The absorption formalism of the excitation must be created for the "
+                    "structure of the heat simulation!"
+                )
+            if not backside:
+                return cls
+            # the formalisms read their structure only during the calculation,
+            # so that a copy keeps all settings for the reversed structure
+            formalism = copy(cls)
+            formalism.S = self.S.reverse()
+            return formalism
+        if not (isinstance(cls, type) and issubclass(cls, MultilayerScattering)):
+            raise TypeError(
+                "The absorption formalism must be a multilayer formalism, e.g. Parratt!"
+            )
+        formalism = cls(
+            self.S.reverse() if backside else self.S,
+            True,
+            save_data=False,
+            disp_messages=False,
+            progress_bar=False,
+        )
+        formalism.wl = Q_(np.r_[self._excitation["wavelength"]], u.m)
+        formalism.theta = Q_(np.r_[self._excitation["theta"]], u.rad)
+        polarization = self._excitation["polarization"]
+        if polarization not in _POLARIZATIONS:
+            raise ValueError(
+                f"The polarization {polarization!r} of a former configured instance must be "
+                f"replaced by one of {', '.join(_POLARIZATIONS)}!"
+            )
+        formalism.set_incoming_polarization(polarization)
+        return formalism
+
+    def get_absorption_from_multilayer(self, distances=[], backside=False):
+        """get_absorption_from_multilayer
+
+        Differential absorption profile :math:`\\mbox{d}A/\\mbox{d}z` from
+        the decrease of the Poynting flux of the multilayer formalism of the
+        excitation, see
+        :meth:`~.MultilayerScattering.calc_homogeneous_absorption`.
 
         Args:
             distances (ndarray[float], optional): spatial grid for calculation.
             backside (boolean, optional): backside or frontside excitation.
 
         Returns:
-            (tuple):
-            - *dAdz (ndarray[float])* - differential absorption within each
-              layer.
-            - *Ints (ndarray[float])* - intensity profiles within each layer.
-            - *R_total (float)* - total amount of reflection from the
-              multilayer.
-            - *T_total (float)* - total transmission in the last layer of the
-              multilayer.
+            dAdz (ndarray[float]): differential absorption profile (1/m).
 
         """
+        formalism = self.create_multilayer_formalism(backside=backside)
         self.disp_message(
-            "Absorption profile is calculated by multilayer formalism "
-            "with {:s}-polarization.".format(self._excitation["polarization"])
+            f"Absorption profile is calculated by {type(formalism).__name__} "
+            f"for {self._excitation['polarization']} polarization."
         )
         if backside:
             self.disp_message("Backside excitation is enabled.")
-            structure = self.S.reverse()
-        else:
-            structure = self.S
-
+        d_start, d_end, d_mid = formalism.S._layer_distances()
         if len(distances) == 0:
-            # if no distances are set, calculate the extinction on
-            # the middle of each unit cell
-            d_start, _, distances = structure._layer_distances()
+            distances = d_mid
         else:
-            d_start, d_end, _ = structure._layer_distances()
+            distances = np.asarray(distances, dtype=float)
             if backside:
                 # np.clip() prevents negative distances after flipping
                 # due to floating point rounding errors
                 distances = np.clip(np.flip(d_end[-1] - distances), 0, d_end[-1])
-
-        interfaces = structure._interface_distances()
-        N = len(interfaces)
-
-        opt_ref_indices = np.empty(N + 1, dtype=np.complex128)
-        thicknesses = np.empty(N + 1, dtype=float)
-        # the refractive indices follow from the dielectric functions for the wavelength
-        wavelength = self._excitation["wavelength"] * u.m
-
-        # add superstrate
-        if isinstance(structure.superstrate[0], Layer):
-            superstrate_layer = structure.superstrate[0]
-        else:
-            raise TypeError("Superstrate must be of type Layer or its sub-classes!")
-
-        opt_ref_indices[0] = superstrate_layer.get_ref_index(wavelength)
-        thicknesses[0] = superstrate_layer.structural.thickness.magnitude
-
-        # iterate actual sampel structure
-        for i in range(N - 1):
-            index = finderb(interfaces[i], d_start)
-            layer = structure.get_layer_handle(index[0])
-            opt_ref_indices[i + 1] = layer.get_ref_index(wavelength)
-            thicknesses[i + 1] = interfaces[i + 1] - interfaces[i]
-
-        # add substrate
-        if isinstance(structure.substrate[0], Layer):
-            substrate_layer = structure.substrate[0]
-        else:
-            raise TypeError("Substrate must be of type Layer or its sub-classes!")
-
-        opt_ref_indices[N] = substrate_layer.get_ref_index(wavelength)
-        thicknesses[N] = substrate_layer.structural.thickness.magnitude
-
-        # Snell laws
-        alpha = np.empty(N + 1, dtype=complex)
-        alpha[0] = np.pi / 2 - self._excitation["theta"]
-        alpha[1:] = np.arcsin(opt_ref_indices[0] / opt_ref_indices[1:] * np.sin(alpha[0]))
-
-        # fresnel coefficient
-        rfresnel = np.empty(N, dtype=complex)
-        tfresnel = np.empty(N, dtype=complex)
-
-        if self._excitation["polarization"] == "s":
-            rfresnel[:] = (
-                opt_ref_indices[0:-1] * np.cos(alpha[0:-1])
-                - opt_ref_indices[1:] * np.cos(alpha[1:])
-            ) / (
-                opt_ref_indices[0:-1] * np.cos(alpha[0:-1])
-                + opt_ref_indices[1:] * np.cos(alpha[1:])
+        # the bottom of the structure belongs to its last layer and not to
+        # the substrate, as for all other interfaces of the formalism
+        z = np.minimum(distances, d_end[-1] * (1 - 128 * np.finfo(float).eps))
+        A, _, _, _, A_layers, _, _, _, S_sub, *_ = formalism.calc_homogeneous_absorption(z)
+        if np.ndim(A) != 3:
+            raise ValueError(
+                "The absorption formalism of the excitation must have a single incoming "
+                "polarization!"
             )
-            tfresnel[:] = (
-                2.0
-                * opt_ref_indices[0:-1]
-                * np.cos(alpha[0:-1])
-                / (
-                    opt_ref_indices[0:-1] * np.cos(alpha[0:-1])
-                    + opt_ref_indices[1:] * np.cos(alpha[1:])
-                )
-            )
-        else:  # p-polarization
-            rfresnel[:] = (
-                opt_ref_indices[1:] * np.cos(alpha[0:-1])
-                - opt_ref_indices[0:-1] * np.cos(alpha[1:])
-            ) / (
-                opt_ref_indices[1:] * np.cos(alpha[0:-1])
-                + opt_ref_indices[0:-1] * np.cos(alpha[1:])
-            )
-            tfresnel[:] = (
-                2.0
-                * opt_ref_indices[0:-1]
-                * np.cos(alpha[0:-1])
-                / (
-                    opt_ref_indices[1:] * np.cos(alpha[0:-1])
-                    + opt_ref_indices[0:-1] * np.cos(alpha[1:])
-                )
-            )
-
-        # interface change matrix
-        Jnm = np.empty((2, 2, N), dtype=complex)
-        Jnm[0, 0, :] = 1.0 / tfresnel
-        Jnm[0, 1, :] = rfresnel / tfresnel
-        Jnm[1, 0, :] = rfresnel / tfresnel
-        Jnm[1, 1, :] = 1.0 / tfresnel
-
-        # calculating z-component of the wave vector
-        k_z = 2.0 * np.pi / self._excitation["wavelength"] * opt_ref_indices * np.cos(alpha)
-
-        # phase changes
-        beta = k_z * thicknesses
-        Ln = np.empty((2, 2, N), dtype=complex)
-        Ln[:, :, 0] = [[1, 0], [0, 1]]
-        Ln[0, 0, 1:] = np.exp(-1.0j * beta[1:-1])
-        Ln[0, 1, 1:] = 0
-        Ln[1, 0, 1:] = 0
-        Ln[1, 1, 1:] = np.exp(1.0j * beta[1:-1])
-
-        # calculating propagation matrix
-        S = Jnm[:, :, N - 1]
-        for i in range(N - 2, -1, -1):
-            S = np.dot(Jnm[:, :, i], np.dot(Ln[:, :, i + 1], S))
-
-        # Total transmission and reflection of the multilayer
-        R_total = np.abs(S[1, 0] / S[0, 0]) ** 2
-        if self._excitation["polarization"] == "s":
-            T_total = (
-                np.real(
-                    opt_ref_indices[N] * np.cos(alpha[N]) / (opt_ref_indices[0] * np.cos(alpha[0]))
-                )
-                * np.abs(1 / S[0, 0]) ** 2
-            )
-        else:
-            T_total = (
-                np.real(
-                    np.conj(opt_ref_indices[N])
-                    * np.cos(alpha[N])
-                    / (opt_ref_indices[0] * np.cos(alpha[0]))
-                )
-                * np.abs(1 / S[0, 0]) ** 2
-            )
-
-        # calculating D matrix for intermediate field
-        Dn = np.empty((2, 2, N + 1), dtype=complex)
-        Dn[0, 0, N] = 1.0 / S[0, 0]
-        Dn[0, 1, N] = 0.0
-        Dn[1, 0, N] = 0.0
-        Dn[1, 1, N] = 1.0 / S[0, 0]
-        for i in range(N - 1, -1, -1):
-            Temp = np.dot(Ln[:, :, i], np.dot(Jnm[:, :, i], Dn[:, :, i + 1]))
-            Dn[0, 0, i] = Temp[0, 0]
-            Dn[0, 1, i] = Temp[0, 1]
-            Dn[1, 0, i] = Temp[1, 0]
-            Dn[1, 1, i] = Temp[1, 1]
-
-        K = len(distances)
-        Ints = np.empty(K, dtype=float)  # initialize relative intensities
-        dAdz = np.empty(K, dtype=float)  # initialize relative absorbed energies
-        k = 0  # counter for first layer
-        for i in range(1, N):
-            # get all distances in the current layer we have to
-            # calculate the absorption profile for
-            if i >= N - 1:  # last layer
-                z = distances[
-                    np.logical_and(distances >= interfaces[i - 1], distances <= interfaces[i])
-                ]
-            else:
-                z = distances[
-                    np.logical_and(distances >= interfaces[i - 1], distances < interfaces[i])
-                ]
-            m = len(z)
-            z -= interfaces[i - 1]  # relative position within the layer
-            # For each layer except the first, compute Intensity, Absorption
-            Ep = Dn[0, 0, i] * np.exp(1.0j * k_z[i] * z)
-            Em = Dn[1, 0, i] * np.exp(-1.0j * k_z[i] * z)
-            if self._excitation["polarization"] == "s":
-                # the electric field is perpendicular to the plane of incidence
-                Ints[k : k + m] = np.abs(Ep + Em) ** 2
-            else:  # p-polarization in the plane of incidence
-                Ety = np.cos(alpha[i]) * (Ep - Em)
-                Etz = -np.sin(alpha[i]) * (Ep + Em)
-                Ints[k : k + m] = np.abs(Ety) ** 2 + np.abs(Etz) ** 2
-            dAdz[k : k + m] = (
-                np.real(
-                    opt_ref_indices[i] * np.cos(alpha[i]) / (opt_ref_indices[0] * np.cos(alpha[0]))
-                )
-                * 2.0
-                * np.imag(k_z[i])
-                * Ints[k : k + m]
-            )
-
-            k = k + m  # set the counter
-
         self.disp_message(
-            f"Total reflectivity of {R_total * 100:0.1f} % and transmission "
-            f"of {T_total * 100:0.1f} %."
+            f"Absorption of {np.sum(A_layers[0, 0]) * 100:0.1f} % in the structure and flux "
+            f"of {S_sub[0, 0] * 100:0.1f} % into the substrate."
         )
-
+        dAdz = A[0, 0]
         if backside:
             # for backside excitation the results must be reversed
             dAdz = np.flip(dAdz)
-            Ints = np.flip(Ints)
-
-        return dAdz, Ints, R_total, T_total
+        return dAdz
 
     def get_temperature_after_delta_excitation(self, fluence, init_temp, distances=[]):
         """get_temperature_after_delta_excitation
@@ -775,7 +674,10 @@ class Heat(Simulation):
         excitation, see :meth:`calc_temperature_after_delta_excitation`.
 
         Args:
-            fluence (float, Quantity): incident fluence (J/m²).
+            fluence (float, Quantity): fluence on the surface (J/m²), i.e.
+                already projected by :math:`\\sin\\vartheta` of the incidence
+                angle, unlike the ``fluence`` of the ``excitation``, see
+                :meth:`check_excitation`.
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
                 temperature scalar or array (K).
             distances (ndarray[float], optional): spatial grid for calculation.
@@ -819,8 +721,8 @@ class Heat(Simulation):
         .. math:: \Delta E = \frac{\mbox{d} \alpha}{\mbox{d}z} E_0 \Delta z
 
         where :math:`E_0` is the initial energy impinging on the first layer
-        given by the fluence :math:`F = E / A`. :math:`\Delta z` is equal to
-        the thickness of each layer.
+        given by the fluence :math:`F = E / A` on the surface area :math:`A`.
+        :math:`\Delta z` is equal to the thickness of each layer.
 
         Finally, one has to minimize the following modulus to obtain the
         final temperature :math:`T_2` of each layer:
@@ -831,7 +733,10 @@ class Heat(Simulation):
              {\mbox{d}z} E_0 \Delta z \right| \stackrel{!}{=} 0
 
         Args:
-            fluence (float, Quantity): incident fluence (J/m²).
+            fluence (float, Quantity): fluence on the surface (J/m²), i.e.
+                already projected by :math:`\sin\vartheta` of the incidence
+                angle, unlike the ``fluence`` of the ``excitation``, see
+                :meth:`check_excitation`.
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
                 temperature scalar or array (K).
             distances (ndarray[float], optional): spatial grid for calculation.
@@ -1424,7 +1329,7 @@ class Heat(Simulation):
             "wavelength": Q_(self._excitation["wavelength"], u.m).to("nm"),
             "theta": Q_(self._excitation["theta"], u.rad).to("deg"),
             "polarization": self._excitation["polarization"],
-            "multilayer_absorption": self._excitation["multilayer_absorption"],
+            "absorption": self._excitation["absorption"],
             "backside": self._excitation["backside"],
         }
 
@@ -1435,28 +1340,45 @@ class Heat(Simulation):
         # check the size of excitation, if we have a multipulse excitation
         if isinstance(excitation, Q_):
             # just a fluence is given
-            self._excitation["fluence"] = [excitation.to("J/m**2").magnitude]
+            self._excitation["fluence"] = np.atleast_1d(
+                np.asarray(excitation.to("J/m**2").magnitude, dtype=float)
+            )
         elif isinstance(excitation, dict):
-            if "fluence" in excitation:
-                self._excitation["fluence"] = excitation["fluence"].to("J/m**2").magnitude
-            if "delay_pump" in excitation:
-                self._excitation["delay_pump"] = excitation["delay_pump"].to("s").magnitude
-            if "pulse_width" in excitation:
-                self._excitation["pulse_width"] = excitation["pulse_width"].to("s").magnitude
+            if "multilayer_absorption" in excitation:
+                raise TypeError(
+                    "The excitation key multilayer_absorption was replaced by absorption, "
+                    "which is lambert_beer or a multilayer formalism, e.g. Parratt by default!"
+                )
+            absorption = excitation.get("absorption", self._excitation["absorption"])
+            given = [key for key in _FORMALISM_KEYS if key in excitation]
+            if isinstance(absorption, MultilayerScattering) and given:
+                raise ValueError(
+                    f"The {', '.join(given)} of the excitation must not be given for a "
+                    "configured instance as absorption, which defines them!"
+                )
+            if "absorption" in excitation:
+                self._set_absorption(excitation["absorption"])
+            # a scalar is a single pulse
+            for key, unit in [("fluence", "J/m**2"), ("delay_pump", "s"), ("pulse_width", "s")]:
+                if key in excitation:
+                    self._excitation[key] = np.atleast_1d(
+                        np.asarray(excitation[key].to(unit).magnitude, dtype=float)
+                    )
             if "wavelength" in excitation:
                 self._excitation["wavelength"] = excitation["wavelength"].to("m").magnitude
             if "theta" in excitation:
                 self._excitation["theta"] = excitation["theta"].to("rad").magnitude
             if "polarization" in excitation:
-                if excitation["polarization"] in ["s", "p"]:
-                    self._excitation["polarization"] = excitation["polarization"]
-                else:
-                    self._excitation["polarization"] = "p"
-                    raise Warning("Polarization musted be either _s_ or _p_!")
-            if "multilayer_absorption" in excitation:
-                self._excitation["multilayer_absorption"] = bool(
-                    excitation["multilayer_absorption"]
-                )
+                polarization = excitation["polarization"]
+                # the name of the formalisms, e.g. "pi" for "p"
+                state = MultilayerScattering._polarization_ids.get(polarization)
+                if polarization == "none" or state not in range(5):
+                    raise ValueError(
+                        f"The polarization of the excitation must be one of "
+                        f"{', '.join(_POLARIZATIONS)}, or c+, c-, s, and p for short, "
+                        f"but not {polarization!r}!"
+                    )
+                self._excitation["polarization"] = MultilayerScattering.polarizations[state]
             if "backside" in excitation:
                 self._excitation["backside"] = bool(excitation["backside"])
         else:
@@ -1476,8 +1398,54 @@ class Heat(Simulation):
         # check the elements of the delay_pump vector
         if len(self._excitation["delay_pump"]) != len(np.unique(self._excitation["delay_pump"])):
             raise ValueError("The excitations have to be unique in delays!")
-        else:
-            self._excitation["delay_pump"] = np.sort(self._excitation["delay_pump"])
+        # sort the pulses by their delays
+        order = np.argsort(self._excitation["delay_pump"])
+        for key in ("fluence", "delay_pump", "pulse_width"):
+            self._excitation[key] = np.asarray(self._excitation[key], dtype=float)[order]
+
+    def _set_absorption(self, absorption):
+        """sets the ``absorption`` of the excitation and, for a configured
+        formalism, the ``wavelength``, ``theta``, and ``polarization`` by it"""
+        if isinstance(absorption, str):
+            if absorption != "lambert_beer":
+                raise ValueError(
+                    f"The absorption of the excitation must be lambert_beer or a multilayer "
+                    f"formalism, but not {absorption!r}!"
+                )
+        elif isinstance(absorption, MultilayerScattering):
+            if absorption.S is not self.S:
+                raise ValueError(
+                    "The absorption formalism of the excitation must be created for the "
+                    "structure of the heat simulation!"
+                )
+            if (
+                np.size(absorption.energy.magnitude) != 1
+                or np.size(absorption.theta.magnitude) != 1
+                or np.atleast_2d(absorption.pol_in).shape[0] != 1
+            ):
+                raise ValueError(
+                    "The absorption formalism of the excitation must have a single energy, "
+                    "angle, and incoming polarization!"
+                )
+            self._excitation["wavelength"] = float(absorption.wl.to("m").magnitude.flat[0])
+            self._excitation["theta"] = float(absorption.theta.to("rad").magnitude.flat[0])
+            self._excitation["polarization"] = absorption.polarizations[absorption.pol_in_state]
+        elif not (isinstance(absorption, type) and issubclass(absorption, MultilayerScattering)):
+            raise TypeError(
+                "The absorption of the excitation must be lambert_beer or a multilayer "
+                "formalism, e.g. Parratt!"
+            )
+        self._excitation["absorption"] = absorption
+
+    def _absorption_name(self):
+        """name of the absorption of the excitation, i.e. lambert_beer or the
+        name of the multilayer formalism"""
+        absorption = self._excitation["absorption"]
+        if isinstance(absorption, str):
+            return absorption
+        if isinstance(absorption, MultilayerScattering):
+            return type(absorption).__name__
+        return absorption.__name__
 
     @property
     def boundary_conditions(self):

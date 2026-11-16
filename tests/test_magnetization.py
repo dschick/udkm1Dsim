@@ -1244,7 +1244,7 @@ def gdfeco():
             "fluence": [fluence] * u.mJ / u.cm**2,
             "delay_pump": [0] * u.ps,
             "pulse_width": [50] * u.fs,
-            "multilayer_absorption": False,
+            "absorption": "lambert_beer",
         }
         res = heat.get_temp_map(delays, T_R * u.K)
         temp_map = res.temp_map
