@@ -30,6 +30,8 @@ from udkm1Dsim.simulations.scattering.multilayer import (
     REFLECTIVITY_NAMES,
     ROTATION_NAMES,
     MultilayerScattering,
+    _flatten_layers,
+    _layer_runs,
 )
 
 FORMALISMS = [Parratt, Elzo, Stepanov, BerremanElzo, BerremanStepanov]
@@ -220,6 +222,28 @@ def test_polar_kerr_effect_dielectric_superstrate(cls):
     chi = abs((r[0] - r[1]) / (r[0] + r[1]))
     assert abs(R[1, 0] / R[0, 0]) == pytest.approx(chi, rel=1e-10)
     assert abs(R[0, 1] / R[1, 1]) == pytest.approx(chi, rel=1e-10)
+
+
+def test_parratt_sublattices():
+    """Parratt neglects the magnetization also of a layer with several
+    sublattices, while the magnetic formalisms require it explicitly"""
+    layer = ud.Layer(
+        "ferri",
+        "ferrimagnet",
+        structural=ud.StructuralParameters(thickness=10 * u.nm, density=8000 * u.kg / u.m**3),
+        optical=ud.OpticalParameters(dielectric=Dispersion.from_ref_index(3.0 + 3.5j)),
+        magnetic=ud.MagneticParameters(magnetization=[(0, 0, 1), (0, 0, -1)]),
+    )
+    S = Structure("ferrimagnet")
+    S.add_sub_structure(layer, 2)
+    S.add_substrate(Vacuum())
+    energy, theta = np.r_[1.55] * u.eV, np.r_[45] * u.deg
+    sim = simulation(Parratt, S, energy, theta)
+    absorption = sim.homogeneous_absorption()
+    R = sim.homogeneous_reflectivity_transmissivity().R
+    np.testing.assert_allclose(R + absorption.A_layers.sum(axis=-1) + absorption.S_sub, 1)
+    with pytest.raises(NotImplementedError, match="sublattices"):
+        simulation(Elzo, S, energy, theta).homogeneous_absorption()
 
 
 def test_parratt_roughness():
@@ -1706,6 +1730,31 @@ def test_reflectivity_transmissivity_absorption(sample, classes):
                 res.R + res.T + absorption.A_layers.sum(axis=-1), 1, atol=1e-12
             )
             np.testing.assert_allclose(absorption.S_sub, res.T, atol=1e-12)
+
+
+@pytest.mark.parametrize("cls", FORMALISMS)
+def test_repeated_layers(cls):
+    """repetitions of identical layers, e.g. a substrate of many unit cells,
+    are handled at once and give the same Jones matrices and fields as the
+    single layers"""
+    S = optical_stack()
+    substrate = substrate_layer()
+    substrate.structural.thickness = 2 * u.nm
+    S.add_substrate(substrate, 1000)
+    sim = simulation(cls, S, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg)
+    tree = sim._homogeneous_layer_tree()
+    # the superstrate, the layers of the structure, and the substrate
+    assert len(_layer_runs(tree)) == 5
+    # the same layers as distinct entries, which are not combined
+    layers = [(*entry,) for entry in _flatten_layers(tree)]
+    assert len(_layer_runs(layers)) == len(layers) == 1007
+    for repeated, single in zip(sim.calc_jones_matrices(tree), sim.calc_jones_matrices(layers)):
+        assert relative(repeated, single) < 1e-12
+    z = np.linspace(-5e-9, 30e-9, 36)
+    repeated = sim.calc_stack_fields(tree, z)
+    single = sim.calc_stack_fields(layers, z)
+    for name in ("E", "H", "K", "S"):
+        assert relative(repeated[name], single[name]) < 1e-12
 
 
 # ============================================================================

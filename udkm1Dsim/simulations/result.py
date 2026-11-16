@@ -600,7 +600,13 @@ def _write_group(group, values):
             value = array
         if not isinstance(value, (str, bool, int, float, complex, np.ndarray, np.generic)):
             value = str(value)
-        dataset = group.create_dataset(name, data=value)
+        if isinstance(value, np.ndarray) and value.dtype.kind == "U":
+            # arrays of texts as variable-length strings
+            dataset = group.create_dataset(
+                name, data=value.astype(object), dtype=h5py.string_dtype()
+            )
+        else:
+            dataset = group.create_dataset(name, data=value)
         dataset.attrs["units"] = unit
 
 

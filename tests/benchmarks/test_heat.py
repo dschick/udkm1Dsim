@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from copy import deepcopy
+
 import numpy as np
 import pytest
 
@@ -40,6 +42,21 @@ def heat_excited(structure_amorph, tmp_path_factory):
     return heat
 
 
+@pytest.fixture(scope="module")
+def heat_thick_substrate(structure_amorph, amorphous_layer_iron, tmp_path_factory):
+    """a substrate of a million layers, as e.g. a substrate of unit cells"""
+    S = deepcopy(structure_amorph)
+    S.add_substrate(amorphous_layer_iron, 1000000)
+    return Heat(
+        S,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=False,
+        disp_messages=False,
+        progress_bar=False,
+    )
+
+
 # benchmarks
 
 
@@ -51,6 +68,11 @@ def test_get_absorption_from_lambert_beer(heat):
 @pytest.mark.benchmark
 def test_get_absorption_from_multilayer(heat):
     heat.get_absorption_from_multilayer()
+
+
+@pytest.mark.benchmark
+def test_get_absorption_from_multilayer_thick_substrate(heat_thick_substrate):
+    heat_thick_substrate.get_absorption_from_multilayer()
 
 
 @pytest.mark.benchmark

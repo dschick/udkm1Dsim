@@ -33,6 +33,7 @@ def test_thickness(structure):
 def test_structure_visualize(structure, agg_backend):
     structure.visualize(show=False)
     structure.visualize(unit="um", block=False)
+    structure.visualize(show=False, superstrate_substrate=False)
 
 
 def test_structure_get_hash(structure):
