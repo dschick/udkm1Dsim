@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the metadata `input_hashes` of the results with the md5 hashes of their input maps, e.g. of the `temp_map` and `delta_temp_map` of the phonon simulations, which are not saved again, and `Result.entry_hash()` and `array_hash()` to compare them with the upstream results
 - the `absorption` of the excitation of `Heat` is `lambert_beer` or any multilayer formalism, by default `Parratt`, e.g. `Elzo` or `Stepanov` for magnetic and `BerremanElzo` or `BerremanStepanov` for anisotropic layers, whose absorption profile is `Heat.get_absorption_from_multilayer()`, see `homogeneous_absorption()`; it can also be a configured instance of the formalism, which defines the `wavelength`, `theta`, and `polarization` of the excitation, and `Heat.create_multilayer_formalism()` creates the formalism of the excitation, e.g. for its reflectivity or the fields inside the structure
 - the `fluence`, `delay_pump`, and `pulse_width` of the excitation of `Heat` can also be scalars for a single pulse
+- the `azimuth` of the multilayer formalisms, i.e. of the plane of incidence relative to the fixed sample, counterclockwise about the surface normal, which rotates the dielectric tensors of all layers, including their magnetization, into the frame of the beam, while the Euler angles of a `Dielectric`, the magnetization, and the magnetization maps stay given in the frame of the sample, so that e.g. the pump and the probe can have different azimuths, see [#255]; the fields of `homogeneous_fields()` stay in the frame of the sample and `calc_fields_in_beam_frame()` transforms them into the frame of the beam; an azimuth of 0 keeps all results and hashes
+- the `azimuth` of the excitation of `Heat` for its multilayer formalism, which is also taken from a configured instance
 - the `polarization` of the excitation of `Heat` can also be `unpolarized`, `circ +`, or `circ -`
 - `c+`, `c-`, `s`, and `p` as short names of the `circ +`, `circ -`, `sigma`, and `pi` polarization of the scattering simulations and of the excitation of `Heat`
 
@@ -40,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the homogeneous reflectivity of `XrayKin` failed for nested sub-structures, as it called the removed `Structure.get_length()` instead of using the thickness of the sub-structure
 
 [#249]: https://github.com/dschick/udkm1Dsim/issues/249
+[#255]: https://github.com/dschick/udkm1Dsim/issues/255
 
 ## [3.0.0a3] 2026-11-13
 

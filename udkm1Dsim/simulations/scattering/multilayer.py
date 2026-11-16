@@ -35,6 +35,19 @@ from the surface in the superstrate, so that the in-plane wave vector
 :math:`n` of the superstrate is conserved in the stack, which also allows for
 the coupling by a prism.
 
+The sample stays fixed in this frame, while the ``azimuth`` :math:`\\Phi` of
+the formalisms rotates the plane of incidence counterclockwise about
+:math:`z`, so that the :math:`\\sigma` polarization is along
+:math:`(\\cos\\Phi, \\sin\\Phi, 0)`. Hence, the dielectric tensors, including
+the magnetization and the strain, are transformed into the frame of the
+beam by :math:`\\varepsilon_\\mathrm{beam} = R_z(-\\Phi)\\, \\varepsilon\\,
+R_z(-\\Phi)^T`, while the Euler angles of a :class:`.Dielectric` orient the
+crystal axes within the fixed sample. For :math:`\\varepsilon^0` alone, an
+azimuth :math:`\\Phi` is equivalent to the Euler angle :math:`\\phi - \\Phi`
+of an in-plane rotation of the crystal, but the azimuth rotates all layers
+at once and also their magnetization, which stays given in the frame of the
+sample, e.g. by a magnetization map.
+
 Every layer has four eigenmodes, two propagating down, i.e. into the sample,
 and two up. Their boundary matrix :math:`A` holds the in-plane electric and
 magnetic fields of the modes, and their normal wave-vector components
@@ -222,6 +235,11 @@ class MultilayerScattering(Scattering):
         theta (ndarray[float]): grazing incidence angles :math:`\theta` of
             scattering light
         qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
+        azimuth (Quantity): azimuth :math:`\Phi` of the plane of incidence
+            relative to the fixed sample, counterclockwise about the surface
+            normal :math:`z`, see the module description and
+            :meth:`calc_fields_in_beam_frame`. Bare numbers are degrees.
+            Defaults to 0.
         polarizations (dict): polarization states and according names.
         pol_in_state (int): incoming polarization state as defined in
             polarizations dict.
@@ -242,6 +260,59 @@ class MultilayerScattering(Scattering):
     _field_frame = np.ones(4)
     # the fields depend on the magnetization
     _magnetic_fields = True
+
+    def __init__(self, S, force_recalc, **kwargs):
+        super().__init__(S, force_recalc, **kwargs)
+        self._azimuth = 0.0
+
+    def _property_rows(self):
+        """[parameter, value] rows of the simulation properties"""
+        return super()._property_rows() + [["azimuth", f"{self.azimuth:.4g~P}"]]
+
+    def _parameters(self):
+        """dict of the parameters of the simulation"""
+        return {**super()._parameters(), "azimuth": self.azimuth}
+
+    @property
+    def azimuth(self):
+        """Quantity: azimuth of the plane of incidence relative to the sample (deg)."""
+        return Q_(np.degrees(self._azimuth), u.deg)
+
+    @azimuth.setter
+    def azimuth(self, azimuth):
+        if isinstance(azimuth, Q_):
+            azimuth = azimuth.to("rad").magnitude
+        else:
+            azimuth = np.radians(azimuth)
+        if np.ndim(azimuth) != 0:
+            raise ValueError("The azimuth of a simulation must be a single angle!")
+        self._azimuth = float(azimuth)
+
+    def _beam_rotation(self):
+        """rotation :math:`R_z(-\\Phi)` of the vectors from the frame of the
+        sample into the frame of the beam"""
+        c, s = np.cos(self._azimuth), np.sin(self._azimuth)
+        return np.array([[c, s, 0], [-s, c, 0], [0, 0, 1]])
+
+    def calc_fields_in_beam_frame(self, field):
+        r"""calc_fields_in_beam_frame
+
+        Transforms fields of the frame of the sample, e.g. of
+        :meth:`homogeneous_fields`, into the frame of the beam by
+        :math:`R_z(-\Phi)` of the ``azimuth`` :math:`\Phi`, i.e. with
+        :math:`x` along the :math:`\sigma` polarization and :math:`yz` as
+        plane of incidence.
+
+        Args:
+            field (ndarray[complex]): electric or magnetic field of shape
+                (..., 3, 2) for the components :math:`(x, y, z)` and the
+                incident :math:`\sigma` and :math:`\pi` polarization.
+
+        Returns:
+            field (ndarray[complex]): field in the frame of the beam.
+
+        """
+        return np.einsum("ij,...jk->...ik", self._beam_rotation(), field)
 
     def get_hash(self, **kwargs):
         """get_hash
@@ -286,6 +357,9 @@ class MultilayerScattering(Scattering):
             if np.size(temp_map) > 1e6:
                 temp_map = temp_map.flatten()[0:1000000]
             param.append(temp_map)
+        if self._azimuth != 0:
+            # only an azimuth changes the hash of former results
+            param.append(("azimuth", self._azimuth))
 
         return self.S.get_hash(types=["xray", "magnetic", "optical"]) + "_" + make_hash_md5(param)
 
@@ -970,6 +1044,10 @@ class MultilayerScattering(Scattering):
         if cache is not None and key in cache:
             return cache[key]
         eps = self.calc_layer_dielectric_tensor(layer, strain, magnetization)
+        if self._azimuth != 0:
+            # the tensor of the fixed sample in the frame of the beam
+            R = self._beam_rotation()
+            eps = R @ eps @ R.T
         modes = self.calc_modes(eps)
         result = modes + (
             layer.structural.thickness.magnitude * (1 + strain),
@@ -1803,7 +1881,8 @@ class MultilayerScattering(Scattering):
                 Defaults to False.
 
         Returns:
-            fields (dict): ``E`` and ``H`` of shape (M, N, Z, 3, 2), the
+            fields (dict): ``E`` and ``H`` of shape (M, N, Z, 3, 2) in the
+            frame of the sample, the
             absorption matrices ``K`` (1/m), and the flux matrices ``S``
             relative to the incident flux of shape (M, N, Z, 2, 2), with the
             suffix ``_phi`` for the opposite magnetization.
@@ -1844,6 +1923,12 @@ class MultilayerScattering(Scattering):
         if dichroic and not magnetic:
             for name in ("E", "H", "K", "S"):
                 result[name + "_phi"] = result[name]
+        if self._azimuth != 0:
+            # the fields of the frame of the beam in the frame of the sample,
+            # while the flux and absorption matrices are invariant
+            R = self._beam_rotation().T
+            for name in [name for name in result if name[0] in "EH"]:
+                result[name] = np.einsum("ij,...jk->...ik", R, result[name])
         return result
 
     def _slab_stack_fields(self, slabs, interfaces, z, k, b, z_slab=None):
