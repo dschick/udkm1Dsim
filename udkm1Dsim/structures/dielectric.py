@@ -141,7 +141,14 @@ def euler_matrix(theta, phi, psi):
     The frame of the sample is the one of :cite:t:`elzo2012` and Dyna:
     :math:`z` is the surface normal pointing out of the sample towards the
     superstrate, :math:`yz` is the plane of incidence and :math:`x` is along
-    :math:`\sigma`, as for the magnetization.
+    :math:`\sigma`, as for the magnetization, for the default ``azimuth``
+    :math:`\Phi = 0` of the multilayer formalisms. The Euler angles orient
+    the crystal within the fixed sample, while the ``azimuth`` rotates the
+    plane of incidence relative to the sample counterclockwise about
+    :math:`z`, see :attr:`.MultilayerScattering.azimuth`. Hence, the
+    :math:`\sigma` polarization is along :math:`(\cos\Phi, \sin\Phi, 0)`,
+    and for the tensor :math:`\varepsilon^0` alone, an azimuth :math:`\Phi`
+    is equivalent to the Euler angle :math:`\phi - \Phi`.
 
     Without rotation, the crystal axes :math:`x'`, :math:`y'`, :math:`z'`
     coincide with :math:`x`, :math:`y`, :math:`z`. As for the
@@ -1365,7 +1372,10 @@ class Dielectric(Parameter):
     :math:`(\theta, \phi, \psi)`, see :func:`euler_matrix`:
     :math:`\varepsilon^0 = R \varepsilon^{0\prime} R^T`. The magnetization of
     the layer and the photoelastic change ``deps_dstrain`` are given in the
-    frame of the sample and are not rotated.
+    frame of the sample and are not rotated. The ``azimuth`` of the
+    multilayer formalisms, i.e. of the plane of incidence relative to the
+    fixed sample, rotates the whole tensor of all layers, including the
+    magnetization, see :attr:`.MultilayerScattering.azimuth`.
 
     The dielectric tensor is calculated by :meth:`get_tensor` or
     :meth:`.Layer.get_dielectric_tensor` for the actual photon energies,

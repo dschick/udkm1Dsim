@@ -314,12 +314,14 @@ def test_absorption_instance(tmp_path):
     formalism.wl = [400] * u.nm
     formalism.theta = [30] * u.deg
     formalism.set_incoming_polarization("sigma")
+    formalism.azimuth = 20 * u.deg
     heat.excitation = {"absorption": formalism}
     excitation = heat.excitation
     assert excitation["absorption"] is formalism
     assert_allclose(excitation["wavelength"], 400 * u.nm)
     assert_allclose(excitation["theta"], 30 * u.deg)
     assert excitation["polarization"] == "sigma"
+    assert_allclose(excitation["azimuth"], 20 * u.deg)
     assert heat.create_multilayer_formalism() is formalism
     dAdz = heat.get_absorption_profile()
     heat.excitation = {"absorption": Parratt}
@@ -328,7 +330,12 @@ def test_absorption_instance(tmp_path):
 
     heat.excitation = {"absorption": formalism}
     assert heat._parameters()["excitation"]["absorption"] == "Elzo"
-    for key, value in [("wavelength", 800 * u.nm), ("theta", 45 * u.deg), ("polarization", "p")]:
+    for key, value in [
+        ("wavelength", 800 * u.nm),
+        ("theta", 45 * u.deg),
+        ("azimuth", 10 * u.deg),
+        ("polarization", "p"),
+    ]:
         with pytest.raises(ValueError, match=key):
             heat.excitation = {key: value}
         with pytest.raises(ValueError, match=key):
@@ -344,6 +351,39 @@ def test_absorption_instance(tmp_path):
     formalism.theta = [30, 40] * u.deg
     with pytest.raises(ValueError, match="single"):
         heat.excitation = {"absorption": formalism}
+
+
+def test_absorption_azimuth(tmp_path):
+    """the azimuth of the excitation is the one of the formalism, which
+    changes the circular dichroism of an in-plane magnetization"""
+    fe = AmorphousLayer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, therm_cond=1)
+    fe.optical.dielectric = Dielectric(
+        eps0=Dispersion.from_ref_index(2.9 + 3.4j),
+        eps_mag=Dispersion.from_array([0, 10], [0.6 + 0.2j] * 2, kind="eps"),
+    )
+    # longitudinal magnetization along the in-plane wave vector for azimuth 0
+    fe.magnetization = (0, 1, 0)
+    S = Structure("film")
+    S.add_sub_structure(fe, 10)
+    S.add_substrate(Vacuum())
+    heat = optical_heat(S, tmp_path, absorption=Elzo)
+    dichroism = {}
+    for azimuth in [0, 90]:
+        heat.excitation = {"azimuth": azimuth * u.deg}
+        assert heat.create_multilayer_formalism().azimuth == azimuth * u.deg
+        profiles = []
+        for polarization in ["c+", "c-"]:
+            heat.excitation = {"polarization": polarization}
+            profiles.append(heat.get_absorption_profile())
+        dichroism[azimuth] = np.max(np.abs(profiles[0] - profiles[1]))
+    # the transverse geometry for an azimuth of 90 deg has no circular dichroism
+    assert dichroism[90] < 1e-6 * dichroism[0]
+    assert "excitation azimuth" in repr(heat)
+    hash = heat.get_hash(np.r_[0:10:1], 300)
+    heat.excitation = {"azimuth": 0 * u.deg}
+    assert heat.get_hash(np.r_[0:10:1], 300) != hash
+    with pytest.raises(ValueError, match="single"):
+        heat.excitation = {"azimuth": [0, 90] * u.deg}
 
 
 def test_absorption_errors(tmp_path):

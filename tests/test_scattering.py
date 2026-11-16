@@ -1708,6 +1708,99 @@ def test_reflectivity_transmissivity_absorption(sample, classes):
             np.testing.assert_allclose(absorption.S_sub, res.T, atol=1e-12)
 
 
+# ============================================================================
+# azimuth
+# ============================================================================
+
+
+def biaxial_layer(euler_angles):
+    """a tilted biaxial absorbing layer on glass"""
+    eps0 = Dispersion.from_ref_index([1.66 + 0.05j, 1.49 + 0.1j, 1.7 + 0.02j])
+    layer = substrate_layer(eps0, euler_angles)
+    layer.structural.thickness = 200 * u.nm
+    S = Structure("biaxial")
+    S.add_sub_structure(layer, 1)
+    S.add_substrate(substrate_layer(Dispersion.from_ref_index(1.5)))
+    return S
+
+
+def beam_frame(vector, azimuth):
+    """components of a vector of the sample in the frame of the beam"""
+    c, s = np.cos(np.radians(azimuth)), np.sin(np.radians(azimuth))
+    return (c * vector[0] + s * vector[1], -s * vector[0] + c * vector[1], vector[2])
+
+
+@pytest.mark.parametrize("cls", [BerremanElzo, BerremanStepanov])
+def test_azimuth_of_anisotropic_layer(cls):
+    """the azimuth of the plane of incidence equals the opposite in-plane
+    rotation of the crystal by its Euler angle phi"""
+    energy, theta = np.r_[1.2, 1.55] * u.eV, np.r_[20, 45, 70] * u.deg
+    sim = simulation(cls, biaxial_layer((20, 10, 15)), energy, theta)
+    sim.azimuth = 35 * u.deg
+    rotated = simulation(cls, biaxial_layer((20, 10 - 35, 15)), energy, theta)
+    np.testing.assert_allclose(
+        sim.calc_homogeneous_jones_matrices()[0],
+        rotated.calc_homogeneous_jones_matrices()[0],
+        atol=1e-12,
+    )
+    z = np.linspace(0, 200e-9, 11)
+    K = sim.calc_homogeneous_absorption(z)[2]
+    assert relative(K, rotated.calc_homogeneous_absorption(z)[2]) < 1e-12
+
+
+@pytest.mark.parametrize("cls", MAGNETIC)
+def test_azimuth_of_magnetic_layer(cls):
+    """the azimuth equals the magnetization in the frame of the beam, also for
+    a magnetization map, while the fields stay in the frame of the sample"""
+    energy, theta = np.r_[1.55] * u.eV, np.r_[30, 60] * u.deg
+    m = np.array([0.3, 0.5, 0.81]) / np.linalg.norm([0.3, 0.5, 0.81])
+    sim = simulation(cls, magnetic_film(tuple(m)), energy, theta)
+    sim.azimuth = 35
+    assert sim.azimuth == 35 * u.deg
+    rotated = simulation(cls, magnetic_film(beam_frame(m, 35)), energy, theta)
+    np.testing.assert_allclose(
+        sim.calc_homogeneous_jones_matrices()[0],
+        rotated.calc_homogeneous_jones_matrices()[0],
+        atol=1e-12,
+    )
+    z = np.linspace(-2e-9, 12e-9, 15)
+    E, _, H, _ = sim.calc_homogeneous_fields(z)
+    E_rotated, _, H_rotated, _ = rotated.calc_homogeneous_fields(z)
+    np.testing.assert_allclose(sim.calc_fields_in_beam_frame(E), E_rotated, atol=1e-12)
+    np.testing.assert_allclose(sim.calc_fields_in_beam_frame(H), H_rotated, atol=1e-12)
+    # the fields are rotated back into the frame of the sample
+    assert relative(E, E_rotated) > 0.1
+    # the magnetization map in the frame of the sample
+    strain_map = np.zeros((2, 1))
+    magnetization_map = np.tile(m, (2, 1, 1))
+    rotated_map = np.tile(beam_frame(m, 35), (2, 1, 1))
+    np.testing.assert_allclose(
+        sim.calc_inhomogeneous_jones_matrices(strain_map, magnetization_map)[0],
+        rotated.calc_inhomogeneous_jones_matrices(strain_map, rotated_map)[0],
+        atol=1e-12,
+    )
+
+
+def test_azimuth_parameters():
+    """the azimuth does not change isotropic layers, is part of the hash
+    only if it is set, and is a single angle"""
+    S = optical_stack(substrate_layer())
+    sim = simulation(Parratt, S, np.r_[1.55] * u.eV, np.r_[20, 45] * u.deg)
+    jones = sim.calc_homogeneous_jones_matrices()[0]
+    hash = sim.get_hash()
+    assert sim.azimuth == 0 * u.deg
+    sim.azimuth = np.pi / 4 * u.rad
+    assert sim.azimuth.to("deg").magnitude == pytest.approx(45)
+    np.testing.assert_allclose(sim.calc_homogeneous_jones_matrices()[0], jones, atol=1e-15)
+    assert sim.get_hash() != hash
+    assert sim._parameters()["azimuth"] == sim.azimuth
+    assert "azimuth" in repr(sim)
+    sim.azimuth = 0
+    assert sim.get_hash() == hash
+    with pytest.raises(ValueError, match="single"):
+        sim.azimuth = [0, 10] * u.deg
+
+
 @pytest.mark.parametrize("cls", FORMALISMS)
 def test_absorption_with_roughness(cls):
     """the reflected flux in the superstrate agrees with the reflectivity also

@@ -48,7 +48,7 @@ Q_ = u.Quantity
 # multilayer formalisms without the elliptical polarization
 _POLARIZATIONS = tuple(MultilayerScattering.polarizations[state] for state in range(5))
 # excitation parameters, which are given by a configured absorption formalism
-_FORMALISM_KEYS = ("wavelength", "theta", "polarization")
+_FORMALISM_KEYS = ("wavelength", "theta", "azimuth", "polarization")
 
 
 class Heat(Simulation):
@@ -94,7 +94,10 @@ class Heat(Simulation):
             ``lambert_beer`` or a multilayer formalism, by default
             :class:`.Parratt`, which can also be a configured instance
             created for the structure ``S``, which then defines the
-            ``wavelength``, ``theta``, and ``polarization``.
+            ``wavelength``, ``theta``, ``azimuth``, and ``polarization``. The
+            ``azimuth`` of the plane of incidence relative to the sample
+            applies to the multilayer formalisms only, see
+            :attr:`.MultilayerScattering.azimuth`.
         boundary_conditions (dict{str, float, Quantity}): boundary conditions of
             the top and bottom boundary for the heat diffusion calculation.
             ``top_type`` or ``bottom_type`` must be one of ``boundary_types``.
@@ -124,6 +127,7 @@ class Heat(Simulation):
             "pulse_width": [0],
             "wavelength": 800e-9,
             "theta": np.pi / 2,
+            "azimuth": 0.0,
             "polarization": "pi",
             "absorption": Parratt,
             "backside": False,
@@ -160,6 +164,7 @@ class Heat(Simulation):
             ["excitation pulse length", pulses(self.excitation["pulse_width"], "ps")],
             ["excitation wavelength", "{:.4g~P}".format(self.excitation["wavelength"].to("nm"))],
             ["excitation theta", "{:.4g~P}".format(self.excitation["theta"].to("deg"))],
+            ["excitation azimuth", "{:.4g~P}".format(self.excitation["azimuth"].to("deg"))],
             ["excitation polarization", self.excitation["polarization"]],
             ["excitation absorption", self._absorption_name()],
             ["excitation backside", self.excitation["backside"]],
@@ -606,6 +611,7 @@ class Heat(Simulation):
         )
         formalism.wl = Q_(np.r_[self._excitation["wavelength"]], u.m)
         formalism.theta = Q_(np.r_[self._excitation["theta"]], u.rad)
+        formalism.azimuth = Q_(self._excitation["azimuth"], u.rad)
         polarization = self._excitation["polarization"]
         if polarization not in _POLARIZATIONS:
             raise ValueError(
@@ -1328,6 +1334,7 @@ class Heat(Simulation):
             "pulse_width": Q_(self._excitation["pulse_width"], u.s).to("ps"),
             "wavelength": Q_(self._excitation["wavelength"], u.m).to("nm"),
             "theta": Q_(self._excitation["theta"], u.rad).to("deg"),
+            "azimuth": Q_(self._excitation["azimuth"], u.rad).to("deg"),
             "polarization": self._excitation["polarization"],
             "absorption": self._excitation["absorption"],
             "backside": self._excitation["backside"],
@@ -1368,6 +1375,13 @@ class Heat(Simulation):
                 self._excitation["wavelength"] = excitation["wavelength"].to("m").magnitude
             if "theta" in excitation:
                 self._excitation["theta"] = excitation["theta"].to("rad").magnitude
+            if "azimuth" in excitation:
+                azimuth = excitation["azimuth"].to("rad").magnitude
+                if np.size(azimuth) != 1:
+                    raise ValueError(
+                        "The azimuth of the excitation must be a single angle for all pulses!"
+                    )
+                self._excitation["azimuth"] = float(np.squeeze(azimuth))
             if "polarization" in excitation:
                 polarization = excitation["polarization"]
                 # the name of the formalisms, e.g. "pi" for "p"
@@ -1405,7 +1419,8 @@ class Heat(Simulation):
 
     def _set_absorption(self, absorption):
         """sets the ``absorption`` of the excitation and, for a configured
-        formalism, the ``wavelength``, ``theta``, and ``polarization`` by it"""
+        formalism, the ``wavelength``, ``theta``, ``azimuth``, and
+        ``polarization`` by it"""
         if isinstance(absorption, str):
             if absorption != "lambert_beer":
                 raise ValueError(
@@ -1429,6 +1444,7 @@ class Heat(Simulation):
                 )
             self._excitation["wavelength"] = float(absorption.wl.to("m").magnitude.flat[0])
             self._excitation["theta"] = float(absorption.theta.to("rad").magnitude.flat[0])
+            self._excitation["azimuth"] = float(absorption.azimuth.to("rad").magnitude)
             self._excitation["polarization"] = absorption.polarizations[absorption.pol_in_state]
         elif not (isinstance(absorption, type) and issubclass(absorption, MultilayerScattering)):
             raise TypeError(
