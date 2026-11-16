@@ -139,6 +139,34 @@ def _flatten_layers(entries):
     return layers
 
 
+def _layer_runs(entries):
+    """consecutive repetitions of the same layer entry of a stack tree or a
+    flat list of layers as ``(entry, count)`` from the top to the bottom,
+    e.g. of a substrate of many unit cells, which are identical layers
+    without interfaces, so that a loop over the layers handles them at once
+    without expanding the repetitions"""
+    runs = []
+
+    def add(entry, count):
+        if runs and runs[-1][0] is entry:
+            runs[-1] = (entry, runs[-1][1] + count)
+        else:
+            runs.append((entry, count))
+
+    for entry in entries:
+        if isinstance(entry, _Period):
+            inner = _layer_runs(entry.entries)
+            if len(inner) == 1:
+                add(inner[0][0], inner[0][1] * entry.repetitions)
+            else:
+                for _ in range(entry.repetitions):
+                    for item, count in inner:
+                        add(item, count)
+        else:
+            add(entry, 1)
+    return runs
+
+
 def circular_to_linear(matrix):
     """circular_to_linear
 
@@ -1788,7 +1816,8 @@ class MultilayerScattering(Scattering):
         self._reject_temperatures(temps, "temps")
         if np.size(magnetizations) > 0:
             magnetizations = self.parse_magnetization_map(magnetizations, polar)
-        layers = _flatten_layers(self._homogeneous_layer_tree(strains, magnetizations))
+        # the stack tree keeps the repetitions, e.g. of the substrate
+        layers = self._homogeneous_layer_tree(strains, magnetizations)
         tops, bottoms = self._layer_bounds(layers)
         if distances is None:
             distances = (tops + bottoms) / 2
@@ -1855,13 +1884,14 @@ class MultilayerScattering(Scattering):
 
     def _layer_bounds(self, layers):
         """tops and bottoms of the layers of the structure without the
-        superstrate and the substrate (m) for the strains of the ``layers``"""
-        num_substrate = len(_flatten_layers(self._superstrate_and_substrate()[1]))
-        thickness = [
-            layer.structural.thickness.magnitude
-            * (1 + self._parse_layer_inputs(layer, strain, magnetization)[0])
-            for layer, strain, magnetization in layers[1 : len(layers) - num_substrate]
-        ]
+        superstrate and the substrate (m) for the strains of the ``layers``
+        of a stack tree or a flat list"""
+        runs = _layer_runs(layers)
+        num_substrate = len(_layer_runs(self._superstrate_and_substrate()[1]))
+        thickness = []
+        for (layer, strain, magnetization), count in runs[1 : len(runs) - num_substrate]:
+            strain = self._parse_layer_inputs(layer, strain, magnetization)[0]
+            thickness += [layer.structural.thickness.magnitude * (1 + strain)] * count
         bottoms = np.cumsum(np.asarray(thickness, dtype=float))
         return bottoms - thickness, bottoms
 
@@ -1893,21 +1923,22 @@ class MultilayerScattering(Scattering):
     def _stack_fields(self, layers, distances, cache=None, dichroic=False, z_slab=None):
         """:meth:`calc_stack_fields`, where the slab of each depth is the one
         at ``z_slab``"""
-        layers = _flatten_layers(layers)
-        self._check_superstrate(layers[0])
+        # repetitions of identical layers are handled at once
+        runs = _layer_runs(layers)
+        self._check_superstrate(runs[0][0])
         k = self.experiment.k.magnitude[:, np.newaxis]
         b = np.broadcast_to(self._in_plane_wavevector(), self.experiment.theta.magnitude.shape)
         z = np.atleast_1d(np.asarray(distances, dtype=float))
-        magnetizations = [self._parse_layer_inputs(*entry)[1] for entry in layers]
-        stacks = {"": layers}
+        magnetizations = [self._parse_layer_inputs(*entry)[1] for entry, _ in runs]
+        stacks = {"": runs}
         magnetic = self._magnetic_fields and any(np.any(m) for m in magnetizations)
         if dichroic and magnetic:
             # the opposite magnetization from the modes of the reversed
             # magnetizations, as the modes of calc_modes() for the opposite
             # magnetization are not given in the sample frame for all formalisms
             stacks["_phi"] = [
-                (layer, strain, tuple(-m for m in magnetization))
-                for (layer, strain, _), magnetization in zip(layers, magnetizations)
+                ((layer, strain, tuple(-m for m in magnetization)), count)
+                for ((layer, strain, _), count), magnetization in zip(runs, magnetizations)
             ]
         result = {}
         for suffix, stack in stacks.items():
@@ -1981,19 +2012,21 @@ class MultilayerScattering(Scattering):
             "K": -(_flux_matrix(dpsi, psi) + _flux_matrix(psi, dpsi)) / flux_in,
         }
 
-    def _field_slabs(self, layers, cache=None):
-        """eigenmodes ``(A, q, thickness, eps)`` of the homogeneous slabs of a
-        flat list of layers from the superstrate to the substrate, where
-        consecutive identical layers are combined, and the interface matrices
+    def _field_slabs(self, runs, cache=None):
+        """eigenmodes ``(A, q, thickness, eps)`` of the homogeneous slabs of
+        the layers from the superstrate to the substrate as repetitions
+        ``(entry, count)`` of :func:`_layer_runs`, where consecutive identical
+        layers are combined, and the interface matrices
         :math:`X` from the amplitudes at the bottom of a slab to the ones at
         the top of the next slab including the roughness, see
         :meth:`_assemble`. The superstrate has no thickness."""
         k = self.experiment.k.magnitude[:, np.newaxis]
         slabs, interfaces, keys = [], [], []
-        for i, entry in enumerate(layers):
+        for i, (entry, count) in enumerate(runs):
             layer, strain, magnetization = entry
             key = (id(layer), *self._parse_layer_inputs(layer, strain, magnetization))
             A, _, q, _, k_z, thickness, roughness, eps = self._layer_modes(*entry, cache=cache)
+            thickness = thickness * count
             if i > 1 and key == keys[-1]:
                 # identical layers have no interface and no roughness
                 slabs[-1][2] += thickness

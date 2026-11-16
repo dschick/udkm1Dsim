@@ -31,7 +31,7 @@ __docformat__ = "restructuredtext"
 import numpy as np
 
 from .berreman import _forward_sqrt
-from .multilayer import MultilayerScattering, _flatten_layers
+from .multilayer import MultilayerScattering, _layer_runs
 
 
 class Parratt(MultilayerScattering):
@@ -80,6 +80,13 @@ class Parratt(MultilayerScattering):
     _title = "Parratt multilayer scattering simulation"
     # the magnetization is neglected
     _magnetic_fields = False
+
+    @staticmethod
+    def _parse_layer_inputs(layer, strain, magnetization):
+        """strain as float, while the magnetization is neglected and not
+        taken from the layer, which may have several sublattices"""
+        strain = float(np.ravel(strain)[0]) if np.size(strain) > 0 else 0.0
+        return strain, (0.0, 0.0, 0.0)
 
     def calc_layer_dielectric_tensor(self, layer, strain=0.0, magnetization=None):
         """calc_layer_dielectric_tensor
@@ -185,10 +192,12 @@ class Parratt(MultilayerScattering):
               magnetization.
 
         """
-        layers = _flatten_layers(layers)
+        # repetitions of identical layers are handled at once, e.g. of the
+        # substrate, as there are no interfaces between them
+        runs = _layer_runs(layers)
         # leading dimension of the delays for arrays of strains
         shape = self.experiment.theta.magnitude.shape
-        for _, strain, _ in layers:
+        for (_, strain, _), _ in runs:
             if np.size(strain) > 1:
                 shape = np.shape(strain) + shape
                 break
@@ -202,9 +211,16 @@ class Parratt(MultilayerScattering):
         # in memory for arrays of strains
         k = self.experiment.k.magnitude[:, np.newaxis]
         k_y2 = self._in_plane_wavevector() ** 2
-        below = self._layer_constants(*layers[-1], k, k_y2, cache)
-        for j in range(len(layers) - 1, 0, -1):
-            above = self._layer_constants(*layers[j - 1], k, k_y2, cache)
+
+        def constants(run):
+            # the phase through all repetitions of the layer
+            entry, count = run
+            n, eps, k_z, phase, sigma = self._layer_constants(*entry, k, k_y2, cache)
+            return n, eps, k_z, phase if count == 1 else phase**count, sigma
+
+        below = constants(runs[-1])
+        for j in range(len(runs) - 1, 0, -1):
+            above = constants(runs[j - 1])
             n_a, eps_a, k_a, phase_a, _ = above
             n_b, eps_b, k_b, phase_b, sigma = below
             r_s = (k_a - k_b) / (k_a + k_b)
@@ -241,7 +257,7 @@ class Parratt(MultilayerScattering):
         T[..., 0, 0], T[..., 1, 1] = t_s, t_p
         return R, R, T, T
 
-    def _field_slabs(self, layers, cache=None):
+    def _field_slabs(self, runs, cache=None):
         r"""linearly polarized modes :math:`(\sigma_d, \pi_d, \sigma_u, \pi_u)`
         of the homogeneous slabs in the sample frame and the interface
         matrices from the reflection coefficients :math:`r_j` and the
@@ -257,11 +273,11 @@ class Parratt(MultilayerScattering):
         k = self.experiment.k.magnitude[:, np.newaxis]
         k_y2 = self._in_plane_wavevector() ** 2
         slabs, interfaces, keys = [], [], []
-        for i, entry in enumerate(layers):
+        for i, (entry, count) in enumerate(runs):
             layer, strain, magnetization = entry
             key = (id(layer), self._parse_layer_inputs(layer, strain, magnetization)[0])
             n, eps, k_z, _, sigma = self._layer_constants(*entry, k, k_y2, cache)
-            thickness = layer.structural.thickness.magnitude * (1 + key[1])
+            thickness = layer.structural.thickness.magnitude * (1 + key[1]) * count
             if i > 1 and key == keys[-1]:
                 # identical layers have no interface and no roughness
                 slabs[-1][2] += thickness
@@ -354,7 +370,7 @@ class Parratt(MultilayerScattering):
         layers = (
             [superstrate]
             + [(handle, strain_map[:, i], None) for i, handle in enumerate(handles)]
-            + _flatten_layers(substrate)
+            + substrate
         )
         Ref, _, Trans, _ = self.calc_jones_matrices(layers, {})
         return Ref, Ref, Trans, Trans

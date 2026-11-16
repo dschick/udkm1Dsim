@@ -631,6 +631,9 @@ class Heat(Simulation):
         cache = self._profile_cache
         if cache is None:
             cache = {"profiles": {}, "reported": set()}
+        if len(distances) == 0:
+            # the layer centers, as for an explicit grid of the same depths
+            distances = self.S._layer_distances()[2]
         grid = np.asarray(distances, dtype=float).tobytes()
         rows = []
         for index in indices:

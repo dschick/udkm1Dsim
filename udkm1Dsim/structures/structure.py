@@ -590,13 +590,27 @@ class Structure:
         return structure
 
     def visualize(
-        self, block=True, unit="nm", fig_size=[20, 1], cmap="Set3", linewidth=0.1, show=True
+        self,
+        block=True,
+        unit="nm",
+        fig_size=[20, 1],
+        cmap="Set3",
+        linewidth=0.1,
+        show=True,
+        superstrate_substrate=True,
     ):
         """visualize
 
         Simple visualization of the :class:`Structure`.
 
+        The semi-infinite superstrate and substrate are drawn as hatched
+        regions of a fixed width of 10 % of the thickness of the structure
+        above the surface and below its bottom, independent of the number of
+        repetitions of the substrate, which is given in its label.
+
         Args:
+            block (boolean): block the execution until the plot is closed.
+                Defaults to True.
             unit (str): SI unit of the distance of the Structure. Defaults to
                 'nm'.
             fig_size (list[float]): figure size of the visualization plot.
@@ -604,6 +618,8 @@ class Structure:
             cmap (str): Matplotlib colormap for colors of Layer.
             linewidth (float): line width of the patches.
             show (boolean): show visualization plot at the end.
+            superstrate_substrate (boolean): also draw the superstrate and the
+                substrate. Defaults to True.
 
         """
         import matplotlib.pyplot as plt
@@ -613,13 +629,20 @@ class Structure:
         layer_interfaces = np.append(0, d_end.to(unit).magnitude)  # Append zero at the start
         thickness = np.max(layer_interfaces)
 
-        layer_ids = self.unique_layers[0]
+        layer_ids = list(self.unique_layers[0])
+        superstrate, _ = self.superstrate
+        substrate, num_substrate = self.substrate
+        if superstrate_substrate:
+            # further layers of the superstrate and substrate, except vacuum
+            for layer in (superstrate, substrate):
+                if not isinstance(layer, Vacuum) and layer.id not in layer_ids:
+                    layer_ids.append(layer.id)
         N = len(layer_ids)  # number of unique layers
 
         cm = colormaps[cmap]
         colortable = {}
         for i in range(N):
-            colortable[layer_ids[i]] = cm(i / (N - 1))
+            colortable[layer_ids[i]] = cm(i / max(N - 1, 1))
 
         plt.figure(figsize=fig_size)
         ax = plt.axes()
@@ -636,7 +659,42 @@ class Structure:
             )
             ax.add_patch(rect)
 
-        plt.xlim(0, thickness)
+        xlim = [0, thickness]
+        if superstrate_substrate:
+            width = 0.1 * thickness if thickness > 0 else 1
+            regions = [
+                (superstrate, -width, "superstrate", 1),
+                (substrate, thickness, "substrate", num_substrate),
+            ]
+            for layer, start, label, repetitions in regions:
+                col = "white" if isinstance(layer, Vacuum) else colortable.get(layer.id, "k")
+                ax.add_patch(
+                    patches.Rectangle(
+                        (start, 0),
+                        width,
+                        1,
+                        linewidth=linewidth,
+                        facecolor=col,
+                        edgecolor="k",
+                        hatch="//",
+                    )
+                )
+                text = f"{label}\n{layer.id}"
+                if repetitions > 1:
+                    text += f" × {repetitions:d}"
+                ax.text(
+                    start + width / 2,
+                    0.5,
+                    text,
+                    ha="center",
+                    va="center",
+                    fontsize="small",
+                    bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.8},
+                    clip_on=True,
+                )
+            xlim = [-width, thickness + width]
+
+        plt.xlim(*xlim)
         plt.ylim(0, 1)
         plt.xlabel(f"Distance ({unit:s})")
         plt.yticks([], [])
