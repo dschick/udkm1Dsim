@@ -25,7 +25,9 @@ __all__ = ["Heat"]
 
 __docformat__ = "restructuredtext"
 
+import operator
 import warnings
+from contextlib import contextmanager
 from copy import copy
 from time import time
 
@@ -47,8 +49,12 @@ Q_ = u.Quantity
 # incoming polarizations of the excitation by their names, i.e. those of the
 # multilayer formalisms without the elliptical polarization
 _POLARIZATIONS = tuple(MultilayerScattering.polarizations[state] for state in range(5))
-# excitation parameters, which are given by a configured absorption formalism
-_FORMALISM_KEYS = ("wavelength", "theta", "azimuth", "polarization")
+# excitation parameters, which are defined by a configured formalism instance as
+# absorption
+_INSTANCE_KEYS = ("wavelength", "theta", "azimuth", "polarization")
+# excitation parameters, which can be given per pulse besides the fluence,
+# delay_pump, and pulse_width
+_PULSE_KEYS = (*_INSTANCE_KEYS, "absorption", "backside")
 
 
 class Heat(Simulation):
@@ -86,8 +92,15 @@ class Heat(Simulation):
             interface of each layer.
         backend (str): pde solver backend - either default scipy or numba.
         excitation (dict{ndarray[float, Quantity]}): excitation parameters
-            fluence, delay_pump, pulse_width, wavelength, theta, polarization,
-            absorption, backside. The ``polarization`` is ``sigma`` or ``s``,
+            fluence, delay_pump, pulse_width, wavelength, theta, azimuth,
+            polarization, absorption, backside. The ``fluence``,
+            ``delay_pump``, and ``pulse_width`` are given for each pulse,
+            while all other parameters are either a single value for all
+            pulses or a list of one value for each pulse, which are sorted by
+            the ``delay_pump`` together with all other per-pulse parameters,
+            so that the indices of the pulses, e.g. ``pulse_index`` of
+            :meth:`get_absorption_profile`, refer to the sorted pulses. The
+            ``polarization`` is ``sigma`` or ``s``,
             ``pi`` or ``p``, ``unpolarized``, ``circ +`` or ``c+``, or ``circ -`` or ``c-``, as for
             the multilayer formalisms, while an ``elliptical`` polarization
             requires a configured instance as ``absorption``. The ``absorption`` is
@@ -133,6 +146,8 @@ class Heat(Simulation):
             "backside": False,
         }
         self._distances = np.array([])
+        # absorption profiles of a run of calc_temp_map
+        self._profile_cache = None
         self.backend = kwargs.get("backend", "scipy")
         self.boundary_types = ["isolator", "temperature", "flux"]
         self._boundary_conditions = {
@@ -255,10 +270,10 @@ class Heat(Simulation):
             self.distances,
             self.ode_options,
         ]
-        if not isinstance(self._excitation["absorption"], str):
-            # the formalism depends also on the roughness and magnetization
-            formalism = self.create_multilayer_formalism(backside=self._excitation["backside"])
-            param.append(formalism.get_hash())
+        for index in range(self.num_pulses):
+            if not isinstance(self._pulse(index)["absorption"], str):
+                # the formalism depends also on the roughness and magnetization
+                param.append(self.create_multilayer_formalism(pulse_index=index).get_hash())
 
         for value in kwargs.values():
             param.append(value)
@@ -347,13 +362,21 @@ class Heat(Simulation):
         fluence = self._excitation["fluence"]
         delay_pump = self._excitation["delay_pump"]
         pulse_width = self._excitation["pulse_width"]
-        theta = self._excitation["theta"]
+        # the incidence angle of every pulse
+        theta = np.array([self._pulse(i)["theta"] for i in range(len(fluence))])
 
         fluence = fluence * np.sin(theta)
-        self.disp_message(
-            f"Surface incidence fluence scaled by factor {np.sin(theta):5.4f}"
-            f" due to incidence angle theta={np.rad2deg(theta):5.2f} deg"
-        )
+        if np.size(np.unique(theta)) == 1:
+            self.disp_message(
+                f"Surface incidence fluence scaled by factor {np.sin(theta[0]):5.4f}"
+                f" due to incidence angle theta={np.rad2deg(theta[0]):5.2f} deg"
+            )
+        elif len(theta) > 1:
+            self.disp_message(
+                "Surface incidence fluences scaled by factors "
+                f"{np.array2string(np.sin(theta), precision=4)} due to incidence angles "
+                f"theta={np.array2string(np.rad2deg(theta), precision=2)} deg"
+            )
 
         # throw warnings if heat diffusion should be enabled
         if (self.S.num_sub_systems > 1) and not self.heat_diffusion:
@@ -459,26 +482,30 @@ class Heat(Simulation):
                     res.append(temp)
         return res, fluence, delay_pump, pulse_width
 
-    def get_absorption_profile(self, distances=[], backside=False):
+    # ---- absorption -------------------------------------------------------------
+
+    def get_absorption_profile(self, distances=[], pulse_index=None):
         r"""get_absorption_profile
 
-        Returns the differential absorption profile :math:`\mbox{d}A/\mbox{d}z`.
+        Returns the differential absorption profile :math:`\mbox{d}A/\mbox{d}z`
+        of every pulse of the excitation by Lambert-Beer's law or its
+        multilayer formalism, depending on its ``absorption``. Pulses with the
+        same ``wavelength``, ``theta``, ``azimuth``, ``polarization``,
+        ``absorption``, and ``backside`` are calculated only once.
 
         Args:
             distances (ndarray[float], optional): spatial grid for calculation.
-            backside (boolean, optional): backside or frontside excitation.
+            pulse_index (int, optional): index of the pulse, sorted by
+                ``delay_pump``. Defaults to all pulses.
 
         Returns:
-            dAdz (ndarray[float]): differential absorption within each layer
-            calculated either by Lambert-Beers law or by the multilayer
-            formalism of the ``absorption`` of the excitation.
+            dAdz (ndarray[float]): differential absorption profile (1/m) of
+            shape (N,) for a single pulse or (P, N) for P pulses.
 
         """
-        if isinstance(self._excitation["absorption"], str):
-            return self.get_absorption_from_lambert_beer(distances, backside)
-        return self.get_absorption_from_multilayer(distances, backside)
+        return self._absorption_profiles(distances, pulse_index, "auto")
 
-    def get_absorption_from_lambert_beer(self, distances=[], backside=False):
+    def get_absorption_from_lambert_beer(self, distances=[], pulse_index=None):
         r"""get_absorption_from_lambert_beer
 
         The transmission is given by:
@@ -498,17 +525,179 @@ class Heat(Simulation):
 
         Args:
             distances (ndarray[float], optional): spatial grid for calculation.
-            backside (boolean, optional): backside or frontside excitation.
+            pulse_index (int, optional): index of the pulse, sorted by
+                ``delay_pump``, for its ``wavelength`` and ``backside``.
+                Defaults to all pulses.
 
         Returns:
-            dAdz (ndarray[float]): differential absorption within each layer
-            calculated by Lambert-Beers law.
+            dAdz (ndarray[float]): differential absorption profile (1/m) of
+            shape (N,) for a single pulse or (P, N) for P pulses calculated
+            by Lambert-Beers law.
 
         """
-        self.disp_message("Absorption profile is calculated by Lambert-Beer's law.")
+        return self._absorption_profiles(distances, pulse_index, "lambert_beer")
 
+    def get_absorption_from_multilayer(self, distances=[], pulse_index=None):
+        """get_absorption_from_multilayer
+
+        Differential absorption profile :math:`\\mbox{d}A/\\mbox{d}z` from
+        the decrease of the Poynting flux of the multilayer formalism of the
+        pulses of the excitation, see
+        :meth:`~.MultilayerScattering.calc_homogeneous_absorption`, which
+        requires a multilayer formalism as ``absorption`` of the pulses.
+
+        Args:
+            distances (ndarray[float], optional): spatial grid for calculation.
+            pulse_index (int, optional): index of the pulse, sorted by
+                ``delay_pump``. Defaults to all pulses.
+
+        Returns:
+            dAdz (ndarray[float]): differential absorption profile (1/m) of
+            shape (N,) for a single pulse or (P, N) for P pulses.
+
+        """
+        return self._absorption_profiles(distances, pulse_index, "multilayer")
+
+    def create_multilayer_formalism(self, cls=None, pulse_index=0):
+        """create_multilayer_formalism
+
+        Multilayer formalism for the ``wavelength``, ``theta``, ``azimuth``,
+        ``polarization``, and ``backside`` of a pulse of the excitation, e.g.
+        to calculate its reflectivity or the fields inside the structure. A
+        configured instance as ``absorption`` of the pulse is returned as it
+        is, or for a backside excitation as a copy with all its settings for
+        the reversed structure.
+
+        Args:
+            cls (type[MultilayerScattering], optional): formalism, e.g.
+                :class:`.Parratt`. Defaults to the ``absorption`` of the
+                pulse.
+            pulse_index (int, optional): index of the pulse, sorted by
+                ``delay_pump``. Defaults to the first pulse.
+
+        Returns:
+            formalism (MultilayerScattering): formalism for the pulse.
+
+        """
+        pulse = self._pulse(self._check_pulse_index(pulse_index))
+        backside = pulse["backside"]
+        if cls is None:
+            cls = pulse["absorption"]
+        if isinstance(cls, MultilayerScattering):
+            if cls.S is not self.S:
+                raise ValueError(
+                    "The absorption formalism of the excitation must be created for the "
+                    "structure of the heat simulation!"
+                )
+            if not backside:
+                return cls
+            # the formalisms read their structure only during the calculation,
+            # so that a copy keeps all settings for the reversed structure
+            formalism = copy(cls)
+            formalism.S = self.S.reverse()
+            return formalism
+        if not (isinstance(cls, type) and issubclass(cls, MultilayerScattering)):
+            raise TypeError(
+                "The absorption formalism must be a multilayer formalism, e.g. Parratt!"
+            )
+        formalism = cls(
+            self.S.reverse() if backside else self.S,
+            True,
+            save_data=False,
+            disp_messages=False,
+            progress_bar=False,
+        )
+        formalism.wl = Q_(np.r_[pulse["wavelength"]], u.m)
+        formalism.theta = Q_(np.r_[pulse["theta"]], u.rad)
+        formalism.azimuth = Q_(pulse["azimuth"], u.rad)
+        polarization = pulse["polarization"]
+        if polarization not in _POLARIZATIONS:
+            raise ValueError(
+                f"The polarization {polarization!r} of a former configured instance must be "
+                f"replaced by one of {', '.join(_POLARIZATIONS)}!"
+            )
+        formalism.set_incoming_polarization(polarization)
+        return formalism
+
+    def _absorption_profiles(self, distances, pulse_index, kind):
+        """absorption profiles of a single or all pulses by Lambert-Beer's law,
+        their multilayer formalism, or ``auto`` by their ``absorption``, which
+        are calculated once for identical pulses and on the same grid during
+        a run of :meth:`calc_temp_map`, while each pulse is reported once"""
+        if pulse_index is None:
+            indices = range(self.num_pulses)
+        else:
+            indices = [self._check_pulse_index(pulse_index)]
+        cache = self._profile_cache
+        if cache is None:
+            cache = {"profiles": {}, "reported": set()}
+        grid = np.asarray(distances, dtype=float).tobytes()
+        rows = []
+        for index in indices:
+            pulse_key = self._pulse_key(index)
+            lambert_beer = kind == "lambert_beer" or (
+                kind == "auto" and isinstance(self._pulse(index)["absorption"], str)
+            )
+            key = (lambert_beer, pulse_key, grid)
+            if key not in cache["profiles"]:
+                if lambert_beer:
+                    profile, report = self._lambert_beer_absorption(distances, index)
+                else:
+                    profile, report = self._multilayer_absorption(distances, index)
+                cache["profiles"][key] = profile
+                if (lambert_beer, pulse_key) not in cache["reported"]:
+                    cache["reported"].add((lambert_beer, pulse_key))
+                    self.disp_message(self._absorption_message(pulse_key, report))
+            rows.append(cache["profiles"][key])
+        rows = np.asarray(rows)
+        return rows[0] if len(rows) == 1 else rows
+
+    @contextmanager
+    def _profile_run(self):
+        """context of a run, in which every absorption profile is calculated
+        and reported only once"""
+        outer = self._profile_cache is not None
+        if not outer:
+            self._profile_cache = {"profiles": {}, "reported": set()}
+        try:
+            yield
+        finally:
+            if not outer:
+                self._profile_cache = None
+
+    def _absorption_message(self, pulse_key, report):
+        """message of the absorption of all pulses with the same parameters"""
+        indices = [i for i in range(self.num_pulses) if self._pulse_key(i) == pulse_key]
+        pulse = self._pulse(indices[0])
+        delays = np.atleast_1d(self._excitation["delay_pump"])
+        delays = [f"{delays[i] * 1e12:.4g}" for i in indices if i < len(delays)]
+        label = "pulse" if len(indices) == 1 else "pulses"
+        label = f"{label} {', '.join(map(str, indices))}"
+        if delays:
+            label += f" at {', '.join(delays)} ps"
+        side = "backside" if pulse["backside"] else "frontside"
+        wavelength = f"{pulse['wavelength'] * 1e9:.4g} nm"
+        if "reflection" not in report:
+            return (
+                f"Absorption of {label} by Lambert-Beer's law for {wavelength}, {side}: "
+                f"absorption in the sample of {report['absorption'] * 100:.1f} %."
+            )
+        return (
+            f"Absorption of {label} by {report['formalism']} for {wavelength}, "
+            f"theta = {np.degrees(pulse['theta']):.4g} deg, "
+            f"azimuth = {np.degrees(pulse['azimuth']):.4g} deg, "
+            f"{pulse['polarization']} polarization, {side}: "
+            f"reflection of {report['reflection'] * 100:.1f} %, "
+            f"absorption in the sample of {report['absorption'] * 100:.1f} %, and "
+            f"transmission into the substrate of {report['substrate'] * 100:.1f} %."
+        )
+
+    def _lambert_beer_absorption(self, distances, index):
+        """absorption profile of a pulse by Lambert-Beer's law and the
+        absorbed fraction of the structure"""
+        pulse = self._pulse(index)
+        backside = pulse["backside"]
         if backside:
-            self.disp_message("Backside excitation is enabled.")
             structure = self.S.reverse()
         else:
             structure = self.S
@@ -534,9 +723,7 @@ class Heat(Simulation):
             # find the first layer and get properties
             index = finderb(interfaces[i], d_start)
             layer = structure.get_layer_handle(index[0])
-            opt_pen_depth = (
-                layer.get_opt_pen_depth(self._excitation["wavelength"] * u.m).to("m").magnitude
-            )
+            opt_pen_depth = layer.get_opt_pen_depth(pulse["wavelength"] * u.m).to("m").magnitude
 
             # get all distances in the current layer we have to
             # calculate the absorption profile for
@@ -560,90 +747,19 @@ class Heat(Simulation):
             # for backside excitation the result must be reversed
             dAdz = np.flip(dAdz)
 
-        return dAdz
+        return dAdz, {"absorption": 1 - I0}
 
-    def create_multilayer_formalism(self, cls=None, backside=False):
-        """create_multilayer_formalism
-
-        Multilayer formalism for the ``wavelength``, ``theta``, and
-        ``polarization`` of the excitation, e.g. to calculate its
-        reflectivity or the fields inside the structure. A configured
-        instance as ``absorption`` of the excitation is returned as it is,
-        or for a backside excitation as a copy with all its settings for the
-        reversed structure.
-
-        Args:
-            cls (type[MultilayerScattering], optional): formalism, e.g.
-                :class:`.Parratt`. Defaults to the ``absorption`` of the
-                excitation.
-            backside (boolean, optional): for the reversed structure of a
-                backside excitation. Defaults to False.
-
-        Returns:
-            formalism (MultilayerScattering): formalism for the excitation.
-
-        """
-        if cls is None:
-            cls = self._excitation["absorption"]
-        if isinstance(cls, MultilayerScattering):
-            if cls.S is not self.S:
-                raise ValueError(
-                    "The absorption formalism of the excitation must be created for the "
-                    "structure of the heat simulation!"
-                )
-            if not backside:
-                return cls
-            # the formalisms read their structure only during the calculation,
-            # so that a copy keeps all settings for the reversed structure
-            formalism = copy(cls)
-            formalism.S = self.S.reverse()
-            return formalism
-        if not (isinstance(cls, type) and issubclass(cls, MultilayerScattering)):
-            raise TypeError(
-                "The absorption formalism must be a multilayer formalism, e.g. Parratt!"
-            )
-        formalism = cls(
-            self.S.reverse() if backside else self.S,
-            True,
-            save_data=False,
-            disp_messages=False,
-            progress_bar=False,
-        )
-        formalism.wl = Q_(np.r_[self._excitation["wavelength"]], u.m)
-        formalism.theta = Q_(np.r_[self._excitation["theta"]], u.rad)
-        formalism.azimuth = Q_(self._excitation["azimuth"], u.rad)
-        polarization = self._excitation["polarization"]
-        if polarization not in _POLARIZATIONS:
+    def _multilayer_absorption(self, distances, index):
+        """absorption profile of a pulse by its multilayer formalism and its
+        reflection, absorption in the structure, and flux into the substrate"""
+        pulse = self._pulse(index)
+        if isinstance(pulse["absorption"], str):
             raise ValueError(
-                f"The polarization {polarization!r} of a former configured instance must be "
-                f"replaced by one of {', '.join(_POLARIZATIONS)}!"
+                f"The pulse {index} is absorbed by Lambert-Beer's law and not by a "
+                "multilayer formalism!"
             )
-        formalism.set_incoming_polarization(polarization)
-        return formalism
-
-    def get_absorption_from_multilayer(self, distances=[], backside=False):
-        """get_absorption_from_multilayer
-
-        Differential absorption profile :math:`\\mbox{d}A/\\mbox{d}z` from
-        the decrease of the Poynting flux of the multilayer formalism of the
-        excitation, see
-        :meth:`~.MultilayerScattering.calc_homogeneous_absorption`.
-
-        Args:
-            distances (ndarray[float], optional): spatial grid for calculation.
-            backside (boolean, optional): backside or frontside excitation.
-
-        Returns:
-            dAdz (ndarray[float]): differential absorption profile (1/m).
-
-        """
-        formalism = self.create_multilayer_formalism(backside=backside)
-        self.disp_message(
-            f"Absorption profile is calculated by {type(formalism).__name__} "
-            f"for {self._excitation['polarization']} polarization."
-        )
-        if backside:
-            self.disp_message("Backside excitation is enabled.")
+        backside = pulse["backside"]
+        formalism = self.create_multilayer_formalism(pulse_index=index)
         d_start, d_end, d_mid = formalism.S._layer_distances()
         if len(distances) == 0:
             distances = d_mid
@@ -662,17 +778,23 @@ class Heat(Simulation):
                 "The absorption formalism of the excitation must have a single incoming "
                 "polarization!"
             )
-        self.disp_message(
-            f"Absorption of {np.sum(A_layers[0, 0]) * 100:0.1f} % in the structure and flux "
-            f"of {S_sub[0, 0] * 100:0.1f} % into the substrate."
-        )
+        report = {
+            "formalism": type(formalism).__name__,
+            "reflection": float(formalism.calc_homogeneous_reflectivity_transmissivity()[0][0, 0]),
+            "absorption": float(np.sum(A_layers[0, 0])),
+            "substrate": float(S_sub[0, 0]),
+        }
         dAdz = A[0, 0]
         if backside:
             # for backside excitation the results must be reversed
             dAdz = np.flip(dAdz)
-        return dAdz
+        return dAdz, report
 
-    def get_temperature_after_delta_excitation(self, fluence, init_temp, distances=[]):
+    # ---- temperature ------------------------------------------------------------
+
+    def get_temperature_after_delta_excitation(
+        self, fluence, init_temp, distances=[], pulse_index=0
+    ):
         """get_temperature_after_delta_excitation
 
         Returns the final temperature and temperature change for each layer of
@@ -687,6 +809,9 @@ class Heat(Simulation):
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
                 temperature scalar or array (K).
             distances (ndarray[float], optional): spatial grid for calculation.
+            pulse_index (int, optional): index of the pulse of the excitation,
+                sorted by ``delay_pump``, for its absorption profile.
+                Defaults to the first pulse.
 
         Returns:
             result (Result): with the final temperature ``final_temp`` and
@@ -696,19 +821,21 @@ class Heat(Simulation):
 
         """
         final_temp, delta_temp = self.calc_temperature_after_delta_excitation(
-            fluence, init_temp, distances
+            fluence, init_temp, distances, pulse_index
         )
         fluence = fluence if isinstance(fluence, Q_) else Q_(fluence, "J/m**2")
         result = self.new_map_result(
             "temperature after delta excitation",
             distances=distances if len(distances) > 0 else None,
-            inputs={"fluence": fluence.to("mJ/cm**2")},
+            inputs={"fluence": fluence.to("mJ/cm**2"), "pulse_index": pulse_index},
         )
         result.add("final_temp", final_temp, ("distances", "subsystems"), "K")
         result.add("delta_temp", delta_temp, ("distances", "subsystems"), "K")
         return result
 
-    def calc_temperature_after_delta_excitation(self, fluence, init_temp, distances=[]):
+    def calc_temperature_after_delta_excitation(
+        self, fluence, init_temp, distances=[], pulse_index=0
+    ):
         r"""calc_temperature_after_delta_excitation
 
         Calculate the final temperature and temperature change for each layer
@@ -746,6 +873,9 @@ class Heat(Simulation):
             init_temp (float, Quantity, ndarray[float, Quantity]): initial
                 temperature scalar or array (K).
             distances (ndarray[float], optional): spatial grid for calculation.
+            pulse_index (int, optional): index of the pulse of the excitation,
+                sorted by ``delay_pump``, for its absorption profile.
+                Defaults to the first pulse.
 
         Returns:
             (tuple):
@@ -756,7 +886,6 @@ class Heat(Simulation):
         """
         # initialize
         t1 = time()
-        backside = self._excitation["backside"]
         if len(distances) == 0:
             # if no distances are set, calculate the extinction on
             # the middle of each unit cell
@@ -765,7 +894,7 @@ class Heat(Simulation):
             d_start, _, _ = self.S._layer_distances()
 
         # absorption profile from Lambert-Beer's law or multilayer absorption
-        dAdz = self.get_absorption_profile(distances=distances, backside=backside)
+        dAdz = self.get_absorption_profile(distances=distances, pulse_index=pulse_index)
 
         # normalize fluence to a scalar (single delta excitation)
         try:
@@ -826,14 +955,21 @@ class Heat(Simulation):
         Returns:
             result (Result): with the spatio-temporal ``temp_map`` and its
             change ``delta_temp_map`` (K) of the dimensions ``delays``,
-            ``distances`` of the layer centers, and ``subsystems``, as well
-            as the checked initial temperature ``init_temp``, see
+            ``distances`` of the layer centers, and ``subsystems``, the
+            checked initial temperature ``init_temp``, and the absorption
+            profile ``absorption`` (1/m) of every pulse of the dimensions
+            ``pulses``, sorted by ``delay_pump``, and ``distances``, see
+            :meth:`get_absorption_profile` and
             :class:`~udkm1Dsim.simulations.result.Result`.
 
         """
         init_temp = self.check_initial_temperature(init_temp)  # check the initial temperature
 
         def calc():
+            with self._profile_run():
+                return calc_result()
+
+        def calc_result():
             temp_map, delta_temp_map, _ = self.calc_temp_map(delays, init_temp)
             result = self.new_map_result("temperature map", delays)
             # the singleton dimensions are squeezed out of the maps
@@ -844,6 +980,12 @@ class Heat(Simulation):
             result.add("temp_map", temp_map, dims, "K")
             result.add("delta_temp_map", delta_temp_map, dims, "K")
             result.add("init_temp", init_temp, ("distances", "subsystems"), "K")
+            if len(self._excitation["fluence"]) > 0:
+                # the absorption profiles at the layer centers, which are
+                # squeezed for a single pulse
+                absorption = self.get_absorption_profile()
+                dims = ("pulses", "distances") if np.ndim(absorption) == 2 else ("distances",)
+                result.add("absorption", absorption, dims, "1/m")
             return result
 
         return self._cached_result("temp_map", self.get_hash(delays, init_temp), calc, False)
@@ -868,6 +1010,12 @@ class Heat(Simulation):
               checked excitations.
 
         """
+        with self._profile_run():
+            return self._calc_temp_map(delays, input_init_temp)
+
+    def _calc_temp_map(self, delays, input_init_temp):
+        """:meth:`calc_temp_map` in the context of a run, in which every
+        absorption profile is calculated and reported only once"""
         t1 = time()
         # all thermal parameters of the heat simulation must have the same number of subsystems
         self.S.check_num_sub_systems("heat_capacity", "therm_cond", "sub_system_coupling")
@@ -897,6 +1045,9 @@ class Heat(Simulation):
             distances = d_mid
 
         N = len(distances)
+        if np.any(self._excitation["fluence"]):
+            # report the absorption of all pulses at the beginning
+            self.get_absorption_profile(distances)
         temp_map = np.zeros([1, N, K])
         # interpolate the initial temperature onto distance grid
         init_temp = np.zeros([N, K])
@@ -904,7 +1055,6 @@ class Heat(Simulation):
             init_temp[:, iii] = np.interp(distances, d_mid, input_init_temp[:, iii])
         temp_map[0, :, :] = init_temp  # this is initial temperature before the simulation starts
 
-        num_ex = 1  # excitation counter
         excitation_delays = np.array([])
         temp = []
         # traverse excitations
@@ -939,16 +1089,14 @@ class Heat(Simulation):
                 if np.sum(fluence) == 0:
                     self.disp_message("Calculating _heat_diffusion_ without excitation...")
                 else:
-                    if len(fluence) == 1:
-                        self.disp_message(
-                            "Calculating _heat_diffusion_ for excitation "
-                            + f"{num_ex:d}:{F:d} ..."
-                        )
-                    elif len(fluence) > 1:
-                        self.disp_message(
-                            "Calculating _heat_diffusion_ for excitation "
-                            + f"{num_ex:d}-{num_ex + len(fluence) - 1:d}:{F:d}..."
-                        )
+                    # the pulses by their indices, as for pulse_index
+                    pulses = self._pulse_indices(delay_pump)
+                    pulses = (
+                        f"pulse {pulses[0]}"
+                        if len(pulses) == 1
+                        else f"pulses {pulses[0]}-{pulses[-1]}"
+                    )
+                    self.disp_message(f"Calculating _heat_diffusion_ for {pulses} of {F} ...")
 
                 start = 0
                 stop = 0
@@ -989,7 +1137,7 @@ class Heat(Simulation):
                 # possible in this case OR excitation with heat diffusion and
                 # pulse_width equal to 0
                 temp, _ = self.calc_temperature_after_delta_excitation(
-                    fluence, init_temp, distances
+                    fluence, init_temp, distances, self._pulse_indices(delay_pump)[0]
                 )
                 temp = np.reshape(temp, [1, np.size(temp, 0), np.size(temp, 1)])
             else:
@@ -1005,9 +1153,6 @@ class Heat(Simulation):
                 init_temp = special_init_temp
             else:
                 init_temp = temp_map[-1, :, :].copy()
-            # increase excitation counter
-            if np.sum(fluence) > 0:
-                num_ex += len(fluence)
 
         if not np.array_equal(excitation_delays, delays.to("s").magnitude) or self.heat_diffusion:
             # if the time grid for the calculation is not the same as
@@ -1060,7 +1205,9 @@ class Heat(Simulation):
                 temperature scalar or array (K).
             distances (ndarray[float]): spatial grid for calculation.
             delays (ndarray[Quantity]): delays range of simulation (s).
-            delay_pump (ndarray[float]): delays of the excitations.
+            delay_pump (ndarray[float]): delays of the excitations, which
+                select the pulses of the ``excitation`` for their absorption
+                profiles.
             pulse_width (ndarray[float]): pulse widths of the excitations.
             fluence (ndarray[float]): excitation fluences.
 
@@ -1069,14 +1216,19 @@ class Heat(Simulation):
 
         """
         t1 = time()
-        backside = self._excitation["backside"]
         init_temp = self.check_initial_temperature(init_temp, distances)
         d_start, _, _ = self.S._layer_distances()
 
         if np.any(fluence):
-            dAdz = self.get_absorption_profile(distances=distances, backside=backside)
+            # one absorption profile per pulse
+            dAdz = np.array(
+                [
+                    self.get_absorption_profile(distances=distances, pulse_index=index)
+                    for index in self._pulse_indices(delay_pump)
+                ]
+            )
         else:
-            dAdz = np.zeros_like(distances)
+            dAdz = np.zeros((len(fluence), len(distances)))
 
         # indices of the unique layers in respect to the spatial grid, so that
         # the solver can group the grid points of identical layers
@@ -1127,6 +1279,8 @@ class Heat(Simulation):
             self.disp_message(f"Elapsed time for _heat_diffusion_: {time() - t1:f} s")
 
         return temp_map
+
+    # ---- energy -----------------------------------------------------------------
 
     def get_energy_map(self, temp_map, init_temp=None):
         """get_energy_map
@@ -1310,6 +1464,8 @@ class Heat(Simulation):
 
         return energy_flux_map
 
+    # ---- properties -------------------------------------------------------------
+
     @property
     def backend(self):
         return self._backend
@@ -1327,141 +1483,41 @@ class Heat(Simulation):
 
     @property
     def excitation(self):
-        # Convert to from default SI units to real quantities
+        # Convert to from default SI units to real quantities, where the
+        # per-pulse parameters are given once, if they are the same for all
+        # pulses
+        values = {key: self._pulse_values(key) for key in _PULSE_KEYS}
         excitation = {
             "fluence": Q_(self._excitation["fluence"], u.J / u.m**2).to("mJ/cm**2"),
             "delay_pump": Q_(self._excitation["delay_pump"], u.s).to("ps"),
             "pulse_width": Q_(self._excitation["pulse_width"], u.s).to("ps"),
-            "wavelength": Q_(self._excitation["wavelength"], u.m).to("nm"),
-            "theta": Q_(self._excitation["theta"], u.rad).to("deg"),
-            "azimuth": Q_(self._excitation["azimuth"], u.rad).to("deg"),
-            "polarization": self._excitation["polarization"],
-            "absorption": self._excitation["absorption"],
-            "backside": self._excitation["backside"],
+            "wavelength": Q_(values["wavelength"], u.m).to("nm"),
+            "theta": Q_(values["theta"], u.rad).to("deg"),
+            "azimuth": Q_(values["azimuth"], u.rad).to("deg"),
+            "polarization": values["polarization"],
+            "absorption": values["absorption"],
+            "backside": values["backside"],
         }
 
         return excitation
 
     @excitation.setter
     def excitation(self, excitation):
-        # check the size of excitation, if we have a multipulse excitation
-        if isinstance(excitation, Q_):
-            # just a fluence is given
-            self._excitation["fluence"] = np.atleast_1d(
-                np.asarray(excitation.to("J/m**2").magnitude, dtype=float)
-            )
-        elif isinstance(excitation, dict):
-            if "multilayer_absorption" in excitation:
-                raise TypeError(
-                    "The excitation key multilayer_absorption was replaced by absorption, "
-                    "which is lambert_beer or a multilayer formalism, e.g. Parratt by default!"
-                )
-            absorption = excitation.get("absorption", self._excitation["absorption"])
-            given = [key for key in _FORMALISM_KEYS if key in excitation]
-            if isinstance(absorption, MultilayerScattering) and given:
-                raise ValueError(
-                    f"The {', '.join(given)} of the excitation must not be given for a "
-                    "configured instance as absorption, which defines them!"
-                )
-            if "absorption" in excitation:
-                self._set_absorption(excitation["absorption"])
-            # a scalar is a single pulse
-            for key, unit in [("fluence", "J/m**2"), ("delay_pump", "s"), ("pulse_width", "s")]:
-                if key in excitation:
-                    self._excitation[key] = np.atleast_1d(
-                        np.asarray(excitation[key].to(unit).magnitude, dtype=float)
-                    )
-            if "wavelength" in excitation:
-                self._excitation["wavelength"] = excitation["wavelength"].to("m").magnitude
-            if "theta" in excitation:
-                self._excitation["theta"] = excitation["theta"].to("rad").magnitude
-            if "azimuth" in excitation:
-                azimuth = excitation["azimuth"].to("rad").magnitude
-                if np.size(azimuth) != 1:
-                    raise ValueError(
-                        "The azimuth of the excitation must be a single angle for all pulses!"
-                    )
-                self._excitation["azimuth"] = float(np.squeeze(azimuth))
-            if "polarization" in excitation:
-                polarization = excitation["polarization"]
-                # the name of the formalisms, e.g. "pi" for "p"
-                state = MultilayerScattering._polarization_ids.get(polarization)
-                if polarization == "none" or state not in range(5):
-                    raise ValueError(
-                        f"The polarization of the excitation must be one of "
-                        f"{', '.join(_POLARIZATIONS)}, or c+, c-, s, and p for short, "
-                        f"but not {polarization!r}!"
-                    )
-                self._excitation["polarization"] = MultilayerScattering.polarizations[state]
-            if "backside" in excitation:
-                self._excitation["backside"] = bool(excitation["backside"])
-        else:
-            raise ValueError("_excitation_ must be either a float/int or dict!")
+        # the excitation is kept as it was for an invalid excitation
+        previous = {
+            key: value.copy() if isinstance(value, (np.ndarray, list)) else value
+            for key, value in self._excitation.items()
+        }
+        try:
+            self._set_excitation(excitation)
+        except Exception:
+            self._excitation = previous
+            raise
 
-        if not (
-            len(self._excitation["fluence"])
-            == len(self._excitation["delay_pump"])
-            == len(self._excitation["pulse_width"])
-        ):
-            raise ValueError(
-                "Elements of excitation dict, fluence, delay_pump, "
-                "and pulse_width must have "
-                "the same number of elements!"
-            )
-
-        # check the elements of the delay_pump vector
-        if len(self._excitation["delay_pump"]) != len(np.unique(self._excitation["delay_pump"])):
-            raise ValueError("The excitations have to be unique in delays!")
-        # sort the pulses by their delays
-        order = np.argsort(self._excitation["delay_pump"])
-        for key in ("fluence", "delay_pump", "pulse_width"):
-            self._excitation[key] = np.asarray(self._excitation[key], dtype=float)[order]
-
-    def _set_absorption(self, absorption):
-        """sets the ``absorption`` of the excitation and, for a configured
-        formalism, the ``wavelength``, ``theta``, ``azimuth``, and
-        ``polarization`` by it"""
-        if isinstance(absorption, str):
-            if absorption != "lambert_beer":
-                raise ValueError(
-                    f"The absorption of the excitation must be lambert_beer or a multilayer "
-                    f"formalism, but not {absorption!r}!"
-                )
-        elif isinstance(absorption, MultilayerScattering):
-            if absorption.S is not self.S:
-                raise ValueError(
-                    "The absorption formalism of the excitation must be created for the "
-                    "structure of the heat simulation!"
-                )
-            if (
-                np.size(absorption.energy.magnitude) != 1
-                or np.size(absorption.theta.magnitude) != 1
-                or np.atleast_2d(absorption.pol_in).shape[0] != 1
-            ):
-                raise ValueError(
-                    "The absorption formalism of the excitation must have a single energy, "
-                    "angle, and incoming polarization!"
-                )
-            self._excitation["wavelength"] = float(absorption.wl.to("m").magnitude.flat[0])
-            self._excitation["theta"] = float(absorption.theta.to("rad").magnitude.flat[0])
-            self._excitation["azimuth"] = float(absorption.azimuth.to("rad").magnitude)
-            self._excitation["polarization"] = absorption.polarizations[absorption.pol_in_state]
-        elif not (isinstance(absorption, type) and issubclass(absorption, MultilayerScattering)):
-            raise TypeError(
-                "The absorption of the excitation must be lambert_beer or a multilayer "
-                "formalism, e.g. Parratt!"
-            )
-        self._excitation["absorption"] = absorption
-
-    def _absorption_name(self):
-        """name of the absorption of the excitation, i.e. lambert_beer or the
-        name of the multilayer formalism"""
-        absorption = self._excitation["absorption"]
-        if isinstance(absorption, str):
-            return absorption
-        if isinstance(absorption, MultilayerScattering):
-            return type(absorption).__name__
-        return absorption.__name__
+    @property
+    def num_pulses(self):
+        """int: number of pulses of the excitation, at least 1."""
+        return max(len(self._excitation["fluence"]), 1)
 
     @property
     def boundary_conditions(self):
@@ -1554,3 +1610,253 @@ class Heat(Simulation):
     @distances.setter
     def distances(self, distances):
         self._distances = distances.to_base_units().magnitude
+
+    # ---- excitation -------------------------------------------------------------
+
+    def _set_excitation(self, excitation):
+        """sets and checks the excitation, see :attr:`excitation`"""
+        # check the size of excitation, if we have a multipulse excitation
+        if isinstance(excitation, Q_):
+            # just a fluence is given
+            self._excitation["fluence"] = np.atleast_1d(
+                np.asarray(excitation.to("J/m**2").magnitude, dtype=float)
+            )
+        elif isinstance(excitation, dict):
+            if "multilayer_absorption" in excitation:
+                raise TypeError(
+                    "The excitation key multilayer_absorption was replaced by absorption, "
+                    "which is lambert_beer or a multilayer formalism, e.g. Parratt by default!"
+                )
+            # a scalar is a single pulse
+            for key, unit in [("fluence", "J/m**2"), ("delay_pump", "s"), ("pulse_width", "s")]:
+                if key in excitation:
+                    self._excitation[key] = np.atleast_1d(
+                        np.asarray(excitation[key].to(unit).magnitude, dtype=float)
+                    )
+            # the per-pulse parameters are scalars for all pulses or given per pulse
+            absorption = self._excitation["absorption"]
+            if "absorption" in excitation:
+                absorption = self._check_per_pulse(
+                    excitation["absorption"], self._check_absorption
+                )
+            given = [key for key in _INSTANCE_KEYS if key in excitation]
+            if isinstance(absorption, MultilayerScattering) and given:
+                raise ValueError(
+                    f"The {', '.join(given)} of the excitation must not be given for a "
+                    "configured instance as absorption, which defines them!"
+                )
+            for key, unit in [("wavelength", "m"), ("theta", "rad"), ("azimuth", "rad")]:
+                if key in excitation:
+                    value = np.asarray(excitation[key].to(unit).magnitude, dtype=float)
+                    self._excitation[key] = float(value) if value.ndim == 0 else value.ravel()
+            if "polarization" in excitation:
+                self._excitation["polarization"] = self._check_per_pulse(
+                    excitation["polarization"], self._check_polarization
+                )
+            if "backside" in excitation:
+                backside = excitation["backside"]
+                self._excitation["backside"] = (
+                    np.asarray(backside, dtype=bool)
+                    if self._is_per_pulse(backside)
+                    else bool(backside)
+                )
+            self._excitation["absorption"] = absorption
+            self._set_instance_parameters(given)
+        else:
+            raise ValueError("_excitation_ must be either a float/int or dict!")
+
+        if not (
+            len(self._excitation["fluence"])
+            == len(self._excitation["delay_pump"])
+            == len(self._excitation["pulse_width"])
+        ):
+            raise ValueError(
+                "Elements of excitation dict, fluence, delay_pump, "
+                "and pulse_width must have "
+                "the same number of elements!"
+            )
+        num_pulses = len(self._excitation["delay_pump"])
+        for key in _PULSE_KEYS:
+            value = self._excitation[key]
+            if self._is_per_pulse(value) and len(value) != num_pulses:
+                raise ValueError(
+                    f"The {key} of the excitation must be a single value for all pulses or "
+                    f"one value for each of the {num_pulses} pulse(s)!"
+                )
+
+        # check the elements of the delay_pump vector
+        if len(self._excitation["delay_pump"]) != len(np.unique(self._excitation["delay_pump"])):
+            raise ValueError("The excitations have to be unique in delays!")
+        # sort the pulses and their per-pulse parameters by their delays
+        order = np.argsort(self._excitation["delay_pump"])
+        for key in ("fluence", "delay_pump", "pulse_width"):
+            self._excitation[key] = np.asarray(self._excitation[key], dtype=float)[order]
+        for key in _PULSE_KEYS:
+            value = self._excitation[key]
+            if isinstance(value, np.ndarray):
+                self._excitation[key] = value[order]
+            elif self._is_per_pulse(value):
+                self._excitation[key] = [value[i] for i in order]
+
+    def _check_per_pulse(self, value, check):
+        """a single checked value for all pulses or a list of checked values
+        for each pulse"""
+        if self._is_per_pulse(value):
+            return [check(item) for item in value]
+        return check(value)
+
+    @staticmethod
+    def _check_polarization(polarization):
+        """name of the polarization of the multilayer formalisms, e.g. pi for p"""
+        state = MultilayerScattering._polarization_ids.get(polarization)
+        if polarization == "none" or state not in range(5):
+            raise ValueError(
+                f"The polarization of the excitation must be one of "
+                f"{', '.join(_POLARIZATIONS)}, or c+, c-, s, and p for short, "
+                f"but not {polarization!r}!"
+            )
+        return MultilayerScattering.polarizations[state]
+
+    def _check_absorption(self, absorption):
+        """checked ``absorption`` of a pulse"""
+        if isinstance(absorption, str):
+            if absorption != "lambert_beer":
+                raise ValueError(
+                    f"The absorption of the excitation must be lambert_beer or a multilayer "
+                    f"formalism, but not {absorption!r}!"
+                )
+        elif isinstance(absorption, MultilayerScattering):
+            if absorption.S is not self.S:
+                raise ValueError(
+                    "The absorption formalism of the excitation must be created for the "
+                    "structure of the heat simulation!"
+                )
+            if (
+                np.size(absorption.energy.magnitude) != 1
+                or np.size(absorption.theta.magnitude) != 1
+                or np.atleast_2d(absorption.pol_in).shape[0] != 1
+            ):
+                raise ValueError(
+                    "The absorption formalism of the excitation must have a single energy, "
+                    "angle, and incoming polarization!"
+                )
+        elif not (isinstance(absorption, type) and issubclass(absorption, MultilayerScattering)):
+            raise TypeError(
+                "The absorption of the excitation must be lambert_beer or a multilayer "
+                "formalism, e.g. Parratt!"
+            )
+        return absorption
+
+    @staticmethod
+    def _instance_parameters(formalism):
+        """``wavelength``, ``theta``, ``azimuth``, and ``polarization`` of a
+        configured formalism"""
+        return {
+            "wavelength": float(formalism.wl.to("m").magnitude.flat[0]),
+            "theta": float(formalism.theta.to("rad").magnitude.flat[0]),
+            "azimuth": float(formalism.azimuth.to("rad").magnitude),
+            "polarization": formalism.polarizations[formalism.pol_in_state],
+        }
+
+    def _set_instance_parameters(self, given):
+        """sets the ``wavelength``, ``theta``, ``azimuth``, and
+        ``polarization`` of the pulses with a configured formalism as
+        ``absorption`` by it, where the ``given`` per-pulse values of these
+        pulses must agree with the formalism"""
+        absorption = self._excitation["absorption"]
+        if isinstance(absorption, MultilayerScattering):
+            self._excitation.update(self._instance_parameters(absorption))
+            return
+        if not self._is_per_pulse(absorption):
+            return
+        for index, formalism in enumerate(absorption):
+            if not isinstance(formalism, MultilayerScattering):
+                continue
+            for key, value in self._instance_parameters(formalism).items():
+                stored = self._excitation[key]
+                if self._is_per_pulse(stored):
+                    if key in given and not (
+                        stored[index] == value
+                        if key == "polarization"
+                        else np.isclose(stored[index], value)
+                    ):
+                        raise ValueError(
+                            f"The {key} of the pulse {index} is defined by its configured "
+                            "instance as absorption and must not be given differently!"
+                        )
+                else:
+                    # one value per pulse
+                    stored = [stored] * len(absorption)
+                    stored = stored if key == "polarization" else np.asarray(stored, dtype=float)
+                stored[index] = value
+                self._excitation[key] = stored
+
+    @staticmethod
+    def _is_per_pulse(value):
+        """the value is given per pulse"""
+        return isinstance(value, (list, tuple)) or (
+            isinstance(value, np.ndarray) and value.ndim > 0
+        )
+
+    def _check_pulse_index(self, pulse_index):
+        """the checked non-negative index of a pulse"""
+        index = operator.index(pulse_index)
+        if not -self.num_pulses <= index < self.num_pulses:
+            raise IndexError(
+                f"The pulse index {pulse_index} is out of range for {self.num_pulses} pulse(s)!"
+            )
+        return index % self.num_pulses
+
+    def _pulse_indices(self, delay_pump):
+        """indices of the pulses of the excitation by their delays"""
+        delays = np.asarray(self._excitation["delay_pump"], dtype=float)
+        indices = []
+        for delay in np.atleast_1d(delay_pump):
+            match = np.flatnonzero(np.isclose(delays, delay, rtol=1e-12, atol=0))
+            if match.size == 0:
+                raise ValueError(f"There is no pulse of the excitation at the delay {delay} s!")
+            indices.append(int(match[0]))
+        return indices
+
+    def _pulse(self, index):
+        """the per-pulse excitation parameters of a pulse"""
+        pulse = {}
+        for key in _PULSE_KEYS:
+            value = self._excitation[key]
+            pulse[key] = value[index] if self._is_per_pulse(value) else value
+        pulse["backside"] = bool(pulse["backside"])
+        return pulse
+
+    def _pulse_key(self, index):
+        """hashable key of the parameters of a pulse, which define its
+        absorption profile"""
+        pulse = self._pulse(index)
+        absorption = pulse["absorption"]
+        if isinstance(absorption, MultilayerScattering):
+            # a configured instance by its identity
+            absorption = id(absorption)
+        return tuple(absorption if key == "absorption" else pulse[key] for key in _PULSE_KEYS)
+
+    def _pulse_values(self, key):
+        """a per-pulse parameter of all pulses, which is a single value, if
+        it is the same for all pulses"""
+        values = [self._pulse(i)[key] for i in range(self.num_pulses)]
+        if all(value is values[0] or value == values[0] for value in values):
+            return values[0]
+        if key in ("wavelength", "theta", "azimuth"):
+            return np.asarray(values, dtype=float)
+        return values
+
+    def _absorption_name(self):
+        """name of the absorption of the excitation, i.e. lambert_beer or the
+        name of the multilayer formalism, or a list of them for each pulse"""
+
+        def name(absorption):
+            if isinstance(absorption, str):
+                return absorption
+            if isinstance(absorption, MultilayerScattering):
+                return type(absorption).__name__
+            return absorption.__name__
+
+        names = [name(self._pulse(i)["absorption"]) for i in range(self.num_pulses)]
+        return names[0] if len(set(names)) == 1 else names

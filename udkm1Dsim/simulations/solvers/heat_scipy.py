@@ -102,7 +102,8 @@ def solve(
         densities (ndarray[float]): densities of all unique layers (kg/m³).
         indices (ndarray[int]): indices of unique layers in respect to
             interpolated spatial grid.
-        dAdz (ndarray[float]): differential absorption profile (1/m).
+        dAdz (ndarray[float]): differential absorption profile (1/m) of all
+            pulses or of shape (P, N) for each of the P pulses.
         boundary_conditions (dict): boundary conditions with keys
             ``top_type``, ``top_value``, ``bottom_type``, and
             ``bottom_value``.
@@ -254,7 +255,8 @@ def odefunc(
             (kg/m³).
         groups (list[tuple]): layer index and indices of its grid points
             for each layer.
-        dAdz (ndarray[float]): differential absorption profile (1/m).
+        dAdz (ndarray[float]): differential absorption profile (1/m) of all
+            pulses or of shape (P, N) for each of the P pulses.
         fluence (ndarray[float]): excitation fluences (J/m²).
         delay_pump (ndarray[float]): delays of the excitations (s).
         pulse_length (ndarray[float]): pulse widths of the excitations (s).
@@ -300,7 +302,15 @@ def odefunc(
     # calculate external source
     source = np.zeros([N, K])
     if np.any(fluence):
-        source[:, 0] = dAdz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
+        if np.ndim(dAdz) == 1:
+            source[:, 0] = dAdz * multi_gauss(t, s=pulse_length, x0=delay_pump, A=fluence)
+        else:
+            # one absorption profile per pulse
+            pulses = [
+                multi_gauss(t, s=[s], x0=[x0], A=[A])
+                for s, x0, A in zip(pulse_length, delay_pump, fluence)
+            ]
+            source[:, 0] = np.dot(np.ravel(pulses), dAdz)
 
     # calculate temperature-dependent parameters once per layer for all of
     # its grid points - vector arguments index the sub-systems along axis 0

@@ -81,7 +81,8 @@ def solve(
             (kg/m³).
         indices (ndarray[int]): indices of actual layers in respect to
             interpolated spatial grid.
-        dAdz (ndarray[float]): differential absorption profile.
+        dAdz (ndarray[float]): differential absorption profile of all pulses
+            or of shape (P, N) for each of the P pulses.
         boundary_conditions (dict{str, int, ndarray[float]}): boundary
             conditions of the top and bottom boundary.
         ode_options (dict): options of the scipy solve_ivp ode solver, unused

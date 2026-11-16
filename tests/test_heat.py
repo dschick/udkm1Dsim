@@ -242,8 +242,8 @@ def test_absorption_conserves_energy(tmp_path, polarization, theta, backside):
     # midpoint rule, as the absorption jumps at the interfaces
     thickness = S.interface_distances[-1].to("m").magnitude
     distances = (np.arange(20000) + 0.5) * thickness / 20000
-    dAdz = heat.get_absorption_profile(distances, backside)
-    formalism = heat.create_multilayer_formalism(backside=backside)
+    dAdz = heat.get_absorption_profile(distances)
+    formalism = heat.create_multilayer_formalism()
     R = formalism.calc_homogeneous_reflectivity_transmissivity()[0]
     T = formalism.calc_homogeneous_absorption()[8]
     absorbed = np.sum(dAdz) * thickness / 20000
@@ -341,11 +341,12 @@ def test_absorption_instance(tmp_path):
         with pytest.raises(ValueError, match=key):
             heat.excitation = {"absorption": formalism, key: value}
     # a backside excitation by a copy of the formalism for the reversed structure
-    dAdz = heat.get_absorption_profile(backside=True)
+    heat.excitation = {"backside": True}
+    dAdz = heat.get_absorption_profile()
     assert formalism.S is S
     heat.excitation = {"absorption": Elzo}
-    np.testing.assert_allclose(heat.get_absorption_profile(backside=True), dAdz, rtol=1e-12)
-    heat.excitation = {"absorption": formalism}
+    np.testing.assert_allclose(heat.get_absorption_profile(), dAdz, rtol=1e-12)
+    heat.excitation = {"absorption": formalism, "backside": False}
     with pytest.raises(ValueError, match="structure"):
         heat.excitation = {"absorption": Elzo(optical_stack(), True)}
     formalism.theta = [30, 40] * u.deg
@@ -511,6 +512,155 @@ def test_get_diffusion_temp_map(heat):
     excited = temp_map[after][0]
     assert temp_map[-1, 0] < excited[0]
     assert np.any(temp_map[-1] > excited + 1e-3)
+
+
+def two_pulses(**excitation):
+    """two pulses of different wavelength, angle, polarization, and side"""
+    return {
+        "fluence": [3, 5] * u.mJ / u.cm**2,
+        "delay_pump": [10, 0] * u.ps,
+        "pulse_width": [0, 0] * u.ps,
+        "wavelength": [400, 800] * u.nm,
+        "theta": [70, 45] * u.deg,
+        "polarization": ["s", "pi"],
+        "absorption": Parratt,
+        "backside": [True, False],
+        **excitation,
+    }
+
+
+def test_per_pulse_excitation(tmp_path):
+    """the per-pulse parameters are sorted by the delays together with the
+    pulses and are given once for identical pulses"""
+    heat = optical_heat(optical_stack(), tmp_path)
+    heat.excitation = two_pulses()
+    excitation = heat.excitation
+    assert heat.num_pulses == 2
+    assert_allclose(excitation["delay_pump"], [0, 10] * u.ps)
+    assert_allclose(excitation["fluence"], [5, 3] * u.mJ / u.cm**2)
+    assert_allclose(excitation["wavelength"], [800, 400] * u.nm)
+    assert_allclose(excitation["theta"], [45, 70] * u.deg)
+    assert excitation["polarization"] == ["pi", "sigma"]
+    assert excitation["backside"] == [False, True]
+    assert excitation["absorption"] is Parratt
+    assert_allclose(excitation["azimuth"], 0 * u.deg)
+    # the footprint of each pulse
+    _, fluence, _, _ = heat.check_excitation(np.r_[-1:20:1] * u.ps)
+    np.testing.assert_allclose(fluence, [50 * np.sin(np.pi / 4), 30 * np.sin(np.radians(70))])
+    assert "['pi', 'sigma']" in repr(heat)
+    # per-pulse values of the wrong length
+    with pytest.raises(ValueError, match="each of the 2 pulse"):
+        heat.excitation = {"wavelength": [400, 800, 600] * u.nm}
+    # mixed absorption of a configured instance and Lambert-Beer
+    # created for the frontside pulse, i.e. the structure of the simulation
+    formalism = heat.create_multilayer_formalism(Elzo, pulse_index=0)
+    heat.excitation = {"absorption": ["lambert_beer", formalism]}
+    assert heat._absorption_name() == ["lambert_beer", "Elzo"]
+    assert heat.create_multilayer_formalism(pulse_index=1) is not formalism  # backside copy
+    heat.excitation = {"wavelength": 600 * u.nm}
+    # the instance keeps the wavelength of its pulse
+    assert_allclose(heat.excitation["wavelength"], [600, 800] * u.nm)
+    with pytest.raises(ValueError, match="pulse 1"):
+        heat.excitation = {"wavelength": [600, 500] * u.nm}
+
+
+def test_per_pulse_absorption_profiles(tmp_path, monkeypatch):
+    """every pulse has its own absorption profile, which is calculated once
+    for identical pulses"""
+    S = optical_stack()
+    heat = optical_heat(S, tmp_path)
+    heat.excitation = two_pulses()
+    profiles = heat.get_absorption_profile()
+    assert profiles.shape == (2, S.num_layers)
+    for index in range(2):
+        np.testing.assert_array_equal(
+            heat.get_absorption_profile(pulse_index=index), profiles[index]
+        )
+    # the profiles of the single pulses
+    for index, (wavelength, theta, polarization, backside) in enumerate(
+        [(800, 45, "pi", False), (400, 70, "sigma", True)]
+    ):
+        single = optical_heat(
+            S,
+            tmp_path,
+            wavelength=wavelength * u.nm,
+            theta=theta * u.deg,
+            polarization=polarization,
+            backside=backside,
+        )
+        np.testing.assert_allclose(single.get_absorption_profile(), profiles[index], rtol=1e-12)
+    np.testing.assert_array_equal(heat.get_absorption_profile(pulse_index=-1), profiles[1])
+    with pytest.raises(IndexError):
+        heat.get_absorption_profile(pulse_index=2)
+    # identical pulses share their calculation
+    calls = []
+    calculate = heat._multilayer_absorption
+    monkeypatch.setattr(
+        heat, "_multilayer_absorption", lambda *args: calls.append(args[1]) or calculate(*args)
+    )
+    heat.excitation = two_pulses(wavelength=800 * u.nm, theta=45 * u.deg, backside=False)
+    heat.excitation = {"polarization": "pi"}
+    profiles = heat.get_absorption_profile()
+    assert calls == [0]
+    np.testing.assert_array_equal(profiles[0], profiles[1])
+    # Lambert-Beer for all pulses, but the multilayer formalism only for its pulses
+    heat.excitation = {"absorption": ["lambert_beer", Parratt]}
+    assert heat.get_absorption_from_lambert_beer().shape == (2, S.num_layers)
+    heat.get_absorption_from_multilayer(pulse_index=1)
+    with pytest.raises(ValueError, match="Lambert-Beer"):
+        heat.get_absorption_from_multilayer()
+
+
+def test_per_pulse_temp_map(heat, tmp_path, monkeypatch, capsys):
+    """the absorbed energy of pulses with different wavelengths, angles, and
+    polarizations, which is conserved by isolating boundaries, and the
+    absorption profiles in the result, which are calculated once per grid and
+    reported once per pulse"""
+    delays = np.r_[-1:10:0.01] * u.ps
+    heat.heat_diffusion = True
+    heat.boundary_conditions = {"top_type": "isolator", "bottom_type": "isolator"}
+    heat.excitation = {
+        "fluence": [5, 5] * u.mJ / u.cm**2,
+        "delay_pump": [0, 3] * u.ps,
+        "pulse_width": [0.1, 0.1] * u.ps,
+        "wavelength": [800, 400] * u.nm,
+        "theta": [45, 70] * u.deg,
+        "polarization": ["pi", "sigma"],
+        "absorption": Parratt,
+        "backside": False,
+    }
+    calls = []
+    calculate = heat._multilayer_absorption
+    monkeypatch.setattr(
+        heat, "_multilayer_absorption", lambda *args: calls.append(args[1]) or calculate(*args)
+    )
+    capsys.readouterr()
+    res = heat.get_temp_map(delays, 300 * u.K)
+    # on the grid of the heat diffusion and at the layer centers of the result
+    assert sorted(calls) == [0, 0, 1, 1]
+    reports = [line for line in capsys.readouterr().out.splitlines() if "Absorption of" in line]
+    assert len(reports) == 2
+    assert "pulse 1 at 3 ps by Parratt for 400 nm, theta = 70 deg" in reports[1]
+    assert "reflection of" in reports[1]
+    monkeypatch.undo()
+    assert res.dims("absorption") == ("pulses", "distances")
+    np.testing.assert_allclose(res.absorption, heat.get_absorption_profile())
+    assert np.max(np.abs(res.absorption[0] - res.absorption[1])) > 0.1 * np.max(res.absorption)
+    thicknesses = heat.S.get_layer_property_vector("structural.thickness.magnitude")
+    densities = heat.S.get_layer_property_vector("structural.density.magnitude")
+    energy = (res.temp_map - 300) @ (500 * densities * thicknesses)
+    # absorbed energy per area of each pulse on the surface
+    surface = np.r_[50 * np.sin(np.pi / 4), 50 * np.sin(np.radians(70))]
+    absorbed = surface * (res.absorption @ thicknesses)
+    t = delays.to("ps").magnitude
+    np.testing.assert_allclose(energy[(t > 1) & (t < 2)], absorbed[0], rtol=2e-2)
+    np.testing.assert_allclose(energy[t > 4], absorbed.sum(), rtol=2e-2)
+    # the per-pulse parameters are saved in the metadata
+    res.save(tmp_path / "temp_map.h5")
+    loaded = type(res).load(tmp_path / "temp_map.h5")
+    assert list(loaded.attrs["parameters"]["excitation"]["polarization"]) == ["pi", "sigma"]
+    heat.excitation = {"wavelength": [800, 600] * u.nm}
+    assert heat.get_hash(delays, 300) != res.attrs["hash"]
 
 
 @pytest.mark.skipif(not HAS_NUMBA, reason="numba is not installed")
