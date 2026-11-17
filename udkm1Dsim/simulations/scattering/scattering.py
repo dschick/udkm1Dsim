@@ -36,9 +36,10 @@ from tqdm.auto import tqdm
 
 from ...helpers import make_hash_md5
 from ...structures.layers import Layer, UnitCell, Vacuum
-from ..parameter_groups import ExperimentParameters
+from ..parameter_groups import ExperimentParameters, InstrumentParameters
 from ..result import Result
 from ..simulation import Simulation
+from . import instrument as _instrument
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -120,6 +121,9 @@ class Scattering(Simulation):
         qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         experiment (ExperimentParameters): photon energies and angles in SI
             units and eV, which also hold the depending quantities.
+        instrument (InstrumentParameters): angular and spectral resolution,
+            source spectrum, footprint, offsets, intensity, and background,
+            which are applied to the intensities of the results.
         polarizations (dict): polarization states and according names, where
             ``c+``, ``c-``, ``s``, and ``p`` can also be given for ``circ +``,
             ``circ -``, ``sigma``, and ``pi``.
@@ -159,6 +163,7 @@ class Scattering(Simulation):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.experiment = ExperimentParameters()
+        self.instrument = InstrumentParameters()
 
         self._pol_in_state = 3  # sigma
         self._pol_out_state = 0  # no analyzer
@@ -340,6 +345,7 @@ class Scattering(Simulation):
             ["q_z", self._format_range(self.qz)],
             ["incoming polarization", self.polarizations[self.pol_in_state]],
             ["analyzer polarization", self.polarizations[self.pol_out_state]],
+            ["instrument", "active" if self.instrument.is_active else "none"],
         ]
         return super()._property_rows() + output
 
@@ -352,6 +358,7 @@ class Scattering(Simulation):
             "analyzer_polarization": self.polarizations[self.pol_out_state],
             "pol_in": self.pol_in,
             "pol_out": self.pol_out,
+            "instrument": self.instrument.to_dict(),
         }
 
     @property
@@ -487,6 +494,9 @@ class Scattering(Simulation):
             self.experiment.energy.magnitude,
             strain_vectors,
         ]
+        if self.instrument.is_active:
+            # only an instrument changes the hash of former results
+            param.append(("instrument", self.instrument._hash_items()))
 
         if "strain_map" in kwargs:
             strain_map = kwargs.get("strain_map")
@@ -522,6 +532,224 @@ class Scattering(Simulation):
 
         """
         return np.sqrt((1 - self.pol_in) + self.pol_in * np.cos(2 * theta) ** 2)
+
+    # ---- instrument function ----------------------------------------------------
+
+    def apply_instrument(self, calc, kinds, finish=None, lead=0):
+        r"""apply_instrument
+
+        Applies the :attr:`instrument` to the intensities of
+        ``calc()``, which is repeated for all nodes of the quadrature with
+        the experiment set to the photon energies and angles of the nodes:
+
+        1. The ``theta_offset`` and ``energy_offset`` are added.
+        2. For each component of the ``spectrum`` and each energy node, the
+           photon energies, or the angles for the ``'qz'`` energy mode, are
+           set, and for each angular node the angles.
+        3. The reflected intensities are multiplied by the ``footprint`` at
+           the angles of the node and all are summed with the weights of the
+           nodes and components.
+        4. The ``'convolution'`` modes convolve the sums along the energies
+           and the angles of the experiment.
+        5. The sums are reduced by ``finish``, e.g. to the rotation of the
+           polarization, and the intensities are scaled to
+           :math:`I_0 I + I_\mathrm{bkg}`.
+
+        Without an active instrument, the values of ``calc()`` are returned
+        as they are, reduced by ``finish``.
+
+        Args:
+            calc (callable): returns a tuple of arrays of the experiment with
+                the energies at the axis ``lead`` and the angles at the axis
+                ``lead + 1``.
+            kinds (tuple[str]): kind of each value, i.e. ``'reflected'`` and
+                ``'transmitted'`` intensities, which are scaled by
+                :math:`I_0` and the background, where only the reflected ones
+                are multiplied by the footprint, as well as ``'reflected
+                terms'`` and ``'transmitted terms'``, which are only averaged,
+                e.g. for the polarization of the light.
+            finish (callable, optional): reduces the averaged tuple of values.
+            lead (int, optional): number of leading axes, e.g. 1 for the
+                delays. Defaults to 0.
+
+        Returns:
+            values (tuple[ndarray[float]]): values with the instrument.
+
+        """
+        ins = self.instrument
+        if not ins.is_active:
+            values = calc()
+            return finish(values) if finish is not None else values
+        exp = self.experiment
+        scan = exp._scan
+        energy0 = np.array(exp.energy.magnitude, dtype=float)
+        scan0 = np.array(exp.__dict__[scan].magnitude, dtype=float)
+        theta0 = np.array(exp.theta.magnitude, dtype=float)
+        M, N = theta0.shape
+        energy = energy0 + ins.energy_offset.magnitude
+        theta = theta0 + np.deg2rad(ins.theta_offset.magnitude)
+        theta_width = np.deg2rad(self._instrument_width(ins.theta_width, (M, N), "theta_width"))
+        energy_width = self._instrument_width(ins.energy_width, (M,), "energy_width")
+        theta_nodes = (
+            self._instrument_nodes("theta")
+            if ins.theta_mode == "quadrature"
+            else (np.zeros(1), np.ones(1))
+        )
+        energy_nodes = (
+            self._instrument_nodes("energy")
+            if ins.energy_mode != "convolution"
+            else (np.zeros(1), np.ones(1))
+        )
+        if ins.energy_mode == "convolution" and ins.energy_resolution != "none":
+            if M > 1 and not np.allclose(theta0, theta0[:1, :]):
+                raise ValueError(
+                    "The 'convolution' of the energy is done at fixed angles, which must be "
+                    "the same for all photon energies, i.e. the angles must be set by theta, "
+                    "not by qz, otherwise use the 'quadrature' energy mode!"
+                )
+        num_components = len(ins.components)
+        num_energy, num_theta = np.size(energy_nodes[0]), np.size(theta_nodes[0])
+        num_calculations = num_components * num_energy * num_theta
+        if num_calculations > 1:
+            self.disp_message(
+                f"Instrument: {num_calculations} calculations ({num_components} spectral "
+                f"component{'s' * (num_components > 1)} x {num_energy} energy "
+                f"node{'s' * (num_energy > 1)} x {num_theta} angle node{'s' * (num_theta > 1)})"
+            )
+        total = None
+        try:
+            for component in ins.components:
+                energy_c = component["factor"] * energy + component["offset"]
+                width_c = component.get("width")
+                width_c = (
+                    component["factor"] * energy_width if width_c is None else np.full(M, width_c)
+                )
+                part = None
+                for x_e, w_e in zip(*energy_nodes):
+                    for x_t, w_t in zip(*theta_nodes):
+                        th = theta + x_t * theta_width
+                        if ins.energy_mode == "qz":
+                            exp.energy = energy_c
+                            scale = 1 + x_e * width_c / energy_c
+                            th = np.arcsin(np.clip(np.sin(th) * scale[:, np.newaxis], -1, 1))
+                        else:
+                            exp.energy = energy_c + x_e * width_c
+                        exp.theta = th
+                        weights = w_e * w_t * np.ones((M, N))
+                        foot = weights * _instrument.footprint(
+                            ins.footprint,
+                            th,
+                            ins.beam_width.magnitude,
+                            ins.sample_length.magnitude,
+                        )
+                        values = calc()
+                        node = tuple(
+                            self._expand(
+                                foot if kind.startswith("reflected") else weights, v, lead
+                            )
+                            * v
+                            for kind, v in zip(kinds, values)
+                        )
+                        part = node if part is None else tuple(p + n for p, n in zip(part, node))
+                if ins.energy_mode == "convolution" and ins.energy_resolution != "none" and M > 1:
+                    # the spread of the component maps to the energies of the experiment
+                    part = tuple(
+                        _instrument.convolve_on_grid(
+                            p,
+                            lead,
+                            energy0,
+                            width_c / component["factor"],
+                            ins.energy_resolution,
+                            ins.energy_range.magnitude,
+                            ins.energy_eta.magnitude,
+                        )
+                        for p in part
+                    )
+                part = tuple(component["weight"] * p for p in part)
+                total = part if total is None else tuple(t + p for t, p in zip(total, part))
+        finally:
+            exp.energy = energy0
+            setattr(exp, scan, scan0)
+        if ins.theta_mode == "convolution" and ins.theta_resolution != "none":
+            convolved = [np.array(t, dtype=float) for t in total]
+            for i in range(M):
+                index = (slice(None),) * lead + (i,)
+                for t, c in zip(total, convolved):
+                    c[index] = _instrument.convolve_on_grid(
+                        t[index],
+                        lead,
+                        theta0[i, :],
+                        theta_width[i, :],
+                        ins.theta_resolution,
+                        ins.theta_range.magnitude,
+                        ins.theta_eta.magnitude,
+                    )
+            total = tuple(convolved)
+        if finish is not None:
+            return finish(total)
+        I0, background = ins.I0.magnitude, ins.background.magnitude
+        return tuple(
+            I0 * t + background if kind in ("reflected", "transmitted") else t
+            for kind, t in zip(kinds, total)
+        )
+
+    def _apply_instrument_with_nominal(self, calc):
+        """reflectivity of ``calc()`` with the :attr:`instrument` and the
+        second value of ``calc()``, e.g. the fields of the sub-structures, at
+        the photon energies and angles of the experiment, which is taken
+        from a node without shift, if there is one, e.g. for a convolution,
+        or calculated once more"""
+        if not self.instrument.is_active:
+            return calc()
+        energy = np.array(self.experiment.energy.magnitude)
+        theta = np.array(self.experiment.theta.magnitude)
+        nominal = []
+
+        def node():
+            R, A = calc()
+            if (
+                not nominal
+                and np.array_equal(self.experiment.energy.magnitude, energy)
+                and np.array_equal(self.experiment.theta.magnitude, theta)
+            ):
+                nominal.append(A)
+            return (R,)
+
+        (R,) = self.apply_instrument(node, ("reflected",))
+        return R, nominal[0] if nominal else calc()[1]
+
+    def _instrument_nodes(self, axis):
+        """nodes in units of the FWHM and weights of the ``axis`` of the
+        instrument, i.e. ``'theta'`` or ``'energy'``"""
+        ins = self.instrument
+        return _instrument.profile_nodes(
+            getattr(ins, f"{axis}_resolution"),
+            getattr(ins, f"{axis}_nodes"),
+            getattr(ins, f"{axis}_points").magnitude,
+            getattr(ins, f"{axis}_range").magnitude,
+            getattr(ins, f"{axis}_eta").magnitude,
+        )
+
+    @staticmethod
+    def _instrument_width(parameter, shape, name):
+        """width of the instrument broadcast to the ``shape`` of the
+        experiment, where widths along the angles are given for all
+        energies"""
+        width = np.asarray(parameter.magnitude, dtype=float)
+        try:
+            return np.broadcast_to(width, shape).copy()
+        except ValueError:
+            raise ValueError(
+                f"The {name} of the instrument of shape {width.shape} must be a scalar or "
+                f"broadcast to the shape {shape} of the experiment!"
+            ) from None
+
+    @staticmethod
+    def _expand(weights, value, lead):
+        """weights of shape (M, N) with axes for the ``lead`` axes and the
+        trailing axes of the ``value``, e.g. of several polarizations"""
+        trail = np.ndim(value) - lead - 2
+        return weights.reshape((1,) * lead + weights.shape + (1,) * trail)
 
     @property
     def energy(self):

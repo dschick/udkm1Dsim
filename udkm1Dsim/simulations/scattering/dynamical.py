@@ -149,9 +149,18 @@ class XrayDyn(Scattering):
             (tuple):
             - *R (ndarray[float])* - homogeneous reflectivity.
             - *A (list)* - reflectivity-transmission matrices of the
-              sub-structures.
+              sub-structures at the photon energies and angles of the
+              experiment.
 
         """
+        return self._apply_instrument_with_nominal(
+            lambda: self._calc_reflectivity_and_matrices(strains, temps)
+        )
+
+    def _calc_reflectivity_and_matrices(self, strains=[], temps=[]):
+        """reflectivity and reflectivity-transmission matrices of the
+        sub-structures without the instrument, see
+        :meth:`calc_homogeneous_reflectivity`"""
         self._check_experiment()
         self._warn_ignored_superstrate_and_substrate()
 
@@ -404,23 +413,27 @@ class XrayDyn(Scattering):
         if calc_type not in ["parallel", "sequential"]:
             raise TypeError("calc_type must be either _parallel_ or _sequential_!")
 
-        # optinally calculate all ref-trans matrices for all unique unitCells
-        # and for all possible strains in advance, if strain_vectors are given
-        if len(strain_vectors) > 0:
-            RTM = self._get_all_ref_trans_matrices(strain_vectors)
-        else:
-            RTM = []
+        def calc():
+            # optinally calculate all ref-trans matrices for all unique unitCells
+            # and for all possible strains in advance, if strain_vectors are given
+            if len(strain_vectors) > 0:
+                RTM = self._get_all_ref_trans_matrices(strain_vectors)
+            else:
+                RTM = []
 
-        # select the type of computation
-        if calc_type == "parallel":
-            R = self.parallel_inhomogeneous_reflectivity(
-                strain_map, strain_vectors, RTM, temp_map, dask_client
-            )
-        else:  # sequential
-            R = self.sequential_inhomogeneous_reflectivity(
-                strain_map, strain_vectors, RTM, temp_map
-            )
+            # select the type of computation
+            if calc_type == "parallel":
+                R = self.parallel_inhomogeneous_reflectivity(
+                    strain_map, strain_vectors, RTM, temp_map, dask_client
+                )
+            else:  # sequential
+                R = self.sequential_inhomogeneous_reflectivity(
+                    strain_map, strain_vectors, RTM, temp_map
+                )
+            return (R,)
 
+        # the instrument repeats the calculation for its nodes
+        (R,) = self.apply_instrument(calc, ("reflected",), lead=1)
         return R
 
     def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM, temp_map):

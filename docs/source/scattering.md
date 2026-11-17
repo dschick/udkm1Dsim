@@ -14,11 +14,18 @@
     :members:
 ```
 
-### Experiment parameters: `simulations.parameter_groups`
+### Experiment and instrument parameters: `simulations.parameter_groups`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.parameter_groups
     :show-inheritance:
+    :members:
+```
+
+### Instrument function: `scattering.instrument`
+
+```{eval-rst}
+.. automodule:: udkm1Dsim.simulations.scattering.instrument
     :members:
 ```
 

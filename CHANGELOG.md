@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- the instrument function of all scattering simulations by the `InstrumentParameters` in `sim.instrument`, which apply to the reflectivity of `XrayKin` and `XrayDyn` and the reflectivity, transmissivity, rotation, and ellipticity of the multilayer formalisms, also of their `calc_*()` methods, e.g. for fits, but not to the Jones matrices, fields, and absorption:
+  - the angular and spectral resolution of a `box`, `gauss`, `lorentz`, or `pseudo_voigt` profile, with all widths as FWHM in (deg) and (eV), which can also vary along the angles and energies, e.g. for a mosaicity or a curvature of the sample, by the `quadrature` over `uniform` nodes of the trapezoidal rule or Gauss-Hermite and Gauss-Legendre nodes at each point of the experiment, with the number of `points` and their `range` for the angle and the energy separately, or by the `convolution` on a dense grid of the experiment, as well as the `qz` mode for the spectral spread as spread of the angle away from resonances
+  - the `spectrum` of the source as list of dicts of the components with the `factor` and `offset` of their photon energy, their `weight`, and an optional `width`, e.g. for the Cu $K_{\alpha 1}$ and $K_{\alpha 2}$ lines or higher harmonics of a monochromator
+  - the `footprint` of a `box` or `gauss` beam of the `beam_width` (FWHM) on a sample of the `sample_length`, which scales the reflected intensities at each node
+  - the `theta_offset` and `energy_offset` of the experiment and the intensity `I0` and `background`
+  - the rotation and ellipticity follow from the averaged polarization of the light, i.e. its Stokes parameters
+  - the `convolution` of a constant width is a fast convolution on an equidistant grid, to which non-equidistant grids, e.g. the angles of a $q_z$-scan, are interpolated, while varying widths are convolved exactly by a sparse matrix
+  - the number of calculations of the instrument is displayed, if it is more than one
+  - the instrument is part of the hashes and the metadata `parameters` of the results, while the hashes without an instrument are kept
+- `udkm1Dsim.simulations.scattering.instrument` with the profiles, nodes, convolution matrices, and footprints of the instrument
+- a reference of the angular resolution and footprint of GenX in `tests/data/references/xray_instrument.npz`
+- the instrument function in the examples of the scattering overview, the data fitting, and the kinematical, dynamical, transient Debye-Waller, and resonant magnetic X-ray scattering instead of the convolution of their results, whose inhomogeneous calculations run in parallel with Dask, if it is installed, and sequentially otherwise
+
+### Changed
+
+- **breaking:** `conv_with_function()` is in `udkm1Dsim.helpers` instead of `Simulation.conv_with_function()`, e.g. for any one-dimensional result, while the instrument function of the scattering simulations replaces it in the examples
+
 ## [3.0.0a4] 2026-11-16
 
 ### Added

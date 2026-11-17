@@ -23,13 +23,14 @@
 
 """Parameter groups of the simulations."""
 
-__all__ = ["ExperimentParameters"]
+__all__ = ["ExperimentParameters", "InstrumentParameters"]
 
 __docformat__ = "restructuredtext"
 
 import numpy as np
 import pint
 import scipy.constants as constants
+from tabulate import tabulate
 
 from ..structures.parameter_groups import ParameterGroup
 from ..structures.parameters import Parameter
@@ -141,3 +142,255 @@ class ExperimentParameters(ParameterGroup):
                 )
         else:
             self.qz.magnitude = 2 * self.k.magnitude[:, np.newaxis] * np.sin(self.theta.magnitude)
+
+
+class InstrumentParameters(ParameterGroup):
+    r"""Instrument function of a scattering experiment.
+
+    The intensities of the scattering simulations are averaged over the
+    angular and spectral distribution of the instrument, multiplied by the
+    footprint of the beam on the sample, and scaled by an intensity and a
+    background, see :meth:`.Scattering.apply_instrument`. All widths
+    are full widths at half maximum (FWHM), also of the Gaussian beam, and
+    the full width of a box. The instrument is applied to the reflectivity
+    and transmissivity, as well as to the rotation and ellipticity of the
+    multilayer formalisms, but not to the Jones matrices, the fields, and
+    the absorption.
+
+    The angular and spectral resolution are given by a profile, i.e.
+    ``'none'``, ``'box'``, ``'gauss'``, ``'lorentz'``, or ``'pseudo_voigt'``,
+    the latter of the mixing :math:`\eta` of a Lorentzian and a Gaussian
+    profile of the same FWHM. Their ``mode`` is either
+
+    * ``'quadrature'``: the simulation is repeated for ``points`` nodes
+      around each point of the grid, which works for any grid,
+    * ``'convolution'``: the result is convolved on the grid of the
+      experiment, which must be dense, e.g. for sharp Bragg peaks, or
+    * ``'qz'``: only for the energy, the spectral spread at a fixed angle is
+      approximated by the spread of the angle
+      :math:`\sin\vartheta' = \sin\vartheta\,(1 + \Delta E / E)` of
+      the same scattering vector :math:`q_z` at the photon energy,
+      which is valid away from resonances only.
+
+    The ``nodes`` of the quadrature are either ``'uniform'`` with the
+    weights of the profile on ``points`` equidistant nodes within
+    :math:`\pm` ``range`` times the width, which is robust for narrow
+    features, or ``'gauss'``, i.e. Gauss-Hermite nodes of a Gaussian and
+    Gauss-Legendre nodes of a box profile, which are more efficient for
+    smooth curves. The widths are scalars or arrays along the energies of
+    the experiment for the energy and along its angles or of its shape
+    (M, N) for the angle, e.g. for a mosaicity or a curvature of the sample.
+
+    The ``spectrum`` of the source is a list of components, e.g. the Cu
+    :math:`K_{\alpha 1}` and :math:`K_{\alpha 2}` lines or higher
+    harmonics of a monochromator, given as dicts of the photon energy
+    :math:`E_m = f\,E + \Delta E` with the ``factor`` :math:`f`
+    (default 1) and the ``offset`` :math:`\Delta E` (default 0 eV) relative
+    to the photon energy :math:`E` of the experiment, as well as the
+    ``weight`` (default 1) and the optional ``width``, which defaults to
+    :math:`f` times the ``energy_width``, as for a constant
+    :math:`\Delta E / E` of a monochromator. The weights are normalized.
+
+    The ``footprint`` of a ``'box'`` or ``'gauss'`` beam of the
+    ``beam_width`` on a sample of the ``sample_length`` scales the
+    reflected intensities, while the ``theta_offset`` and ``energy_offset``
+    are added to the angles and photon energies of the experiment, and the
+    intensities are scaled to :math:`I_0 I + I_\mathrm{bkg}`.
+
+    Bare numbers of the angles are degrees, of the energies eV, and of the
+    lengths mm.
+
+    Attributes:
+        theta_resolution (str): profile of the angular resolution.
+        theta_width (ndarray[float]): FWHM of the angular resolution (deg).
+        theta_eta (float): Lorentzian fraction of a pseudo-Voigt profile.
+        theta_mode (str): ``'quadrature'`` or ``'convolution'``.
+        theta_nodes (str): ``'uniform'`` or ``'gauss'`` nodes.
+        theta_points (int): number of nodes.
+        theta_range (float): range of the uniform nodes in units of the
+            width.
+        energy_resolution (str): profile of the spectral resolution.
+        energy_width (ndarray[float]): FWHM of the spectral resolution (eV).
+        energy_eta (float): Lorentzian fraction of a pseudo-Voigt profile.
+        energy_mode (str): ``'quadrature'``, ``'convolution'``, or ``'qz'``.
+        energy_nodes (str): ``'uniform'`` or ``'gauss'`` nodes.
+        energy_points (int): number of nodes.
+        energy_range (float): range of the uniform nodes in units of the
+            width.
+        spectrum (list[dict], None): components of the source spectrum.
+        footprint (str): ``'none'``, ``'box'``, or ``'gauss'`` beam.
+        beam_width (float): FWHM or full width of the beam (mm).
+        sample_length (float): length of the sample along the beam (mm).
+        theta_offset (float): offset of the angles (deg).
+        energy_offset (float): offset of the photon energies (eV).
+        I0 (float): scale of the intensities :math:`I_0`.
+        background (float): background of the intensities
+            :math:`I_\mathrm{bkg}`.
+
+    """
+
+    profiles = ("none", "box", "gauss", "lorentz", "pseudo_voigt")
+    footprints = ("none", "box", "gauss")
+    _options = {
+        "theta_resolution": profiles,
+        "theta_mode": ("quadrature", "convolution"),
+        "theta_nodes": ("uniform", "gauss"),
+        "energy_resolution": profiles,
+        "energy_mode": ("quadrature", "convolution", "qz"),
+        "energy_nodes": ("uniform", "gauss"),
+        "footprint": footprints,
+    }
+    _spectrum_keys = ("offset", "factor", "weight", "width")
+
+    def __init__(self):
+        self.theta_resolution = "none"
+        self.theta_width = Parameter("deg", 0.0, symbol=r"\Delta\theta")
+        self.theta_eta = Parameter("", 0.5, symbol=r"\eta_\theta")
+        self.theta_mode = "quadrature"
+        self.theta_nodes = "uniform"
+        self.theta_points = Parameter("", 7, symbol=r"n_\theta")
+        self.theta_range = Parameter("", 2.0, symbol=r"r_\theta")
+        self.energy_resolution = "none"
+        self.energy_width = Parameter("eV", 0.0, symbol=r"\Delta E")
+        self.energy_eta = Parameter("", 0.5, symbol=r"\eta_E")
+        self.energy_mode = "quadrature"
+        self.energy_nodes = "uniform"
+        self.energy_points = Parameter("", 7, symbol="n_E")
+        self.energy_range = Parameter("", 2.0, symbol="r_E")
+        self.spectrum = None
+        self.footprint = "none"
+        self.beam_width = Parameter("mm", 0.0, symbol="w")
+        self.sample_length = Parameter("mm", 0.0, symbol="L")
+        self.theta_offset = Parameter("deg", 0.0, symbol=r"\theta_0")
+        self.energy_offset = Parameter("eV", 0.0, symbol="E_0")
+        self.I0 = Parameter("", 1.0, symbol="I_0")
+        self.background = Parameter("", 0.0, symbol=r"I_\mathrm{bkg}")
+
+        self._connect_parameters()
+
+    def __setattr__(self, name, value):
+        """The options are checked and the spectrum is parsed on
+        assignment."""
+        if name in self._options:
+            if value not in self._options[name]:
+                raise ValueError(
+                    f"The {name} must be one of {', '.join(map(repr, self._options[name]))}, "
+                    f"but is {value!r}!"
+                )
+        elif name == "spectrum" and value is not None:
+            value = self._parse_spectrum(value)
+        super().__setattr__(name, value)
+
+    @classmethod
+    def _parse_spectrum(cls, spectrum):
+        """components of the spectrum as dicts of floats in eV with the
+        defaults"""
+        if isinstance(spectrum, dict):
+            spectrum = [spectrum]
+        if len(spectrum) == 0:
+            raise ValueError("The spectrum must have at least one component!")
+        components = []
+        for component in spectrum:
+            if not isinstance(component, dict):
+                raise TypeError(
+                    f"The components of the spectrum must be dicts, not {component!r}!"
+                )
+            unknown = set(component) - set(cls._spectrum_keys)
+            if unknown:
+                raise ValueError(
+                    f"Unknown keys {sorted(unknown)} of a component of the spectrum, which has "
+                    f"the keys {', '.join(cls._spectrum_keys)}!"
+                )
+            parsed = {
+                "offset": cls._to_float(component.get("offset", 0.0), "eV"),
+                "factor": cls._to_float(component.get("factor", 1.0), ""),
+                "weight": cls._to_float(component.get("weight", 1.0), ""),
+            }
+            if component.get("width") is not None:
+                parsed["width"] = cls._to_float(component["width"], "eV")
+            if parsed["factor"] <= 0 or parsed["weight"] < 0 or parsed.get("width", 0) < 0:
+                raise ValueError(
+                    "The factor of a component of the spectrum must be positive and its "
+                    f"weight and width must not be negative, but it is {component!r}!"
+                )
+            components.append(parsed)
+        if sum(c["weight"] for c in components) <= 0:
+            raise ValueError("The weights of the spectrum must not all be zero!")
+        return components
+
+    @staticmethod
+    def _to_float(value, unit):
+        """float of a value, which can be a Quantity, in the unit"""
+        if isinstance(value, u.Quantity):
+            return float(value.to(unit).magnitude) if unit else float(value.to("").magnitude)
+        return float(value)
+
+    @property
+    def components(self):
+        """list[dict]: components of the spectrum with normalized weights,
+        which is the photon energy of the experiment for no spectrum."""
+        spectrum = self.spectrum or [{"offset": 0.0, "factor": 1.0, "weight": 1.0}]
+        total = sum(c["weight"] for c in spectrum)
+        return [dict(c, weight=c["weight"] / total) for c in spectrum if c["weight"] > 0]
+
+    @property
+    def is_active(self):
+        """bool: the instrument changes the results of the simulations,
+        otherwise they are calculated as without an instrument."""
+        return self._hash_items() != InstrumentParameters()._hash_items()
+
+    def to_dict(self):
+        """dict: all settings of the instrument with Quantities for values
+        with units, e.g. for the metadata of the results."""
+        settings = {}
+        for name, value in vars(self).items():
+            if name.startswith("_"):
+                continue
+            if isinstance(value, Parameter):
+                settings[name] = value.quantity if str(value.unit) else value.magnitude
+            elif value is not None:
+                settings[name] = value
+        return settings
+
+    def _hash_items(self):
+        """settings of the instrument as plain values for the hash of the
+        results"""
+        settings = {}
+        for name, value in vars(self).items():
+            if name.startswith("_"):
+                continue
+            if isinstance(value, Parameter):
+                magnitude = np.asarray(value.magnitude, dtype=float)
+                value = (magnitude.tolist(), f"{value.unit}")
+            settings[name] = value
+        return settings
+
+    def _option_rows(self):
+        rows = [[name, getattr(self, name)] for name in self._options]
+        rows.append(["spectrum", self._format_spectrum()])
+        return rows
+
+    def _format_spectrum(self):
+        """components of the spectrum as text, e.g. ``E - 20 eV (1)``"""
+        if self.spectrum is None:
+            return "none"
+        texts = []
+        for c in self.spectrum:
+            text = "E" if c["factor"] == 1 else f"{c['factor']:g} E"
+            if c["offset"] != 0:
+                text += f" {'+' if c['offset'] > 0 else '-'} {abs(c['offset']):g} eV"
+            text += f" ({c['weight']:g}"
+            if "width" in c:
+                text += f", {c['width']:g} eV"
+            texts.append(text + ")")
+        return ", ".join(texts)
+
+    def __repr__(self):
+        options = tabulate(
+            self._option_rows(), headers=["Option", "Value"], tablefmt="double_grid"
+        )
+        return super().__repr__() + "\n" + options
+
+    def _repr_html_(self):
+        options = tabulate(self._option_rows(), headers=["Option", "Value"], tablefmt="html")
+        return super()._repr_html_() + options
