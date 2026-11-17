@@ -504,6 +504,18 @@ def test_format_number(value, text, latex):
     assert format_number(value, "latex") == latex
 
 
+@pytest.mark.parametrize("mode", ["text", "html", "latex"])
+@pytest.mark.parametrize("value", [1.0, -2e-8, 2, True, 2.44 + 4.32j])
+def test_format_number_zero_dimensional_array(value, mode):
+    assert format_number(np.array(value), mode) == format_number(value, mode)
+
+
+@pytest.mark.parametrize("mode", ["text", "html", "latex"])
+def test_format_number_nested_zero_dimensional_arrays(mode):
+    values = [np.array(1.0), [np.array(2e-8), np.array(3 + 4j)]]
+    assert format_number(values, mode) == format_number([1.0, [2e-8, 3 + 4j]], mode)
+
+
 def test_parameter_display():
     p = Parameter("m", 2e-8, name="thickness", symbol="d")
     assert str(p) == "d = 2×10⁻⁸ m"
