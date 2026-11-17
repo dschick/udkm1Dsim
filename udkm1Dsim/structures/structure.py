@@ -593,7 +593,7 @@ class Structure:
         self,
         block=True,
         unit="nm",
-        fig_size=[20, 1],
+        fig_size=[10, 1],
         cmap="Set3",
         linewidth=0.1,
         show=True,
@@ -614,7 +614,7 @@ class Structure:
             unit (str): SI unit of the distance of the Structure. Defaults to
                 'nm'.
             fig_size (list[float]): figure size of the visualization plot.
-                Defaults to [20, 1].
+                Defaults to [10, 1].
             cmap (str): Matplotlib colormap for colors of Layer.
             linewidth (float): line width of the patches.
             show (boolean): show visualization plot at the end.

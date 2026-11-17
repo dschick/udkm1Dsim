@@ -250,6 +250,25 @@ class Simulation:
         return result
 
     @staticmethod
+    def parse_delays(delays):
+        """parse_delays
+
+        Returns the delays as plain array in seconds.
+
+        Args:
+            delays (ndarray[Quantity, float]): delays (s).
+
+        Returns:
+            delays (ndarray[float]): delays (s).
+
+        """
+        try:
+            delays = delays.to("s").magnitude
+        except AttributeError:
+            pass
+        return np.asarray(delays, dtype=float)
+
+    @staticmethod
     def _add_inputs(result, inputs=None, input_maps=None):
         """Add the ``inputs`` of a method, which are no maps, to the metadata
         ``inputs`` of the ``result`` and the

@@ -295,7 +295,7 @@ class XrayDyn(Scattering):
         return RT, A
 
     def inhomogeneous_reflectivity(
-        self, strain_map, strain_vectors=[], temp_map=np.array([]), **kwargs
+        self, strain_map, strain_vectors=[], temp_map=np.array([]), *, delays=None, **kwargs
     ):
         """inhomogeneous_reflectivity
 
@@ -321,6 +321,11 @@ class XrayDyn(Scattering):
             temp_map (ndarray[float], Result, optional): spatio-temporal
                 temperature profile or result of
                 :meth:`~udkm1Dsim.simulations.heat.Heat.get_temp_map`.
+            delays (ndarray[float, Quantity], optional): delays (s) of the
+                maps, which are taken from their upstream result otherwise.
+                They are needed for the temporal resolution of the
+                :attr:`instrument` only, see
+                :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.get_inhomogeneous_delays`.
             **kwargs:
                 - *calc_type (str)* - type of calculation.
                 - *dask_client (Dask.Client)* - Dask client.
@@ -330,7 +335,7 @@ class XrayDyn(Scattering):
         Returns:
             result (Result): with the ``reflectivity`` of the dimensions
             ``delays``, ``energy``, and ``angles``, whose ``delays`` are taken
-            from a given upstream result, see
+            from a given upstream result or are the given ``delays``, see
             :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
 
         """
@@ -339,10 +344,11 @@ class XrayDyn(Scattering):
         source = find_source(strain_map, temp_map)
         strain_map = get_entry(strain_map, "strain_map")
         temp_map = get_entry(temp_map, "temp_map")
+        delays = self.get_inhomogeneous_delays(delays, source, np.size(strain_map, 0))
 
         def calc():
             R = self.calc_inhomogeneous_reflectivity(
-                strain_map, strain_vectors, temp_map, **kwargs
+                strain_map, strain_vectors, temp_map, delays=delays, **kwargs
             )
             return self._scattering_result(
                 "inhomogeneous reflectivity",
@@ -352,16 +358,17 @@ class XrayDyn(Scattering):
                 source=source,
                 inputs={"strain_vectors": strain_vectors},
                 input_maps={"strain_map": strain_map, "temp_map": temp_map},
+                delays=delays,
             )
 
         return self._cached_result(
             "inhomogeneous_reflectivity_dyn",
-            self.get_hash(strain_vectors, strain_map=strain_map, temp_map=temp_map),
+            self.get_hash(strain_vectors, strain_map=strain_map, temp_map=temp_map, delays=delays),
             calc,
         )
 
     def calc_inhomogeneous_reflectivity(
-        self, strain_map, strain_vectors=[], temp_map=np.array([]), **kwargs
+        self, strain_map, strain_vectors=[], temp_map=np.array([]), *, delays=None, **kwargs
     ):
         """calc_inhomogeneous_reflectivity
 
@@ -376,6 +383,7 @@ class XrayDyn(Scattering):
 
         """
         self._check_experiment()
+        source = find_source(strain_map, temp_map)
         strain_map = get_entry(strain_map, "strain_map")
         temp_map = get_entry(temp_map, "temp_map")
         # parse the input arguments
@@ -387,6 +395,7 @@ class XrayDyn(Scattering):
             raise TypeError("temp_map must be a numpy ndarray!")
 
         (M, L) = strain_map.shape
+        delays = self.get_inhomogeneous_delays(delays, source, M)
         # check length (number of sub-systems) of Debye-Waller factor, which is not checked
         # in setter method
         numel_deb_wal_fac = self.S.get_numel_of_layer_property("deb_wal_fac")
@@ -433,7 +442,7 @@ class XrayDyn(Scattering):
             return (R,)
 
         # the instrument repeats the calculation for its nodes
-        (R,) = self.apply_instrument(calc, ("reflected",), lead=1)
+        (R,) = self.apply_instrument(calc, ("reflected",), lead=1, delays=delays)
         return R
 
     def sequential_inhomogeneous_reflectivity(self, strain_map, strain_vectors, RTM, temp_map):

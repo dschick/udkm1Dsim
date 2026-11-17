@@ -71,7 +71,9 @@ higher harmonics, the footprint of the beam, the offsets of the angles and
 photon energies, and the intensity and background, see
 :meth:`~Scattering.apply_instrument`. It applies to the reflectivities and
 transmissivities and the rotation and ellipticity, but not to the Jones
-matrices, fields, and absorption.
+matrices, fields, and absorption. Its temporal resolution convolves the
+inhomogeneous results along their delays, which are given by ``delays`` or
+are taken from the upstream result of the maps.
 
 The code ported from `Dyna <https://gitlab.com/dynadevgroup/Dyna>`_ by
 Stéphane Grenier is included under the MIT license with the author's written

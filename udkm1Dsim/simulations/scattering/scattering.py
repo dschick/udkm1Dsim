@@ -171,7 +171,7 @@ class Scattering(Simulation):
         self.pol_out = self.calc_outgoing_polarization(self._pol_out_state)
 
     def new_scattering_result(
-        self, title, num_delays=None, source=None, inputs=None, input_maps=None
+        self, title, num_delays=None, source=None, inputs=None, input_maps=None, delays=None
     ):
         """new_scattering_result
 
@@ -180,7 +180,7 @@ class Scattering(Simulation):
         :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`. The
         ``qz`` and ``theta`` have the dimensions ``energy`` and ``angles``.
         The ``delays`` are taken from an upstream ``source`` result, if
-        their number agrees.
+        their number agrees, or are the given ``delays``.
 
         Args:
             title (str): title of the result.
@@ -191,18 +191,18 @@ class Scattering(Simulation):
                 :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`.
             input_maps (dict, optional): input maps of the method, see
                 :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`.
+            delays (ndarray[float], optional): delays (s) of an inhomogeneous
+                result, see :meth:`get_inhomogeneous_delays`.
 
         Returns:
             result (Result): empty result.
 
         """
         result = self.new_result(title, inputs=inputs, input_maps=input_maps)
-        if (
-            isinstance(source, Result)
-            and "delays" in source.coords
-            and np.size(source["delays"]) == num_delays
-        ):
+        if self._source_delays(source, num_delays) is not None:
             result.copy_coords(source, ["delays"])
+        elif delays is not None:
+            result.add_coord("delays", delays, "s")
         result.add_coord("energy", np.atleast_1d(self.energy.to("eV").magnitude), "eV")
         dims = ("energy", "angles")
         result.add_coord("qz", np.atleast_2d(self.qz.to("1/nm").magnitude), "1/nm", dims)
@@ -219,20 +219,73 @@ class Scattering(Simulation):
         source=None,
         inputs=None,
         input_maps=None,
+        delays=None,
     ):
         """result of the ``values`` with the ``names`` and their
         :data:`ALIASES`, which have a first axis of the delays for
         ``inhomogeneous=True`` with the coordinates of an upstream ``source``
-        result and the ``inputs`` and ``input_maps`` of the method, see
-        :meth:`new_scattering_result`"""
+        result or the given ``delays`` and the ``inputs`` and ``input_maps``
+        of the method, see :meth:`new_scattering_result`"""
         num_delays = np.size(values[0], 0) if inhomogeneous else None
-        result = self.new_scattering_result(title, num_delays, source, inputs, input_maps)
+        result = self.new_scattering_result(title, num_delays, source, inputs, input_maps, delays)
         dims = ("delays", "energy", "angles") if inhomogeneous else ("energy", "angles")
         for name, value in zip(names, values):
             # e.g. the lists of the sub-structures have no dimensions
             value_dims = dims if isinstance(value, np.ndarray) else ()
             result.add(name, value, value_dims, unit, ALIASES.get(name, ()))
         return result
+
+    @staticmethod
+    def _source_delays(source, num_delays):
+        """delays (s) of an upstream ``source`` result, if their number
+        agrees, otherwise None"""
+        if (
+            isinstance(source, Result)
+            and "delays" in source.coords
+            and np.size(source["delays"]) == num_delays
+        ):
+            return np.asarray(source.quantity("delays", "s").magnitude, dtype=float)
+        return None
+
+    def get_inhomogeneous_delays(self, delays, source, num_delays):
+        """get_inhomogeneous_delays
+
+        Delays of an inhomogeneous simulation of ``num_delays`` delays, which
+        are the given ``delays`` or are taken from the upstream ``source``
+        result of the maps, see :meth:`new_scattering_result`. The delays are
+        needed for the temporal resolution of the :attr:`instrument` only.
+
+        Args:
+            delays (ndarray[float, Quantity], None): delays (s).
+            source (Result, None): upstream result of the maps.
+            num_delays (int): number of delays of the maps.
+
+        Returns:
+            delays (ndarray[float], None): delays (s) or None, if none are
+            given or known.
+
+        Raises:
+            ValueError: the number of the given delays does not agree with
+                the maps or they differ from the delays of the upstream
+                result.
+
+        """
+        source_delays = self._source_delays(source, num_delays)
+        if delays is None:
+            return source_delays
+        delays = np.atleast_1d(self.parse_delays(delays))
+        if delays.ndim != 1 or delays.size != num_delays:
+            raise ValueError(
+                f"The {delays.size} delays must be a 1D array of the {num_delays} delays of "
+                "the maps!"
+            )
+        if source_delays is not None and not np.allclose(
+            delays, source_delays, rtol=1e-9, atol=1e-9 * np.max(np.abs(source_delays))
+        ):
+            raise ValueError(
+                "The given delays differ from the delays of the upstream result of the maps!"
+            )
+        return delays
 
     def _check_experiment(self):
         """Warn for scattering vectors beyond :math:`2k`, which have no
@@ -497,6 +550,8 @@ class Scattering(Simulation):
         if self.instrument.is_active:
             # only an instrument changes the hash of former results
             param.append(("instrument", self.instrument._hash_items()))
+        if self.instrument.is_delay_active and kwargs.get("delays") is not None:
+            param.append(("delays", kwargs["delays"]))
 
         if "strain_map" in kwargs:
             strain_map = kwargs.get("strain_map")
@@ -535,7 +590,7 @@ class Scattering(Simulation):
 
     # ---- instrument function ----------------------------------------------------
 
-    def apply_instrument(self, calc, kinds, finish=None, lead=0):
+    def apply_instrument(self, calc, kinds, finish=None, lead=0, delays=None):
         r"""apply_instrument
 
         Applies the :attr:`instrument` to the intensities of
@@ -551,7 +606,10 @@ class Scattering(Simulation):
            nodes and components.
         4. The ``'convolution'`` modes convolve the sums along the energies
            and the angles of the experiment.
-        5. The sums are reduced by ``finish``, e.g. to the rotation of the
+        5. The temporal resolution convolves the sums of inhomogeneous
+           simulations, i.e. with a ``lead`` axis, along their ``delays``,
+           see :func:`~udkm1Dsim.simulations.scattering.instrument.convolve_delays`.
+        6. The sums are reduced by ``finish``, e.g. to the rotation of the
            polarization, and the intensities are scaled to
            :math:`I_0 I + I_\mathrm{bkg}`.
 
@@ -571,12 +629,24 @@ class Scattering(Simulation):
             finish (callable, optional): reduces the averaged tuple of values.
             lead (int, optional): number of leading axes, e.g. 1 for the
                 delays. Defaults to 0.
+            delays (ndarray[float], optional): delays (s) of the first
+                leading axis, which are needed for a temporal resolution.
 
         Returns:
             values (tuple[ndarray[float]]): values with the instrument.
 
+        Raises:
+            ValueError: no delays are given for a temporal resolution of an
+                inhomogeneous simulation.
+
         """
         ins = self.instrument
+        if ins.is_delay_active and lead > 0 and delays is None:
+            raise ValueError(
+                "The temporal resolution of the instrument needs the delays of the maps, "
+                "which are given by the argument delays or are taken from the upstream "
+                "result of the maps!"
+            )
         if not ins.is_active:
             values = calc()
             return finish(values) if finish is not None else values
@@ -685,6 +755,23 @@ class Scattering(Simulation):
                         ins.theta_eta.magnitude,
                     )
             total = tuple(convolved)
+        if ins.is_delay_active and lead > 0:
+            num_delays = np.size(total[0], 0)
+            delay_width = 1e-12 * self._instrument_width(
+                ins.delay_width, (num_delays,), "delay_width"
+            )
+            total = tuple(
+                _instrument.convolve_delays(
+                    t,
+                    0,
+                    delays,
+                    delay_width,
+                    ins.delay_resolution,
+                    ins.delay_range.magnitude,
+                    ins.delay_eta.magnitude,
+                )
+                for t in total
+            )
         if finish is not None:
             return finish(total)
         I0, background = ins.I0.magnitude, ins.background.magnitude

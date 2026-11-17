@@ -36,6 +36,7 @@ __all__ = [
     "convolution_matrix",
     "convolve",
     "convolve_on_grid",
+    "convolve_delays",
     "footprint",
 ]
 
@@ -294,6 +295,68 @@ def convolve_on_grid(values, axis, x, width, shape, range=2.0, eta=0.5):
     unsorted = np.empty_like(result)
     unsorted[..., order] = result
     return np.moveaxis(unsorted, -1, axis)
+
+
+def convolve_delays(values, axis, delays, width, shape, range=2.0, eta=0.5):
+    """convolve_delays
+
+    Convolution of ``values`` along their ``axis`` of the ``delays``, which
+    can be non-equidistant, with a profile of the FWHM ``width``, e.g. the
+    temporal resolution of a pump-probe experiment, see
+    :func:`convolution_matrix`. In contrast to :func:`convolve_on_grid`,
+    the values are held at their first and last value beyond the ends of
+    the delays, e.g. the unexcited sample before the excitation, instead of
+    normalizing the truncated profile.
+
+    Args:
+        values (ndarray[float]): values.
+        axis (int): axis of the delays.
+        delays (ndarray[float]): delays of shape (N,).
+        width (ndarray[float]): FWHM of the profile in the unit of the
+            delays of shape (N,) or a scalar.
+        shape (str): profile.
+        range (float, optional): range in units of the FWHM. Defaults to 2.
+        eta (float, optional): Lorentzian fraction of the pseudo-Voigt
+            profile. Defaults to 0.5.
+
+    Returns:
+        values (ndarray[float]): convolved values of the same shape.
+
+    """
+    delays = np.asarray(delays, dtype=float)
+    N = np.size(delays)
+    width = np.broadcast_to(np.abs(np.asarray(width, dtype=float)), (N,))
+    values = np.asarray(values, dtype=float)
+    if shape == "none" or N < 2 or not np.any(width > 0):
+        return values
+    order = np.argsort(delays)
+    ds, ws = delays[order], width[order]
+    if np.any(np.diff(ds) <= 0):
+        raise ValueError("The delays of a temporal convolution must be distinct!")
+    reach = (0.5 if shape == "box" else range) * np.max(ws)
+
+    def padding(step):
+        # at most about 64 points beyond each end, which hold the end value
+        step = max(step, reach / 64)
+        return step * np.arange(1, int(np.ceil(reach * (1 + 1e-9) / step)) + 1)
+
+    left = ds[0] - padding(ds[1] - ds[0])[::-1]
+    right = ds[-1] + padding(ds[-1] - ds[-2])
+    nl, nr = left.size, right.size
+    x = np.concatenate((left, ds, right))
+    w = np.concatenate((np.full(nl, ws[0]), ws, np.full(nr, ws[-1])))
+    K = convolution_matrix(x, w, shape, range, eta)[nl : nl + N]
+    # the columns of the padding are folded onto the first and last delay
+    columns = np.concatenate((np.zeros(nl, dtype=int), np.arange(N), np.full(nr, N - 1)))
+    fold = sparse.csr_array((np.ones(x.size), (np.arange(x.size), columns)), shape=(x.size, N))
+    K = sparse.csr_array(K @ fold)
+    sorted_values = np.take(values, order, axis=axis)
+    result = convolve(sorted_values, axis, K)
+    unsorted = np.empty_like(result)
+    index = [slice(None)] * result.ndim
+    index[axis] = order
+    unsorted[tuple(index)] = result
+    return unsorted
 
 
 def footprint(shape, theta, beam_width, sample_length):

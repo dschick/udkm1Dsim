@@ -157,7 +157,7 @@ class InstrumentParameters(ParameterGroup):
     multilayer formalisms, but not to the Jones matrices, the fields, and
     the absorption.
 
-    The angular and spectral resolution are given by a profile, i.e.
+    The angular, spectral, and temporal resolution are given by a profile, i.e.
     ``'none'``, ``'box'``, ``'gauss'``, ``'lorentz'``, or ``'pseudo_voigt'``,
     the latter of the mixing :math:`\eta` of a Lorentzian and a Gaussian
     profile of the same FWHM. Their ``mode`` is either
@@ -191,14 +191,22 @@ class InstrumentParameters(ParameterGroup):
     :math:`f` times the ``energy_width``, as for a constant
     :math:`\Delta E / E` of a monochromator. The weights are normalized.
 
+    The temporal resolution, e.g. of the pump-probe cross-correlation, is
+    given by the ``delay_resolution`` profile of the ``delay_width``, which
+    is a scalar or an array along the delays. It applies only to the
+    inhomogeneous simulations, whose intensities are convolved along their
+    delays, see :func:`~udkm1Dsim.simulations.scattering.instrument.convolve_delays`.
+    These need the ``delays`` then, which are given or are taken from the
+    upstream result of the maps.
+
     The ``footprint`` of a ``'box'`` or ``'gauss'`` beam of the
     ``beam_width`` on a sample of the ``sample_length`` scales the
     reflected intensities, while the ``theta_offset`` and ``energy_offset``
     are added to the angles and photon energies of the experiment, and the
     intensities are scaled to :math:`I_0 I + I_\mathrm{bkg}`.
 
-    Bare numbers of the angles are degrees, of the energies eV, and of the
-    lengths mm.
+    Bare numbers of the angles are degrees, of the energies eV, of the
+    widths of the delays ps, and of the lengths mm.
 
     Attributes:
         theta_resolution (str): profile of the angular resolution.
@@ -218,6 +226,10 @@ class InstrumentParameters(ParameterGroup):
         energy_range (float): range of the uniform nodes in units of the
             width.
         spectrum (list[dict], None): components of the source spectrum.
+        delay_resolution (str): profile of the temporal resolution.
+        delay_width (ndarray[float]): FWHM of the temporal resolution (ps).
+        delay_eta (float): Lorentzian fraction of a pseudo-Voigt profile.
+        delay_range (float): range of the convolution in units of the width.
         footprint (str): ``'none'``, ``'box'``, or ``'gauss'`` beam.
         beam_width (float): FWHM or full width of the beam (mm).
         sample_length (float): length of the sample along the beam (mm).
@@ -238,6 +250,7 @@ class InstrumentParameters(ParameterGroup):
         "energy_resolution": profiles,
         "energy_mode": ("quadrature", "convolution", "qz"),
         "energy_nodes": ("uniform", "gauss"),
+        "delay_resolution": profiles,
         "footprint": footprints,
     }
     _spectrum_keys = ("offset", "factor", "weight", "width")
@@ -258,6 +271,10 @@ class InstrumentParameters(ParameterGroup):
         self.energy_points = Parameter("", 7, symbol="n_E")
         self.energy_range = Parameter("", 2.0, symbol="r_E")
         self.spectrum = None
+        self.delay_resolution = "none"
+        self.delay_width = Parameter("ps", 0.0, symbol=r"\Delta t")
+        self.delay_eta = Parameter("", 0.5, symbol=r"\eta_t")
+        self.delay_range = Parameter("", 2.0, symbol="r_t")
         self.footprint = "none"
         self.beam_width = Parameter("mm", 0.0, symbol="w")
         self.sample_length = Parameter("mm", 0.0, symbol="L")
@@ -332,6 +349,12 @@ class InstrumentParameters(ParameterGroup):
         spectrum = self.spectrum or [{"offset": 0.0, "factor": 1.0, "weight": 1.0}]
         total = sum(c["weight"] for c in spectrum)
         return [dict(c, weight=c["weight"] / total) for c in spectrum if c["weight"] > 0]
+
+    @property
+    def is_delay_active(self):
+        """bool: the temporal resolution convolves the inhomogeneous
+        results along their delays."""
+        return self.delay_resolution != "none"
 
     @property
     def is_active(self):

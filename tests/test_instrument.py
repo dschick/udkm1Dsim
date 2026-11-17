@@ -452,3 +452,154 @@ def test_xray_kin_with_instrument(structure_crystalline):
     R, A = sim.calc_homogeneous_reflectivity()
     np.testing.assert_allclose(R, 2 * R0)
     assert len(A) > 0
+
+
+# ============================================================================
+# temporal resolution
+# ============================================================================
+
+
+def test_convolve_delays_holds_the_ends():
+    """a step at zero delay convolved by a Gaussian is an error function on
+    a non-equidistant grid, which is held at its ends"""
+    sigma = 1 / (2 * np.sqrt(2 * np.log(2)))
+    delays = np.r_[np.linspace(-3, -0.5, 6), np.linspace(-0.45, 2, 50), np.linspace(2.5, 20, 8)]
+    step = (delays >= 0).astype(float)
+    values = np.stack([step, 2 * step + 1], axis=1)
+    result = ins.convolve_delays(values, 0, delays, 1, "gauss", 4)
+    expected = 0.5 * (1 + erf(delays / (np.sqrt(2) * sigma)))
+    np.testing.assert_allclose(result[:, 0], expected, atol=2e-2)
+    np.testing.assert_allclose(result[:, 1], 2 * result[:, 0] + 1)
+    # the ends are held instead of normalized, e.g. constant values
+    np.testing.assert_allclose(ins.convolve_delays(np.ones(10), 0, np.arange(10), 3, "lorentz"), 1)
+    np.testing.assert_allclose(result[[0, -1], 0], [0, 1], atol=1e-10)
+    # unsorted delays
+    order = np.random.default_rng(1).permutation(delays.size)
+    unsorted = ins.convolve_delays(values[order], 0, delays[order], 1, "gauss", 4)
+    np.testing.assert_allclose(unsorted, result[order])
+    with pytest.raises(ValueError, match="distinct"):
+        ins.convolve_delays(np.ones(3), 0, [0, 1, 1], 1, "gauss")
+
+
+@pytest.mark.parametrize("shape", PROFILES)
+def test_convolve_delays_equals_the_convolution_inside(shape):
+    """away from the ends, the temporal convolution is the one on the grid"""
+    delays = np.linspace(-5, 5, 201)
+    values = np.exp(-(delays**2)) * np.cos(3 * delays)
+    result = ins.convolve_delays(values, 0, delays, 0.8, shape, 3, 0.3)
+    expected = ins.convolve_on_grid(values, 0, delays, 0.8, shape, 3, 0.3)
+    inside = np.abs(delays) < 2
+    np.testing.assert_allclose(result[inside], expected[inside], atol=1e-12)
+
+
+@pytest.fixture
+def demagnetization(magnetic_elzo):
+    """map of a demagnetization of 50 % at zero delay and its delays (ps)"""
+    delays = np.r_[-2:-0.5:0.5, -0.5:1:0.05, 1:6:1]
+    magnetization = magnetic_elzo.S.get_layer_property_vector("magnetization").magnitude
+    amplitude = 1 - 0.5 * (delays >= 0)
+    return delays, amplitude[:, np.newaxis, np.newaxis] * magnetization[np.newaxis]
+
+
+def test_temporal_resolution_of_the_intensities_and_polarization(magnetic_elzo, demagnetization):
+    delays, mag_map = demagnetization
+    sim = magnetic_elzo
+    R = sim.calc_inhomogeneous_reflectivity_transmissivity(magnetization_map=mag_map)
+    rotation = sim.calc_inhomogeneous_rotation_ellipticity(magnetization_map=mag_map)
+    terms = sim._calc_inhomogeneous(
+        np.zeros(mag_map.shape[:2]),
+        mag_map,
+        type(sim)._reduce_polarization_terms,
+    )
+    homogeneous = sim.calc_homogeneous_reflectivity_transmissivity()
+    sim.instrument.delay_resolution = "gauss"
+    sim.instrument.delay_width = 0.3 * u.ps
+    assert sim.instrument.is_active and sim.instrument.is_delay_active
+    # the homogeneous results have no delays
+    for h, reference in zip(sim.calc_homogeneous_reflectivity_transmissivity(), homogeneous):
+        np.testing.assert_allclose(h, reference)
+    with pytest.raises(ValueError, match="needs the delays"):
+        sim.calc_inhomogeneous_reflectivity_transmissivity(magnetization_map=mag_map)
+    convolved = sim.calc_inhomogeneous_reflectivity_transmissivity(
+        magnetization_map=mag_map, delays=delays * u.ps
+    )
+    for c, r in zip(convolved, R):
+        expected = ins.convolve_delays(r, 0, delays * 1e-12, 0.3e-12, "gauss")
+        np.testing.assert_allclose(c, expected, rtol=1e-10)
+        np.testing.assert_allclose(c[[0, -1]], r[[0, -1]], rtol=1e-10)
+        assert not np.allclose(c, r)
+    # the rotation follows from the convolved polarization terms
+    rotation_convolved = sim.calc_inhomogeneous_rotation_ellipticity(
+        magnetization_map=mag_map, delays=delays * u.ps
+    )
+    terms = tuple(ins.convolve_delays(t, 0, delays * 1e-12, 0.3e-12, "gauss") for t in terms)
+    expected = type(sim)._finish_rotation_ellipticity(terms)
+    for c, e, r in zip(rotation_convolved, expected, rotation):
+        np.testing.assert_allclose(c, e, atol=1e-10)
+        np.testing.assert_allclose(c[[0, -1]], r[[0, -1]], atol=1e-10)
+
+
+def test_delays_of_the_inhomogeneous_results(magnetic_elzo, demagnetization, tmp_path):
+    delays, mag_map = demagnetization
+    sim = magnetic_elzo
+    # the given delays label the result
+    result = sim.inhomogeneous_reflectivity_transmissivity(
+        magnetization_map=mag_map, delays=delays * u.ps
+    )
+    np.testing.assert_allclose(result.quantity("delays", "ps").magnitude, delays)
+    jones = sim.inhomogeneous_jones_matrices(magnetization_map=mag_map, delays=delays * 1e-12)
+    np.testing.assert_allclose(jones.delays, delays * 1e-12)
+    assert "delays" not in sim.inhomogeneous_reflectivity_transmissivity(magnetization_map=mag_map)
+    with pytest.raises(ValueError, match="1D array"):
+        sim.calc_inhomogeneous_reflectivity_transmissivity(
+            magnetization_map=mag_map, delays=delays[1:] * u.ps
+        )
+    # the delays of an upstream result
+    upstream = Result("magnetization map")
+    upstream.add_coord("delays", delays * u.ps, "ps")
+    upstream.add("magnetization_map", mag_map, ("delays", "distances", "components"))
+    sim.instrument.delay_resolution = "box"
+    sim.instrument.delay_width = 0.5
+    from_result = sim.calc_inhomogeneous_reflectivity_transmissivity(magnetization_map=upstream)
+    given = sim.calc_inhomogeneous_reflectivity_transmissivity(
+        magnetization_map=mag_map, delays=delays * u.ps
+    )
+    for r, g in zip(from_result, given):
+        np.testing.assert_allclose(r, g)
+    np.testing.assert_allclose(
+        sim.calc_inhomogeneous_reflectivity_transmissivity(
+            magnetization_map=upstream, delays=delays * u.ps
+        )[0],
+        given[0],
+    )
+    with pytest.raises(ValueError, match="differ"):
+        sim.calc_inhomogeneous_reflectivity_transmissivity(
+            magnetization_map=upstream, delays=2 * delays * u.ps
+        )
+    # the delays enter the hash with a temporal resolution
+    sim.save_data = True
+    sim.cache_dir = str(tmp_path)
+    sim.force_recalc = False
+    first = sim.inhomogeneous_reflectivity_transmissivity(magnetization_map=upstream)
+    other = sim.inhomogeneous_reflectivity_transmissivity(
+        magnetization_map=mag_map, delays=(delays + 0.1) * u.ps
+    )
+    assert other.attrs["hash"] != first.attrs["hash"]
+    assert first.attrs["parameters"]["instrument"]["delay_width"] == 0.5 * u.ps
+
+
+def test_xray_dyn_temporal_resolution(xray_dyn, structure_crystalline):
+    xray_dyn.theta = np.linspace(31, 33, 41) * u.deg
+    L = structure_crystalline.num_layers
+    delays = np.linspace(-1, 4, 11) * u.ps
+    strain_map = np.zeros([11, L])
+    strain_map[delays.magnitude >= 0, :] = 1e-3
+    R = xray_dyn.calc_inhomogeneous_reflectivity(strain_map)
+    xray_dyn.instrument.delay_resolution = "gauss"
+    xray_dyn.instrument.delay_width = 1
+    with pytest.raises(ValueError, match="needs the delays"):
+        xray_dyn.calc_inhomogeneous_reflectivity(strain_map)
+    result = xray_dyn.inhomogeneous_reflectivity(strain_map, delays=delays)
+    expected = ins.convolve_delays(R, 0, delays.to("s").magnitude, 1e-12, "gauss")
+    np.testing.assert_allclose(result.reflectivity, expected, rtol=1e-10)
+    np.testing.assert_allclose(result.quantity("delays", "ps").magnitude, delays.magnitude)
