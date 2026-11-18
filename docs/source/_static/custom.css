@@ -1,3 +1,78 @@
+/* Fira Sans for text and headings, Fira Mono for code
+ *
+ * The fonts are served from _static/fonts instead of Google Fonts, so no
+ * requests are sent to third parties (SIL Open Font License, see OFL.txt).
+ */
+@font-face {
+  font-family: "Fira Sans";
+  src: url("fonts/FiraSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Sans";
+  src: url("fonts/FiraSans-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Sans";
+  src: url("fonts/FiraSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Sans";
+  src: url("fonts/FiraSans-SemiBoldItalic.woff2") format("woff2");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Sans";
+  src: url("fonts/FiraSans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Sans";
+  src: url("fonts/FiraSans-BoldItalic.woff2") format("woff2");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Mono";
+  src: url("fonts/FiraMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fira Mono";
+  src: url("fonts/FiraMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+html {
+  --pst-font-family-base: "Fira Sans", var(--pst-font-family-base-system);
+  --pst-font-family-heading: "Fira Sans", var(--pst-font-family-base-system);
+  --pst-font-family-monospace: "Fira Mono", var(--pst-font-family-monospace-system);
+}
+
 /* rich representations (_repr_html_) of udkm1Dsim objects in notebook outputs
  *
  * In dark mode, the theme renders HTML outputs in a light box, so all colors
