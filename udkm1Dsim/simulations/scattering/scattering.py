@@ -163,7 +163,8 @@ class Scattering(Simulation):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.experiment = ExperimentParameters()
-        self.instrument = InstrumentParameters()
+        # the instrument is created on its first use, see instrument
+        self._instrument = None
 
         self._pol_in_state = 3  # sigma
         self._pol_out_state = 0  # no analyzer
@@ -398,7 +399,7 @@ class Scattering(Simulation):
             ["q_z", self._format_range(self.qz)],
             ["incoming polarization", self.polarizations[self.pol_in_state]],
             ["analyzer polarization", self.polarizations[self.pol_out_state]],
-            ["instrument", "active" if self.instrument.is_active else "none"],
+            ["instrument", "active" if self._instrument_active else "none"],
         ]
         return super()._property_rows() + output
 
@@ -547,10 +548,10 @@ class Scattering(Simulation):
             self.experiment.energy.magnitude,
             strain_vectors,
         ]
-        if self.instrument.is_active:
+        if self._instrument_active:
             # only an instrument changes the hash of former results
             param.append(("instrument", self.instrument._hash_items()))
-        if self.instrument.is_delay_active and kwargs.get("delays") is not None:
+        if self._delay_active and kwargs.get("delays") is not None:
             param.append(("delays", kwargs["delays"]))
 
         if "strain_map" in kwargs:
@@ -640,16 +641,16 @@ class Scattering(Simulation):
                 inhomogeneous simulation.
 
         """
-        ins = self.instrument
-        if ins.is_delay_active and lead > 0 and delays is None:
+        if self._delay_active and lead > 0 and delays is None:
             raise ValueError(
                 "The temporal resolution of the instrument needs the delays of the maps, "
                 "which are given by the argument delays or are taken from the upstream "
                 "result of the maps!"
             )
-        if not ins.is_active:
+        if not self._instrument_active:
             values = calc()
             return finish(values) if finish is not None else values
+        ins = self.instrument
         exp = self.experiment
         scan = exp._scan
         energy0 = np.array(exp.energy.magnitude, dtype=float)
@@ -786,7 +787,7 @@ class Scattering(Simulation):
         the photon energies and angles of the experiment, which is taken
         from a node without shift, if there is one, e.g. for a convolution,
         or calculated once more"""
-        if not self.instrument.is_active:
+        if not self._instrument_active:
             return calc()
         energy = np.array(self.experiment.energy.magnitude)
         theta = np.array(self.experiment.theta.magnitude)
@@ -837,6 +838,33 @@ class Scattering(Simulation):
         trailing axes of the ``value``, e.g. of several polarizations"""
         trail = np.ndim(value) - lead - 2
         return weights.reshape((1,) * lead + weights.shape + (1,) * trail)
+
+    @property
+    def instrument(self):
+        """InstrumentParameters: instrument function of the simulation, which
+        is created on its first use."""
+        if self._instrument is None:
+            self._instrument = InstrumentParameters()
+        return self._instrument
+
+    @instrument.setter
+    def instrument(self, instrument):
+        if not isinstance(instrument, InstrumentParameters):
+            raise TypeError(
+                f"The instrument must be InstrumentParameters, not {type(instrument).__name__}!"
+            )
+        self._instrument = instrument
+
+    @property
+    def _instrument_active(self):
+        """the instrument changes the results, which is checked without
+        creating an unused instrument"""
+        return self._instrument is not None and self._instrument.is_active
+
+    @property
+    def _delay_active(self):
+        """the instrument has a temporal resolution"""
+        return self._instrument is not None and self._instrument.is_delay_active
 
     @property
     def energy(self):

@@ -388,10 +388,10 @@ class MultilayerScattering(Scattering):
         if self._azimuth != 0:
             # only an azimuth changes the hash of former results
             param.append(("azimuth", self._azimuth))
-        if self.instrument.is_active:
+        if self._instrument_active:
             # only an instrument changes the hash of former results
             param.append(("instrument", self.instrument._hash_items()))
-        if self.instrument.is_delay_active and kwargs.get("delays") is not None:
+        if self._delay_active and kwargs.get("delays") is not None:
             param.append(("delays", kwargs["delays"]))
 
         return self.S.get_hash(types=["xray", "magnetic", "optical"]) + "_" + make_hash_md5(param)
@@ -2681,10 +2681,7 @@ class MultilayerScattering(Scattering):
                 lead=lead,
                 delays=delays,
             )
-        if (
-            reduce is MultilayerScattering._reduce_rotation_ellipticity
-            and self.instrument.is_active
-        ):
+        if reduce is MultilayerScattering._reduce_rotation_ellipticity and self._instrument_active:
             kinds = ("reflected terms",) * 8 + ("transmitted terms",) * 8
             return self.apply_instrument(
                 lambda: compute(MultilayerScattering._reduce_polarization_terms),

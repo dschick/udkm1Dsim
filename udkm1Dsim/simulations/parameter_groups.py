@@ -254,6 +254,8 @@ class InstrumentParameters(ParameterGroup):
         "footprint": footprints,
     }
     _spectrum_keys = ("offset", "factor", "weight", "width")
+    # settings of the default instrument, see is_active
+    _default_hash_items = None
 
     def __init__(self):
         self.theta_resolution = "none"
@@ -360,7 +362,11 @@ class InstrumentParameters(ParameterGroup):
     def is_active(self):
         """bool: the instrument changes the results of the simulations,
         otherwise they are calculated as without an instrument."""
-        return self._hash_items() != InstrumentParameters()._hash_items()
+        if InstrumentParameters._default_hash_items is None:
+            # the defaults are compared for every calculation, so they are
+            # created only once
+            InstrumentParameters._default_hash_items = InstrumentParameters()._hash_items()
+        return self._hash_items() != InstrumentParameters._default_hash_items
 
     def to_dict(self):
         """dict: all settings of the instrument with Quantities for values
@@ -383,8 +389,8 @@ class InstrumentParameters(ParameterGroup):
             if name.startswith("_"):
                 continue
             if isinstance(value, Parameter):
-                magnitude = np.asarray(value.magnitude, dtype=float)
-                value = (magnitude.tolist(), f"{value.unit}")
+                # the unit of a parameter is fixed, as values are converted to it
+                value = np.asarray(value.magnitude, dtype=float).tolist()
             settings[name] = value
         return settings
 
