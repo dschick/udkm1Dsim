@@ -21,7 +21,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""X-ray and light scattering simulations.
+r"""X-ray and light scattering simulations.
 
 The formalisms are named by their method:
 
