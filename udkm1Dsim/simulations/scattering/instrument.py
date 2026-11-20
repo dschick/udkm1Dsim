@@ -211,6 +211,16 @@ def convolution_matrix(x, width, shape, range=2.0, eta=0.5):
     at the box, as well as at the ends of the grid. A width below the
     spacing of the grid keeps the values.
 
+    Each row is the trapezoidal rule of the integral over the profile at
+    :math:`x_i` with the neighboring points of the grid as nodes. For an
+    equidistant grid and a constant width, all rows are the same profile
+    shifted by one point, i.e. :math:`K` is a Toeplitz matrix and
+    :math:`K y` is the discrete convolution, which is calculated by the FFT
+    in :func:`convolve_on_grid` instead. For a varying width, every row has
+    the profile of its own width :math:`w_i`, i.e. of the point of the
+    experiment, which is no convolution in the strict sense anymore and
+    has no FFT, while the truncation keeps :math:`K` sparse.
+
     Args:
         x (ndarray[float]): grid of shape (N,).
         width (ndarray[float]): FWHM of the profile of shape (N,) or a scalar.
@@ -286,8 +296,9 @@ def convolve_on_grid(values, axis, x, width, shape, range=2.0, eta=0.5):
 
     Convolution of ``values`` along their ``axis`` on the grid :math:`x`
     with a profile of the FWHM ``width``, see :func:`convolution_matrix`.
-    For a constant width, the values are convolved by a fast convolution on
-    an equidistant grid of the smallest spacing of :math:`x`, to which they
+    For a constant width, the values are convolved by the FFT, i.e. by the
+    overlap-add method of :func:`scipy.signal.oaconvolve`, on an equidistant
+    grid of the smallest spacing of :math:`x`, to which they
     are interpolated linearly for a non-equidistant grid, as for
     :func:`~udkm1Dsim.helpers.conv_with_function`, and normalized at the
     ends of the grid. A varying width is convolved exactly by the
