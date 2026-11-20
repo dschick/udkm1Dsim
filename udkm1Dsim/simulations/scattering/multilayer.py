@@ -388,6 +388,11 @@ class MultilayerScattering(Scattering):
         if self._azimuth != 0:
             # only an azimuth changes the hash of former results
             param.append(("azimuth", self._azimuth))
+        if self._instrument_active:
+            # only an instrument changes the hash of former results
+            param.append(("instrument", self.instrument._hash_items()))
+        if self._delay_active and kwargs.get("delays") is not None:
+            param.append(("delays", kwargs["delays"]))
 
         return self.S.get_hash(types=["xray", "magnetic", "optical"]) + "_" + make_hash_md5(param)
 
@@ -1430,8 +1435,13 @@ class MultilayerScattering(Scattering):
               magnetization.
 
         """
-        jones = self.calc_homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar)
-        return self._reduce_reflectivity_transmissivity(self, jones)
+        return self._reduce_with_instrument(
+            lambda reduce: reduce(
+                self,
+                self.calc_homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar),
+            ),
+            MultilayerScattering._reduce_reflectivity_transmissivity,
+        )
 
     def homogeneous_rotation_ellipticity(
         self,
@@ -1519,8 +1529,13 @@ class MultilayerScattering(Scattering):
 
         """
         self._pi_incident()
-        jones = self.calc_homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar)
-        return self._reduce_rotation_ellipticity(self, jones)
+        return self._reduce_with_instrument(
+            lambda reduce: reduce(
+                self,
+                self.calc_homogeneous_jones_matrices(strains, magnetizations, temps, polar=polar),
+            ),
+            MultilayerScattering._reduce_rotation_ellipticity,
+        )
 
     # ---- fields and absorption --------------------------------------------------
 
@@ -2057,6 +2072,7 @@ class MultilayerScattering(Scattering):
         temp_map=np.array([]),
         *,
         polar=False,
+        delays=None,
         **kwargs,
     ):
         r"""inhomogeneous_jones_matrices
@@ -2091,6 +2107,11 @@ class MultilayerScattering(Scattering):
             polar (bool, optional): the ``magnetization_map`` is given in polar
                 coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
                 as before version 2.6.1. Defaults to False.
+            delays (ndarray[float, Quantity], optional): delays (s) of the
+                maps, which are taken from their upstream result otherwise.
+                They are needed for the temporal resolution of the
+                :attr:`instrument` only, see
+                :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.get_inhomogeneous_delays`.
             **kwargs:
                 - *calc_type (str)* - ``sequential`` (default) or ``parallel``
                   over blocks of delays utilizing `Dask <https://dask.org/>`_
@@ -2117,6 +2138,7 @@ class MultilayerScattering(Scattering):
         strain_map, magnetization_map = self._parse_maps(
             strain_map, magnetization_map, temp_map, polar
         )
+        delays = self.get_inhomogeneous_delays(delays, source, np.size(strain_map, 0))
         results = self._timed(
             "inhomogeneous_jones_matrices",
             self._calc_inhomogeneous,
@@ -2133,6 +2155,7 @@ class MultilayerScattering(Scattering):
             source=source,
             inputs={"polar": polar},
             input_maps=input_maps,
+            delays=delays,
         )
 
     def calc_inhomogeneous_jones_matrices(self, strain_map, magnetization_map, temp_map=None):
@@ -2176,6 +2199,7 @@ class MultilayerScattering(Scattering):
         temp_map=np.array([]),
         *,
         polar=False,
+        delays=None,
         **kwargs,
     ):
         r"""inhomogeneous_reflectivity_transmissivity
@@ -2209,6 +2233,11 @@ class MultilayerScattering(Scattering):
             polar (bool, optional): the ``magnetization_map`` is given in polar
                 coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
                 as before version 2.6.1. Defaults to False.
+            delays (ndarray[float, Quantity], optional): delays (s) of the
+                maps, which are taken from their upstream result otherwise.
+                They are needed for the temporal resolution of the
+                :attr:`instrument` only, see
+                :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.get_inhomogeneous_delays`.
             **kwargs:
                 - *calc_type (str)* - ``sequential`` (default) or ``parallel``
                   over blocks of delays utilizing `Dask <https://dask.org/>`_
@@ -2220,7 +2249,8 @@ class MultilayerScattering(Scattering):
             result (Result): with the ``reflectivity`` and ``transmissivity``,
             also for opposite magnetization ``reflectivity_phi`` and
             ``transmissivity_phi``, of the dimensions ``delays``, ``energy``, and ``angles``,
-            whose ``delays`` are taken from a given upstream result, see
+            whose ``delays`` are taken from a given upstream result or are the
+            given ``delays``, see
             :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
 
         """
@@ -2233,6 +2263,7 @@ class MultilayerScattering(Scattering):
             magnetization_map,
             temp_map,
             polar,
+            delays,
             kwargs,
         )
 
@@ -2243,6 +2274,7 @@ class MultilayerScattering(Scattering):
         temp_map=np.array([]),
         *,
         polar=False,
+        delays=None,
         **kwargs,
     ):
         """calc_inhomogeneous_reflectivity_transmissivity
@@ -2263,14 +2295,16 @@ class MultilayerScattering(Scattering):
               magnetization.
 
         """
-        strain_map, magnetization_map = self._parse_result_maps_to_arrays(
-            strain_map, magnetization_map, temp_map, polar
+        strain_map, magnetization_map, delays = self._parse_result_maps_to_arrays(
+            strain_map, magnetization_map, temp_map, polar, delays
         )
-        return self._calc_inhomogeneous(
-            strain_map,
-            magnetization_map,
+        return self._reduce_with_instrument(
+            lambda reduce: self._calc_inhomogeneous(
+                strain_map, magnetization_map, reduce, **kwargs
+            ),
             MultilayerScattering._reduce_reflectivity_transmissivity,
-            **kwargs,
+            lead=1,
+            delays=delays,
         )
 
     def inhomogeneous_rotation_ellipticity(
@@ -2280,6 +2314,7 @@ class MultilayerScattering(Scattering):
         temp_map=np.array([]),
         *,
         polar=False,
+        delays=None,
         **kwargs,
     ):
         r"""inhomogeneous_rotation_ellipticity
@@ -2314,6 +2349,11 @@ class MultilayerScattering(Scattering):
             polar (bool, optional): the ``magnetization_map`` is given in polar
                 coordinates ``(amplitude, phi, gamma)`` with the angles in rad,
                 as before version 2.6.1. Defaults to False.
+            delays (ndarray[float, Quantity], optional): delays (s) of the
+                maps, which are taken from their upstream result otherwise.
+                They are needed for the temporal resolution of the
+                :attr:`instrument` only, see
+                :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.get_inhomogeneous_delays`.
             **kwargs:
                 - *calc_type (str)* - ``sequential`` (default) or ``parallel``
                   over blocks of delays utilizing `Dask <https://dask.org/>`_
@@ -2327,7 +2367,8 @@ class MultilayerScattering(Scattering):
             ``transmission_rotation`` and ``transmission_ellipticity``, e.g.
             the Faraday effect, also for opposite magnetization with the
             suffix ``_phi``, in (deg) of the dimensions ``delays``, ``energy``, and ``angles``,
-            whose ``delays`` are taken from a given upstream result, see
+            whose ``delays`` are taken from a given upstream result or are the
+            given ``delays``, see
             :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
 
         """
@@ -2341,6 +2382,7 @@ class MultilayerScattering(Scattering):
             magnetization_map,
             temp_map,
             polar,
+            delays,
             kwargs,
         )
 
@@ -2351,6 +2393,7 @@ class MultilayerScattering(Scattering):
         temp_map=np.array([]),
         *,
         polar=False,
+        delays=None,
         **kwargs,
     ):
         """calc_inhomogeneous_rotation_ellipticity
@@ -2368,14 +2411,16 @@ class MultilayerScattering(Scattering):
 
         """
         self._pi_incident()
-        strain_map, magnetization_map = self._parse_result_maps_to_arrays(
-            strain_map, magnetization_map, temp_map, polar
+        strain_map, magnetization_map, delays = self._parse_result_maps_to_arrays(
+            strain_map, magnetization_map, temp_map, polar, delays
         )
-        return self._calc_inhomogeneous(
-            strain_map,
-            magnetization_map,
+        return self._reduce_with_instrument(
+            lambda reduce: self._calc_inhomogeneous(
+                strain_map, magnetization_map, reduce, **kwargs
+            ),
             MultilayerScattering._reduce_rotation_ellipticity,
-            **kwargs,
+            lead=1,
+            delays=delays,
         )
 
     # ---- input maps and results -------------------------------------------------
@@ -2448,12 +2493,19 @@ class MultilayerScattering(Scattering):
             source,
         )
 
-    def _parse_result_maps_to_arrays(self, strain_map, magnetization_map, temp_map, polar):
-        """strain and cartesian magnetization map of arrays or results"""
-        strain_map, magnetization_map, temp_map, polar, _ = self.parse_result_maps(
+    def _parse_result_maps_to_arrays(
+        self, strain_map, magnetization_map, temp_map, polar, delays=None
+    ):
+        """strain and cartesian magnetization map of arrays or results and
+        their delays, see :meth:`get_inhomogeneous_delays`"""
+        strain_map, magnetization_map, temp_map, polar, source = self.parse_result_maps(
             strain_map, magnetization_map, temp_map, polar
         )
-        return self._parse_maps(strain_map, magnetization_map, temp_map, polar)
+        strain_map, magnetization_map = self._parse_maps(
+            strain_map, magnetization_map, temp_map, polar
+        )
+        delays = self.get_inhomogeneous_delays(delays, source, np.size(strain_map, 0))
+        return strain_map, magnetization_map, delays
 
     def _parse_maps(self, strain_map, magnetization_map, temp_map, polar):
         """strain and cartesian magnetization map with the same delays"""
@@ -2508,7 +2560,17 @@ class MultilayerScattering(Scattering):
         return [slice(i, min(i + size, M)) for i in range(0, M, size)]
 
     def _cached_inhomogeneous(
-        self, name, names, unit, reduce, strain_map, magnetization_map, temp_map, polar, kwargs
+        self,
+        name,
+        names,
+        unit,
+        reduce,
+        strain_map,
+        magnetization_map,
+        temp_map,
+        polar,
+        delays,
+        kwargs,
     ):
         """Result of :meth:`_calc_inhomogeneous` with the ``names`` and
         ``unit``, which is saved to and loaded from the cache by its
@@ -2524,9 +2586,17 @@ class MultilayerScattering(Scattering):
         strain_map, magnetization_map = self._parse_maps(
             strain_map, magnetization_map, temp_map, polar
         )
+        delays = self.get_inhomogeneous_delays(delays, source, np.size(strain_map, 0))
 
         def calc():
-            results = self._calc_inhomogeneous(strain_map, magnetization_map, reduce, **kwargs)
+            results = self._reduce_with_instrument(
+                lambda reduce: self._calc_inhomogeneous(
+                    strain_map, magnetization_map, reduce, **kwargs
+                ),
+                reduce,
+                lead=1,
+                delays=delays,
+            )
             title = f"inhomogeneous {name.replace('_', ' and ')}"
             return self._scattering_result(
                 title,
@@ -2537,12 +2607,16 @@ class MultilayerScattering(Scattering):
                 source,
                 inputs={"polar": polar},
                 input_maps=input_maps,
+                delays=delays,
             )
 
         return self._cached_result(
             f"inhomogeneous_{name}_{type(self).__name__}",
             self.get_hash(
-                strain_map=strain_map, magnetization_map=magnetization_map, temp_map=temp_map
+                strain_map=strain_map,
+                magnetization_map=magnetization_map,
+                temp_map=temp_map,
+                delays=delays,
             ),
             calc,
         )
@@ -2592,6 +2666,66 @@ class MultilayerScattering(Scattering):
         R, T = sim.calc_reflectivity_transmissivity(Ref, Trans)
         R_phi, T_phi = sim.calc_reflectivity_transmissivity(Ref_phi, Trans_phi)
         return R, R_phi, T, T_phi
+
+    def _reduce_with_instrument(self, compute, reduce, lead=0, delays=None):
+        """Results of ``compute(reduce)`` with the :attr:`instrument` and the
+        ``delays`` of a temporal resolution, see
+        :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.apply_instrument`,
+        where the rotation and ellipticity follow from the averaged
+        polarization of the light, see :meth:`_reduce_polarization_terms`,
+        and the Jones matrices of ``reduce=None`` have no instrument."""
+        if reduce is MultilayerScattering._reduce_reflectivity_transmissivity:
+            return self.apply_instrument(
+                lambda: compute(reduce),
+                ("reflected", "reflected", "transmitted", "transmitted"),
+                lead=lead,
+                delays=delays,
+            )
+        if reduce is MultilayerScattering._reduce_rotation_ellipticity and self._instrument_active:
+            kinds = ("reflected terms",) * 8 + ("transmitted terms",) * 8
+            return self.apply_instrument(
+                lambda: compute(MultilayerScattering._reduce_polarization_terms),
+                kinds,
+                MultilayerScattering._finish_rotation_ellipticity,
+                lead=lead,
+                delays=delays,
+            )
+        return compute(reduce)
+
+    @staticmethod
+    def _reduce_polarization_terms(sim, jones):
+        r"""terms :math:`|a|^2`, :math:`|b|^2`, :math:`\Re(a^* b)`, and
+        :math:`\Im(a^* b)` of the outgoing field of each Jones matrix with
+        the component :math:`a` of the incoming :math:`\sigma` or
+        :math:`\pi` polarization and the perpendicular one :math:`b`,
+        which are averaged by the instrument as the Stokes parameters of
+        the light"""
+        pi_incident = sim._pi_incident()
+        terms = []
+        for j in jones:
+            if pi_incident:
+                a, b = j[..., 1, 1], j[..., 0, 1]
+            else:
+                a, b = j[..., 0, 0], j[..., 1, 0]
+            cross = np.conj(a) * b
+            terms += [np.abs(a) ** 2, np.abs(b) ** 2, np.real(cross), np.imag(cross)]
+        return tuple(terms)
+
+    @staticmethod
+    def _finish_rotation_ellipticity(terms):
+        r"""rotation and ellipticity (deg) of the averaged terms of
+        :meth:`_reduce_polarization_terms` by
+        :math:`\tan(2\theta) = 2 \Re(a^* b) / (|a|^2 - |b|^2)` and
+        :math:`\sin(2\epsilon) = 2 \Im(a^* b) / (|a|^2 + |b|^2)`, which
+        equal :meth:`calc_rotation_ellipticity` for a single node"""
+        result = []
+        for i in range(0, len(terms), 4):
+            a2, b2, re, im = terms[i : i + 4]
+            rotation = 0.5 * np.arctan2(2 * re, a2 - b2)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                ellipticity = 0.5 * np.arcsin(np.clip(2 * im / (a2 + b2), -1, 1))
+            result += [np.rad2deg(rotation), np.rad2deg(ellipticity)]
+        return tuple(result)
 
     @staticmethod
     def _reduce_rotation_ellipticity(sim, jones):

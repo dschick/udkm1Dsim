@@ -21,7 +21,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""X-ray and light scattering simulations.
+r"""X-ray and light scattering simulations.
 
 The formalisms are named by their method:
 
@@ -61,6 +61,19 @@ and ``sim.qz`` as shortcuts. The polarizations are set by
 :meth:`~Scattering.set_polarization` with their ids or names in
 ``polarizations``, e.g. ``sim.set_polarization("sigma", "none")``, and states
 which are not supported by a formalism raise a ``ValueError``.
+
+The instrument function of all formalisms is set by the
+:class:`~udkm1Dsim.simulations.parameter_groups.InstrumentParameters` in
+``sim.instrument``, i.e. the angular and spectral resolution of a box,
+Gaussian, Lorentzian, or pseudo-Voigt profile, the ``spectrum`` of the
+source, e.g. the :math:`K_{\alpha 1}` and :math:`K_{\alpha 2}` lines or
+higher harmonics, the footprint of the beam, the offsets of the angles and
+photon energies, and the intensity and background, see
+:meth:`~Scattering.apply_instrument`. It applies to the reflectivities and
+transmissivities and the rotation and ellipticity, but not to the Jones
+matrices, fields, and absorption. Its temporal resolution convolves the
+inhomogeneous results along their delays, which are given by ``delays`` or
+are taken from the upstream result of the maps.
 
 The code ported from `Dyna <https://gitlab.com/dynadevgroup/Dyna>`_ by
 Stéphane Grenier is included under the MIT license with the author's written

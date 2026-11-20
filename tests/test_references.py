@@ -120,7 +120,7 @@ def test_reference_dielectric_tensors(path):
         )
 
 
-@pytest.mark.parametrize("path, cls", CASES)
+@pytest.mark.parametrize("path, cls", [c for c in CASES if "dyna_R" in load(c.values[0])[0]])
 def test_reflection_against_dyna(path, cls):
     """complex Jones matrices of the reflection against the exact Berreman
     formalism of Dyna, where Elzo and Stepanov are exact only to first order
@@ -195,6 +195,36 @@ def test_reflectivity_against_genx_parratt(path, cls):
     S, _ = build_structure(data, meta)
     R, _ = jones(cls, S, data, meta)
     assert_close(np.abs(R[:, 0, 0]) ** 2, np.abs(data["genx_r"]) ** 2, 1e-9)
+
+
+@pytest.mark.parametrize("footprint", ["gauss", "square"])
+@pytest.mark.parametrize(
+    "path, cls", [c for c in CASES if "genx_R_instrument_gauss" in load(c.values[0])[0]]
+)
+def test_instrument_against_genx(path, cls, footprint):
+    """sigma reflectivity with the angular resolution and the footprint of
+    GenX, whose full convolution in 2theta has Gaussian nodes within
+    +-resintrange of its sigma with the weights of the trapezoidal rule and
+    whose Gaussian beam width is the sigma"""
+    data, meta = load(path)
+    genx = meta["instrument"]
+    fwhm = 2 * np.sqrt(2 * np.log(2))
+    S, _ = build_structure(data, meta)
+    sim = cls(S, True, disp_messages=False, progress_bar=False, save_data=False)
+    sim.energy = np.r_[meta["energy"]] * u.eV
+    sim.theta = data["theta"] * u.deg
+    sim.set_incoming_polarization("sigma")
+    sim.instrument.theta_resolution = "gauss"
+    sim.instrument.theta_width = genx["res"] / 2 * fwhm * u.deg
+    sim.instrument.theta_points = genx["respoints"]
+    sim.instrument.theta_range = genx["resintrange"] / fwhm
+    sim.instrument.footprint = "gauss" if footprint == "gauss" else "box"
+    sim.instrument.beam_width = genx["beamw"] * (fwhm if footprint == "gauss" else 1) * u.mm
+    sim.instrument.sample_length = genx["samplelen"] * u.mm
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        R = sim.calc_homogeneous_reflectivity_transmissivity()[0][0]
+    assert_close(R, data[f"genx_R_instrument_{footprint}"], 1e-9)
 
 
 @pytest.mark.parametrize("path, cls", [c for c in CASES if "genx_W" in load(c.values[0])[0]])

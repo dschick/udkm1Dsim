@@ -786,25 +786,6 @@ class Magnetization(Simulation):
         return values
 
     @staticmethod
-    def parse_delays(delays):
-        """parse_delays
-
-        Returns the delays as plain array in seconds.
-
-        Args:
-            delays (ndarray[Quantity, float]): delays (s).
-
-        Returns:
-            delays (ndarray[float]): delays (s).
-
-        """
-        try:
-            delays = delays.to("s").magnitude
-        except AttributeError:
-            pass
-        return np.asarray(delays, dtype=float)
-
-    @staticmethod
     def parse_field(B_ext):
         """parse_field
 
