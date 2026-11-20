@@ -596,7 +596,10 @@ class Scattering(Simulation):
 
         Applies the :attr:`instrument` to the intensities of
         ``calc()``, which is repeated for all nodes of the quadrature with
-        the experiment set to the photon energies and angles of the nodes:
+        the experiment set to the photon energies and angles of the nodes,
+        see the module :mod:`~udkm1Dsim.simulations.scattering.instrument`
+        for the formulas and the example of the
+        :doc:`instrument function </examples/scattering/instrument_function>`:
 
         1. The ``theta_offset`` and ``energy_offset`` are added.
         2. For each component of the ``spectrum`` and each energy node, the
@@ -651,6 +654,7 @@ class Scattering(Simulation):
             values = calc()
             return finish(values) if finish is not None else values
         ins = self.instrument
+        ins._check_resolutions()
         exp = self.experiment
         scan = exp._scan
         energy0 = np.array(exp.energy.magnitude, dtype=float)
@@ -782,11 +786,40 @@ class Scattering(Simulation):
         )
 
     def _apply_instrument_with_nominal(self, calc):
-        """reflectivity of ``calc()`` with the :attr:`instrument` and the
-        second value of ``calc()``, e.g. the fields of the sub-structures, at
-        the photon energies and angles of the experiment, which is taken
-        from a node without shift, if there is one, e.g. for a convolution,
-        or calculated once more"""
+        """Reflectivity of ``calc()`` with the :attr:`instrument` and its
+        second value without the instrument, see
+        :meth:`apply_instrument`.
+
+        The homogeneous calculations of :class:`.XrayKin` and
+        :class:`.XrayDyn` return the reflectivity :math:`R` together with the
+        reflected fields or the reflection-transmission matrices of the
+        sub-structures :math:`A`. These are complex amplitudes in nested
+        lists with labels, which cannot be averaged over the nodes of the
+        instrument, as its intensities. Hence, only :math:`R` is passed to
+        :meth:`apply_instrument`, while :math:`A` is kept at the photon
+        energies and angles of the experiment:
+
+        1. Without an active instrument, ``calc()`` is returned as it is.
+        2. Otherwise, the first node of the instrument without any shift of
+           the photon energies and angles, e.g. of a ``'convolution'`` mode
+           or the center of an odd number of ``'uniform'`` nodes, gives
+           :math:`A`.
+        3. If there is no such node, e.g. for a ``theta_offset`` or an even
+           number of nodes, ``calc()`` is repeated once more at the
+           experiment, which is restored by :meth:`apply_instrument`.
+
+        Args:
+            calc (callable): returns the reflectivity of shape (M, N) and the
+                values of the sub-structures for the photon energies and
+                angles set in the experiment.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - reflectivity with the instrument.
+            - *A (list)* - values of the sub-structures without the
+              instrument.
+
+        """
         if not self._instrument_active:
             return calc()
         energy = np.array(self.experiment.energy.magnitude)

@@ -27,6 +27,8 @@ __all__ = ["ExperimentParameters", "InstrumentParameters"]
 
 __docformat__ = "restructuredtext"
 
+import warnings
+
 import numpy as np
 import pint
 import scipy.constants as constants
@@ -160,12 +162,20 @@ class InstrumentParameters(ParameterGroup):
     The angular, spectral, and temporal resolution are given by a profile, i.e.
     ``'none'``, ``'box'``, ``'gauss'``, ``'lorentz'``, or ``'pseudo_voigt'``,
     the latter of the mixing :math:`\eta` of a Lorentzian and a Gaussian
-    profile of the same FWHM. Their ``mode`` is either
+    profile of the same FWHM. A resolution needs both, its profile, e.g.
+    ``theta_resolution``, and its FWHM, e.g. ``theta_width``: a width with
+    the profile ``'none'`` is not applied, and a profile with a width of 0
+    has no effect, which are both warned for. Their ``mode`` is either
 
-    * ``'quadrature'``: the simulation is repeated for ``points`` nodes
-      around each point of the grid, which works for any grid,
-    * ``'convolution'``: the result is convolved on the grid of the
-      experiment, which must be dense, e.g. for sharp Bragg peaks, or
+    * ``'quadrature'``: the integral over the profile is approximated by a
+      weighted sum over ``points`` nodes, i.e. the simulation is calculated
+      once for every node with the whole grid of the experiment shifted by
+      the node, so that every point gets its nodes at the correct distance
+      and any grid works,
+    * ``'convolution'``: the integral is evaluated with the neighboring
+      points of the grid as nodes, i.e. the result of a single calculation
+      is convolved on the grid of the experiment, which must be dense,
+      e.g. for sharp Bragg peaks, or
     * ``'qz'``: only for the energy, the spectral spread at a fixed angle is
       approximated by the spread of the angle
       :math:`\sin\vartheta' = \sin\vartheta\,(1 + \Delta E / E)` of
@@ -175,11 +185,13 @@ class InstrumentParameters(ParameterGroup):
     The ``nodes`` of the quadrature are either ``'uniform'`` with the
     weights of the profile on ``points`` equidistant nodes within
     :math:`\pm` ``range`` times the width, which is robust for narrow
-    features, or ``'gauss'``, i.e. Gauss-Hermite nodes of a Gaussian and
-    Gauss-Legendre nodes of a box profile, which are more efficient for
+    features, or ``'gaussian_quadrature'``, i.e. Gauss-Hermite nodes of a Gaussian
+    and Gauss-Legendre nodes of a box profile, which are more efficient for
     smooth curves. The widths are scalars or arrays along the energies of
     the experiment for the energy and along its angles or of its shape
-    (M, N) for the angle, e.g. for a mosaicity or a curvature of the sample.
+    (M, N) for the angle, e.g. for a curvature of the sample, whose
+    footprint spreads the angle, or a spectral bandwidth of constant
+    :math:`\Delta E / E`.
 
     The ``spectrum`` of the source is a list of components, e.g. the Cu
     :math:`K_{\alpha 1}` and :math:`K_{\alpha 2}` lines or higher
@@ -205,31 +217,49 @@ class InstrumentParameters(ParameterGroup):
     are added to the angles and photon energies of the experiment, and the
     intensities are scaled to :math:`I_0 I + I_\mathrm{bkg}`.
 
+    The nodes of the quadrature and the formulas of the instrument function
+    are described in the module
+    :mod:`~udkm1Dsim.simulations.scattering.instrument`.
+
     Bare numbers of the angles are degrees, of the energies eV, of the
     widths of the delays ps, and of the lengths mm.
 
     Attributes:
-        theta_resolution (str): profile of the angular resolution.
-        theta_width (ndarray[float]): FWHM of the angular resolution (deg).
+        theta_resolution (str): profile of the angular resolution, i.e.
+            ``'none'`` (default) for no angular resolution, ``'box'``,
+            ``'gauss'``, ``'lorentz'``, or ``'pseudo_voigt'``.
+        theta_width (ndarray[float]): FWHM of the angular resolution (deg),
+            a scalar or an array along the angles or of the shape (M, N) of
+            the experiment.
         theta_eta (float): Lorentzian fraction of a pseudo-Voigt profile.
         theta_mode (str): ``'quadrature'`` or ``'convolution'``.
-        theta_nodes (str): ``'uniform'`` or ``'gauss'`` nodes.
+        theta_nodes (str): ``'uniform'`` or ``'gaussian_quadrature'`` nodes.
         theta_points (int): number of nodes.
-        theta_range (float): range of the uniform nodes in units of the
-            width.
-        energy_resolution (str): profile of the spectral resolution.
-        energy_width (ndarray[float]): FWHM of the spectral resolution (eV).
+        theta_range (float): truncation of the profile in units of its
+            FWHM, i.e. the extent :math:`\pm` range of the uniform nodes and
+            of the convolution, not used by ``'gaussian_quadrature'`` nodes and box
+            profiles.
+        energy_resolution (str): profile of the spectral resolution, i.e.
+            ``'none'`` (default) for no spectral resolution, ``'box'``,
+            ``'gauss'``, ``'lorentz'``, or ``'pseudo_voigt'``.
+        energy_width (ndarray[float]): FWHM of the spectral resolution (eV),
+            a scalar or an array along the photon energies.
         energy_eta (float): Lorentzian fraction of a pseudo-Voigt profile.
         energy_mode (str): ``'quadrature'``, ``'convolution'``, or ``'qz'``.
-        energy_nodes (str): ``'uniform'`` or ``'gauss'`` nodes.
+        energy_nodes (str): ``'uniform'`` or ``'gaussian_quadrature'`` nodes.
         energy_points (int): number of nodes.
-        energy_range (float): range of the uniform nodes in units of the
-            width.
+        energy_range (float): truncation of the profile in units of its
+            FWHM, i.e. the extent :math:`\pm` range of the uniform nodes and
+            of the convolution, not used by ``'gaussian_quadrature'`` nodes and box
+            profiles.
         spectrum (list[dict], None): components of the source spectrum.
-        delay_resolution (str): profile of the temporal resolution.
+        delay_resolution (str): profile of the temporal resolution, i.e.
+            ``'none'`` (default) for no temporal resolution, ``'box'``,
+            ``'gauss'``, ``'lorentz'``, or ``'pseudo_voigt'``.
         delay_width (ndarray[float]): FWHM of the temporal resolution (ps).
         delay_eta (float): Lorentzian fraction of a pseudo-Voigt profile.
-        delay_range (float): range of the convolution in units of the width.
+        delay_range (float): truncation of the profile in units of its
+            FWHM for the convolution, not used by box profiles.
         footprint (str): ``'none'``, ``'box'``, or ``'gauss'`` beam.
         beam_width (float): FWHM or full width of the beam (mm).
         sample_length (float): length of the sample along the beam (mm).
@@ -246,10 +276,10 @@ class InstrumentParameters(ParameterGroup):
     _options = {
         "theta_resolution": profiles,
         "theta_mode": ("quadrature", "convolution"),
-        "theta_nodes": ("uniform", "gauss"),
+        "theta_nodes": ("uniform", "gaussian_quadrature"),
         "energy_resolution": profiles,
         "energy_mode": ("quadrature", "convolution", "qz"),
-        "energy_nodes": ("uniform", "gauss"),
+        "energy_nodes": ("uniform", "gaussian_quadrature"),
         "delay_resolution": profiles,
         "footprint": footprints,
     }
@@ -351,6 +381,32 @@ class InstrumentParameters(ParameterGroup):
         spectrum = self.spectrum or [{"offset": 0.0, "factor": 1.0, "weight": 1.0}]
         total = sum(c["weight"] for c in spectrum)
         return [dict(c, weight=c["weight"] / total) for c in spectrum if c["weight"] > 0]
+
+    def _check_resolutions(self):
+        """Warn for an angular, spectral, or temporal resolution, which is set
+        only partially, i.e. a width without a profile, which is not applied,
+        or a profile without a width, which repeats the same calculation for
+        all its nodes."""
+        widths = {
+            "theta": np.any(self.theta_width.magnitude > 0),
+            "energy": np.any(self.energy_width.magnitude > 0)
+            or any(c.get("width", 0) > 0 for c in self.spectrum or []),
+            "delay": np.any(self.delay_width.magnitude > 0),
+        }
+        for axis, width in widths.items():
+            resolution = getattr(self, f"{axis}_resolution")
+            if width and resolution == "none":
+                warnings.warn(
+                    f"The {axis}_width is set, but the {axis}_resolution is 'none', so that "
+                    f"no {axis} resolution is applied!",
+                    stacklevel=4,
+                )
+            elif not width and resolution != "none":
+                warnings.warn(
+                    f"The {axis}_resolution is {resolution!r}, but the {axis}_width is 0, so "
+                    f"that the {axis} resolution has no effect!",
+                    stacklevel=4,
+                )
 
     @property
     def is_delay_active(self):

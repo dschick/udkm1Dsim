@@ -14,10 +14,22 @@
     :members:
 ```
 
-### Experiment and instrument parameters: `simulations.parameter_groups`
+## Experiment and instrument
+
+### Experiment parameters: `parameter_groups.ExperimentParameters`
 
 ```{eval-rst}
 .. automodule:: udkm1Dsim.simulations.parameter_groups
+
+.. autoclass:: ExperimentParameters
+    :show-inheritance:
+    :members:
+```
+
+### Instrument parameters: `parameter_groups.InstrumentParameters`
+
+```{eval-rst}
+.. autoclass:: udkm1Dsim.simulations.parameter_groups.InstrumentParameters
     :show-inheritance:
     :members:
 ```

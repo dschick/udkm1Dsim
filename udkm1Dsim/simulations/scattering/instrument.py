@@ -21,12 +21,44 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-"""Profiles, quadrature nodes, convolutions, and footprints of the
+r"""Profiles, quadrature nodes, convolutions, and footprints of the
 instrument function of the scattering simulations, see
-:class:`~udkm1Dsim.simulations.parameter_groups.InstrumentParameters`.
+:class:`~udkm1Dsim.simulations.parameter_groups.InstrumentParameters` and
+:meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.apply_instrument`.
 
-All profiles are given in units of their full width at half maximum (FWHM),
-which is the full width of a box.
+All profiles :math:`p(x)` are area-normalized and given in units of their
+full width at half maximum (FWHM), which is the full width of a box, see
+:func:`profile`. The measured intensity is the ideal one averaged over the
+profiles of the angle and the photon energy with the FWHM
+:math:`\Delta\vartheta` and :math:`\Delta E`,
+
+.. math::
+
+    \langle R\rangle(E, \vartheta) = \iint p_E(x_e)\, p_\vartheta(x_t)\,
+    R(E + x_e \Delta E, \vartheta + x_t \Delta\vartheta)\, \mathrm{d}x_e\,
+    \mathrm{d}x_t,
+
+which is approximated by a quadrature with the nodes :math:`x_i` and their
+weights :math:`w_i` of :func:`profile_nodes`, which sum to 1. Every node is a
+shifted copy of the experiment, at which the simulation is calculated once.
+With the components :math:`m` of the ``spectrum`` of the photon energies
+:math:`E_m = f_m E + \delta_m`, the normalized weights :math:`W_m`, and the
+widths :math:`\Delta E_m`, the intensity with the instrument is
+
+.. math::
+
+    I(E, \vartheta) = I_0 \sum_m W_m \sum_e w_e \sum_t w_t\,
+    F(\vartheta_t)\, R(E_m + x_e \Delta E_m, \vartheta_t) + I_\mathrm{bkg},
+    \quad \vartheta_t = \vartheta + x_t \Delta\vartheta,
+
+where the :func:`footprint` :math:`F` scales the reflected intensities only.
+Hence, the simulation is calculated for components :math:`\times` energy
+nodes :math:`\times` angle nodes. An axis in the ``'convolution'`` mode has
+the single node :math:`x = 0` with :math:`w = 1`, and the sum is convolved
+along the grid of the experiment instead, see :func:`convolve_on_grid`. The
+``'qz'`` mode of the photon energy applies its nodes as shifts of the angle
+with the same scattering vector,
+:math:`\sin\vartheta' = \sin\vartheta_t\,(1 + x_e \Delta E_m / E_m)`.
 
 """
 
@@ -93,21 +125,33 @@ def profile(shape, x, eta=0.5):
 
 
 def profile_nodes(shape, nodes="uniform", points=7, range=2.0, eta=0.5):
-    """profile_nodes
+    r"""profile_nodes
 
-    Nodes in units of the FWHM and normalized weights of the quadrature of
-    a profile, see :func:`profile`. The ``'uniform'`` nodes are ``points``
-    equidistant nodes within :math:`\\pm` ``range`` with the weights of the
-    profile by the trapezoidal rule, or the centers of ``points`` equal
-    parts of a box. The
-    ``'gauss'`` nodes are the Gauss-Hermite nodes of a Gaussian and the
-    Gauss-Legendre nodes of a box, which are not defined for the other
-    profiles. No profile, i.e. ``'none'``, has a single node.
+    Nodes :math:`x_i` in units of the FWHM and normalized weights
+    :math:`w_i` of the quadrature of a profile :math:`p(x)`, see
+    :func:`profile` and the module :mod:`.instrument`, for :math:`n`
+    ``points`` and the ``range`` :math:`r`:
+
+    * ``'uniform'``: equidistant nodes
+      :math:`x_i = -r + 2 r\, i / (n - 1)` with the weights of the
+      trapezoidal rule :math:`w_i \propto p(x_i)`, halved at both ends, as
+      the full convolution of GenX, which are robust for narrow features,
+      e.g. Bragg peaks or resonances. A box has the centers of :math:`n`
+      equal parts :math:`x_i = (i + 1/2) / n - 1/2` with :math:`w_i = 1/n`.
+    * ``'gaussian_quadrature'``: the nodes of the Gaussian quadrature, i.e. the
+      Gauss-Hermite nodes of a Gaussian of the standard deviation
+      :math:`\sigma = 1 / (2\sqrt{2 \ln 2})` and the Gauss-Legendre nodes
+      of a box, which integrate smooth
+      functions exactly with few nodes, but are not defined for the other
+      profiles.
+    * ``'none'``: the single node :math:`x = 0` with :math:`w = 1`.
+
+    An odd number of nodes contains the unshifted node :math:`x = 0`.
 
     Args:
         shape (str): profile.
-        nodes (str, optional): ``'uniform'`` or ``'gauss'``. Defaults to
-            ``'uniform'``.
+        nodes (str, optional): ``'uniform'`` or ``'gaussian_quadrature'``.
+            Defaults to ``'uniform'``.
         points (int, optional): number of nodes. Defaults to 7.
         range (float, optional): range of the uniform nodes in units of the
             FWHM. Defaults to 2.
@@ -125,7 +169,7 @@ def profile_nodes(shape, nodes="uniform", points=7, range=2.0, eta=0.5):
         return np.zeros(1), np.ones(1)
     if points < 1:
         raise ValueError(f"The number of nodes must be positive, not {points}!")
-    if nodes == "gauss":
+    if nodes == "gaussian_quadrature":
         if shape == "gauss":
             x, w = np.polynomial.hermite_e.hermegauss(points)
             return x * _SIGMA, w / np.sum(w)
@@ -133,11 +177,11 @@ def profile_nodes(shape, nodes="uniform", points=7, range=2.0, eta=0.5):
             x, w = np.polynomial.legendre.leggauss(points)
             return x / 2, w / np.sum(w)
         raise ValueError(
-            f"Gauss nodes are defined for a 'gauss' and a 'box' profile only, but not for "
-            f"{shape!r}, which needs 'uniform' nodes!"
+            "The Gaussian quadrature is defined for a 'gauss' and a 'box' profile only, "
+            f"but not for {shape!r}, which needs 'uniform' nodes!"
         )
     if nodes != "uniform":
-        raise ValueError(f"The nodes must be 'uniform' or 'gauss', not {nodes!r}!")
+        raise ValueError(f"The nodes must be 'uniform' or 'gaussian_quadrature', not {nodes!r}!")
     if shape == "box":
         x = (np.arange(points) + 0.5) / points - 0.5
         return x, np.full(points, 1 / points)

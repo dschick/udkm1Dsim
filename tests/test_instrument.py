@@ -63,11 +63,11 @@ def test_profiles_have_unit_fwhm_and_area(shape):
 
 def test_gauss_nodes_have_the_moments_of_the_profile():
     sigma = 1 / (2 * np.sqrt(2 * np.log(2)))
-    x, w = ins.profile_nodes("gauss", "gauss", 5)
+    x, w = ins.profile_nodes("gauss", "gaussian_quadrature", 5)
     np.testing.assert_allclose(np.sum(w), 1)
     np.testing.assert_allclose(np.sum(w * x**2), sigma**2)
     np.testing.assert_allclose(np.sum(w * x**4), 3 * sigma**4)
-    x, w = ins.profile_nodes("box", "gauss", 4)
+    x, w = ins.profile_nodes("box", "gaussian_quadrature", 4)
     np.testing.assert_allclose(np.sum(w * x**2), 1 / 12)
     x, w = ins.profile_nodes("box", "uniform", 4)
     np.testing.assert_allclose(x, [-0.375, -0.125, 0.125, 0.375])
@@ -86,7 +86,7 @@ def test_uniform_nodes(shape):
 @pytest.mark.parametrize("shape", ["lorentz", "pseudo_voigt"])
 def test_gauss_nodes_only_for_gauss_and_box(shape):
     with pytest.raises(ValueError, match="uniform"):
-        ins.profile_nodes(shape, "gauss")
+        ins.profile_nodes(shape, "gaussian_quadrature")
 
 
 def test_convolution_matrix():
@@ -187,6 +187,31 @@ def test_inactive_instrument_keeps_the_hash(parratt):
     assert parratt.get_hash() != hash
 
 
+@pytest.mark.parametrize(
+    "settings, match",
+    [
+        ({"theta_width": 0.1}, "theta_width is set, but the theta_resolution is 'none'"),
+        ({"theta_resolution": "gauss"}, "theta_resolution is 'gauss', but the theta_width is 0"),
+        ({"energy_width": 1}, "energy_width is set, but the energy_resolution is 'none'"),
+        ({"energy_resolution": "box"}, "energy_resolution is 'box', but the energy_width is 0"),
+        ({"delay_width": 0.5}, "delay_width is set, but the delay_resolution is 'none'"),
+        ({"delay_resolution": "gauss"}, "delay_resolution is 'gauss', but the delay_width is 0"),
+    ],
+)
+def test_partial_resolution_is_warned(parratt, settings, match):
+    for name, value in settings.items():
+        setattr(parratt.instrument, name, value)
+    with pytest.warns(UserWarning, match=match):
+        parratt.homogeneous_reflectivity_transmissivity()
+
+
+def test_width_of_the_spectrum_completes_the_resolution(parratt, recwarn):
+    parratt.instrument.energy_resolution = "gauss"
+    parratt.instrument.spectrum = [{"weight": 1, "width": 2}]
+    parratt.homogeneous_reflectivity_transmissivity()
+    assert not [w for w in recwarn if "resolution" in str(w.message)]
+
+
 def test_metadata_of_the_instrument(parratt, tmp_path):
     parratt.instrument.theta_resolution = "gauss"
     parratt.instrument.theta_width = 0.02
@@ -210,8 +235,8 @@ def test_metadata_of_the_instrument(parratt, tmp_path):
     "shape,nodes",
     [
         ("gauss", "uniform"),
-        ("gauss", "gauss"),
-        ("box", "gauss"),
+        ("gauss", "gaussian_quadrature"),
+        ("box", "gaussian_quadrature"),
         ("lorentz", "uniform"),
         ("pseudo_voigt", "uniform"),
     ],
@@ -231,8 +256,10 @@ def test_theta_quadrature_is_the_weighted_average(parratt, shape, nodes):
     for x_i, w_i in zip(x, w):
         parratt.instrument.theta_offset = x_i * 0.05
         parratt.instrument.theta_resolution = "none"
+        parratt.instrument.theta_width = 0
         expected = expected + w_i * parratt.calc_homogeneous_reflectivity_transmissivity()[0]
         parratt.instrument.theta_resolution = shape
+        parratt.instrument.theta_width = 0.05
     np.testing.assert_allclose(R, expected, rtol=1e-12)
     assert not np.allclose(R, R0, rtol=1e-3)
 
