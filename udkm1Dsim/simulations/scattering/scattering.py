@@ -34,7 +34,7 @@ import numpy as np
 import pint
 from tqdm.auto import tqdm
 
-from ...helpers import make_hash_md5
+from ...helpers import make_hash_md5, to_angle
 from ...structures.layers import Layer, UnitCell, Vacuum
 from ..parameter_groups import ExperimentParameters, InstrumentParameters
 from ..result import Result
@@ -116,8 +116,10 @@ class Scattering(Simulation):
         energy (ndarray[float]): photon energies :math:`E` of scattering light
         wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
         k (ndarray[float]): wavenumber :math:`k` of scattering light
-        theta (ndarray[float]): incidence angles :math:`\theta` of scattering
-            light
+        theta (Quantity): incidence angles :math:`\theta` of scattering
+            light as pint Quantity with an angular unit, e.g.
+            ``np.r_[0.1:5:0.01] * u.deg``, see
+            :func:`~udkm1Dsim.helpers.to_angle`.
         qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         experiment (ExperimentParameters): photon energies and angles in SI
             units and eV, which also hold the depending quantities.
@@ -976,7 +978,7 @@ class Scattering(Simulation):
 
     @theta.setter
     def theta(self, theta):
-        self.experiment.theta = theta.to("rad")
+        self.experiment.theta = to_angle(theta, name="incidence angle theta")
 
     @property
     def qz(self):

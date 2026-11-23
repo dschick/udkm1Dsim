@@ -260,8 +260,10 @@ class MultilayerScattering(Scattering):
         energy (ndarray[float]): photon energies :math:`E` of scattering light
         wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
         k (ndarray[float]): wavenumber :math:`k` of scattering light
-        theta (ndarray[float]): grazing incidence angles :math:`\theta` of
-            scattering light
+        theta (Quantity): grazing incidence angles :math:`\theta` of
+            scattering light as pint Quantity with an angular unit, e.g.
+            ``np.r_[0.1:5:0.01] * u.deg``, see
+            :func:`~udkm1Dsim.helpers.to_angle`.
         qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         azimuth (Quantity): azimuth :math:`\Phi` of the plane of incidence
             relative to the fixed sample, counterclockwise about the surface

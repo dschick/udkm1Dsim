@@ -885,6 +885,11 @@ def test_experiment_keeps_the_angle_set_last():
     assert "theta" not in sim.experiment._derived and "qz" in sim.experiment._derived
     with pytest.raises(IndexError, match="Set energy, wl, or k first"):
         ud.XrayKin(ud.Structure("empty"), True).qz = np.array([1.0]) / u.nm
+    # bare numbers and dimensionless quantities are ambiguous angles
+    for theta in (np.array([10.0, 20.0]), np.array([0.1, 0.2]) * u.dimensionless):
+        with pytest.raises(TypeError, match="incidence angle theta must be given"):
+            sim.theta = theta
+    np.testing.assert_allclose(sim.theta.to("deg").magnitude, [[10.0, 20.0]] * 2)
 
 
 def test_display_before_the_experiment_is_set():

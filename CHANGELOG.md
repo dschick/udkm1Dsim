@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the figures of the examples are 3.4 inches wide and use the `base` and `paper` styles of [mbistyles](https://github.com/MBI-Div-B/mbistyles), if it is installed
 - **breaking:** `conv_with_function()` is in `udkm1Dsim.helpers` instead of `Simulation.conv_with_function()`, e.g. for any one-dimensional result, while the instrument function of the scattering simulations replaces it in the examples
 - **breaking:** the azimuth angle `alpha` of an elliptical polarization of the multilayer formalisms, e.g. `sim.set_polarization("elliptical", "none", polarization_in=(45 * u.deg, 0))`, must be a pint Quantity with an angular unit, while a bare number, which was taken in rad, raises a `TypeError`
+- the incidence angles `sim.theta` of the scattering simulations and the `theta` and `azimuth` of the `Heat` excitation, which were already pint Quantities, are checked by `to_angle()`, so that a dimensionless Quantity raises a `TypeError` instead of being taken in rad, while the excitation also accepts a list of angle Quantities per pulse
 
 ## [3.0.0a4] 2026-11-16
 
