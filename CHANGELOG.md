@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **breaking:** the azimuth angle `alpha` of an elliptical polarization of the multilayer formalisms, e.g. `sim.set_polarization("elliptical", "none", polarization_in=(45 * u.deg, 0))`, must be a pint Quantity with an angular unit, while a bare number, which was taken in rad, raises a `TypeError`
 - the incidence angles `sim.theta` of the scattering simulations and the `theta` and `azimuth` of the `Heat` excitation, which were already pint Quantities, are checked by `to_angle()`, so that a dimensionless Quantity raises a `TypeError` instead of being taken in rad, while the excitation also accepts a list of angle Quantities per pulse
 - **breaking:** the `theta_width` and `theta_offset` of the `InstrumentParameters` must be pint Quantities with an angular unit, e.g. `0.05 * u.deg`, while a bare number, which was taken in deg, raises a `TypeError`
+- **breaking:** the `azimuth` of the multilayer formalisms, the `euler_angles` of a `Dielectric`, and the angles `phi` and `gamma` of a magnetization `(r, phi, gamma)` for `polar=True` of `Dielectric.get_tensor()`, `Layer.get_dielectric_tensor()`, and `gyrotropic_tensor()` must be pint Quantities with an angular unit, e.g. `(30, 0, 0) * u.deg`, while bare numbers, which were taken in deg for the azimuth and the Euler angles and in rad for the magnetization, raise a `TypeError`; the structure YAML keeps its Euler angles as bare numbers in deg
 
 ## [3.0.0a4] 2026-11-16
 

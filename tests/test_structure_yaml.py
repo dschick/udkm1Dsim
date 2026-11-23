@@ -468,7 +468,7 @@ def test_dielectric_tensor():
         eps_mag=Dispersion.from_array(None, 0.01j, kind="voigt"),
         strain_model="photoelastic",
         deps_dstrain=[0.1, 0.2, 0.3 + 0.01j],
-        euler_angles=(10, 20.5 * u.deg, 0.1 * u.rad),
+        euler_angles=(10 * u.deg, 20.5 * u.deg, 0.1 * u.rad),
     )
     dielectric.display_energy = 800 * u.nm
     deps = Dielectric(eps0=eps0, strain_model="photoelastic", deps_dstrain=eps0)

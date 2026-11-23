@@ -268,8 +268,9 @@ class MultilayerScattering(Scattering):
         azimuth (Quantity): azimuth :math:`\Phi` of the plane of incidence
             relative to the fixed sample, counterclockwise about the surface
             normal :math:`z`, see the module description and
-            :meth:`calc_fields_in_beam_frame`. Bare numbers are degrees.
-            Defaults to 0.
+            :meth:`calc_fields_in_beam_frame`, as angle Quantity, e.g.
+            ``30 * u.deg``, see :func:`~udkm1Dsim.helpers.to_angle`. Defaults
+            to 0.
         polarizations (dict): polarization states and according names.
         pol_in_state (int): incoming polarization state as defined in
             polarizations dict.
@@ -310,10 +311,7 @@ class MultilayerScattering(Scattering):
 
     @azimuth.setter
     def azimuth(self, azimuth):
-        if isinstance(azimuth, Q_):
-            azimuth = azimuth.to("rad").magnitude
-        else:
-            azimuth = np.radians(azimuth)
+        azimuth = to_angle(azimuth, name="azimuth")
         if np.ndim(azimuth) != 0:
             raise ValueError("The azimuth of a simulation must be a single angle!")
         self._azimuth = float(azimuth)

@@ -343,7 +343,7 @@ class Layer:
             strain (float, optional): strain. Defaults to 0.
             magnetization (tuple[float], optional): cartesian magnetization
                 ``(x, y, z)``, or its amplitude, polar angle, and azimuth
-                (rad) for ``polar=True``. Defaults to the magnetization of
+                as angle Quantities for ``polar=True``. Defaults to the magnetization of
                 the layer.
             polar (bool, optional): the magnetization is given in polar
                 coordinates. Defaults to False.

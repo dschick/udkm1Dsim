@@ -74,6 +74,7 @@ from ..helpers import (
     format_number,
     interpolate_table,
     read_columns,
+    to_angle,
     to_energy,
     undefined_error,
 )
@@ -219,7 +220,7 @@ def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
             strength of the magnetic part, of shape (M,) or (..., M).
         magnetization (tuple[float], VectorParameter): cartesian
             magnetization :math:`(m_x, m_y, m_z)`, or its amplitude, polar
-            angle :math:`\phi`, and azimuth :math:`\gamma` (rad) for
+            angle :math:`\phi`, and azimuth :math:`\gamma` as angle Quantities for
             ``polar=True``.
         polar (bool, optional): the magnetization is given in polar
             coordinates. Defaults to False.
@@ -1305,18 +1306,26 @@ class _Scaled(Dispersion):
 def _cartesian_magnetization(magnetization, polar=False):
     """Cartesian magnetization (m_x, m_y, m_z) of a magnetization, given as
     VectorParameter, as cartesian components, or for ``polar=True`` as
-    (amplitude, phi, gamma) with the angles in rad, each also as Quantities."""
+    (amplitude, phi, gamma) with the angles as angle Quantities, see
+    :func:`~udkm1Dsim.helpers.to_angle`."""
     if magnetization is None:
         return np.zeros(3)
     if hasattr(magnetization, "polar_rad"):
         # a VectorParameter defines its coordinates itself
         return magnetization.magnitude
     if isinstance(magnetization, u.Quantity):
+        if polar:
+            raise TypeError(
+                "The polar magnetization must be given by its amplitude and its angles "
+                "separately, e.g. (1, 90 * u.deg, 0 * u.deg)!"
+            )
         magnetization = magnetization.to("").magnitude
     values = []
     for i, value in enumerate(magnetization):
-        if isinstance(value, u.Quantity):
-            value = value.to("rad").magnitude if polar and i > 0 else value.to("").magnitude
+        if polar and i > 0:
+            value = to_angle(value, name=f"angle {('phi', 'gamma')[i - 1]} of the magnetization")
+        elif isinstance(value, u.Quantity):
+            value = value.to("").magnitude
         values.append(float(value))
     if len(values) != 3:
         raise ValueError(
@@ -1397,9 +1406,10 @@ class Dielectric(Parameter):
             measured, total change of the dielectric function per strain for
             the strain model ``photoelastic`` in the frame of the sample.
             Defaults to 0.
-        euler_angles (tuple[float, Quantity], optional): z-x-z Euler angles
-            :math:`(\theta, \phi, \psi)` of the crystal, where floats are taken
-            in deg. Defaults to no rotation.
+        euler_angles (Quantity, tuple[Quantity], optional): z-x-z Euler
+            angles :math:`(\theta, \phi, \psi)` of the crystal as angle
+            Quantities, e.g. ``(30, 0, 0) * u.deg``, see
+            :func:`~udkm1Dsim.helpers.to_angle`. Defaults to no rotation.
 
     """
 
@@ -1433,16 +1443,10 @@ class Dielectric(Parameter):
 
     @staticmethod
     def _check_euler_angles(value):
-        """Euler angles in rad, where floats are taken in deg."""
+        """Euler angles in rad of angle Quantities."""
         if value is None:
             return None
-        if isinstance(value, u.Quantity):
-            angles = np.atleast_1d(value.to("rad").magnitude)
-        else:
-            angles = [
-                v.to("rad").magnitude if isinstance(v, u.Quantity) else np.deg2rad(v)
-                for v in value
-            ]
+        angles = np.atleast_1d(to_angle(value, name="Euler angles")).ravel()
         angles = tuple(float(angle) for angle in angles)
         if len(angles) != 3:
             raise ValueError("The Euler angles must be given as (theta, phi, psi)!")
@@ -1616,7 +1620,7 @@ class Dielectric(Parameter):
                 delays. Defaults to 0.
             magnetization (tuple[float], VectorParameter, optional): cartesian
                 magnetization :math:`(m_x, m_y, m_z)`, or its amplitude, polar
-                angle :math:`\\phi`, and azimuth :math:`\\gamma` (rad) for
+                angle :math:`\\phi`, and azimuth :math:`\\gamma` as angle Quantities for
                 ``polar=True``. Defaults to none.
             density (float, optional): mass density of the layer (kg/m³),
                 which is required by dispersions from atoms.

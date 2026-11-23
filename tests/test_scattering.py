@@ -50,7 +50,7 @@ def relative(a, b):
     return np.max(np.abs(a - b)) / np.max(np.abs(b))
 
 
-def substrate_layer(eps0=None, euler_angles=(0, 0, 0)):
+def substrate_layer(eps0=None, euler_angles=(0, 0, 0) * u.deg):
     sub = AmorphousLayer("sub", "substrate", thickness=0 * u.nm, density=1000 * u.kg / u.m**3)
     eps0 = Dispersion.from_ref_index(N_SUB) if eps0 is None else eps0
     sub.optical.dielectric = Dielectric(eps0=eps0, euler_angles=euler_angles)
@@ -453,7 +453,7 @@ def test_uniaxial_crystal(cls, euler_angles, axis):
     """reflection at a uniaxial crystal with the optic axis along x, y, or z
     from the Fresnel equations of a diagonal dielectric tensor"""
     n_o, n_e = 1.66 + 0.01j, 1.49 + 0.02j
-    sub = substrate_layer(Dispersion.from_ref_index([n_o, n_e]), euler_angles)
+    sub = substrate_layer(Dispersion.from_ref_index([n_o, n_e]), euler_angles * u.deg)
     eps = np.full(3, n_o**2)
     eps[axis] = n_e**2
     theta = np.r_[5:85:10]
@@ -476,7 +476,7 @@ def test_uniaxial_crystal(cls, euler_angles, axis):
 def test_tilted_optic_axis():
     """a tilted optic axis out of the plane of incidence converts the
     polarization, while both Berreman formalisms agree"""
-    sub = substrate_layer(Dispersion.from_ref_index([1.66, 1.49]), (45, 30, 0))
+    sub = substrate_layer(Dispersion.from_ref_index([1.66, 1.49]), (45, 30, 0) * u.deg)
     S = interface(sub)
     S.add_sub_structure(substrate_layer(Dispersion.from_ref_index(1.3)), 1)
     energy, theta = np.r_[1.55, 2.5] * u.eV, np.r_[10:80:10] * u.deg
@@ -1564,7 +1564,9 @@ def test_magnetic_absorption_of_elzo_and_berreman(magnetization):
 def test_anisotropic_absorption(cls):
     """energy conservation for a tilted uniaxial absorbing layer, which mixes
     the sigma and pi polarizations"""
-    layer = substrate_layer(Dispersion.from_ref_index([1.66 + 0.05j, 1.49 + 0.1j]), (30, 20, 0))
+    layer = substrate_layer(
+        Dispersion.from_ref_index([1.66 + 0.05j, 1.49 + 0.1j]), (30, 20, 0) * u.deg
+    )
     layer.structural.thickness = 200 * u.nm
     S = Structure("birefringent")
     S.add_sub_structure(layer, 1)
@@ -1708,7 +1710,9 @@ def test_layer_absorption(cls, roughness):
 
 def birefringent_layer():
     """vacuum around a tilted uniaxial absorbing layer"""
-    layer = substrate_layer(Dispersion.from_ref_index([1.66 + 0.05j, 1.49 + 0.1j]), (30, 20, 0))
+    layer = substrate_layer(
+        Dispersion.from_ref_index([1.66 + 0.05j, 1.49 + 0.1j]), (30, 20, 0) * u.deg
+    )
     layer.structural.thickness = 200 * u.nm
     S = Structure("birefringent")
     S.add_sub_structure(layer, 1)
@@ -1794,9 +1798,11 @@ def test_azimuth_of_anisotropic_layer(cls):
     """the azimuth of the plane of incidence equals the opposite in-plane
     rotation of the crystal by its Euler angle phi"""
     energy, theta = np.r_[1.2, 1.55] * u.eV, np.r_[20, 45, 70] * u.deg
-    sim = simulation(cls, biaxial_layer((20, 10, 15)), energy, theta)
+    sim = simulation(cls, biaxial_layer((20, 10, 15) * u.deg), energy, theta)
     sim.azimuth = 35 * u.deg
-    rotated = simulation(cls, biaxial_layer((20, 10 - 35, 15)), energy, theta)
+    with pytest.raises(TypeError, match="azimuth must be given"):
+        sim.azimuth = 35
+    rotated = simulation(cls, biaxial_layer((20, 10 - 35, 15) * u.deg), energy, theta)
     np.testing.assert_allclose(
         sim.calc_homogeneous_jones_matrices()[0],
         rotated.calc_homogeneous_jones_matrices()[0],
@@ -1814,7 +1820,9 @@ def test_azimuth_of_magnetic_layer(cls):
     energy, theta = np.r_[1.55] * u.eV, np.r_[30, 60] * u.deg
     m = np.array([0.3, 0.5, 0.81]) / np.linalg.norm([0.3, 0.5, 0.81])
     sim = simulation(cls, magnetic_film(tuple(m)), energy, theta)
-    sim.azimuth = 35
+    sim.azimuth = 35 * u.deg
+    with pytest.raises(TypeError, match="azimuth must be given"):
+        sim.azimuth = 35
     assert sim.azimuth == 35 * u.deg
     rotated = simulation(cls, magnetic_film(beam_frame(m, 35)), energy, theta)
     np.testing.assert_allclose(
@@ -1854,7 +1862,7 @@ def test_azimuth_parameters():
     assert sim.get_hash() != hash
     assert sim._parameters()["azimuth"] == sim.azimuth
     assert "azimuth" in repr(sim)
-    sim.azimuth = 0
+    sim.azimuth = 0 * u.deg
     assert sim.get_hash() == hash
     with pytest.raises(ValueError, match="single"):
         sim.azimuth = [0, 10] * u.deg

@@ -221,13 +221,14 @@ def test_dielectric_gyrotropic_tensor():
     reversed_eps = gyrotropic_tensor(1 + chi0, chim, -m)[0]
     np.testing.assert_allclose(reversed_eps, eps.T)
     np.testing.assert_allclose(np.diagonal(eps), 1.1 + 0.01j)
-    # the same magnetization in polar coordinates, also as Quantities
-    np.testing.assert_allclose(
-        gyrotropic_tensor(1 + chi0, chim, (0.7, 0.4, 1.1), polar=True)[0], eps
-    )
+    # the same magnetization in polar coordinates with angle Quantities
     np.testing.assert_allclose(
         gyrotropic_tensor(1 + chi0, chim, (0.7, 0.4 * u.rad, 1.1 * u.rad), polar=True)[0], eps
     )
+    # but no bare angles or a single Quantity of the amplitude and the angles
+    for magnetization in ((0.7, 0.4, 1.1), (0.7, 0.4, 1.1) * u.rad):
+        with pytest.raises(TypeError, match="magnetization"):
+            gyrotropic_tensor(1 + chi0, chim, magnetization, polar=True)
     # same as -i chim eps_ijk m_k
     levi_civita = np.zeros((3, 3, 3))
     for i, j, k in [(0, 1, 2), (1, 2, 0), (2, 0, 1)]:
@@ -292,7 +293,7 @@ def test_euler_matrix():
 
 def test_dielectric_euler_angles():
     eps0 = Dispersion.from_ref_index([1.5, 2.0])  # uniaxial along the c-axis of the crystal
-    dielectric = Dielectric(eps0=eps0, euler_angles=(90, 0, 0))
+    dielectric = Dielectric(eps0=eps0, euler_angles=(90, 0, 0) * u.deg)
     np.testing.assert_allclose(dielectric.euler_angles.magnitude, [90, 0, 0])
     # the c-axis is rotated into the surface plane
     np.testing.assert_allclose(
@@ -304,7 +305,7 @@ def test_dielectric_euler_angles():
     np.testing.assert_allclose(np.trace(eps), 2 * 2.25 + 4)
     np.testing.assert_allclose(eps, eps.T)
     # isotropic dielectrics do not change
-    iso = Dielectric(eps0=Dispersion.from_ref_index(2), euler_angles=(30, 45, 10))
+    iso = Dielectric(eps0=Dispersion.from_ref_index(2), euler_angles=(30, 45, 10) * u.deg)
     np.testing.assert_allclose(iso.get_tensor(1.0)[0], 4 * np.eye(3), atol=1e-12)
     # the magnetization and the photoelastic change are given in the frame of the sample
     rotated = Dielectric(
@@ -312,13 +313,15 @@ def test_dielectric_euler_angles():
         eps_mag=Dispersion.from_array(None, 0.02j),
         strain_model="photoelastic",
         deps_dstrain=[0, 0, 1],
-        euler_angles=(90, 0, 0),
+        euler_angles=(90, 0, 0) * u.deg,
     )
     eps = rotated.get_tensor(1.0, 0.1, (0, 0, 1))[0]
     np.testing.assert_allclose(eps[2, 2], 4.1)
     np.testing.assert_allclose(eps[0, 1], -1j * 0.02j / 1.1)
     # the same magnetization along z in polar coordinates
-    np.testing.assert_allclose(rotated.get_tensor(1.0, 0.1, (1, 0, 0), polar=True)[0], eps)
+    np.testing.assert_allclose(
+        rotated.get_tensor(1.0, 0.1, (1, 0 * u.deg, 0 * u.deg), polar=True)[0], eps
+    )
     # the rotation is part of the representation and the display
     assert "euler_angles" in repr(dielectric)
     assert repr(dielectric) != repr(Dielectric(eps0=eps0))
@@ -330,7 +333,9 @@ def test_dielectric_euler_angles():
     layer = Layer("l", "l", dielectric=dielectric)
     np.testing.assert_allclose(layer.optical.dielectric.euler_angles.magnitude, [30, 45, 10])
     with pytest.raises(ValueError, match="theta, phi, psi"):
-        dielectric.euler_angles = (1, 2)
+        dielectric.euler_angles = (1, 2) * u.deg
+    with pytest.raises(TypeError, match="Euler angles must be given"):
+        dielectric.euler_angles = (30, 45, 10)
 
 
 def test_dielectric_ref_index_and_pen_depth():
@@ -672,7 +677,9 @@ def test_delta_beta_mag(iron):
     rotated = Layer(
         "l",
         "l",
-        dielectric=Dielectric(eps0=Dispersion.from_ref_index([1.5, 2]), euler_angles=(30, 20, 0)),
+        dielectric=Dielectric(
+            eps0=Dispersion.from_ref_index([1.5, 2]), euler_angles=(30, 20, 0) * u.deg
+        ),
     )
     np.testing.assert_allclose(rotated.get_delta_beta_mag(1.0), (0, 0))
     rotated.optical.dielectric.eps_mag = Dispersion.from_array(
