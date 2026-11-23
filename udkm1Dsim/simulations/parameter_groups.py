@@ -286,6 +286,8 @@ class InstrumentParameters(ParameterGroup):
     _spectrum_keys = ("offset", "factor", "weight", "width")
     # settings of the default instrument, see is_active
     _default_hash_items = None
+    # largest spacing of uniform nodes (FWHM), i.e. the default 7 nodes within +-2 FWHM
+    _max_node_spacing = 2 / 3
 
     def __init__(self):
         self.theta_resolution = "none"
@@ -406,6 +408,39 @@ class InstrumentParameters(ParameterGroup):
                     f"The {axis}_resolution is {resolution!r}, but the {axis}_width is 0, so "
                     f"that the {axis} resolution has no effect!",
                     stacklevel=4,
+                )
+            elif width and axis != "delay":
+                self._check_nodes(axis)
+
+    def _check_nodes(self, axis):
+        """Warn for too few nodes of the quadrature of the ``axis``, i.e. a
+        single node, which has no effect, or uniform nodes, which are more
+        than :attr:`_max_node_spacing` FWHM apart, so that their weights do not
+        follow the profile, e.g. three nodes within :math:`\\pm 2` FWHM, whose
+        outer weights vanish, or two nodes at :math:`\\pm 2` FWHM."""
+        mode = getattr(self, f"{axis}_mode")
+        resolution = getattr(self, f"{axis}_resolution")
+        if mode == "convolution" or resolution == "none":
+            return
+        nodes = getattr(self, f"{axis}_nodes")
+        points = int(getattr(self, f"{axis}_points").magnitude)
+        node_range = float(getattr(self, f"{axis}_range").magnitude)
+        if points == 1:
+            warnings.warn(
+                f"The {axis}_points is 1, so that the single node of the quadrature is the "
+                f"unshifted point and the {axis} resolution has no effect!",
+                stacklevel=5,
+            )
+        elif nodes == "uniform" and resolution != "box":
+            spacing = 2 * node_range / (points - 1)
+            if spacing > self._max_node_spacing * (1 + 1e-9):
+                needed = int(np.ceil(2 * node_range / self._max_node_spacing)) + 1
+                warnings.warn(
+                    f"The {points} uniform nodes of the {axis} resolution are {spacing:.2g} "
+                    f"FWHM apart within the {axis}_range of {node_range:g} FWHM, which is too "
+                    f"coarse for the profile, so that the resolution is wrong, e.g. too small "
+                    f"or too large! Use at least {needed} {axis}_points for this range.",
+                    stacklevel=5,
                 )
 
     @property

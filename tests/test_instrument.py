@@ -205,6 +205,56 @@ def test_partial_resolution_is_warned(parratt, settings, match):
         parratt.homogeneous_reflectivity_transmissivity()
 
 
+@pytest.mark.parametrize(
+    "settings, match",
+    [
+        ({"theta_points": 1}, "single node of the quadrature"),
+        ({"theta_points": 3}, "3 uniform nodes .* 2 FWHM apart"),
+        ({"theta_points": 9, "theta_range": 4}, "Use at least 13 theta_points"),
+        ({"theta_mode": "convolution", "theta_width": 1e-3}, "larger than the theta_width"),
+        ({"energy_mode": "convolution"}, "a single photon energy"),
+    ],
+)
+def test_resolution_without_effect_is_warned(parratt, settings, match):
+    parratt.instrument.theta_resolution = "gauss"
+    parratt.instrument.theta_width = 0.05
+    if "energy_mode" in settings:
+        parratt.instrument.theta_resolution = "none"
+        parratt.instrument.theta_width = 0
+        parratt.instrument.energy_resolution = "gauss"
+        parratt.instrument.energy_width = 10
+    for name, value in settings.items():
+        setattr(parratt.instrument, name, value)
+    with pytest.warns(UserWarning, match=match):
+        parratt.homogeneous_reflectivity_transmissivity()
+
+
+@pytest.mark.parametrize(
+    "shape, nodes, points",
+    [("gauss", "uniform", 7), ("gauss", "gaussian_quadrature", 3), ("box", "uniform", 2)],
+)
+def test_enough_nodes_are_not_warned(parratt, recwarn, shape, nodes, points):
+    parratt.instrument.theta_resolution = shape
+    parratt.instrument.theta_nodes = nodes
+    parratt.instrument.theta_points = points
+    parratt.instrument.theta_width = 0.05
+    parratt.homogeneous_reflectivity_transmissivity()
+    assert not [w for w in recwarn if "resolution" in str(w.message)]
+
+
+def test_is_resolved():
+    x = np.linspace(0, 1, 11)
+    assert ins.is_resolved(x, 0.1, "gauss")
+    assert not ins.is_resolved(x, 0.01, "gauss")
+    # a box of the width of the spacing reaches half the spacing only
+    assert not ins.is_resolved(x, 0.1, "box")
+    assert ins.is_resolved(x, 0.2, "box")
+    assert not ins.is_resolved(x[:1], 1, "gauss")
+    assert not ins.is_resolved(x, 0.1, "none")
+    # a single point with a wide profile is enough
+    assert ins.is_resolved(x, np.where(x == 0.5, 0.1, 0.01), "gauss")
+
+
 def test_width_of_the_spectrum_completes_the_resolution(parratt, recwarn):
     parratt.instrument.energy_resolution = "gauss"
     parratt.instrument.spectrum = [{"weight": 1, "width": 2}]
@@ -247,11 +297,11 @@ def test_theta_quadrature_is_the_weighted_average(parratt, shape, nodes):
     parratt.instrument.theta_resolution = shape
     parratt.instrument.theta_nodes = nodes
     parratt.instrument.theta_width = 0.05
-    parratt.instrument.theta_points = 5
+    parratt.instrument.theta_points = 7
     R = parratt.calc_homogeneous_reflectivity_transmissivity()[0]
     # the experiment is restored
     np.testing.assert_allclose(parratt.theta.to("deg").magnitude, theta)
-    x, w = ins.profile_nodes(shape, nodes, 5, 2, 0.5)
+    x, w = ins.profile_nodes(shape, nodes, 7, 2, 0.5)
     expected = 0
     for x_i, w_i in zip(x, w):
         parratt.instrument.theta_offset = x_i * 0.05
@@ -370,6 +420,13 @@ def test_energy_qz_mode_close_to_quadrature(xray_dyn):
     xray_dyn.instrument.energy_mode = "qz"
     R_qz = xray_dyn.calc_homogeneous_reflectivity()[0]
     assert np.max(np.abs(R_qz - R_quad)) < 1e-2 * np.max(R_quad)
+    # the footprint is taken at the angle of incidence, not at the angle of
+    # the same qz
+    xray_dyn.instrument.footprint = "box"
+    xray_dyn.instrument.beam_width = 0.5 * u.mm
+    xray_dyn.instrument.sample_length = 0.6 * u.mm
+    foot = ins.footprint("box", xray_dyn.theta.to("rad").magnitude, 0.5, 0.6)
+    np.testing.assert_allclose(xray_dyn.calc_homogeneous_reflectivity()[0], foot * R_qz)
 
 
 def test_energy_convolution_close_to_quadrature(multilayer):
@@ -430,7 +487,7 @@ def test_inhomogeneous_equals_homogeneous_with_instrument(magnetic_elzo, tmp_pat
     magnetic_elzo.instrument.theta_width = 1
     magnetic_elzo.instrument.energy_resolution = "lorentz"
     magnetic_elzo.instrument.energy_width = 0.5
-    magnetic_elzo.instrument.energy_points = 5
+    magnetic_elzo.instrument.energy_points = 7
     magnetic_elzo.instrument.background = 1e-6
     magnetization = magnetic_elzo.S.get_layer_property_vector("magnetization").magnitude
     mag_map = np.repeat(magnetization[np.newaxis], 3, axis=0)

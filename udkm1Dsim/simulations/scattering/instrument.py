@@ -66,6 +66,7 @@ __all__ = [
     "profile",
     "profile_nodes",
     "convolution_matrix",
+    "is_resolved",
     "convolve",
     "convolve_on_grid",
     "convolve_delays",
@@ -260,6 +261,37 @@ def convolution_matrix(x, width, shape, range=2.0, eta=0.5):
     return sparse.csr_array(
         (np.concatenate(values), (np.concatenate(rows), np.concatenate(cols))), shape=(N, N)
     )
+
+
+def is_resolved(x, width, shape, range=2.0):
+    """is_resolved
+
+    Whether a convolution on the grid :math:`x` with a profile of the FWHM
+    ``width`` changes the values at any point of the grid, i.e. whether at
+    least one point has a neighbor within :math:`\\pm` ``range`` times its
+    width, or within the box, see :func:`convolution_matrix`. Otherwise, a
+    single point or a width below the spacing of the grid keeps the values.
+
+    Args:
+        x (ndarray[float]): grid of shape (N,).
+        width (ndarray[float]): FWHM of the profile of shape (N,) or a scalar.
+        shape (str): profile.
+        range (float, optional): range in units of the FWHM. Defaults to 2.
+
+    Returns:
+        resolved (bool): the convolution changes the values.
+
+    """
+    x = np.asarray(x, dtype=float).ravel()
+    N = np.size(x)
+    if shape == "none" or N < 2:
+        return False
+    width = np.broadcast_to(np.abs(np.asarray(width, dtype=float)), (N,))
+    reach = (0.5 if shape == "box" else range) * width * (1 + 1e-9)
+    xs = np.sort(x)
+    lo = np.searchsorted(xs, x - reach, side="left")
+    hi = np.searchsorted(xs, x + reach, side="right")
+    return bool(np.any((hi - lo > 1) & (width > 0)))
 
 
 def convolve(values, axis, matrix):

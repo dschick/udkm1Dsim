@@ -700,9 +700,28 @@ class Scattering(Simulation):
                     component["factor"] * energy_width if width_c is None else np.full(M, width_c)
                 )
                 part = None
+                energy_convolved = False
+                if ins.energy_mode == "convolution" and ins.energy_resolution != "none":
+                    energy_convolved = _instrument.is_resolved(
+                        energy0,
+                        width_c / component["factor"],
+                        ins.energy_resolution,
+                        ins.energy_range.magnitude,
+                    )
+                    if not energy_convolved and np.any(width_c > 0):
+                        self._warn_unresolved("energy", M)
                 for x_e, w_e in zip(*energy_nodes):
                     for x_t, w_t in zip(*theta_nodes):
                         th = theta + x_t * theta_width
+                        weights = w_e * w_t * np.ones((M, N))
+                        # the beam hits the sample at the angle of the node, also
+                        # for the angle of the same qz of the 'qz' mode
+                        foot = weights * _instrument.footprint(
+                            ins.footprint,
+                            th,
+                            ins.beam_width.magnitude,
+                            ins.sample_length.magnitude,
+                        )
                         if ins.energy_mode == "qz":
                             exp.energy = energy_c
                             scale = 1 + x_e * width_c / energy_c
@@ -710,13 +729,6 @@ class Scattering(Simulation):
                         else:
                             exp.energy = energy_c + x_e * width_c
                         exp.theta = th
-                        weights = w_e * w_t * np.ones((M, N))
-                        foot = weights * _instrument.footprint(
-                            ins.footprint,
-                            th,
-                            ins.beam_width.magnitude,
-                            ins.sample_length.magnitude,
-                        )
                         values = calc()
                         node = tuple(
                             self._expand(
@@ -726,7 +738,7 @@ class Scattering(Simulation):
                             for kind, v in zip(kinds, values)
                         )
                         part = node if part is None else tuple(p + n for p, n in zip(part, node))
-                if ins.energy_mode == "convolution" and ins.energy_resolution != "none" and M > 1:
+                if ins.energy_mode == "convolution" and energy_convolved:
                     # the spread of the component maps to the energies of the experiment
                     part = tuple(
                         _instrument.convolve_on_grid(
@@ -746,6 +758,16 @@ class Scattering(Simulation):
             exp.energy = energy0
             setattr(exp, scan, scan0)
         if ins.theta_mode == "convolution" and ins.theta_resolution != "none":
+            if np.any(theta_width > 0) and not any(
+                _instrument.is_resolved(
+                    theta0[i, :],
+                    theta_width[i, :],
+                    ins.theta_resolution,
+                    ins.theta_range.magnitude,
+                )
+                for i in range(M)
+            ):
+                self._warn_unresolved("theta", N)
             convolved = [np.array(t, dtype=float) for t in total]
             for i in range(M):
                 index = (slice(None),) * lead + (i,)
@@ -765,6 +787,10 @@ class Scattering(Simulation):
             delay_width = 1e-12 * self._instrument_width(
                 ins.delay_width, (num_delays,), "delay_width"
             )
+            if np.any(delay_width > 0) and not _instrument.is_resolved(
+                delays, delay_width, ins.delay_resolution, ins.delay_range.magnitude
+            ):
+                self._warn_unresolved("delay", num_delays)
             total = tuple(
                 _instrument.convolve_delays(
                     t,
@@ -838,6 +864,27 @@ class Scattering(Simulation):
 
         (R,) = self.apply_instrument(node, ("reflected",))
         return R, nominal[0] if nominal else calc()[1]
+
+    @staticmethod
+    def _warn_unresolved(axis, num_points):
+        """Warn for a convolution of the ``axis``, i.e. ``'theta'``,
+        ``'energy'``, or ``'delay'``, which keeps the values, as the grid has
+        a single point or its spacing exceeds the width everywhere."""
+        reason = (
+            f"a single {'photon energy' if axis == 'energy' else axis}"
+            if num_points < 2
+            else f"a spacing of the grid larger than the {axis}_width everywhere"
+        )
+        hint = (
+            " Use the 'quadrature' mode or a denser grid."
+            if axis != "delay"
+            else " Use denser delays."
+        )
+        warnings.warn(
+            f"The {axis} resolution is a convolution along the grid of the experiment, which "
+            f"has {reason}, so that the {axis} resolution has no effect!" + hint,
+            stacklevel=4,
+        )
 
     def _instrument_nodes(self, axis):
         """nodes in units of the FWHM and weights of the ``axis`` of the

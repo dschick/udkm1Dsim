@@ -2717,7 +2717,11 @@ class MultilayerScattering(Scattering):
         :meth:`_reduce_polarization_terms` by
         :math:`\tan(2\theta) = 2 \Re(a^* b) / (|a|^2 - |b|^2)` and
         :math:`\sin(2\epsilon) = 2 \Im(a^* b) / (|a|^2 + |b|^2)`, which
-        equal :meth:`calc_rotation_ellipticity` for a single node"""
+        equal :meth:`calc_rotation_ellipticity` for a single node.
+
+        The averaged light of several nodes can be partially polarized,
+        so that the ellipticity is relative to its total intensity, while the
+        rotation is the orientation of its polarization."""
         result = []
         for i in range(0, len(terms), 4):
             a2, b2, re, im = terms[i : i + 4]
