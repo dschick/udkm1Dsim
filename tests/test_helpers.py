@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 from udkm1Dsim.helpers import (
+    conv_with_function,
     convert_cartesian_to_polar,
     convert_polar_to_cartesian,
     finderb,
@@ -146,3 +147,28 @@ def test_spectral_table():
     assert table.energy_range == (2, 3)
     np.testing.assert_allclose(table([2.5]), [4 - 5j])
     assert "md5" in repr(table) and len(table) == 3
+
+
+def test_conv_with_function():
+    def handle(x):
+        return np.exp(-(x**2))
+
+    x = np.r_[0:10:1]
+    y = np.r_[0:10:1]
+    assert np.allclose(
+        conv_with_function(y, x, handle),
+        np.array(
+            [
+                0.22840624,
+                1.01047185,
+                2.00006975,
+                3.00000006,
+                4.0,
+                4.99999943,
+                5.99937279,
+                6.90631129,
+                6.02811867,
+                6.02811867,
+            ]
+        ),
+    )

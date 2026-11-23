@@ -8,7 +8,7 @@ with these packages:
 
 - [refnx](https://github.com/refnx/refnx) 0.1.67 (BSD-3-Clause): X-ray reflectivity by the Abeles matrices with the roughness of Névot and Croce
 - [tmm](https://github.com/sbyrnes321/tmm) 0.2.0 (MIT): complex reflection and transmission coefficients of isotropic stacks
-- [GenX](https://github.com/aglavic/genx) 3.8.14 (GPL-3.0): the Parratt recursion and the resonant magnetic X-ray reflectivity by the recursion of Stepanov and Sinha (`xrmr`)
+- [GenX](https://github.com/aglavic/genx) 3.8.14 (GPL-3.0): the Parratt recursion and the resonant magnetic X-ray reflectivity by the recursion of Stepanov and Sinha (`xrmr`), as well as the full convolution of the angular resolution in 2θ and the footprint of a Gaussian and a square beam of `spec_nx` in `xray_instrument.npz`
 - [PyGTM](https://github.com/pyMatJ/pyGTM) 7a228b7 (2023-11-16) (GPL-3.0): the generalized transfer matrices of Passler and Paarmann for anisotropic layers
 - [PyLlama](https://github.com/VignoliniLab/PyLlama) e54fdb5 (2022-05-03) (GPL-3.0): the scattering matrices of the Berreman matrix of Bay et al. for arbitrary dielectric tensors
 - [Dyna](https://gitlab.com/dynadevgroup/Dyna) 6.15.0, a8bc11a (2026-10-22) (GPL-2.0-or-later): the exact Berreman formalism with the scattering-matrix recursion of Stepanov, also for gyrotropic dielectric tensors

@@ -36,9 +36,10 @@ from tqdm.auto import tqdm
 
 from ...helpers import make_hash_md5
 from ...structures.layers import Layer, UnitCell, Vacuum
-from ..parameter_groups import ExperimentParameters
+from ..parameter_groups import ExperimentParameters, InstrumentParameters
 from ..result import Result
 from ..simulation import Simulation
+from . import instrument as _instrument
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -120,6 +121,9 @@ class Scattering(Simulation):
         qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
         experiment (ExperimentParameters): photon energies and angles in SI
             units and eV, which also hold the depending quantities.
+        instrument (InstrumentParameters): angular and spectral resolution,
+            source spectrum, footprint, offsets, intensity, and background,
+            which are applied to the intensities of the results.
         polarizations (dict): polarization states and according names, where
             ``c+``, ``c-``, ``s``, and ``p`` can also be given for ``circ +``,
             ``circ -``, ``sigma``, and ``pi``.
@@ -159,6 +163,8 @@ class Scattering(Simulation):
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.experiment = ExperimentParameters()
+        # the instrument is created on its first use, see instrument
+        self._instrument = None
 
         self._pol_in_state = 3  # sigma
         self._pol_out_state = 0  # no analyzer
@@ -166,7 +172,7 @@ class Scattering(Simulation):
         self.pol_out = self.calc_outgoing_polarization(self._pol_out_state)
 
     def new_scattering_result(
-        self, title, num_delays=None, source=None, inputs=None, input_maps=None
+        self, title, num_delays=None, source=None, inputs=None, input_maps=None, delays=None
     ):
         """new_scattering_result
 
@@ -175,7 +181,7 @@ class Scattering(Simulation):
         :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`. The
         ``qz`` and ``theta`` have the dimensions ``energy`` and ``angles``.
         The ``delays`` are taken from an upstream ``source`` result, if
-        their number agrees.
+        their number agrees, or are the given ``delays``.
 
         Args:
             title (str): title of the result.
@@ -186,18 +192,18 @@ class Scattering(Simulation):
                 :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`.
             input_maps (dict, optional): input maps of the method, see
                 :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`.
+            delays (ndarray[float], optional): delays (s) of an inhomogeneous
+                result, see :meth:`get_inhomogeneous_delays`.
 
         Returns:
             result (Result): empty result.
 
         """
         result = self.new_result(title, inputs=inputs, input_maps=input_maps)
-        if (
-            isinstance(source, Result)
-            and "delays" in source.coords
-            and np.size(source["delays"]) == num_delays
-        ):
+        if self._source_delays(source, num_delays) is not None:
             result.copy_coords(source, ["delays"])
+        elif delays is not None:
+            result.add_coord("delays", delays, "s")
         result.add_coord("energy", np.atleast_1d(self.energy.to("eV").magnitude), "eV")
         dims = ("energy", "angles")
         result.add_coord("qz", np.atleast_2d(self.qz.to("1/nm").magnitude), "1/nm", dims)
@@ -214,20 +220,73 @@ class Scattering(Simulation):
         source=None,
         inputs=None,
         input_maps=None,
+        delays=None,
     ):
         """result of the ``values`` with the ``names`` and their
         :data:`ALIASES`, which have a first axis of the delays for
         ``inhomogeneous=True`` with the coordinates of an upstream ``source``
-        result and the ``inputs`` and ``input_maps`` of the method, see
-        :meth:`new_scattering_result`"""
+        result or the given ``delays`` and the ``inputs`` and ``input_maps``
+        of the method, see :meth:`new_scattering_result`"""
         num_delays = np.size(values[0], 0) if inhomogeneous else None
-        result = self.new_scattering_result(title, num_delays, source, inputs, input_maps)
+        result = self.new_scattering_result(title, num_delays, source, inputs, input_maps, delays)
         dims = ("delays", "energy", "angles") if inhomogeneous else ("energy", "angles")
         for name, value in zip(names, values):
             # e.g. the lists of the sub-structures have no dimensions
             value_dims = dims if isinstance(value, np.ndarray) else ()
             result.add(name, value, value_dims, unit, ALIASES.get(name, ()))
         return result
+
+    @staticmethod
+    def _source_delays(source, num_delays):
+        """delays (s) of an upstream ``source`` result, if their number
+        agrees, otherwise None"""
+        if (
+            isinstance(source, Result)
+            and "delays" in source.coords
+            and np.size(source["delays"]) == num_delays
+        ):
+            return np.asarray(source.quantity("delays", "s").magnitude, dtype=float)
+        return None
+
+    def get_inhomogeneous_delays(self, delays, source, num_delays):
+        """get_inhomogeneous_delays
+
+        Delays of an inhomogeneous simulation of ``num_delays`` delays, which
+        are the given ``delays`` or are taken from the upstream ``source``
+        result of the maps, see :meth:`new_scattering_result`. The delays are
+        needed for the temporal resolution of the :attr:`instrument` only.
+
+        Args:
+            delays (ndarray[float, Quantity], None): delays (s).
+            source (Result, None): upstream result of the maps.
+            num_delays (int): number of delays of the maps.
+
+        Returns:
+            delays (ndarray[float], None): delays (s) or None, if none are
+            given or known.
+
+        Raises:
+            ValueError: the number of the given delays does not agree with
+                the maps or they differ from the delays of the upstream
+                result.
+
+        """
+        source_delays = self._source_delays(source, num_delays)
+        if delays is None:
+            return source_delays
+        delays = np.atleast_1d(self.parse_delays(delays))
+        if delays.ndim != 1 or delays.size != num_delays:
+            raise ValueError(
+                f"The {delays.size} delays must be a 1D array of the {num_delays} delays of "
+                "the maps!"
+            )
+        if source_delays is not None and not np.allclose(
+            delays, source_delays, rtol=1e-9, atol=1e-9 * np.max(np.abs(source_delays))
+        ):
+            raise ValueError(
+                "The given delays differ from the delays of the upstream result of the maps!"
+            )
+        return delays
 
     def _check_experiment(self):
         """Warn for scattering vectors beyond :math:`2k`, which have no
@@ -340,6 +399,7 @@ class Scattering(Simulation):
             ["q_z", self._format_range(self.qz)],
             ["incoming polarization", self.polarizations[self.pol_in_state]],
             ["analyzer polarization", self.polarizations[self.pol_out_state]],
+            ["instrument", "active" if self._instrument_active else "none"],
         ]
         return super()._property_rows() + output
 
@@ -352,6 +412,7 @@ class Scattering(Simulation):
             "analyzer_polarization": self.polarizations[self.pol_out_state],
             "pol_in": self.pol_in,
             "pol_out": self.pol_out,
+            "instrument": self.instrument.to_dict(),
         }
 
     @property
@@ -487,6 +548,11 @@ class Scattering(Simulation):
             self.experiment.energy.magnitude,
             strain_vectors,
         ]
+        if self._instrument_active:
+            # only an instrument changes the hash of former results
+            param.append(("instrument", self.instrument._hash_items()))
+        if self._delay_active and kwargs.get("delays") is not None:
+            param.append(("delays", kwargs["delays"]))
 
         if "strain_map" in kwargs:
             strain_map = kwargs.get("strain_map")
@@ -522,6 +588,316 @@ class Scattering(Simulation):
 
         """
         return np.sqrt((1 - self.pol_in) + self.pol_in * np.cos(2 * theta) ** 2)
+
+    # ---- instrument function ----------------------------------------------------
+
+    def apply_instrument(self, calc, kinds, finish=None, lead=0, delays=None):
+        r"""apply_instrument
+
+        Applies the :attr:`instrument` to the intensities of
+        ``calc()``, which is repeated for all nodes of the quadrature with
+        the experiment set to the photon energies and angles of the nodes,
+        see the module :mod:`~udkm1Dsim.simulations.scattering.instrument`
+        for the formulas and the example of the
+        :doc:`instrument function </examples/scattering/instrument_function>`:
+
+        1. The ``theta_offset`` and ``energy_offset`` are added.
+        2. For each component of the ``spectrum`` and each energy node, the
+           photon energies, or the angles for the ``'qz'`` energy mode, are
+           set, and for each angular node the angles.
+        3. The reflected intensities are multiplied by the ``footprint`` at
+           the angles of the node and all are summed with the weights of the
+           nodes and components.
+        4. The ``'convolution'`` modes convolve the sums along the energies
+           and the angles of the experiment.
+        5. The temporal resolution convolves the sums of inhomogeneous
+           simulations, i.e. with a ``lead`` axis, along their ``delays``,
+           see :func:`~udkm1Dsim.simulations.scattering.instrument.convolve_delays`.
+        6. The sums are reduced by ``finish``, e.g. to the rotation of the
+           polarization, and the intensities are scaled to
+           :math:`I_0 I + I_\mathrm{bkg}`.
+
+        Without an active instrument, the values of ``calc()`` are returned
+        as they are, reduced by ``finish``.
+
+        Args:
+            calc (callable): returns a tuple of arrays of the experiment with
+                the energies at the axis ``lead`` and the angles at the axis
+                ``lead + 1``.
+            kinds (tuple[str]): kind of each value, i.e. ``'reflected'`` and
+                ``'transmitted'`` intensities, which are scaled by
+                :math:`I_0` and the background, where only the reflected ones
+                are multiplied by the footprint, as well as ``'reflected
+                terms'`` and ``'transmitted terms'``, which are only averaged,
+                e.g. for the polarization of the light.
+            finish (callable, optional): reduces the averaged tuple of values.
+            lead (int, optional): number of leading axes, e.g. 1 for the
+                delays. Defaults to 0.
+            delays (ndarray[float], optional): delays (s) of the first
+                leading axis, which are needed for a temporal resolution.
+
+        Returns:
+            values (tuple[ndarray[float]]): values with the instrument.
+
+        Raises:
+            ValueError: no delays are given for a temporal resolution of an
+                inhomogeneous simulation.
+
+        """
+        if self._delay_active and lead > 0 and delays is None:
+            raise ValueError(
+                "The temporal resolution of the instrument needs the delays of the maps, "
+                "which are given by the argument delays or are taken from the upstream "
+                "result of the maps!"
+            )
+        if not self._instrument_active:
+            values = calc()
+            return finish(values) if finish is not None else values
+        ins = self.instrument
+        ins._check_resolutions()
+        exp = self.experiment
+        scan = exp._scan
+        energy0 = np.array(exp.energy.magnitude, dtype=float)
+        scan0 = np.array(exp.__dict__[scan].magnitude, dtype=float)
+        theta0 = np.array(exp.theta.magnitude, dtype=float)
+        M, N = theta0.shape
+        energy = energy0 + ins.energy_offset.magnitude
+        theta = theta0 + np.deg2rad(ins.theta_offset.magnitude)
+        theta_width = np.deg2rad(self._instrument_width(ins.theta_width, (M, N), "theta_width"))
+        energy_width = self._instrument_width(ins.energy_width, (M,), "energy_width")
+        theta_nodes = (
+            self._instrument_nodes("theta")
+            if ins.theta_mode == "quadrature"
+            else (np.zeros(1), np.ones(1))
+        )
+        energy_nodes = (
+            self._instrument_nodes("energy")
+            if ins.energy_mode != "convolution"
+            else (np.zeros(1), np.ones(1))
+        )
+        if ins.energy_mode == "convolution" and ins.energy_resolution != "none":
+            if M > 1 and not np.allclose(theta0, theta0[:1, :]):
+                raise ValueError(
+                    "The 'convolution' of the energy is done at fixed angles, which must be "
+                    "the same for all photon energies, i.e. the angles must be set by theta, "
+                    "not by qz, otherwise use the 'quadrature' energy mode!"
+                )
+        num_components = len(ins.components)
+        num_energy, num_theta = np.size(energy_nodes[0]), np.size(theta_nodes[0])
+        num_calculations = num_components * num_energy * num_theta
+        if num_calculations > 1:
+            self.disp_message(
+                f"Instrument: {num_calculations} calculations ({num_components} spectral "
+                f"component{'s' * (num_components > 1)} x {num_energy} energy "
+                f"node{'s' * (num_energy > 1)} x {num_theta} angle node{'s' * (num_theta > 1)})"
+            )
+        total = None
+        try:
+            for component in ins.components:
+                energy_c = component["factor"] * energy + component["offset"]
+                width_c = component.get("width")
+                width_c = (
+                    component["factor"] * energy_width if width_c is None else np.full(M, width_c)
+                )
+                part = None
+                for x_e, w_e in zip(*energy_nodes):
+                    for x_t, w_t in zip(*theta_nodes):
+                        th = theta + x_t * theta_width
+                        if ins.energy_mode == "qz":
+                            exp.energy = energy_c
+                            scale = 1 + x_e * width_c / energy_c
+                            th = np.arcsin(np.clip(np.sin(th) * scale[:, np.newaxis], -1, 1))
+                        else:
+                            exp.energy = energy_c + x_e * width_c
+                        exp.theta = th
+                        weights = w_e * w_t * np.ones((M, N))
+                        foot = weights * _instrument.footprint(
+                            ins.footprint,
+                            th,
+                            ins.beam_width.magnitude,
+                            ins.sample_length.magnitude,
+                        )
+                        values = calc()
+                        node = tuple(
+                            self._expand(
+                                foot if kind.startswith("reflected") else weights, v, lead
+                            )
+                            * v
+                            for kind, v in zip(kinds, values)
+                        )
+                        part = node if part is None else tuple(p + n for p, n in zip(part, node))
+                if ins.energy_mode == "convolution" and ins.energy_resolution != "none" and M > 1:
+                    # the spread of the component maps to the energies of the experiment
+                    part = tuple(
+                        _instrument.convolve_on_grid(
+                            p,
+                            lead,
+                            energy0,
+                            width_c / component["factor"],
+                            ins.energy_resolution,
+                            ins.energy_range.magnitude,
+                            ins.energy_eta.magnitude,
+                        )
+                        for p in part
+                    )
+                part = tuple(component["weight"] * p for p in part)
+                total = part if total is None else tuple(t + p for t, p in zip(total, part))
+        finally:
+            exp.energy = energy0
+            setattr(exp, scan, scan0)
+        if ins.theta_mode == "convolution" and ins.theta_resolution != "none":
+            convolved = [np.array(t, dtype=float) for t in total]
+            for i in range(M):
+                index = (slice(None),) * lead + (i,)
+                for t, c in zip(total, convolved):
+                    c[index] = _instrument.convolve_on_grid(
+                        t[index],
+                        lead,
+                        theta0[i, :],
+                        theta_width[i, :],
+                        ins.theta_resolution,
+                        ins.theta_range.magnitude,
+                        ins.theta_eta.magnitude,
+                    )
+            total = tuple(convolved)
+        if ins.is_delay_active and lead > 0:
+            num_delays = np.size(total[0], 0)
+            delay_width = 1e-12 * self._instrument_width(
+                ins.delay_width, (num_delays,), "delay_width"
+            )
+            total = tuple(
+                _instrument.convolve_delays(
+                    t,
+                    0,
+                    delays,
+                    delay_width,
+                    ins.delay_resolution,
+                    ins.delay_range.magnitude,
+                    ins.delay_eta.magnitude,
+                )
+                for t in total
+            )
+        if finish is not None:
+            return finish(total)
+        I0, background = ins.I0.magnitude, ins.background.magnitude
+        return tuple(
+            I0 * t + background if kind in ("reflected", "transmitted") else t
+            for kind, t in zip(kinds, total)
+        )
+
+    def _apply_instrument_with_nominal(self, calc):
+        """Reflectivity of ``calc()`` with the :attr:`instrument` and its
+        second value without the instrument, see
+        :meth:`apply_instrument`.
+
+        The homogeneous calculations of :class:`.XrayKin` and
+        :class:`.XrayDyn` return the reflectivity :math:`R` together with the
+        reflected fields or the reflection-transmission matrices of the
+        sub-structures :math:`A`. These are complex amplitudes in nested
+        lists with labels, which cannot be averaged over the nodes of the
+        instrument, as its intensities. Hence, only :math:`R` is passed to
+        :meth:`apply_instrument`, while :math:`A` is kept at the photon
+        energies and angles of the experiment:
+
+        1. Without an active instrument, ``calc()`` is returned as it is.
+        2. Otherwise, the first node of the instrument without any shift of
+           the photon energies and angles, e.g. of a ``'convolution'`` mode
+           or the center of an odd number of ``'uniform'`` nodes, gives
+           :math:`A`.
+        3. If there is no such node, e.g. for a ``theta_offset`` or an even
+           number of nodes, ``calc()`` is repeated once more at the
+           experiment, which is restored by :meth:`apply_instrument`.
+
+        Args:
+            calc (callable): returns the reflectivity of shape (M, N) and the
+                values of the sub-structures for the photon energies and
+                angles set in the experiment.
+
+        Returns:
+            (tuple):
+            - *R (ndarray[float])* - reflectivity with the instrument.
+            - *A (list)* - values of the sub-structures without the
+              instrument.
+
+        """
+        if not self._instrument_active:
+            return calc()
+        energy = np.array(self.experiment.energy.magnitude)
+        theta = np.array(self.experiment.theta.magnitude)
+        nominal = []
+
+        def node():
+            R, A = calc()
+            if (
+                not nominal
+                and np.array_equal(self.experiment.energy.magnitude, energy)
+                and np.array_equal(self.experiment.theta.magnitude, theta)
+            ):
+                nominal.append(A)
+            return (R,)
+
+        (R,) = self.apply_instrument(node, ("reflected",))
+        return R, nominal[0] if nominal else calc()[1]
+
+    def _instrument_nodes(self, axis):
+        """nodes in units of the FWHM and weights of the ``axis`` of the
+        instrument, i.e. ``'theta'`` or ``'energy'``"""
+        ins = self.instrument
+        return _instrument.profile_nodes(
+            getattr(ins, f"{axis}_resolution"),
+            getattr(ins, f"{axis}_nodes"),
+            getattr(ins, f"{axis}_points").magnitude,
+            getattr(ins, f"{axis}_range").magnitude,
+            getattr(ins, f"{axis}_eta").magnitude,
+        )
+
+    @staticmethod
+    def _instrument_width(parameter, shape, name):
+        """width of the instrument broadcast to the ``shape`` of the
+        experiment, where widths along the angles are given for all
+        energies"""
+        width = np.asarray(parameter.magnitude, dtype=float)
+        try:
+            return np.broadcast_to(width, shape).copy()
+        except ValueError:
+            raise ValueError(
+                f"The {name} of the instrument of shape {width.shape} must be a scalar or "
+                f"broadcast to the shape {shape} of the experiment!"
+            ) from None
+
+    @staticmethod
+    def _expand(weights, value, lead):
+        """weights of shape (M, N) with axes for the ``lead`` axes and the
+        trailing axes of the ``value``, e.g. of several polarizations"""
+        trail = np.ndim(value) - lead - 2
+        return weights.reshape((1,) * lead + weights.shape + (1,) * trail)
+
+    @property
+    def instrument(self):
+        """InstrumentParameters: instrument function of the simulation, which
+        is created on its first use."""
+        if self._instrument is None:
+            self._instrument = InstrumentParameters()
+        return self._instrument
+
+    @instrument.setter
+    def instrument(self, instrument):
+        if not isinstance(instrument, InstrumentParameters):
+            raise TypeError(
+                f"The instrument must be InstrumentParameters, not {type(instrument).__name__}!"
+            )
+        self._instrument = instrument
+
+    @property
+    def _instrument_active(self):
+        """the instrument changes the results, which is checked without
+        creating an unused instrument"""
+        return self._instrument is not None and self._instrument.is_active
+
+    @property
+    def _delay_active(self):
+        """the instrument has a temporal resolution"""
+        return self._instrument is not None and self._instrument.is_delay_active
 
     @property
     def energy(self):

@@ -31,6 +31,7 @@ __all__ = [
     "m_times_n",
     "finderb",
     "multi_gauss",
+    "conv_with_function",
     "convert_cartesian_to_polar",
     "convert_polar_to_cartesian",
     "latex_to_text",
@@ -250,6 +251,38 @@ def multi_gauss(x, s=[1], x0=[0], A=[1]):
     for i in range(len(s)):
         y = y + a[i] * np.exp(-((x - x0[i]) ** 2) / (2 * s[i] ** 2))
     return y
+
+
+def conv_with_function(y, x, handle):
+    """conv_with_function
+
+    Convolutes the array :math:`y(x)` with a function given by the handle
+    on the argument array :math:`x`, e.g. a transient result along the
+    delays with the time resolution of an experiment. The data are
+    interpolated to an equidistant grid of the smallest spacing of
+    :math:`x` for the convolution.
+
+    Args:
+        y (ndarray[float]): y data.
+        x (ndarray[float]): x data.
+        handle (@lamdba): convolution function.
+
+    Returns:
+        y_conv (ndarray[float]): convoluted data.
+
+    """
+    dx = np.min(np.diff(x))
+    x_lin = np.r_[np.min(x) : np.max(x) : dx]
+    y_lin = np.interp(x_lin, x, y)
+    x0 = np.mean(x_lin)
+    y_handle = handle(x_lin - x0)
+
+    temp = np.convolve(y_lin, y_handle / y_handle.sum(), mode="same")
+
+    y_conv = np.interp(x, x_lin, temp)
+    # finally remove NaN entries due to the interpolation
+    y_conv[np.isnan(y_conv)] = 0
+    return y_conv
 
 
 def convert_polar_to_cartesian(polar):

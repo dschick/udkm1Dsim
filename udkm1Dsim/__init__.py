@@ -2,7 +2,7 @@ import pint
 
 from .simulations.heat import Heat
 from .simulations.magnetization import LLB, LLG, Magnetization, iLLG
-from .simulations.parameter_groups import ExperimentParameters
+from .simulations.parameter_groups import ExperimentParameters, InstrumentParameters
 from .simulations.phonons import Phonon, PhononAna, PhononNum
 from .simulations.result import Result
 from .simulations.scattering import (
@@ -39,6 +39,7 @@ Q_ = u.Quantity
 
 __all__ = [
     "ExperimentParameters",
+    "InstrumentParameters",
     "Atom",
     "AtomMixed",
     "AtomMixedParameters",

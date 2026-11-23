@@ -190,10 +190,19 @@ class XrayKin(Scattering):
 
         Returns:
             (tuple):
-            - *R (ndarray[float])* - homogeneous reflectivity.
-            - *A (list)* - reflected fields of the sub-structures.
+            - *R (ndarray[float])* - homogeneous reflectivity with the
+              :attr:`instrument`.
+            - *A (list)* - reflected fields of the sub-structures at the
+              photon energies and angles of the experiment.
 
         """
+        return self._apply_instrument_with_nominal(
+            lambda: self._calc_reflectivity_and_fields(strains)
+        )
+
+    def _calc_reflectivity_and_fields(self, strains=0):
+        """reflectivity and reflected fields of the sub-structures without
+        the instrument, see :meth:`calc_homogeneous_reflectivity`"""
         self._check_experiment()
         self._warn_ignored_superstrate_and_substrate()
         if strains == 0:

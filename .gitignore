@@ -46,3 +46,7 @@ coverage.xml
 
 # nox
 .nox
+
+# Claude Code
+CLAUDE.md
+.claude/

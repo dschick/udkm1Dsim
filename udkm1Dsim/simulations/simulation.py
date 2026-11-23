@@ -250,6 +250,25 @@ class Simulation:
         return result
 
     @staticmethod
+    def parse_delays(delays):
+        """parse_delays
+
+        Returns the delays as plain array in seconds.
+
+        Args:
+            delays (ndarray[Quantity, float]): delays (s).
+
+        Returns:
+            delays (ndarray[float]): delays (s).
+
+        """
+        try:
+            delays = delays.to("s").magnitude
+        except AttributeError:
+            pass
+        return np.asarray(delays, dtype=float)
+
+    @staticmethod
     def _add_inputs(result, inputs=None, input_maps=None):
         """Add the ``inputs`` of a method, which are no maps, to the metadata
         ``inputs`` of the ``result`` and the
@@ -311,35 +330,6 @@ class Simulation:
         result.attrs["hash"] = hash
         self.save(full_filename, result, f"_{name}_")
         return result
-
-    @staticmethod
-    def conv_with_function(y, x, handle):
-        """conv_with_function
-
-        Convolutes the array :math:`y(x)` with a function given by the handle
-        on the argument array :math:`x`.
-
-        Args:
-            y (ndarray[float]): y data.
-            x (ndarray[float]): x data.
-            handle (@lamdba): convolution function.
-
-        Returns:
-            y_conv (ndarray[float]): convoluted data.
-
-        """
-        dx = np.min(np.diff(x))
-        x_lin = np.r_[np.min(x) : np.max(x) : dx]
-        y_lin = np.interp(x_lin, x, y)
-        x0 = np.mean(x_lin)
-        y_handle = handle(x_lin - x0)
-
-        temp = np.convolve(y_lin, y_handle / y_handle.sum(), mode="same")
-
-        y_conv = np.interp(x, x_lin, temp)
-        # finally remove NaN entries due to the interpolation
-        y_conv[np.isnan(y_conv)] = 0
-        return y_conv
 
     @property
     def cache_dir(self):

@@ -283,6 +283,7 @@ html_theme_options = {
     "home_page_in_toc": False,
     'show_navbar_depth': 1,
     'max_navbar_depth': 3,
+    'show_toc_level': 1,
     'repository_url': 'https://github.com/dschick/udkm1Dsim',
     'repository_branch': "develop",
     'use_repository_button': True,
