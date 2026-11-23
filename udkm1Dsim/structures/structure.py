@@ -215,8 +215,8 @@ class Structure:
         Add :math:`N` :class:`.Layer` or its sub-classes as static substrate to the sample.
 
         Args:
-            sub_structure (Layer): substrate Layer or its sub-classes.
-            N (int): number or repetitions.
+            layer (Layer): substrate Layer or its sub-classes.
+            N (int, optional): number of repetitions. Defaults to 1.
 
         """
         if not isinstance(layer, Layer):
@@ -235,7 +235,7 @@ class Structure:
         Add :class:`.Layer` or its sub-classes as static superstrate to the sample.
 
         Args:
-            sub_structure (Layer): superstrate Layer or its sub-classes.
+            layer (Layer): superstrate Layer or its sub-classes.
 
         """
         if not isinstance(layer, Layer):

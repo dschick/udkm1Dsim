@@ -218,10 +218,10 @@ def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
         eps_mag (ndarray[complex], None): gyrotropic dielectric function
             :math:`\varepsilon^m` per unit magnetization, i.e. the scalar
             strength of the magnetic part, of shape (M,) or (..., M).
-        magnetization (tuple[float], VectorParameter): cartesian
-            magnetization :math:`(m_x, m_y, m_z)`, or its amplitude, polar
-            angle :math:`\phi`, and azimuth :math:`\gamma` as angle Quantities for
-            ``polar=True``.
+        magnetization (tuple[float, Quantity], VectorParameter): cartesian
+            magnetization :math:`(m_x, m_y, m_z)`, or for ``polar=True`` its
+            amplitude and the angles :math:`\phi` and :math:`\gamma` as
+            angle Quantities, e.g. ``(1, 90 * u.deg, 0 * u.deg)``.
         polar (bool, optional): the magnetization is given in polar
             coordinates. Defaults to False.
 
@@ -1505,6 +1505,9 @@ class Dielectric(Parameter):
 
     @property
     def magnitude(self):
+        """The dielectric itself, which is set by another :class:`Dielectric` or by the inputs of a
+        dispersion, as the value of a parameter.
+        """
         return self
 
     @magnitude.setter
@@ -1531,6 +1534,7 @@ class Dielectric(Parameter):
 
     @property
     def quantity(self):
+        """The dielectric itself, as :attr:`magnitude`."""
         return self
 
     @quantity.setter
@@ -1618,10 +1622,11 @@ class Dielectric(Parameter):
             strain (float, ndarray[float], optional): strain :math:`\\eta`,
                 or an array of strains of shape S, e.g. of a layer for all
                 delays. Defaults to 0.
-            magnetization (tuple[float], VectorParameter, optional): cartesian
-                magnetization :math:`(m_x, m_y, m_z)`, or its amplitude, polar
-                angle :math:`\\phi`, and azimuth :math:`\\gamma` as angle Quantities for
-                ``polar=True``. Defaults to none.
+            magnetization (tuple[float, Quantity], VectorParameter, optional):
+                cartesian magnetization :math:`(m_x, m_y, m_z)`, or for
+                ``polar=True`` its amplitude and the angles :math:`\\phi` and
+                :math:`\\gamma` as angle Quantities, e.g.
+                ``(1, 90 * u.deg, 0 * u.deg)``. Defaults to none.
             density (float, optional): mass density of the layer (kg/m³),
                 which is required by dispersions from atoms.
             polar (bool, optional): the magnetization is given in polar

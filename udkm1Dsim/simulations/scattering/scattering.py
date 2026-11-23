@@ -113,14 +113,18 @@ class Scattering(Simulation):
         disp_messages (boolean): true to display messages from within the
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
-        energy (ndarray[float]): photon energies :math:`E` of scattering light
-        wl (ndarray[float]): wavelengths :math:`\lambda` of scattering light
-        k (ndarray[float]): wavenumber :math:`k` of scattering light
+        energy (Quantity): photon energies :math:`E` of scattering light,
+            returned in eV.
+        wl (Quantity): wavelengths :math:`\lambda` of scattering light,
+            returned in nm.
+        k (Quantity): wavenumber :math:`k` of scattering light, returned in
+            1/nm.
         theta (Quantity): incidence angles :math:`\theta` of scattering
             light as pint Quantity with an angular unit, e.g.
             ``np.r_[0.1:5:0.01] * u.deg``, see
             :func:`~udkm1Dsim.helpers.to_angle`.
-        qz (ndarray[float]): scattering vector :math:`q_z` of scattering light
+        qz (Quantity): scattering vector :math:`q_z` of scattering light,
+            returned in 1/nm.
         experiment (ExperimentParameters): photon energies and angles in SI
             units and eV, which also hold the depending quantities.
         instrument (InstrumentParameters): angular and spectral resolution,
@@ -950,6 +954,7 @@ class Scattering(Simulation):
 
     @property
     def energy(self):
+        """Photon energies :math:`E` as Quantity in eV."""
         return self.experiment.energy.quantity
 
     @energy.setter
@@ -958,6 +963,7 @@ class Scattering(Simulation):
 
     @property
     def wl(self):
+        r"""Wavelengths :math:`\lambda` as Quantity in nm."""
         return self.experiment.wl.quantity.to("nm")
 
     @wl.setter
@@ -966,6 +972,7 @@ class Scattering(Simulation):
 
     @property
     def k(self):
+        """Wavenumbers :math:`k` as Quantity in 1/nm."""
         return self.experiment.k.quantity.to("1/nm")
 
     @k.setter
@@ -974,6 +981,9 @@ class Scattering(Simulation):
 
     @property
     def theta(self):
+        r"""Incidence angles :math:`\theta` as Quantity in deg, set as angle Quantity, see
+        :func:`~udkm1Dsim.helpers.to_angle`.
+        """
         return self.experiment.theta.quantity.to("deg")
 
     @theta.setter
@@ -982,6 +992,7 @@ class Scattering(Simulation):
 
     @property
     def qz(self):
+        """Scattering vectors :math:`q_z` as Quantity in 1/nm."""
         return self.experiment.qz.quantity.to("1/nm")
 
     @qz.setter

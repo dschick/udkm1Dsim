@@ -356,8 +356,10 @@ class Magnetization(Simulation):
             ``components``, and the metadata ``polar``, see
             :class:`~udkm1Dsim.simulations.result.Result`. For ``polar=True``,
             its components are also given as
-            ``sublattice_magnetization_amplitude``, ``_phi``, and ``_gamma``
-            with the aliases ``amplitude``, ``phi``, and ``gamma``, see
+            ``sublattice_magnetization_amplitude``,
+            ``sublattice_magnetization_phi``, and
+            ``sublattice_magnetization_gamma`` with the aliases ``amplitude``,
+            ``phi``, and ``gamma`` and the angles in rad, see
             :meth:`get_magnetization_map`.
 
         """
@@ -950,8 +952,10 @@ class Magnetization(Simulation):
             and ``components``, and the metadata ``polar``, see
             :class:`~udkm1Dsim.simulations.result.Result`. For ``polar=True``,
             its components are also given as
-            ``equilibrium_magnetization_amplitude``, ``_phi``, and ``_gamma``
-            with the aliases ``amplitude``, ``phi``, and ``gamma``, see
+            ``equilibrium_magnetization_amplitude``,
+            ``equilibrium_magnetization_phi``, and
+            ``equilibrium_magnetization_gamma`` with the aliases ``amplitude``,
+            ``phi``, and ``gamma`` and the angles in rad, see
             :meth:`get_magnetization_map`.
 
         """
@@ -1583,6 +1587,7 @@ class iLLG(LLG):
             is_magnetic (ndarray[boolean]): mask of the magnetic layers.
             init_velocity (ndarray[float], optional): initial velocities
                 (1/s), see :meth:`calc_magnetization_map`. Defaults to None.
+            **kwargs: further options raise a ``TypeError``.
 
         Returns:
             init_state (ndarray[float]): initial state :math:`2 \times N
@@ -1906,6 +1911,7 @@ class LLB(Magnetization):
 
     @property
     def distances(self):
+        """Distances of the layer centers as Quantity in nm."""
         return Q_(self._distances, u.meter).to("nm")
 
     @distances.setter

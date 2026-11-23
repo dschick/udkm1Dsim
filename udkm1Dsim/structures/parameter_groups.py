@@ -501,6 +501,11 @@ class ElasticParameters(ParameterGroup):
 
         .. math:: k = m \, \left(\frac{v}{d}\right)^2
 
+        Args:
+            mass_unit_area (float): mass of the layer per unit area of 1 Å²
+                :math:`m` (kg).
+            thickness (float): thickness of the layer :math:`d` (m).
+
         """
         try:
             self.spring_const.magnitude[0] = (
@@ -511,12 +516,16 @@ class ElasticParameters(ParameterGroup):
             self.spring_const.magnitude[0] = 0
 
     def calc_acoustic_impedance(self, mass, area):
-        """calc_acoustic_impedance
+        r"""calc_acoustic_impedance
 
-        Calculates the acoustic impedance.
+        Calculates the acoustic impedance from the spring constant, the
+        mass, and the area of the layer.
 
-        Returns:
-            Z (float): acoustic impedance.
+        .. math:: Z = \sqrt{\frac{k \, m}{A^2}}
+
+        Args:
+            mass (float): mass of the layer :math:`m` (kg).
+            area (float): area of the layer :math:`A` (m²).
 
         """
         self.acoustic_impedance.magnitude = np.sqrt(
@@ -990,6 +999,20 @@ class MagneticParameters(ParameterGroup):
         self.check_array(self.anisotropy, "Anisotropy")
 
     def check_array(self, parameter, name):
+        """check_array
+
+        Broadcast a scalar parameter or a parameter of length 1 to a vector of
+        length 3 of the x, y, and z components.
+
+        Args:
+            parameter (Parameter): parameter to check, which is set in place.
+            name (str): name of the parameter for the error message.
+
+        Raises:
+            ValueError: if the parameter is neither a scalar nor a vector of
+                length 3.
+
+        """
         value = np.asarray(parameter.magnitude)
 
         if value.ndim == 0:

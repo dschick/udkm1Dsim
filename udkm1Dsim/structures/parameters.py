@@ -68,6 +68,7 @@ class Parameter:
 
     @property
     def magnitude(self):
+        """Value in the unit of the parameter, set as number, array, or Quantity."""
         return self._magnitude
 
     @magnitude.setter
@@ -86,6 +87,7 @@ class Parameter:
 
     @property
     def quantity(self):
+        """Value as pint Quantity in the unit of the parameter."""
         return self._magnitude * self.unit
 
     @quantity.setter
@@ -201,6 +203,10 @@ class VectorParameter(Parameter):
 
     Components missing in a dict keep their current value, e.g. ``{"r": -1}``
     only changes the radius.
+
+    The ``angle_unit`` (default deg) is the unit of the returned angles
+    :attr:`phi` and :attr:`gamma` only, while the given angles are always
+    angle Quantities.
     """
 
     # precision relative to r below which calculated cartesian components are zero
@@ -235,9 +241,17 @@ class VectorParameter(Parameter):
     _cartesian_keys = ("x", "y", "z")
 
     def set(self, value):
-        """Set the vector from cartesian components, a dict of polar or
+        """set
+
+        Set the vector from cartesian components, a dict of polar or
         cartesian components, or another VectorParameter, see the class
-        description."""
+        description.
+
+        Args:
+            value (tuple[float], Quantity, dict, VectorParameter): new vector,
+                e.g. ``{"r": 1, "phi": 90 * u.deg, "gamma": 0 * u.deg}``.
+
+        """
         if isinstance(value, VectorParameter):
             polar = value.polar_rad
             polar[0] = (polar[0] * value.unit).to(self.unit).magnitude
@@ -272,6 +286,23 @@ class VectorParameter(Parameter):
 
     @classmethod
     def from_polar(cls, unit, r, phi, gamma, name="", angle_unit="deg", symbol=""):
+        """VectorParameter given by its polar components.
+
+        Args:
+            unit (str, Unit): unit of the vector.
+            r (float, Quantity): radius, which is negative for the reversed
+                direction of the angles.
+            phi (Quantity): angle from +z as angle Quantity.
+            gamma (Quantity): angle in the xy-plane from +x as angle Quantity.
+            name (str, optional): name of the parameter. Defaults to ''.
+            angle_unit (str, Unit, optional): unit of the returned angles.
+                Defaults to 'deg'.
+            symbol (str, optional): symbol of the parameter. Defaults to ''.
+
+        Returns:
+            vec (VectorParameter): vector of the polar components.
+
+        """
         vec = cls(unit, name=name, angle_unit=angle_unit, symbol=symbol)
         vec.polar = (r, phi, gamma)
         return vec
@@ -330,6 +361,7 @@ class VectorParameter(Parameter):
 
     @property
     def quantity(self):
+        """Cartesian components (x, y, z) as pint Quantity in the unit of the parameter."""
         return self.magnitude * self.unit
 
     @quantity.setter
@@ -379,6 +411,7 @@ class VectorParameter(Parameter):
 
     @property
     def phi(self):
+        """Angle from +z in ``angle_unit``, set as angle Quantity."""
         return (self._polar[1] * u.rad).to(self.angle_unit)
 
     @phi.setter
@@ -387,6 +420,8 @@ class VectorParameter(Parameter):
 
     @property
     def gamma(self):
+        """Angle in the xy-plane from +x in ``angle_unit``, set as angle
+        Quantity."""
         return (self._polar[2] * u.rad).to(self.angle_unit)
 
     @gamma.setter
@@ -443,6 +478,7 @@ class TemperatureParameter(Parameter):
 
     @property
     def magnitude(self):
+        """Sympy expressions of the temperature dependence per subsystem."""
         return self._magnitude
 
     @magnitude.setter
@@ -546,6 +582,7 @@ class TemperatureParameter(Parameter):
 
     @property
     def integral(self):
+        """Integrals over the temperature as functions per subsystem."""
         if self._integral == []:
             # for now the dedicated logic as in functional is skipped
             self._integral_expr = []
@@ -576,12 +613,14 @@ class TemperatureParameter(Parameter):
 
     @property
     def integral_expr(self):
+        """Sympy expressions of the integrals over the temperature per subsystem."""
         if self._integral_expr == []:
             self.integral
         return self._integral_expr
 
     @property
     def quantity(self):
+        """Sympy expressions of the temperature dependence per subsystem, as :attr:`magnitude`."""
         return self.magnitude
 
     @quantity.setter
