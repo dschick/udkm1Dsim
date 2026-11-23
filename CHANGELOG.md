@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the example of the instrument function next to the scattering overview, which starts with the choice between the convolution, its limits on coarse grids, and the quadrature with its nodes and weights, followed by the angular and spectral resolution, the `qz` mode, a higher harmonic of the spectrum, the footprint, offsets, intensity, and background, the rotation and ellipticity, and the temporal resolution, while the scattering overview links to it
 - the instrument function in the examples of the data fitting and the kinematical, dynamical, transient Debye-Waller, and resonant magnetic X-ray scattering instead of the convolution of their results, whose inhomogeneous calculations run in parallel with Dask, if it is installed, and sequentially otherwise
 - `to_angle()` in `udkm1Dsim.helpers`, which converts angles given as pint Quantities to floats in a unit and rejects bare numbers and dimensionless Quantities, as they are ambiguous between deg and rad
+- the polar components of the results of `get_magnetization_map()`, `get_sublattice_magnetization_map()`, and `get_equilibrium_magnetization()` for `polar=True` as separate entries, e.g. `magnetization_amplitude`, `magnetization_phi`, and `magnetization_gamma` with the aliases `amplitude`, `phi`, and `gamma` and the angles in rad, so that the angles are given as Quantities in any unit, e.g. `res.quantity("phi", "deg")`, while the polar arrays stay in rad
 
 ### Changed
 

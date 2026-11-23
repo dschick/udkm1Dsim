@@ -1057,6 +1057,17 @@ def test_polar_and_cartesian_maps(tmp_path):
         cartesian = get_map(delays, B_ext=B_ext)
         polar = get_map(delays, B_ext=B_ext, polar=True)
         assert not cartesian.attrs["polar"] and polar.attrs["polar"]
+        # the polar components are separate entries with the angles in rad
+        prefix = name.removesuffix("_map")
+        for i, component in enumerate(("amplitude", "phi", "gamma")):
+            np.testing.assert_array_equal(polar[component], polar[name][..., i])
+            assert polar.aliases[component] == f"{prefix}_{component}"
+            assert polar.dims(component) == polar.dims(name)[:-1]
+            assert component not in cartesian.aliases
+        np.testing.assert_allclose(
+            polar.quantity("phi", "deg").magnitude, np.degrees(polar[name][..., 1])
+        )
+        assert polar.unit("amplitude") == ""
         cartesian, polar = cartesian[name], polar[name]
         assert cartesian.shape == polar.shape
         assert np.allclose(convert_polar_to_cartesian(polar), cartesian)
@@ -1090,6 +1101,10 @@ def test_equilibrium_magnetization_result(tmp_path):
         "components",
     )
     assert polar.attrs["polar"] and not cartesian.attrs["polar"]
+    np.testing.assert_array_equal(
+        polar.quantity("gamma", "rad").magnitude, polar.equilibrium_magnetization[..., 2]
+    )
+    assert polar.aliases["gamma"] == "equilibrium_magnetization_gamma"
     reference = llg.get_sublattice_magnetization_map(delays, B_ext=B_ext, init_magnetization=eq)
     for init in (cartesian, polar):
         sub = llg.get_sublattice_magnetization_map(delays, B_ext=B_ext, init_magnetization=init)

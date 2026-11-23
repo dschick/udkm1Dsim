@@ -315,7 +315,11 @@ class Magnetization(Simulation):
             result (Result): with the spatio-temporal ``magnetization_map`` of
             the dimensions ``delays``, ``distances`` of the layer centers, and
             ``components``, and the metadata ``polar``, see
-            :class:`~udkm1Dsim.simulations.result.Result`.
+            :class:`~udkm1Dsim.simulations.result.Result`. For ``polar=True``,
+            its components are also given as ``magnetization_amplitude``,
+            ``magnetization_phi``, and ``magnetization_gamma`` with the
+            aliases ``amplitude``, ``phi``, and ``gamma`` and the angles in
+            rad, e.g. ``res.quantity("phi", "deg")``.
 
         """
         return self._select_coordinates(
@@ -350,7 +354,11 @@ class Magnetization(Simulation):
             ``sublattice_magnetization_map`` of the dimensions ``delays``,
             ``distances`` of the layer centers, ``sublattices``, and
             ``components``, and the metadata ``polar``, see
-            :class:`~udkm1Dsim.simulations.result.Result`.
+            :class:`~udkm1Dsim.simulations.result.Result`. For ``polar=True``,
+            its components are also given as
+            ``sublattice_magnetization_amplitude``, ``_phi``, and ``_gamma``
+            with the aliases ``amplitude``, ``phi``, and ``gamma``, see
+            :meth:`get_magnetization_map`.
 
         """
         return self._select_coordinates(
@@ -370,8 +378,24 @@ class Magnetization(Simulation):
         result = maps.select(name)
         if polar:
             result.add(name, Magnetization._to_coordinates(result[name], polar), result.dims(name))
+            Magnetization._add_polar_entries(result, name)
         result.attrs["polar"] = polar
         return result
+
+    @staticmethod
+    def _add_polar_entries(result, name):
+        """Add the components of the polar magnetization ``name`` of the
+        ``result`` as separate entries, i.e. the amplitude and the angles
+        ``phi`` and ``gamma`` in rad, which are given as Quantities by
+        :meth:`~udkm1Dsim.simulations.result.Result.quantity`, e.g.
+        ``res.quantity("phi", "deg")``."""
+        prefix = name.removesuffix("_map")
+        polar = result[name]
+        dims = result.dims(name)[:-1]
+        for i, (component, unit) in enumerate(
+            [("amplitude", ""), ("phi", "rad"), ("gamma", "rad")]
+        ):
+            result.add(f"{prefix}_{component}", polar[..., i], dims, unit, aliases=component)
 
     @staticmethod
     def _parse_input_maps(kwargs):
@@ -924,7 +948,11 @@ class Magnetization(Simulation):
             result (Result): with the ``equilibrium_magnetization`` of the
             dimensions ``distances`` of the layer centers, ``sublattices``,
             and ``components``, and the metadata ``polar``, see
-            :class:`~udkm1Dsim.simulations.result.Result`.
+            :class:`~udkm1Dsim.simulations.result.Result`. For ``polar=True``,
+            its components are also given as
+            ``equilibrium_magnetization_amplitude``, ``_phi``, and ``_gamma``
+            with the aliases ``amplitude``, ``phi``, and ``gamma``, see
+            :meth:`get_magnetization_map`.
 
         """
         equilibrium = self.calc_equilibrium_magnetization(
@@ -941,6 +969,8 @@ class Magnetization(Simulation):
             equilibrium,
             ("distances", "sublattices", "components"),
         )
+        if polar:
+            self._add_polar_entries(result, "equilibrium_magnetization")
         result.attrs["polar"] = polar
         return result
 
