@@ -241,7 +241,17 @@ class Result:
         return dict(self._aliases)
 
     def aliases_of(self, name):
-        """aliases of a data entry"""
+        """aliases_of
+
+        Aliases of a data entry, e.g. ``("R",)`` of the ``reflectivity``.
+
+        Args:
+            name (str): name or alias of the entry.
+
+        Returns:
+            aliases (tuple[str]): all aliases of the entry.
+
+        """
         name = self._resolve(name)
         return tuple(alias for alias, target in self._aliases.items() if target == name)
 
@@ -256,27 +266,61 @@ class Result:
         return dict(self._coords)
 
     def keys(self):
-        """names of the data entries"""
+        """Names of the data entries without the aliases and coordinates."""
         return self._data.keys()
 
     def values(self):
-        """data entries"""
+        """Arrays of the data entries."""
         return self._data.values()
 
     def items(self):
-        """names and data entries"""
+        """Names and arrays of the data entries."""
         return self._data.items()
 
     def get(self, name, default=None):
-        """data entry or coordinate of the given name or the default"""
+        """get
+
+        Data entry or coordinate of the given name or alias, or the default,
+        as for a dict.
+
+        Args:
+            name (str): name or alias of the entry or coordinate.
+            default (optional): returned if the name is not in the result.
+                Defaults to None.
+
+        Returns:
+            value (ndarray): entry or coordinate, or the default.
+
+        """
         return self[name] if name in self else default
 
     def dims(self, name):
-        """names of the dimensions of an entry or coordinate"""
+        """dims
+
+        Names of the dimensions of an entry or coordinate, e.g.
+        ``("delays", "distances")`` of a ``temp_map``.
+
+        Args:
+            name (str): name or alias of the entry or coordinate.
+
+        Returns:
+            dims (tuple[str]): names of the dimensions.
+
+        """
         return self._dims[self._resolve(name)]
 
     def unit(self, name):
-        """unit of an entry or coordinate"""
+        """unit
+
+        Unit of an entry or coordinate, see also :meth:`quantity`.
+
+        Args:
+            name (str): name or alias of the entry or coordinate.
+
+        Returns:
+            unit (str): unit, which is empty for dimensionless entries.
+
+        """
         return self._units[self._resolve(name)]
 
     def quantity(self, name, unit=None):

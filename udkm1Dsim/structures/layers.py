@@ -341,10 +341,12 @@ class Layer:
             energy (float, ndarray[float], Quantity): photon energies, where
                 floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain. Defaults to 0.
-            magnetization (tuple[float], optional): cartesian magnetization
-                ``(x, y, z)``, or its amplitude, polar angle, and azimuth
-                as angle Quantities for ``polar=True``. Defaults to the magnetization of
-                the layer.
+            magnetization (tuple[float, Quantity], VectorParameter, optional):
+                cartesian magnetization ``(x, y, z)``, or for ``polar=True``
+                its amplitude and the angles :math:`\\phi` and
+                :math:`\\gamma` as angle Quantities, e.g.
+                ``(1, 90 * u.deg, 0 * u.deg)``. Defaults to the magnetization
+                of the layer.
             polar (bool, optional): the magnetization is given in polar
                 coordinates. Defaults to False.
 
@@ -611,6 +613,7 @@ class Layer:
 
     @property
     def thickness(self):
+        """Thickness :math:`d` of the layer as Quantity, see :class:`.StructuralParameters`."""
         return self.structural.thickness.quantity
 
     @thickness.setter
@@ -619,6 +622,9 @@ class Layer:
 
     @property
     def mass(self):
+        """Read-only mass :math:`m` of the layer as Quantity, derived from its density and volume,
+        see :class:`.StructuralParameters`.
+        """
         return self.structural.mass.quantity
 
     @mass.setter
@@ -629,6 +635,9 @@ class Layer:
 
     @property
     def mass_unit_area(self):
+        """Read-only mass :math:`m_A` of the layer normalized to a unit area of 1 Å² as Quantity,
+        see :class:`.StructuralParameters`.
+        """
         return self.structural.mass_unit_area.quantity
 
     @mass_unit_area.setter
@@ -640,6 +649,7 @@ class Layer:
 
     @property
     def density(self):
+        r"""Mass density :math:`\rho` as Quantity, see :class:`.StructuralParameters`."""
         return self.structural.density.quantity
 
     @density.setter
@@ -648,6 +658,7 @@ class Layer:
 
     @property
     def area(self):
+        """Area :math:`A` of the layer as Quantity, see :class:`.StructuralParameters`."""
         return self.structural.area.quantity
 
     @area.setter
@@ -656,6 +667,7 @@ class Layer:
 
     @property
     def volume(self):
+        """Read-only volume :math:`V` as Quantity, see :class:`.StructuralParameters`."""
         return self.structural.volume.quantity
 
     @volume.setter
@@ -666,6 +678,9 @@ class Layer:
 
     @property
     def roughness(self):
+        r"""Gaussian width :math:`\sigma` of the top roughness of the layer as Quantity, see
+        :class:`.StructuralParameters`.
+        """
         return self.structural.roughness.quantity
 
     @roughness.setter
@@ -678,6 +693,9 @@ class Layer:
 
     @property
     def therm_cond(self):
+        r"""Temperature-dependent thermal conductivities :math:`\kappa` per subsystem as functions,
+        see :class:`.ThermalParameters`.
+        """
         return self.thermal.therm_cond.functional
 
     @therm_cond.setter
@@ -686,10 +704,14 @@ class Layer:
 
     @property
     def therm_cond_expr(self):
+        """Expressions of the thermal conductivities as Quantities."""
         return self.thermal.therm_cond.quantity
 
     @property
     def heat_capacity(self):
+        """Temperature-dependent heat capacities :math:`c` per subsystem as functions, see
+        :class:`.ThermalParameters`.
+        """
         return self.thermal.heat_capacity.functional
 
     @heat_capacity.setter
@@ -698,10 +720,14 @@ class Layer:
 
     @property
     def heat_capacity_expr(self):
+        """Expressions of the heat capacities as Quantities."""
         return self.thermal.heat_capacity.quantity
 
     @property
     def lin_therm_exp(self):
+        r"""Temperature-dependent linear thermal expansion coefficients :math:`\alpha` per
+        subsystem as functions, see :class:`.ThermalParameters`.
+        """
         return self.thermal.lin_therm_exp.functional
 
     @lin_therm_exp.setter
@@ -710,10 +736,14 @@ class Layer:
 
     @property
     def lin_therm_exp_expr(self):
+        """Expressions of the linear thermal expansion coefficients as Quantities."""
         return self.thermal.lin_therm_exp.quantity
 
     @property
     def int_lin_therm_exp(self):
+        """Integrals of the linear thermal expansion coefficients over the temperature as
+        functions.
+        """
         return self.thermal.lin_therm_exp.integral
 
     @int_lin_therm_exp.setter
@@ -725,10 +755,12 @@ class Layer:
 
     @property
     def int_lin_therm_exp_expr(self):
+        """Expressions of the integrals of the linear thermal expansion coefficients."""
         return self.thermal.lin_therm_exp.integral_expr
 
     @property
     def int_heat_capacity(self):
+        """Integrals of the heat capacities over the temperature as functions."""
         return self.thermal.heat_capacity.integral
 
     @int_heat_capacity.setter
@@ -740,10 +772,12 @@ class Layer:
 
     @property
     def int_heat_capacity_expr(self):
+        """Expressions of the integrals of the heat capacities."""
         return self.thermal.heat_capacity.integral_expr
 
     @property
     def sub_system_coupling(self):
+        """Coupling functions :math:`G` of the subsystems, see :class:`.ThermalParameters`."""
         return self.thermal.sub_system_coupling.functional
 
     @sub_system_coupling.setter
@@ -752,6 +786,9 @@ class Layer:
 
     @property
     def deb_wal_fac(self):
+        r"""Temperature-dependent Debye-Waller factors :math:`\langle u^2\rangle` per subsystem as
+        functions, see :class:`.ThermalParameters`.
+        """
         return self.thermal.deb_wal_fac.functional
 
     @deb_wal_fac.setter
@@ -760,10 +797,12 @@ class Layer:
 
     @property
     def deb_wal_fac_expr(self):
+        """Expressions of the Debye-Waller factors as Quantities."""
         return self.thermal.deb_wal_fac.quantity
 
     @property
     def num_sub_systems(self):
+        """Number of subsystems :math:`N` for heat and phonons, see :class:`.ThermalParameters`."""
         return self.thermal.num_sub_systems.magnitude
 
     @num_sub_systems.setter
@@ -779,6 +818,9 @@ class Layer:
 
     @property
     def sound_vel(self):
+        """Longitudinal sound velocity :math:`v` of the layer as Quantity, see
+        :class:`.ElasticParameters`.
+        """
         return self.elastic.sound_vel.quantity
 
     @sound_vel.setter
@@ -787,6 +829,7 @@ class Layer:
 
     @property
     def spring_const(self):
+        """Spring constants :math:`k` of the layer as Quantity, see :class:`.ElasticParameters`."""
         return self.elastic.spring_const.quantity
 
     @spring_const.setter
@@ -797,6 +840,7 @@ class Layer:
 
     @property
     def acoustic_impedance(self):
+        """Acoustic impedance :math:`Z` as Quantity, see :class:`.ElasticParameters`."""
         return self.elastic.acoustic_impedance.quantity
 
     @acoustic_impedance.setter
@@ -807,6 +851,9 @@ class Layer:
 
     @property
     def phonon_damping(self):
+        r"""Damping constant :math:`\gamma` of the phonon propagation as Quantity, see
+        :class:`.ElasticParameters`.
+        """
         return self.elastic.phonon_damping.quantity
 
     @phonon_damping.setter
@@ -819,6 +866,7 @@ class Layer:
 
     @property
     def dielectric(self):
+        r"""Dielectric function :math:`\varepsilon`, see :class:`.OpticalParameters`."""
         return self.optical.dielectric
 
     @dielectric.setter
@@ -831,6 +879,7 @@ class Layer:
 
     @property
     def eff_spin(self):
+        """Effective spin :math:`S` per sublattice, see :class:`.MagneticParameters`."""
         return self.magnetic.eff_spin.quantity
 
     @eff_spin.setter
@@ -839,6 +888,7 @@ class Layer:
 
     @property
     def curie_temp(self):
+        r"""Curie temperature :math:`T_\mathrm{C}`, see :class:`.MagneticParameters`."""
         return self.magnetic.curie_temp.quantity
 
     @curie_temp.setter
@@ -847,6 +897,9 @@ class Layer:
 
     @property
     def mf_exch_coupling(self):
+        """Mean-field exchange coupling constant :math:`J` as Quantity, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.mf_exch_coupling.quantity
 
     @mf_exch_coupling.setter
@@ -855,6 +908,9 @@ class Layer:
 
     @property
     def lamda(self):
+        r"""Intrinsic coupling to the bath :math:`\lambda` per sublattice, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.lamda.quantity
 
     @lamda.setter
@@ -863,6 +919,9 @@ class Layer:
 
     @property
     def mag_moment(self):
+        r"""Atomic magnetic moment :math:`\mu` per sublattice as Quantity, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.mag_moment.quantity
 
     @mag_moment.setter
@@ -871,6 +930,9 @@ class Layer:
 
     @property
     def aniso_exponent(self):
+        r"""Exponent :math:`\beta` of the temperature dependence of the anisotropy per sublattice,
+        see :class:`.MagneticParameters`.
+        """
         return self.magnetic.aniso_exponent.quantity
 
     @aniso_exponent.setter
@@ -879,6 +941,9 @@ class Layer:
 
     @property
     def anisotropy(self):
+        """Anisotropy :math:`K` at 0 K as Quantity of its x, y, and z components, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.anisotropy.quantity
 
     @anisotropy.setter
@@ -887,6 +952,9 @@ class Layer:
 
     @property
     def exch_stiffness(self):
+        r"""Exchange stiffness :math:`A_\mathrm{ex}` at 0 K as Quantity, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.exch_stiffness.quantity
 
     @exch_stiffness.setter
@@ -895,6 +963,9 @@ class Layer:
 
     @property
     def mag_saturation(self):
+        """Saturation magnetization :math:`M_s` at 0 K per sublattice as Quantity, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.mag_saturation.quantity
 
     @mag_saturation.setter
@@ -916,6 +987,9 @@ class Layer:
 
     @property
     def gilbert_damping(self):
+        r"""Gilbert damping :math:`\alpha` of the LLG per sublattice, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.gilbert_damping.quantity
 
     @gilbert_damping.setter
@@ -924,6 +998,9 @@ class Layer:
 
     @property
     def gyromagnetic_ratio(self):
+        r"""Gyromagnetic ratio :math:`\gamma` including its negative sign as Quantity, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.gyromagnetic_ratio.quantity
 
     @gyromagnetic_ratio.setter
@@ -932,6 +1009,9 @@ class Layer:
 
     @property
     def inertial_time(self):
+        r"""Inertial relaxation time :math:`\tau` of the inertial LLG per sublattice as Quantity,
+        see :class:`.MagneticParameters`.
+        """
         return self.magnetic.inertial_time.quantity
 
     @inertial_time.setter
@@ -940,6 +1020,9 @@ class Layer:
 
     @property
     def magnetoelastic_coupling(self):
+        """Magnetoelastic coupling constant :math:`B_1` per sublattice as Quantity, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.magnetoelastic_coupling.quantity
 
     @magnetoelastic_coupling.setter
@@ -948,6 +1031,9 @@ class Layer:
 
     @property
     def exch_relax_rate(self):
+        r"""Exchange-relaxation rate :math:`\lambda_\mathrm{ex}` of the extended LLB, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.exch_relax_rate.quantity
 
     @exch_relax_rate.setter
@@ -956,6 +1042,9 @@ class Layer:
 
     @property
     def concentration(self):
+        """Concentration :math:`x` per sublattice for the exchange relaxation, see
+        :class:`.MagneticParameters`.
+        """
         return self.magnetic.concentration.quantity
 
     @concentration.setter
@@ -1057,6 +1146,17 @@ class Layer:
 
 
 class Vacuum(Layer):
+    """Vacuum
+
+    Layer of vacuum with a refractive index of 1 and zero density, e.g. as the
+    default superstrate and substrate of a :class:`.Structure`.
+
+    Args:
+        thickness (Quantity, optional): thickness of the layer. Defaults to
+            1 nm.
+
+    """
+
     def __init__(self, thickness=1 * u.nm, **kwargs):
 
         super().__init__("vacuum", "vacuum", dielectric=Dispersion.from_ref_index(1))
@@ -1093,6 +1193,7 @@ class AmorphousLayer(Layer):
 
     @property
     def atom(self):
+        """Atom or mixed atom of the layer, see :class:`.Atom` and :class:`.AtomMixed`."""
         return self._atom
 
     @atom.setter
@@ -1313,11 +1414,14 @@ class UnitCell(Layer):
     def get_atom_positions(self, *args):
         """get_atom_positions
 
-        Calculates the relative positions of the atoms in the unit cell
+        Calculates the relative positions of the atoms in the unit cell.
+
+        Args:
+            *args (float): optional strain of the unit cell. Defaults to 0.
 
         Returns:
-            res (ndarray[float]): relative postion of the atoms within the unit
-            cell.
+            res (ndarray[float]): relative position of the atoms within the
+            unit cell.
 
         """
         if args:
@@ -1345,7 +1449,10 @@ class UnitCell(Layer):
             visualize magnetization per atom
 
         Args:
-            **kwargs (str): strain for manipulating unit cell visualization.
+            block (bool, optional): block the execution until the figure is
+                closed, see :func:`matplotlib.pyplot.show`. Defaults to True.
+            **kwargs (float): ``strain`` of the unit cell for the
+                visualization.
 
         """
         import matplotlib.pyplot as plt
@@ -1408,6 +1515,7 @@ class UnitCell(Layer):
 
     @property
     def a_axis(self):
+        """Lattice parameter :math:`a` as Quantity, see :class:`.LatticeParameters`."""
         return self.lattice.a_axis.quantity
 
     @a_axis.setter
@@ -1416,6 +1524,7 @@ class UnitCell(Layer):
 
     @property
     def b_axis(self):
+        """Lattice parameter :math:`b` as Quantity, see :class:`.LatticeParameters`."""
         return self.lattice.b_axis.quantity
 
     @b_axis.setter
@@ -1424,6 +1533,7 @@ class UnitCell(Layer):
 
     @property
     def c_axis(self):
+        """Lattice parameter :math:`c` as Quantity, see :class:`.LatticeParameters`."""
         return self.lattice.c_axis.quantity
 
     @c_axis.setter
@@ -1432,6 +1542,7 @@ class UnitCell(Layer):
 
     @property
     def thickness(self):
+        """Thickness of the unit cell as Quantity, which is its c-axis."""
         return self.structural.thickness.quantity
 
     @thickness.setter
@@ -1441,6 +1552,9 @@ class UnitCell(Layer):
 
     @property
     def density(self):
+        """Mass density of the unit cell as Quantity, derived from its atoms and volume, unless the
+        unit cell has no atoms.
+        """
         return self.structural.density.quantity
 
     @density.setter

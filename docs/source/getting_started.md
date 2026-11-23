@@ -8,9 +8,11 @@ following ultrafast optical excitation. Structural dynamics driven by thermally
 induced stresses are calculated using a linear-chain model of coupled masses and 
 springs, while magnetization dynamics can be simulated with Landau–Lifshitz-type 
 models. The resulting optical and X-ray scattering response is computed using 
-kinematical or dynamical scattering theory, including resonant magnetic X-ray 
-scattering, enabling direct comparison between time-resolved simulations and a 
-wide range of ultrafast scattering experiments.
+kinematical or dynamical X-ray diffraction and the multilayer formalisms of 
+Parratt, Stepanov, Elzo, and Berreman for isotropic, magnetic, and anisotropic 
+layers, including resonant magnetic X-ray scattering and the instrument function 
+of the experiment, enabling direct comparison between time-resolved simulations 
+and a wide range of ultrafast scattering experiments.
 
 ## Installation
 
@@ -58,15 +60,15 @@ The sketch illustrates the internal architecture of **udkm1Dsim** toolbox.
 All physical material properties are stored in a 
 {py:class}`Structure <udkm1Dsim.structures.structure.Structure>` 
 object composed of {py:class}`Layer <udkm1Dsim.structures.layers.Layer>` 
-objects, , which in turn consist of 
-{py:class}`Atom <udkm1Dsim.structures.atoms.Atom>` objetcs.
+objects, which in turn consist of 
+{py:class}`Atom <udkm1Dsim.structures.atoms.Atom>` objects.
 
 All simulation modules operate on the same 
 {py:class}`Structure <udkm1Dsim.structures.structure.Structure>` 
 instance, ensuring consistency and reproducibility across different calculations.
 
 The simulation framework is highly modular. The simulations return their results 
-as a dedicted {py:class}`Result <udkm1Dsim.simulations.result.Result>` class, which holds plain 
+as a dedicated {py:class}`Result <udkm1Dsim.simulations.result.Result>` class, which holds plain 
 `numpy` arrays together with their coordinates, units, and the parameters of the 
 simulation. Results can be inspected, saved to HDF5 files, or passed on directly 
 as input of subsequent simulations, which accept plain `numpy` arrays as well, 
@@ -98,15 +100,15 @@ conventions, which are used consistently throughout **udkm1Dsim**.
 :::{grid-item}
 
 The incoming and outgoing wavevectors $\vec{k}_\text{in}$ and
-$\vec{k}_\text{out}$ define the scattering plane which must be co-planar
-to the sample surface, hence only accessing scattering vectors $\vec{q_z}$
-along the surface normal.
+$\vec{k}_\text{out}$ define the scattering plane, which contains the surface
+normal $z$, hence only accessing scattering vectors $\vec{q_z}$ along the
+surface normal.
+The incidence angle $\theta$ is measured from the sample surface.
 The pointing of the magnetization vector $\vec{m}$ is defined by the two
-angles $\phi$ and $\gamma$ and allows any direction in the
-$xyz$ coordinate system.
-
-The sample structure is defined from top to bottom. Accordingly the distances
-with in the sample structure start at its surface and proceed along
+angles $\phi$ from the $z$-axis and $\gamma$ in the $xy$-plane from the
+$x$-axis and allows any direction in the $xyz$ coordinate system.
+The sample structure is defined from top to bottom. Accordingly, the distances
+within the sample structure start at its surface and proceed along the
 $-z$ direction.
 
 :::

@@ -270,7 +270,7 @@ class MultilayerScattering(Scattering):
             normal :math:`z`, see the module description and
             :meth:`calc_fields_in_beam_frame`, as angle Quantity, e.g.
             ``30 * u.deg``, see :func:`~udkm1Dsim.helpers.to_angle`. Defaults
-            to 0.
+            to 0 deg.
         polarizations (dict): polarization states and according names.
         pol_in_state (int): incoming polarization state as defined in
             polarizations dict.

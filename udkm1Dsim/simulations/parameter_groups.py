@@ -471,8 +471,14 @@ class InstrumentParameters(ParameterGroup):
         return self._hash_items() != InstrumentParameters._default_hash_items
 
     def to_dict(self):
-        """dict: all settings of the instrument with Quantities for values
-        with units, e.g. for the metadata of the results."""
+        """to_dict
+
+        All settings of the instrument, e.g. for the metadata of the results.
+
+        Returns:
+            settings (dict): settings with Quantities for values with units.
+
+        """
         settings = {}
         for name, value in vars(self).items():
             if name.startswith("_"):
