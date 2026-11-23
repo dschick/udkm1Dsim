@@ -2919,5 +2919,6 @@ def _full_fields(psi, b, eps):
 def _flux_matrix(psi_1, psi_2):
     """hermitian bilinear form of the normal component of the Poynting
     vector into the sample of shape (..., P, P) of the in-plane fields of
-    shape (..., 4, P), see :data:`_FLUX_WEIGHTS`"""
-    return np.einsum("...ia,ij,...jb->...ab", psi_1.conj(), _FLUX_WEIGHTS, psi_2)
+    shape (..., 4, P), see :data:`_FLUX_WEIGHTS`, by matrix products, which
+    are much faster than a single einsum of the three operands"""
+    return np.swapaxes(psi_1.conj(), -1, -2) @ (_FLUX_WEIGHTS @ psi_2)

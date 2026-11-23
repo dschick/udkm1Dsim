@@ -64,7 +64,11 @@ with the same scattering vector,
 
 __all__ = [
     "profile",
+    "PROFILES",
+    "NODES",
+    "MAX_NODE_SPACING",
     "profile_nodes",
+    "check_nodes",
     "convolution_matrix",
     "is_resolved",
     "convolve",
@@ -75,10 +79,20 @@ __all__ = [
 
 __docformat__ = "restructuredtext"
 
+import warnings
+
 import numpy as np
 from scipy import sparse
 from scipy.signal import oaconvolve
 from scipy.special import erf
+
+#: tuple[str]: profiles of :func:`profile`, besides ``'none'`` for no profile
+PROFILES = ("box", "gauss", "lorentz", "pseudo_voigt")
+#: tuple[str]: nodes of :func:`profile_nodes`
+NODES = ("uniform", "gaussian_quadrature")
+#: float: largest spacing of uniform nodes (FWHM), i.e. the default 7 nodes
+#: within :math:`\pm 2` FWHM, see :func:`check_nodes`
+MAX_NODE_SPACING = 2 / 3
 
 # sigma of a Gaussian of unit FWHM
 _SIGMA = 1 / (2 * np.sqrt(2 * np.log(2)))
@@ -165,11 +179,19 @@ def profile_nodes(shape, nodes="uniform", points=7, range=2.0, eta=0.5):
         - *w (ndarray[float])* - normalized weights.
 
     """
-    points = int(points)
     if shape == "none":
         return np.zeros(1), np.ones(1)
-    if points < 1:
-        raise ValueError(f"The number of nodes must be positive, not {points}!")
+    if shape not in PROFILES:
+        raise ValueError(f"The profile must be one of {', '.join(PROFILES)}, not {shape!r}!")
+    if nodes not in NODES:
+        raise ValueError(f"The nodes must be 'uniform' or 'gaussian_quadrature', not {nodes!r}!")
+    if isinstance(points, bool) or int(points) != points or points < 1:
+        raise ValueError(f"The number of nodes must be a positive integer, not {points!r}!")
+    points = int(points)
+    if not range > 0:
+        raise ValueError(f"The range of the nodes must be positive, not {range}!")
+    if not 0 <= eta <= 1:
+        raise ValueError(f"The mixing eta of a pseudo-Voigt profile must be in [0, 1], not {eta}!")
     if nodes == "gaussian_quadrature":
         if shape == "gauss":
             x, w = np.polynomial.hermite_e.hermegauss(points)
@@ -181,13 +203,9 @@ def profile_nodes(shape, nodes="uniform", points=7, range=2.0, eta=0.5):
             "The Gaussian quadrature is defined for a 'gauss' and a 'box' profile only, "
             f"but not for {shape!r}, which needs 'uniform' nodes!"
         )
-    if nodes != "uniform":
-        raise ValueError(f"The nodes must be 'uniform' or 'gaussian_quadrature', not {nodes!r}!")
     if shape == "box":
         x = (np.arange(points) + 0.5) / points - 0.5
         return x, np.full(points, 1 / points)
-    if range <= 0:
-        raise ValueError(f"The range of the nodes must be positive, not {range}!")
     if points == 1:
         return np.zeros(1), np.ones(1)
     x = np.linspace(-range, range, points)
@@ -195,6 +213,51 @@ def profile_nodes(shape, nodes="uniform", points=7, range=2.0, eta=0.5):
     w = profile(shape, x, eta)
     w[[0, -1]] /= 2
     return x, w / np.sum(w)
+
+
+def check_nodes(name, label, shape, nodes, points, range, stacklevel=2):
+    """check_nodes
+
+    Warns for too few nodes of :func:`profile_nodes`, i.e. a single node,
+    which has no effect, or ``'uniform'`` nodes, which are more than
+    :data:`MAX_NODE_SPACING` FWHM apart, so that their weights do not follow
+    the profile, e.g. three nodes within :math:`\\pm 2` FWHM, whose outer
+    weights vanish, or two nodes at :math:`\\pm 2` FWHM.
+
+    Args:
+        name (str): prefix of the ``*_points`` and ``*_range`` of the
+            nodes in the warnings, e.g. ``'theta'``.
+        label (str): description of the profile in the warnings, e.g.
+            ``'theta resolution'``.
+        shape (str): profile.
+        nodes (str): ``'uniform'`` or ``'gaussian_quadrature'``.
+        points (int): number of nodes.
+        range (float): range of the uniform nodes in units of the FWHM.
+        stacklevel (int, optional): stack level of the warnings, e.g. of the
+            caller of the caller. Defaults to 2.
+
+    """
+    if shape == "none":
+        return
+    points = int(points)
+    range = float(range)
+    if points == 1:
+        warnings.warn(
+            f"The {name}_points is 1, so that the single node of the quadrature is the "
+            f"unshifted point and the {label} has no effect!",
+            stacklevel=stacklevel + 1,
+        )
+    elif nodes == "uniform" and shape != "box":
+        spacing = 2 * range / (points - 1)
+        if spacing > MAX_NODE_SPACING * (1 + 1e-9):
+            needed = int(np.ceil(2 * range / MAX_NODE_SPACING)) + 1
+            warnings.warn(
+                f"The {points} uniform nodes of the {label} are {spacing:.2g} FWHM apart "
+                f"within the {name}_range of {range:g} FWHM, which is too coarse for the "
+                f"profile, so that the {label} is wrong, e.g. too small or too large! Use at "
+                f"least {needed} {name}_points for this range.",
+                stacklevel=stacklevel + 1,
+            )
 
 
 def convolution_matrix(x, width, shape, range=2.0, eta=0.5):
