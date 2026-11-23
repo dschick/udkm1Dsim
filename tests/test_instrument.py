@@ -8,6 +8,7 @@ import udkm1Dsim as ud
 from udkm1Dsim import AmorphousLayer, Atom, InstrumentParameters, Parratt, Structure, u
 from udkm1Dsim.simulations.result import Result
 from udkm1Dsim.simulations.scattering import instrument as ins
+from udkm1Dsim.structures.parameters import Parameter
 
 PROFILES = ["box", "gauss", "lorentz", "pseudo_voigt"]
 # energies of the Cu K-alpha1 and K-alpha2 lines (eV)
@@ -159,9 +160,15 @@ def test_instrument_parameters():
     for name in ("theta_resolution", "energy_mode", "footprint", "theta_nodes"):
         with pytest.raises(ValueError, match=name):
             setattr(instrument, name, "unknown")
-    instrument.theta_width = [0.1, 0.2]
+    instrument.theta_width = [0.1, 0.2] * u.deg
     assert instrument.is_active
     instrument.theta_width = 0.01 * u.rad
+    assert instrument.theta_width.magnitude == pytest.approx(np.degrees(0.01))
+    # bare numbers and dimensionless values are ambiguous angles
+    for name in ("theta_width", "theta_offset"):
+        for value in (0.1, [0.1, 0.2], 0.1 * u.dimensionless, Parameter("", 0.1)):
+            with pytest.raises(TypeError, match=f"{name} must be given"):
+                setattr(instrument, name, value)
     assert instrument.theta_width.magnitude == pytest.approx(np.degrees(0.01))
     instrument = InstrumentParameters()
     instrument.spectrum = [{"weight": 2}, {"offset": -20 * u.eV, "weight": 1, "width": 3}]
@@ -190,7 +197,7 @@ def test_inactive_instrument_keeps_the_hash(parratt):
 @pytest.mark.parametrize(
     "settings, match",
     [
-        ({"theta_width": 0.1}, "theta_width is set, but the theta_resolution is 'none'"),
+        ({"theta_width": 0.1 * u.deg}, "theta_width is set, but the theta_resolution is 'none'"),
         ({"theta_resolution": "gauss"}, "theta_resolution is 'gauss', but the theta_width is 0"),
         ({"energy_width": 1}, "energy_width is set, but the energy_resolution is 'none'"),
         ({"energy_resolution": "box"}, "energy_resolution is 'box', but the energy_width is 0"),
@@ -211,16 +218,19 @@ def test_partial_resolution_is_warned(parratt, settings, match):
         ({"theta_points": 1}, "single node of the quadrature"),
         ({"theta_points": 3}, "3 uniform nodes .* 2 FWHM apart"),
         ({"theta_points": 9, "theta_range": 4}, "Use at least 13 theta_points"),
-        ({"theta_mode": "convolution", "theta_width": 1e-3}, "larger than the theta_width"),
+        (
+            {"theta_mode": "convolution", "theta_width": 1e-3 * u.deg},
+            "larger than the theta_width",
+        ),
         ({"energy_mode": "convolution"}, "a single photon energy"),
     ],
 )
 def test_resolution_without_effect_is_warned(parratt, settings, match):
     parratt.instrument.theta_resolution = "gauss"
-    parratt.instrument.theta_width = 0.05
+    parratt.instrument.theta_width = 0.05 * u.deg
     if "energy_mode" in settings:
         parratt.instrument.theta_resolution = "none"
-        parratt.instrument.theta_width = 0
+        parratt.instrument.theta_width = 0 * u.deg
         parratt.instrument.energy_resolution = "gauss"
         parratt.instrument.energy_width = 10
     for name, value in settings.items():
@@ -237,7 +247,7 @@ def test_enough_nodes_are_not_warned(parratt, recwarn, shape, nodes, points):
     parratt.instrument.theta_resolution = shape
     parratt.instrument.theta_nodes = nodes
     parratt.instrument.theta_points = points
-    parratt.instrument.theta_width = 0.05
+    parratt.instrument.theta_width = 0.05 * u.deg
     parratt.homogeneous_reflectivity_transmissivity()
     assert not [w for w in recwarn if "resolution" in str(w.message)]
 
@@ -264,7 +274,7 @@ def test_width_of_the_spectrum_completes_the_resolution(parratt, recwarn):
 
 def test_metadata_of_the_instrument(parratt, tmp_path):
     parratt.instrument.theta_resolution = "gauss"
-    parratt.instrument.theta_width = 0.02
+    parratt.instrument.theta_width = 0.02 * u.deg
     parratt.instrument.spectrum = [{"weight": 2}, {"offset": -20 * u.eV, "weight": 1}]
     result = parratt.homogeneous_reflectivity_transmissivity()
     instrument = result.attrs["parameters"]["instrument"]
@@ -296,7 +306,7 @@ def test_theta_quadrature_is_the_weighted_average(parratt, shape, nodes):
     R0 = parratt.calc_homogeneous_reflectivity_transmissivity()[0]
     parratt.instrument.theta_resolution = shape
     parratt.instrument.theta_nodes = nodes
-    parratt.instrument.theta_width = 0.05
+    parratt.instrument.theta_width = 0.05 * u.deg
     parratt.instrument.theta_points = 7
     R = parratt.calc_homogeneous_reflectivity_transmissivity()[0]
     # the experiment is restored
@@ -304,12 +314,12 @@ def test_theta_quadrature_is_the_weighted_average(parratt, shape, nodes):
     x, w = ins.profile_nodes(shape, nodes, 7, 2, 0.5)
     expected = 0
     for x_i, w_i in zip(x, w):
-        parratt.instrument.theta_offset = x_i * 0.05
+        parratt.instrument.theta_offset = x_i * 0.05 * u.deg
         parratt.instrument.theta_resolution = "none"
-        parratt.instrument.theta_width = 0
+        parratt.instrument.theta_width = 0 * u.deg
         expected = expected + w_i * parratt.calc_homogeneous_reflectivity_transmissivity()[0]
         parratt.instrument.theta_resolution = shape
-        parratt.instrument.theta_width = 0.05
+        parratt.instrument.theta_width = 0.05 * u.deg
     np.testing.assert_allclose(R, expected, rtol=1e-12)
     assert not np.allclose(R, R0, rtol=1e-3)
 
@@ -331,9 +341,9 @@ def test_theta_offset_footprint_I0_and_background(parratt):
     parratt.instrument.footprint = "none"
     parratt.instrument.I0 = 1
     parratt.instrument.background = 0
-    parratt.instrument.theta_offset = 0.1
+    parratt.instrument.theta_offset = 0.1 * u.deg
     R = parratt.calc_homogeneous_reflectivity_transmissivity()[0]
-    parratt.instrument.theta_offset = 0
+    parratt.instrument.theta_offset = 0 * u.deg
     parratt.theta = parratt.theta + 0.1 * u.deg
     np.testing.assert_allclose(R, parratt.calc_homogeneous_reflectivity_transmissivity()[0])
 
@@ -341,7 +351,7 @@ def test_theta_offset_footprint_I0_and_background(parratt):
 def test_theta_convolution_close_to_quadrature(multilayer):
     sim = simulation(Parratt, multilayer, [8000] * u.eV, np.linspace(0.2, 4, 3801) * u.deg)
     sim.instrument.theta_resolution = "gauss"
-    sim.instrument.theta_width = 0.05
+    sim.instrument.theta_width = 0.05 * u.deg
     sim.instrument.theta_range = 3
     sim.instrument.theta_mode = "convolution"
     R_conv = sim.calc_homogeneous_reflectivity_transmissivity()[0]
@@ -355,9 +365,9 @@ def test_theta_convolution_close_to_quadrature(multilayer):
 def test_theta_width_along_the_angles(parratt):
     width = np.linspace(0.01, 0.1, 101)
     parratt.instrument.theta_resolution = "gauss"
-    parratt.instrument.theta_width = width
+    parratt.instrument.theta_width = width * u.deg
     R = parratt.calc_homogeneous_reflectivity_transmissivity()[0]
-    parratt.instrument.theta_width = width[:50]
+    parratt.instrument.theta_width = width[:50] * u.deg
     with pytest.raises(ValueError, match="theta_width"):
         parratt.calc_homogeneous_reflectivity_transmissivity()
     assert R.shape == (1, 101)
@@ -484,7 +494,7 @@ def test_rotation_ellipticity_of_a_single_node(magnetic_elzo):
 
 def test_inhomogeneous_equals_homogeneous_with_instrument(magnetic_elzo, tmp_path):
     magnetic_elzo.instrument.theta_resolution = "gauss"
-    magnetic_elzo.instrument.theta_width = 1
+    magnetic_elzo.instrument.theta_width = 1 * u.deg
     magnetic_elzo.instrument.energy_resolution = "lorentz"
     magnetic_elzo.instrument.energy_width = 0.5
     magnetic_elzo.instrument.energy_points = 7
@@ -519,7 +529,7 @@ def test_inhomogeneous_equals_homogeneous_with_instrument(magnetic_elzo, tmp_pat
 def test_xray_dyn_inhomogeneous_with_instrument(xray_dyn, structure_crystalline):
     xray_dyn.theta = np.linspace(31, 33, 41) * u.deg
     xray_dyn.instrument.theta_resolution = "gauss"
-    xray_dyn.instrument.theta_width = 0.05
+    xray_dyn.instrument.theta_width = 0.05 * u.deg
     xray_dyn.instrument.spectrum = [{"weight": 2}, {"offset": -20 * u.eV, "weight": 1}]
     R = xray_dyn.calc_homogeneous_reflectivity()[0]
     strain_map = np.zeros([2, structure_crystalline.num_layers])
