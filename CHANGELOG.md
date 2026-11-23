@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - the documented arguments `layer` of `Structure.add_substrate()` and `Structure.add_superstrate()`, the arguments of `ElasticParameters.calc_spring_const()` and `calc_acoustic_impedance()`, which returns nothing, and typos in the examples and the getting-started page
+- stale cached results, as the hashes of the simulations missed inputs, which change the results; all hashes change, so that cached results require `force_recalc=True`:
+  - arrays, e.g. the maps, delays, and energies, entered the hashes by their `repr`, which shows only the corners of arrays of more than 1000 values and rounds them, and the maps of `PhononAna`, `PhononNum`, and the magnetization simulations only by their first $10^6$ values; arrays are hashed by all their values now, see `helpers.make_hashable()`
+  - the superstrate and the substrate with its number of repetitions, e.g. its dielectric tensor for the multilayer formalisms and the absorption of `Heat`
+  - the atoms of the layers for `XrayKin` and `XrayDyn`, i.e. their ids, positions in the unit cell, ionicity, Cromer-Mann coefficients, magnetization, and tabulated form factors, see the new `Atom.hash`, which is cached and calculated again after changes of these inputs
+  - the `mf_exch_coupling` of several sublattices, whose Curie temperature is only its largest eigenvalue, e.g. for an antiferromagnetic and a ferromagnetic coupling
+  - the angles of a zero `VectorParameter`, e.g. a magnetization of `r=0`, whose direction is the initial direction of the magnetization simulations
+- the cached reflection-transmission matrices of the atoms of `XrayDyn` were shared by different atoms of the same id, e.g. `Atom("Fe")` and `Atom("Fe", ionicity=3)`, also after changing the structure of the simulation; they are identified by `Atom.hash` now
 
 ## [3.0.0a4] 2026-11-16
 

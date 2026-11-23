@@ -341,7 +341,8 @@ class Structure:
 
         Create an unique hash from all layer IDs in the correct order in the
         Structure as well as the corresponding material properties which are
-        given by the `kwargs`.
+        given by the `kwargs`, including the superstrate and the substrate
+        with its number of repetitions.
 
         `types='all'` is problematic, as function handles will be include,
         which will always change on recreation. Following errors from the
@@ -358,10 +359,14 @@ class Structure:
         param = []
         layers = self.unique_layers
         for layer in layers[1]:
-            param.append(layer.get_property_dict(**kwargs))
+            param.append(layer._hash_params(**kwargs))
 
         _, IDs, _ = self.layer_vectors
         param.append(IDs)
+        # the semi-infinite superstrate and the substrate with its repetitions
+        for layer, N in (self.superstrate, self.substrate):
+            if isinstance(layer, Layer):
+                param.append([layer.id, N, layer._hash_params(**kwargs)])
         return make_hash_md5(param)
 
     def get_layer_handle(self, i):

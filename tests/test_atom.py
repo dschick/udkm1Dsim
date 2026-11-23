@@ -603,3 +603,35 @@ def test_atom_form_factor_table_follows_the_coefficients():
     assert atom._cached_form_factor_table(False) is atom._cached_form_factor_table(False)
     atom.atomic_form_factor_coeff[:, 1] *= 2  # changed in place
     assert not np.allclose(atom.get_atomic_form_factor(energy), reference)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda atom: setattr(atom, "id", "other"),
+        lambda atom: setattr(atom, "ionicity", 2),
+        lambda atom: setattr(atom, "magnetization", (0, 0, 1)),
+        lambda atom: setattr(atom.atomic.magnetization, "phi", 90 * u.deg),
+        lambda atom: setattr(atom, "cromer_mann_coeff", atom.cromer_mann_coeff * 1.01),
+        lambda atom: setattr(atom, "atomic_form_factor_coeff", atom.atomic_form_factor_coeff * 2),
+        lambda atom: setattr(atom, "magnetic_form_factor_coeff", None),
+    ],
+)
+def test_atom_hash_follows_its_inputs(atom_iron, change):
+    atom = copy.deepcopy(atom_iron)  # do not alter the module-scoped fixture
+    old_hash = atom.hash
+    assert atom.hash == old_hash == copy.deepcopy(atom_iron).hash
+    change(atom)
+    assert atom.hash != old_hash
+
+
+def test_atom_mixed_hash_follows_its_constituents(atom_mixed):
+    mixed = copy.deepcopy(atom_mixed)  # do not alter the module-scoped fixture
+    hashes = {mixed.hash}
+    mixed.atoms[0][0].magnetization = (1, 0, 0)
+    hashes.add(mixed.hash)
+    mixed.magnetization = (0, 1, 0)
+    hashes.add(mixed.hash)
+    mixed.add_atom(Atom("O"), 0.0)
+    hashes.add(mixed.hash)
+    assert len(hashes) == 4

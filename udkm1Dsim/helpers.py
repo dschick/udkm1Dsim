@@ -107,6 +107,10 @@ def make_hashable(obj):
     """make_hashable
 
     Recursive calls to elements of tuples, lists, dicts, set, and frozensets.
+    Arrays are replaced by their data type, shape, and the md5 digest of all
+    their values, as their ``repr`` shows only the corners of large arrays
+    and rounds the values. Quantities are replaced by their magnitude and
+    unit.
 
     Args:
         obj (any): anything that can be hashed..
@@ -115,6 +119,16 @@ def make_hashable(obj):
         obj (tuple): hashable object.
 
     """
+    if isinstance(obj, u.Quantity):
+        return ("Quantity", make_hashable(obj.magnitude), str(obj.units))
+
+    if isinstance(obj, np.ndarray):
+        if obj.dtype == object:
+            return ("ndarray", obj.shape, tuple(make_hashable(e) for e in obj.ravel()))
+        obj = np.ascontiguousarray(obj)
+        digest = hashlib.md5(obj.tobytes()).hexdigest()
+        return ("ndarray", obj.dtype.str, obj.shape, digest)
+
     if isinstance(obj, (tuple, list)):
         return tuple(make_hashable(e) for e in obj)
 

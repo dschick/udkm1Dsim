@@ -207,6 +207,53 @@ def test_structure_get_hash_depends_on_properties(structure, types, prop, value)
     assert structure.get_hash(types=types) != old_hash
 
 
+@pytest.mark.parametrize("types", ["heat", "xray", "optical", ["xray", "magnetic", "optical"]])
+def test_structure_get_hash_depends_on_superstrate_and_substrate(
+    structure, amorphous_layer_oxygen, types
+):
+    S = copy.deepcopy(structure)  # do not alter the module-scoped fixtures
+    hashes = {S.get_hash(types=types)}
+    S.add_substrate(S.substrate[0], 50)
+    hashes.add(S.get_hash(types=types))
+    S.substrate[0].roughness = 2 * u.nm
+    S.substrate[0].dielectric = Dispersion.from_ref_index(3.9 + 0.02j)
+    S.substrate[0].density = 2000 * u.kg / u.m**3
+    hashes.add(S.get_hash(types=types))
+    S.add_superstrate(copy.deepcopy(amorphous_layer_oxygen))
+    hashes.add(S.get_hash(types=types))
+    assert len(hashes) == 4
+
+
+def test_structure_get_hash_depends_on_atoms(structure_crystalline, atom_oxygen):
+    """the atoms of a unit cell and their positions, ionicities, and form
+    factors enter the hash of X-ray simulations"""
+    S = copy.deepcopy(structure_crystalline)  # do not alter the module-scoped fixtures
+    unit_cell = S.get_layer_handle(0)
+    hashes = {S.get_hash(types="xray")}
+    unit_cell.atoms[0][0].ionicity = 3
+    hashes.add(S.get_hash(types="xray"))
+    unit_cell.atoms[0][0].atomic_form_factor_coeff = (
+        unit_cell.atoms[0][0].atomic_form_factor_coeff * 1.01
+    )
+    hashes.add(S.get_hash(types="xray"))
+    unit_cell.add_atom(copy.deepcopy(atom_oxygen), 0.5)
+    hashes.add(S.get_hash(types="xray"))
+    atom, position, position_str = unit_cell.atoms[-1]
+    unit_cell.atoms[-1] = [atom, position, "0.6*(1+s)"]
+    hashes.add(S.get_hash(types="xray"))
+    assert len(hashes) == 5
+
+
+def test_structure_get_hash_depends_on_direction_of_zero_magnetization(structure):
+    """the angles of a zero magnetization are kept, e.g. as initial direction"""
+    S = copy.deepcopy(structure)  # do not alter the module-scoped fixtures
+    magnetization = S.get_layer_handle(0).magnetic.magnetization
+    magnetization.set({"r": 0, "phi": 0 * u.deg, "gamma": 0 * u.deg})
+    old_hash = S.get_hash(types="magnetic")
+    magnetization.phi = 90 * u.deg
+    assert S.get_hash(types="magnetic") != old_hash
+
+
 def test_get_layer_property_vector_padding(structure):
     """layers without higher order spring constants get zeros for them"""
     _, layers = structure.unique_layers

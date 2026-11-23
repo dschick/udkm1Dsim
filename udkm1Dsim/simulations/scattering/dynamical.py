@@ -868,8 +868,11 @@ class XrayDyn(Scattering):
                 deb_wal_fac,
             ]
         )
+        # the atoms are identified by their hash, as different atoms, e.g.
+        # of different ionicity, can share the same id
+        atom_hash = atom.hash
         try:
-            index = self.last_atom_ref_trans_matrices["atom_ids"].index(atom.id)
+            index = self.last_atom_ref_trans_matrices["atom_ids"].index(atom_hash)
         except ValueError:
             index = -1
 
@@ -899,11 +902,11 @@ class XrayDyn(Scattering):
             # remember this matrix for next use with the same
             # parameters for this atom
             if index >= 0:
-                self.last_atom_ref_trans_matrices["atom_ids"][index] = atom.id
+                self.last_atom_ref_trans_matrices["atom_ids"][index] = atom_hash
                 self.last_atom_ref_trans_matrices["hashes"][index] = _hash
                 self.last_atom_ref_trans_matrices["H"][index] = H
             else:
-                self.last_atom_ref_trans_matrices["atom_ids"].append(atom.id)
+                self.last_atom_ref_trans_matrices["atom_ids"].append(atom_hash)
                 self.last_atom_ref_trans_matrices["hashes"].append(_hash)
                 self.last_atom_ref_trans_matrices["H"].append(H)
         return H

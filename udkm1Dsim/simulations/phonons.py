@@ -108,9 +108,6 @@ class Phonon(Simulation):
         """
         param = [delays] + self._hash_params()
 
-        if np.size(temp_map) > 1e6:
-            temp_map = temp_map.flatten()[0:1000000]
-            delta_temp_map = delta_temp_map.flatten()[0:1000000]
         param.append(temp_map)
         param.append(delta_temp_map)
 
