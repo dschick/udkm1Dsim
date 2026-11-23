@@ -532,8 +532,10 @@ class MultilayerScattering(Scattering):
         """
         if pol_out_state == 0:  # no analyzer
             return np.array([], dtype=np.complex128)
+        # the analyzer projects onto the conjugate of its Jones vector, so
+        # that it transmits the same polarization as the incoming one
         if pol_out_state == 5:  # elliptical
-            return MultilayerScattering.calc_elliptical_polarization(polarization)
+            return MultilayerScattering.calc_elliptical_polarization(polarization).conj()
         return _POLARIZATION_VECTORS[pol_out_state].conj()
 
     @staticmethod

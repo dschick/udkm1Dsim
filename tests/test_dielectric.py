@@ -275,6 +275,45 @@ def test_dielectric_strain_models():
         )
 
 
+@pytest.mark.parametrize("strain_model", ["density", "photoelastic"])
+@pytest.mark.parametrize("strain", [0.1, np.array([0.0, 0.1])])
+def test_dielectric_voigt_constant_scales_once_with_density(strain_model, strain):
+    """a Voigt constant gives the same gyrotropic part as the equivalent
+    eps_mag = Q eps_xx of the unstrained eps_xx, which scales with the density"""
+    eps0 = Dispersion.from_ref_index(2.9 + 3.4j)
+    Q = 0.03 + 0.01j
+    eps_xx = (2.9 + 3.4j) ** 2
+    kwargs = {"deps_dstrain": 1 + 2j} if strain_model == "photoelastic" else {}
+    voigt = Dielectric(
+        eps0=eps0,
+        eps_mag=Dispersion.from_array(None, Q, kind="voigt"),
+        strain_model=strain_model,
+        **kwargs,
+    )
+    eps = Dielectric(
+        eps0=eps0,
+        eps_mag=Dispersion.from_array(None, Q * eps_xx),
+        strain_model=strain_model,
+        **kwargs,
+    )
+    np.testing.assert_allclose(
+        voigt.get_tensor(1, strain, (0, 0, 1)), eps.get_tensor(1, strain, (0, 0, 1)), rtol=1e-12
+    )
+
+
+@pytest.mark.parametrize(
+    "deps_dstrain, isotropic",
+    [(0.5, True), ([0.5, 0.5, 0.5], True), ([1.0, 3.0], False), (np.diag([1, 1, 2]), False)],
+)
+def test_dielectric_is_isotropic_with_photoelastic_change(deps_dstrain, isotropic):
+    """an anisotropic photoelastic change makes the dielectric tensor
+    anisotropic, e.g. for the isotropic formalisms"""
+    eps0 = Dispersion.from_ref_index(2 + 0.5j)
+    dielectric = Dielectric(eps0=eps0, strain_model="photoelastic", deps_dstrain=deps_dstrain)
+    assert dielectric.is_isotropic is isotropic
+    assert Dielectric(eps0=eps0, strain_model="density").is_isotropic
+
+
 def test_euler_matrix():
     R = euler_matrix(0.3, 0.7, -1.1)
     np.testing.assert_allclose(R @ R.T, np.eye(3), atol=1e-15)

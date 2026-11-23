@@ -978,6 +978,25 @@ def test_polarization_consistency(elzo):
     assert elzo.num_pol == 1
 
 
+@pytest.mark.parametrize(
+    "polarization, state",
+    [((0 * u.deg, 1), 1), ((0 * u.deg, -1), 2), ((0 * u.deg, 0), 3), ((90 * u.deg, 0), 4)],
+)
+def test_elliptical_analyzer_transmits_its_own_polarization(polarization, state):
+    """an elliptical analyzer transmits the light of the same elliptical or
+    of the equivalent circular or linear polarization and blocks the
+    orthogonal one, i.e. the opposite helicity"""
+    calc_in = MultilayerScattering.calc_incoming_polarization
+    calc_out = MultilayerScattering.calc_outgoing_polarization
+    analyzer = calc_out(5, polarization)[0]
+    alpha, ellipticity = polarization
+    orthogonal = (alpha + 90 * u.deg, -ellipticity)
+    assert abs(calc_in(5, polarization)[0] @ analyzer) ** 2 == pytest.approx(1)
+    assert abs(calc_in(state) @ analyzer) ** 2 == pytest.approx(1)
+    assert abs(calc_in(5, orthogonal)[0] @ analyzer) ** 2 == pytest.approx(0, abs=1e-15)
+    assert abs(calc_in(state) @ calc_out(state)) ** 2 == pytest.approx(1)
+
+
 def test_get_hash_of_elliptical_polarizations(elzo):
     elzo.set_polarization(5, 0, (0 * u.deg, 0))
     hash_1 = elzo.get_hash()

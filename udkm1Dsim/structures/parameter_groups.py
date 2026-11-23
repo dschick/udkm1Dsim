@@ -519,9 +519,12 @@ class ElasticParameters(ParameterGroup):
         r"""calc_acoustic_impedance
 
         Calculates the acoustic impedance from the spring constant, the
-        mass, and the area of the layer.
+        mass, and the area of the layer. The spring constant :math:`k` is
+        normalized to the unit area :math:`A_0` of 1 Å², as the mass
+        :math:`m_A = m A_0 / A` per unit area, so that the impedance is the
+        product of the density :math:`\rho` and the sound velocity :math:`v`:
 
-        .. math:: Z = \sqrt{\frac{k \, m}{A^2}}
+        .. math:: Z = \frac{\sqrt{k \, m_A}}{A_0} = \sqrt{\frac{k \, m}{A \, A_0}} = \rho \, v
 
         Args:
             mass (float): mass of the layer :math:`m` (kg).
@@ -529,7 +532,7 @@ class ElasticParameters(ParameterGroup):
 
         """
         self.acoustic_impedance.magnitude = np.sqrt(
-            self.spring_const.magnitude[0] * mass / area**2
+            self.spring_const.magnitude[0] * mass / (area * 1e-20)
         )
 
     def set_ho_spring_constants(self, HO):

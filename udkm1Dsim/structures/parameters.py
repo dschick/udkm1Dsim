@@ -616,7 +616,8 @@ class TemperatureParameter(Parameter):
                         "did not work. "
                         "Just do it numerically with scipy.integrate.quad"
                     )
-                    self._integral.append(lambda T: quad(functional, 0, T, limit=10000)[0])
+                    # bind the functional of this subsystem, not the last one
+                    self._integral.append(lambda T, f=functional: quad(f, 0, T, limit=10000)[0])
                     self._integral_expr.append(f"scipy.integrate.quad({str(expression)}, 0, T)[0]")
 
         return self._integral

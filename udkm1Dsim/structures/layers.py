@@ -1198,6 +1198,11 @@ class AmorphousLayer(Layer):
 
     Use :class:`Layer` instead.
 
+    The magnetization of the layer is the one of its atom, unless a
+    ``magnetization`` is given on initialization, either as keyword argument
+    or in the dict of the ``magnetic`` parameters. Setting the ``atom``
+    afterwards sets the magnetization of the layer to the one of the atom.
+
     """
 
     def __init__(self, id, name, thickness=None, density=None, **kwargs):
@@ -1206,7 +1211,11 @@ class AmorphousLayer(Layer):
         if density is not None:
             kwargs["density"] = density
         super().__init__(id, name, **kwargs)
-        self.atom = kwargs.get("atom", [])
+        magnetic = kwargs.get("magnetic")
+        given = "magnetization" in kwargs or (
+            isinstance(magnetic, dict) and "magnetization" in magnetic
+        )
+        self._set_atom(kwargs.get("atom", []), magnetization=not given)
 
     @property
     def atom(self):
@@ -1215,8 +1224,14 @@ class AmorphousLayer(Layer):
 
     @atom.setter
     def atom(self, atom):
+        self._set_atom(atom)
+
+    def _set_atom(self, atom, magnetization=True):
+        """Set the atom and, if ``magnetization``, the magnetization of the
+        layer to the one of the atom or to zero without an atom."""
         if atom == []:  # no atom is set
-            self.magnetic.magnetization.polar = (0, 0 * u.deg, 0 * u.deg)
+            if magnetization:
+                self.magnetic.magnetization.polar = (0, 0 * u.deg, 0 * u.deg)
             return
 
         if not isinstance(atom, (Atom, AtomMixed)):
@@ -1229,12 +1244,13 @@ class AmorphousLayer(Layer):
         self._atom = atom
         if isinstance(atom, AtomMixed) and atom.num_atoms == self.magnetic.num_sublattices > 1:
             # every constituent of the mixed atom forms a sublattice
-            self.magnetic.magnetization = [
-                constituent.atomic.magnetization for constituent, _ in atom.atoms
-            ]
+            if magnetization:
+                self.magnetic.magnetization = [
+                    constituent.atomic.magnetization for constituent, _ in atom.atoms
+                ]
             if not self.magnetic._concentration_explicit:
                 self.magnetic.concentration = [fraction for _, fraction in atom.atoms]
-        else:
+        elif magnetization:
             if isinstance(self.magnetic.magnetization, list):
                 self.magnetic.magnetization = (0.0, 0.0, 0.0)
             # keeps the angles of the atom, also for a zero amplitude

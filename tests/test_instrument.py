@@ -358,6 +358,30 @@ def test_theta_quadrature_is_the_weighted_average(parratt, shape, nodes):
     assert not np.allclose(R, R0, rtol=1e-3)
 
 
+def test_theta_nodes_below_the_surface_do_not_contribute(xray_dyn):
+    """the nodes of a divergent beam at angles <= 0 are rays, which do not
+    hit the sample from above, instead of NaN, e.g. by q_z = 0"""
+    xray_dyn.theta = np.r_[0.05, 0.1, 0.2, 0.3] * u.deg
+    xray_dyn.instrument.theta_resolution = "gauss"
+    xray_dyn.instrument.theta_width = 0.1 * u.deg
+    with pytest.warns(UserWarning, match="below the surface"):
+        R = xray_dyn.calc_homogeneous_reflectivity()[0]
+    assert np.all(np.isfinite(R))
+    x, w = ins.profile_nodes("gauss", "uniform", 7, 2, 0.5)
+    expected = 0
+    for x_i, w_i in zip(x, w):
+        theta = np.r_[0.05, 0.1, 0.2, 0.3] + x_i * 0.1
+        R_i = np.zeros(4)
+        above = theta > 0
+        if np.any(above):
+            xray_dyn.instrument.theta_resolution = "none"
+            xray_dyn.instrument.theta_width = 0 * u.deg
+            xray_dyn.theta = theta[above] * u.deg
+            R_i[above] = xray_dyn.calc_homogeneous_reflectivity()[0][0]
+        expected = expected + w_i * R_i
+    np.testing.assert_allclose(R[0], expected, rtol=1e-12)
+
+
 def test_theta_offset_footprint_I0_and_background(parratt):
     R0, _, T0, _ = parratt.calc_homogeneous_reflectivity_transmissivity()
     parratt.instrument.footprint = "box"

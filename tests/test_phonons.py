@@ -206,6 +206,29 @@ def test_phonon_inconsistent_num_sub_systems_raises(tmp_path, phonon_class):
         phonon.get_strain_map(delays, temp_map, np.zeros_like(temp_map))
 
 
+def test_check_temp_maps_expands_single_delta_temp_map_of_sub_systems(tmp_path):
+    """a temperature difference map of a single delay is expanded to all M
+    delays for K > 1 subsystems, also for M != K"""
+    layer = Layer(
+        "a",
+        "a",
+        thickness=1 * u.nm,
+        density=1000 * u.kg / u.m**3,
+        sound_vel=5 * u.nm / u.ps,
+        heat_capacity=[10, 20],
+        lin_therm_exp=[1e-5, 1e-5],
+    )
+    S = Structure("s")
+    S.add_sub_structure(layer, 10)
+    phonon = Phonon(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
+    delays = np.r_[0:1:0.1] * u.ps
+    temp_map = 300 * np.ones([len(delays), S.num_layers, 2])
+    delta = np.ones([1, S.num_layers, 2])
+    _, delta_temp_map = phonon.check_temp_maps(temp_map, delta, delays)
+    assert delta_temp_map.shape == temp_map.shape
+    assert np.all(delta_temp_map[0] == 1) and np.all(delta_temp_map[1:] == 0)
+
+
 # PhononAna vs. PhononNum
 #
 # The analytical solution is exact for the harmonic linear chain without

@@ -100,6 +100,19 @@ def test_temperature_parameter_list(temperature_parameter, input, expected, expe
         assert expression.equals(sp.sympify(expected_expr[i]))
 
 
+def test_temperature_parameter_numerical_integral_per_sub_system(monkeypatch):
+    """the numerical fallback integrates the function of each subsystem"""
+
+    def fail(*args, **kwargs):
+        raise NotImplementedError
+
+    monkeypatch.setattr("udkm1Dsim.structures.parameters.integrate", fail)
+    parameter = TemperatureParameter("J/kg/K", ["100", "200"], "heat_capacity")
+    with pytest.warns(UserWarning, match="numerically"):
+        integral = parameter.integral
+    assert [f(10) for f in integral] == pytest.approx([1000, 2000])
+
+
 # VectorParameter
 
 
