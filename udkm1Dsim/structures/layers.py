@@ -27,6 +27,7 @@ __docformat__ = "restructuredtext"
 
 import copy
 import warnings
+from difflib import get_close_matches
 from inspect import isfunction
 from operator import attrgetter
 
@@ -173,6 +174,7 @@ class Layer:
         for removed, replacement in _REMOVED_OPTICAL_INPUTS.items():
             if removed in kwargs or (isinstance(optical, dict) and removed in optical):
                 raise TypeError(f"'{removed}' was removed, use {replacement} instead!")
+        self._check_inputs(kwargs)
 
         # the parameters depending on several groups are updated once all are set
         self._updating = True
@@ -1078,6 +1080,32 @@ class Layer:
     # Private methods
     # ============================================================================
 
+    # keyword arguments of a sub-class besides the parameter groups
+    _extra_inputs = ()
+
+    def _check_inputs(self, kwargs):
+        """Raise for keyword arguments, which are neither a parameter group,
+        nor one of their parameters, e.g. misspelled ones, which would be
+        ignored otherwise, as Python does for an explicit signature, with
+        the closest known names as hint."""
+        known = set(self._parameter_group_names) | set(self._extra_inputs)
+        for group_name in self._parameter_group_names:
+            known.update(getattr(type(self), group_name).group_class._input_names())
+        unknown = sorted(set(kwargs) - known)
+        if not unknown:
+            return
+        names = []
+        for key in unknown:
+            matches = get_close_matches(key, known, n=1)
+            names.append(f"{key!r}" + (f" (did you mean {matches[0]!r}?)" if matches else ""))
+        plural = "s" if len(unknown) > 1 else ""
+        raise TypeError(
+            f"{type(self).__name__}() got {'an ' if not plural else ''}unexpected keyword "
+            f"argument{plural} {', '.join(names)}, which {'are' if plural else 'is'} neither a "
+            f"parameter group ({', '.join(self._parameter_group_names)}) nor one of their "
+            "parameters!"
+        )
+
     def _group_input(self, group_name, kwargs):
         """Input of a parameter group from the keyword arguments, either as
         parameter group or as dict of the group and its single parameters."""
@@ -1204,6 +1232,8 @@ class AmorphousLayer(Layer):
     afterwards sets the magnetization of the layer to the one of the atom.
 
     """
+
+    _extra_inputs = ("atom",)
 
     def __init__(self, id, name, thickness=None, density=None, **kwargs):
         if thickness is not None:

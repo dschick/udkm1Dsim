@@ -71,6 +71,8 @@ __all__ = ["MultilayerScattering", "circular_to_linear", "compose_scattering_sta
 __docformat__ = "restructuredtext"
 
 
+import warnings
+
 import numpy as np
 import pint
 from tqdm.auto import tqdm
@@ -896,6 +898,7 @@ class MultilayerScattering(Scattering):
         eps = state["eps"]
 
         if self._assembly == "transfer":
+            self._check_transfer_matrix_growth(stack, stack_phi)
             R, T = self.jones_from_transfer_matrix(stack)
             R_phi, T_phi = self.jones_from_transfer_matrix(stack_phi)
         else:
@@ -905,6 +908,29 @@ class MultilayerScattering(Scattering):
         R, T = self.incident_field(R, T, top[7])
         R_phi, T_phi = self.incident_field(R_phi, T_phi, top[7])
         return R, R_phi, T, T_phi
+
+    #: float: largest element of the transfer matrix of a stack, above which
+    #: the transmission loses its precision, see :meth:`calc_jones_matrices`
+    MAX_TRANSFER_MATRIX = 1e12
+
+    def _check_transfer_matrix_growth(self, *stacks):
+        """warns for a transfer matrix, which grows exponentially by the up
+        modes of thick evanescent or absorbing layers, so that the
+        transmission loses its precision, as its absolute error grows with
+        the square of the largest element, e.g. to about 1e-6 for 1e12, while
+        the reflection and the fields and absorption of the stable recursion
+        of the mode amplitudes keep their precision"""
+        largest = max(np.max(np.abs(stack)) for stack in stacks)
+        if not largest <= self.MAX_TRANSFER_MATRIX:
+            name = type(self).__name__
+            warnings.warn(
+                f"The transfer matrix of {name} grows to {largest:.1e} by thick evanescent or "
+                "absorbing layers, so that the transmission loses its precision, while the "
+                f"reflection, fields, and absorption keep it! Use "
+                f"{name.replace('Elzo', 'Stepanov')} with scattering matrices for the "
+                "transmission instead.",
+                stacklevel=3,
+            )
 
     @staticmethod
     def jones_from_transfer_matrix(RT):
@@ -1067,6 +1093,8 @@ class MultilayerScattering(Scattering):
         strain = float(np.ravel(strain)[0]) if np.size(strain) > 0 else 0.0
         if magnetization is None or np.size(magnetization) < 3:
             magnetization = layer._magnetization_for_dielectric()
+            if not np.any(magnetization):
+                _warn_for_magnetized_atoms(layer)
         return strain, tuple(float(m) for m in np.ravel(magnetization)[:3])
 
     def _layer_modes(self, layer, strain, magnetization, cache=None):
@@ -2916,6 +2944,25 @@ def _full_fields(psi, b, eps):
     E = np.stack([E_x, E_y, E_z], axis=-2)
     H = np.stack([H_x, H_y, -b * E_x], axis=-2)
     return E, H
+
+
+def _warn_for_magnetized_atoms(layer):
+    """warns for a layer without magnetization, whose atoms are magnetized
+    and whose dielectric tensor has a gyrotropic part, e.g. of a UnitCell,
+    which follows the magnetization of the layer, not of its atoms"""
+    if getattr(layer.optical.dielectric, "eps_mag", None) is None:
+        return
+    try:
+        atoms = layer._atoms_and_fractions()
+    except TypeError:  # a layer without atoms
+        return
+    if any(np.any(atom.atomic.magnetization.magnitude) for atom, _ in atoms):
+        warnings.warn(
+            f"The atoms of the layer '{layer.id}' are magnetized, but the layer is not. The "
+            "gyrotropic part of its dielectric tensor follows the magnetization of the layer, "
+            "so set it, e.g. layer.magnetization = (0, 0, 1)!",
+            stacklevel=2,
+        )
 
 
 def _flux_matrix(psi_1, psi_2):

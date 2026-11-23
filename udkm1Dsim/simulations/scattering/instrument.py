@@ -69,6 +69,9 @@ __all__ = [
     "MAX_NODE_SPACING",
     "profile_nodes",
     "check_nodes",
+    "MIN_PROFILE_AREA",
+    "profile_area",
+    "check_range",
     "convolution_matrix",
     "is_resolved",
     "convolve",
@@ -93,6 +96,9 @@ NODES = ("uniform", "gaussian_quadrature")
 #: float: largest spacing of uniform nodes (FWHM), i.e. the default 7 nodes
 #: within :math:`\pm 2` FWHM, see :func:`check_nodes`
 MAX_NODE_SPACING = 2 / 3
+#: float: smallest area of a profile within its ``range``, below which the
+#: truncation of its wings is warned for, see :func:`check_range`
+MIN_PROFILE_AREA = 0.95
 
 # sigma of a Gaussian of unit FWHM
 _SIGMA = 1 / (2 * np.sqrt(2 * np.log(2)))
@@ -258,6 +264,80 @@ def check_nodes(name, label, shape, nodes, points, range, stacklevel=2):
                 f"least {needed} {name}_points for this range.",
                 stacklevel=stacklevel + 1,
             )
+
+
+def profile_area(shape, range=2.0, eta=0.5):
+    r"""profile_area
+
+    Area of the profile of :func:`profile` within :math:`\pm` ``range`` in
+    units of its FWHM, i.e. the part of the profile, which is kept by the
+    truncation of the uniform nodes and of the convolution, as the weights
+    are normalized to this part, e.g. 0.844 of a Lorentzian within
+    :math:`\pm 2` FWHM, but :math:`1 - 2\times10^{-5}` of a Gaussian:
+
+    * ``'box'``: :math:`1` for a range of at least :math:`1/2`
+    * ``'gauss'``: :math:`\mathrm{erf}(2 \sqrt{\ln 2}\, r)`
+    * ``'lorentz'``: :math:`2 \arctan(2 r) / \pi`
+    * ``'pseudo_voigt'``: :math:`\eta` times the Lorentzian plus
+      :math:`1 - \eta` times the Gaussian
+
+    Args:
+        shape (str): profile.
+        range (float, optional): range in units of the FWHM. Defaults to 2.
+        eta (float, optional): Lorentzian fraction of the pseudo-Voigt
+            profile. Defaults to 0.5.
+
+    Returns:
+        area (float): area within the range.
+
+    """
+    if shape == "box":
+        return float(min(range / 0.5, 1.0))
+    gauss = float(erf(2 * np.sqrt(np.log(2)) * range))
+    lorentz = float(2 * np.arctan(2 * range) / np.pi)
+    if shape == "gauss":
+        return gauss
+    if shape == "lorentz":
+        return lorentz
+    if shape == "pseudo_voigt":
+        return eta * lorentz + (1 - eta) * gauss
+    raise ValueError(f"Unknown profile {shape!r}!")
+
+
+def check_range(name, label, shape, range, eta=0.5, stacklevel=2):
+    """check_range
+
+    Warns for a ``range`` of a profile, within which less than
+    :data:`MIN_PROFILE_AREA` of its area lies, see :func:`profile_area`,
+    e.g. of a Lorentzian within the default range of 2 FWHM, so that its
+    wings are missing.
+
+    Args:
+        name (str): prefix of the ``*_range`` in the warnings, e.g.
+            ``'theta'``.
+        label (str): description of the profile in the warnings, e.g.
+            ``'theta resolution'``.
+        shape (str): profile.
+        range (float): range in units of the FWHM.
+        eta (float, optional): Lorentzian fraction of the pseudo-Voigt
+            profile. Defaults to 0.5.
+        stacklevel (int, optional): stack level of the warnings, e.g. of the
+            caller of the caller. Defaults to 2.
+
+    """
+    if shape in ("none", "box", "gauss"):
+        return
+    area = profile_area(shape, float(range), float(eta))
+    if area < MIN_PROFILE_AREA:
+        needed = np.tan(np.pi * MIN_PROFILE_AREA / 2) / 2
+        if shape == "pseudo_voigt":
+            needed = np.tan(np.pi / 2 * (1 - (1 - MIN_PROFILE_AREA) / max(eta, 1e-12))) / 2
+        warnings.warn(
+            f"Only {area:.1%} of the {shape} profile of the {label} lie within the "
+            f"{name}_range of {float(range):g} FWHM, so that its wings are missing! Use a "
+            f"{name}_range of at least {needed:.2g} FWHM with enough {name}_points.",
+            stacklevel=stacklevel + 1,
+        )
 
 
 def convolution_matrix(x, width, shape, range=2.0, eta=0.5):

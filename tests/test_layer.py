@@ -457,6 +457,43 @@ def test_amorphous_layer_takes_magnetization_of_atom(amorphous_layer, atom_iron)
     assert np.allclose(amorphous_layer.magnetization.magnitude, atom_iron.magnetization.magnitude)
 
 
+@pytest.mark.parametrize(
+    "cls, kwargs, message",
+    [
+        (
+            Layer,
+            {"heat_capcity": 455},
+            r"\(\) got an unexpected keyword argument 'heat_capcity' "
+            r"\(did you mean 'heat_capacity'\?\)",
+        ),
+        (AmorphousLayer, {"atom_": None}, r"'atom_' \(did you mean 'atom'\?\)"),
+        (
+            UnitCell,
+            {"c_axis": 3 * u.angstrom, "sound_velocity": 5 * u.nm / u.ps, "xyz": 1},
+            r"unexpected keyword arguments 'sound_velocity' \(did you mean 'sound_vel'\?\), "
+            r"'xyz', which are",
+        ),
+    ],
+)
+def test_layer_rejects_unknown_keyword_arguments(cls, kwargs, message):
+    """misspelled parameters would be ignored silently otherwise"""
+    with pytest.raises(TypeError, match=message):
+        cls("a", "a", **kwargs)
+
+
+@pytest.mark.parametrize(
+    "gyromagnetic_ratio, expected",
+    [(-1.761e11, -1.761e11), (-28.025 * u.GHz / u.T, -2 * np.pi * 28.025e9)],
+)
+def test_layer_gyromagnetic_ratio(gyromagnetic_ratio, expected):
+    layer = Layer("a", "a", gyromagnetic_ratio=gyromagnetic_ratio)
+    assert layer.magnetic.gyromagnetic_ratio.magnitude == pytest.approx(expected)
+    with pytest.raises(ValueError, match="negative sign"):
+        Layer("a", "a", gyromagnetic_ratio=1.761e11)
+    with pytest.raises(ValueError, match="negative sign"):
+        layer.gyromagnetic_ratio = [-1.761e11, 1.761e11]
+
+
 def test_amorphous_layer_invalid_atom():
     with pytest.raises(TypeError):
         AmorphousLayer("a", "a", 1 * u.nm, 1000 * u.kg / u.m**3, atom="Fe")

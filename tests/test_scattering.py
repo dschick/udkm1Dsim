@@ -1539,6 +1539,9 @@ def check_energy_conservation(sim, points=2001):
             )
 
 
+# the transmission of the transfer matrices of Elzo and BerremanElzo loses its
+# precision for the thick stack, but not their fields and absorption
+@pytest.mark.filterwarnings("ignore:The transfer matrix")
 @pytest.mark.parametrize("cls", FORMALISMS)
 @pytest.mark.parametrize("thickness", [1, 100], ids=["thin", "thick"])
 def test_absorption_conserves_energy(cls, thickness):
@@ -1548,6 +1551,43 @@ def test_absorption_conserves_energy(cls, thickness):
     S = optical_stack(substrate_layer(), thickness)
     sim = simulation(cls, S, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg)
     check_energy_conservation(sim)
+
+
+def test_magnetized_atoms_of_an_unmagnetized_layer_are_warned(unit_cell_iron, recwarn):
+    """the gyrotropic part of the dielectric tensor of a unit cell follows the
+    magnetization of the layer, not of its magnetized atoms"""
+    unit_cell = copy.deepcopy(unit_cell_iron)
+    S = ud.Structure("crystal")
+    S.add_sub_structure(unit_cell, 5)
+    sim = simulation(Elzo, S, np.r_[708] * u.eV, np.r_[10] * u.deg)
+    with pytest.warns(UserWarning, match="atoms of the layer 'unit_cell_Fe' are magnetized"):
+        sim.homogeneous_reflectivity_transmissivity()
+    unit_cell.magnetization = (0, 0, 1)
+    sim.homogeneous_reflectivity_transmissivity()
+    assert not [w for w in recwarn if "are magnetized" in str(w.message)]
+
+
+@pytest.mark.parametrize(
+    "transfer, scattering", [(Elzo, Stepanov), (BerremanElzo, BerremanStepanov)]
+)
+def test_growing_transfer_matrix_is_warned(transfer, scattering, recwarn):
+    """the transmission of the transfer matrices of thick absorbing layers
+    loses its precision, while the one of the scattering matrices and the
+    reflection keep it"""
+    S = optical_stack(substrate_layer(), 100)
+    energy, theta = np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg
+    with pytest.warns(UserWarning, match=f"Use {scattering.__name__} with scattering"):
+        R, _, T, _ = simulation(
+            transfer, S, energy, theta
+        ).calc_homogeneous_reflectivity_transmissivity()
+    R_ref, _, T_ref, _ = simulation(
+        scattering, S, energy, theta
+    ).calc_homogeneous_reflectivity_transmissivity()
+    np.testing.assert_allclose(R, R_ref, atol=1e-12)
+    assert np.max(np.abs(T - T_ref)) > 1
+    S = optical_stack(substrate_layer(), 1)
+    simulation(transfer, S, energy, theta).calc_homogeneous_reflectivity_transmissivity()
+    assert not [w for w in recwarn if "transfer matrix" in str(w.message)]
 
 
 @pytest.mark.parametrize("cls", MAGNETIC)
