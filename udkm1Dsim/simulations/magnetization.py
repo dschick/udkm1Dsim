@@ -36,6 +36,7 @@ from ..helpers import (
     convert_polar_to_cartesian,
     finderb,
     make_hash_md5,
+    to_angle,
 )
 from ..structures.layers import UnitCell
 from ..structures.parameters import VectorParameter
@@ -816,7 +817,8 @@ class Magnetization(Simulation):
         - cartesian components ``(x, y, z)``, e.g. ``(1, 0, 0)`` or an array
           of them with the components in its last dimension,
         - dict of the polar components ``{"r": ..., "phi": ..., "gamma": ...}``
-          with angles as quantities or bare numbers in degrees, where a
+          with the angles as angle Quantities, e.g. ``90 * u.deg``, see
+          :func:`~udkm1Dsim.helpers.to_angle`, where a
           negative ``r`` reverses the direction given by the angles,
         - dict of the cartesian components ``{"x": ..., "y": ..., "z": ...}``,
         - :class:`~udkm1Dsim.structures.parameters.VectorParameter` or
@@ -856,8 +858,8 @@ class Magnetization(Simulation):
                 r = init_magnetization["r"]
                 r = r.m_as("") if isinstance(r, u.Quantity) else r
                 angles = [
-                    value.m_as("rad") if isinstance(value, u.Quantity) else np.radians(value)
-                    for value in (init_magnetization["phi"], init_magnetization["gamma"])
+                    to_angle(init_magnetization[key], name=f"angle {key} of the magnetization")
+                    for key in ("phi", "gamma")
                 ]
                 return np.stack(np.broadcast_arrays(r, *angles), axis=-1).astype(float)
             if keys == {"x", "y", "z"}:

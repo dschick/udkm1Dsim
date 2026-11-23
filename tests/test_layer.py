@@ -896,7 +896,7 @@ def test_sublattice_parameters():
         lamda=0.01,
         anisotropy=[[0, 0, 1], [0, 0, 2]] * u.J / u.m**3,
         mf_exch_coupling=EXCHANGE * u.J,
-        magnetization=[(0, 0, 1), {"r": -0.5, "phi": 0, "gamma": 0}],
+        magnetization=[(0, 0, 1), {"r": -0.5, "phi": 0 * u.deg, "gamma": 0 * u.deg}],
     )
     assert magnetic.num_sublattices == magnetic.check_sublattices() == 2
     assert np.array_equal(magnetic.sublattice_values("lamda"), [0.01, 0.01])

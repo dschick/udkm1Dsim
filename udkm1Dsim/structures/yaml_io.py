@@ -351,7 +351,12 @@ def _read_vector(value, unit=""):
     floats in deg."""
     vector = VectorParameter(unit)
     if isinstance(value, dict):
-        vector.set({key: _read_quantity(v) for key, v in value.items()})
+        vector.set(
+            {
+                key: _read_angle(v) if key in ("phi", "gamma") else _read_quantity(v)
+                for key, v in value.items()
+            }
+        )
     else:
         vector.set(_read_quantity(value))
     return vector
