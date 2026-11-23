@@ -2,6 +2,7 @@
 import numpy as np
 import pytest
 
+import udkm1Dsim as ud
 from udkm1Dsim.helpers import (
     conv_with_function,
     convert_cartesian_to_polar,
@@ -11,6 +12,7 @@ from udkm1Dsim.helpers import (
     m_times_n,
     make_hash_md5,
     multi_gauss,
+    to_angle,
 )
 
 
@@ -172,3 +174,17 @@ def test_conv_with_function():
             ]
         ),
     )
+
+
+def test_to_angle():
+    u = ud.u
+    np.testing.assert_allclose(to_angle(90 * u.deg), np.pi / 2)
+    np.testing.assert_allclose(to_angle(np.pi * u.rad, "deg"), 180)
+    np.testing.assert_allclose(to_angle(np.r_[0, 30] * u.deg, "deg"), [0, 30])
+    np.testing.assert_allclose(to_angle([1 * u.mrad, 1 * u.deg], "mrad"), [1, np.pi * 1e3 / 180])
+    # the unit of an inverse function is rad
+    np.testing.assert_allclose(to_angle(np.arcsin(0.5 * u.dimensionless), "deg"), 30)
+    # bare numbers, dimensionless and other quantities are no angles
+    for value in (0, 0.5, np.r_[0.5], [0.5 * u.deg, 1], 0.5 * u.dimensionless, 1 * u.sr, 1 * u.m):
+        with pytest.raises(TypeError, match="alpha must be given"):
+            to_angle(value, name="alpha")

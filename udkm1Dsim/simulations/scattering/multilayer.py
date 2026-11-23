@@ -75,7 +75,7 @@ import numpy as np
 import pint
 from tqdm.auto import tqdm
 
-from ...helpers import convert_polar_to_cartesian, make_hash_md5
+from ...helpers import convert_polar_to_cartesian, make_hash_md5, to_angle
 from ...structures.layers import Layer, Vacuum
 from ...structures.structure import Structure
 from ..result import Result, find_source, get_entry
@@ -451,8 +451,9 @@ class MultilayerScattering(Scattering):
         Args:
             pol_in_state (int, str): incoming polarization state id or name.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
-                ellipticity (-+1 -> circular left/right; 0 -> linear)
+                azimuth angle alpha of the polarization as pint Quantity,
+                e.g. ``45 * u.deg`` (0° -> s; 90° -> p), and ellipticity
+                (-+1 -> circular left/right; 0 -> linear).
 
         """
         state = self._parse_polarization_state(pol_in_state, self._pol_in_states, "incoming")
@@ -478,8 +479,9 @@ class MultilayerScattering(Scattering):
         Args:
             pol_out_state (int, str): outgoing polarization state id or name.
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
-                ellipticity (-+1 -> circular left/right; 0 -> linear)
+                azimuth angle alpha of the polarization as pint Quantity,
+                e.g. ``45 * u.deg`` (0° -> s; 90° -> p), and ellipticity
+                (-+1 -> circular left/right; 0 -> linear).
 
         """
         state = self._parse_polarization_state(pol_out_state, self._pol_out_states, "analyzer")
@@ -543,8 +545,9 @@ class MultilayerScattering(Scattering):
 
         Args:
             polarization (list[tuple[alpha (Quantity), ellipticity (float)]]):
-                azimuth angle alpha of polarization (0 -> s; 90 -> p) (deg)
-                ellipticity (-+1 -> circular left/right; 0 -> linear)
+                azimuth angle alpha of the polarization as pint Quantity,
+                e.g. ``45 * u.deg`` (0° -> s; 90° -> p), and ellipticity
+                (-+1 -> circular left/right; 0 -> linear).
 
         Returns:
             pol (ndarray[complex]): polarization factors of shape (N, 2).
@@ -561,10 +564,7 @@ class MultilayerScattering(Scattering):
         N = len(polarization)
         pol = np.zeros((N, 2), dtype=np.complex128)
         for i, (alpha, ellipticity) in enumerate(polarization):
-            try:
-                alpha = alpha.to("rad").magnitude
-            except AttributeError:
-                pass
+            alpha = to_angle(alpha, name="azimuth angle alpha of the polarization")
 
             if ellipticity > 1 or ellipticity < -1:
                 raise ValueError("ellipticity must be -1 <= e <= +1")

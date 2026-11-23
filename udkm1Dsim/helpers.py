@@ -24,6 +24,7 @@
 __all__ = [
     "read_columns",
     "to_energy",
+    "to_angle",
     "SpectralTable",
     "make_hash_md5",
     "make_hashable",
@@ -693,6 +694,39 @@ def to_energy(value):
     if isinstance(value, u.Quantity):
         return np.asarray(value.to("eV", "sp").magnitude, dtype=float)
     return np.asarray(value, dtype=float)
+
+
+def to_angle(value, unit="rad", name="angle"):
+    """to_angle
+
+    Convert angles given as pint Quantity, e.g. ``45 * u.deg``, or as list
+    or tuple of them, to floats in the ``unit``. Bare numbers are rejected,
+    since they are ambiguous between deg and rad. As pint treats angles as
+    dimensionless, a dimensionless Quantity is rejected as well, i.e. the
+    angle needs an explicit angular unit such as rad, deg, or mrad.
+
+    Args:
+        value (Quantity, list[Quantity], tuple[Quantity]): angle(s).
+        unit (str, optional): unit of the returned angles. Defaults to
+            ``'rad'``.
+        name (str, optional): name of the angle for the error message.
+            Defaults to ``'angle'``.
+
+    Returns:
+        angle (ndarray[float]): angle(s) in the ``unit``.
+
+    Raises:
+        TypeError: if the angle is no Quantity with an angular unit.
+
+    """
+    if isinstance(value, (list, tuple)):
+        return np.array([to_angle(v, unit, name) for v in value], dtype=float)
+    if isinstance(value, u.Quantity) and value.to_root_units().units == u.rad:
+        return np.asarray(value.to(unit).magnitude, dtype=float)
+    raise TypeError(
+        f"The {name} must be given as pint Quantity with an angular unit, "
+        f"e.g. 45 * u.deg, not as {value!r}!"
+    )
 
 
 def _md5(*arrays):

@@ -936,21 +936,26 @@ def test_elliptical_polarization_requires_valid_parameters(elzo):
     for setter in (elzo.set_incoming_polarization, elzo.set_outgoing_polarization):
         with pytest.raises(ValueError):
             setter(5)
-        setter(5, (0, 0))
+        setter(5, (0 * u.deg, 0))
         with pytest.raises(ValueError):
-            setter(5, (0, 2))
+            setter(5, (0 * u.deg, 2))
+        # bare numbers and dimensionless quantities are ambiguous angles
+        for alpha in (0, np.pi / 2, 0.5 * u.dimensionless):
+            with pytest.raises(TypeError, match="angular unit"):
+                setter(5, (alpha, 0))
 
 
 def test_polarization_consistency(elzo):
-    elzo.set_polarization(5, 5, [(0, 0), (1, 0), (2, 0)], [(0, 0), (1, 0), (2, 0)])
+    pols = [(alpha * u.deg, 0) for alpha in (0, 1, 2)]
+    elzo.set_polarization(5, 5, pols, pols)
     assert elzo.num_pol == 3
     # changing only one side to a different number of polarizations must fail
     # and keep the previous state
     with pytest.raises(ValueError, match="set_polarization"):
-        elzo.set_outgoing_polarization(5, [(0, 0), (1, 0)])
+        elzo.set_outgoing_polarization(5, pols[:2])
     assert elzo.pol_out.shape == (3, 2)
     with pytest.raises(ValueError, match="set_polarization"):
-        elzo.set_incoming_polarization(5, [(0, 0), (1, 0)])
+        elzo.set_incoming_polarization(5, pols[:2])
     assert elzo.pol_in.shape == (3, 2)
     # a single polarization on one side is always allowed
     elzo.set_outgoing_polarization(3)
@@ -958,10 +963,10 @@ def test_polarization_consistency(elzo):
     elzo.set_outgoing_polarization(0)
     assert elzo.num_pol == 3
     # changing both at the same time
-    elzo.set_polarization(5, 5, [(0, 0), (1, 0)], [(0, 0), (1, 0)])
+    elzo.set_polarization(5, 5, pols[:2], pols[:2])
     assert elzo.num_pol == 2
     with pytest.raises(ValueError):
-        elzo.set_polarization(5, 5, [(0, 0), (1, 0)], [(0, 0), (1, 0), (2, 0)])
+        elzo.set_polarization(5, 5, pols[:2], pols)
     assert elzo.num_pol == 2
     elzo.set_polarization(3, 0)
     assert elzo.num_pol == 1
@@ -982,7 +987,7 @@ def test_inhomogeneous_for_several_polarizations(elzo, magnetic_multilayer):
     strain_map = np.full((2, L), 0.01)
     magnetization_map = np.zeros((2, L, 3))
     elzo.set_incoming_polarization(5, [(0 * u.deg, 0), (45 * u.deg, 0), (90 * u.deg, 0)])
-    elzo.set_outgoing_polarization(5, [(0, 0)])
+    elzo.set_outgoing_polarization(5, [(0 * u.deg, 0)])
     assert elzo.num_pol == 3
     res = elzo.inhomogeneous_reflectivity_transmissivity(strain_map, magnetization_map)
     R = res.reflectivity

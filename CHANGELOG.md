@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - a reference of the angular resolution and footprint of GenX in `tests/data/references/xray_instrument.npz`
 - the example of the instrument function next to the scattering overview, which starts with the choice between the convolution, its limits on coarse grids, and the quadrature with its nodes and weights, followed by the angular and spectral resolution, the `qz` mode, a higher harmonic of the spectrum, the footprint, offsets, intensity, and background, the rotation and ellipticity, and the temporal resolution, while the scattering overview links to it
 - the instrument function in the examples of the data fitting and the kinematical, dynamical, transient Debye-Waller, and resonant magnetic X-ray scattering instead of the convolution of their results, whose inhomogeneous calculations run in parallel with Dask, if it is installed, and sequentially otherwise
+- `to_angle()` in `udkm1Dsim.helpers`, which converts angles given as pint Quantities to floats in a unit and rejects bare numbers and dimensionless Quantities, as they are ambiguous between deg and rad
 
 ### Changed
 
@@ -33,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the default `fig_size` of `Structure.visualize()` is `[10, 1]` instead of `[20, 1]`
 - the figures of the examples are 3.4 inches wide and use the `base` and `paper` styles of [mbistyles](https://github.com/MBI-Div-B/mbistyles), if it is installed
 - **breaking:** `conv_with_function()` is in `udkm1Dsim.helpers` instead of `Simulation.conv_with_function()`, e.g. for any one-dimensional result, while the instrument function of the scattering simulations replaces it in the examples
+- **breaking:** the azimuth angle `alpha` of an elliptical polarization of the multilayer formalisms, e.g. `sim.set_polarization("elliptical", "none", polarization_in=(45 * u.deg, 0))`, must be a pint Quantity with an angular unit, while a bare number, which was taken in rad, raises a `TypeError`
 
 ## [3.0.0a4] 2026-11-16
 
