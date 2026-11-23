@@ -57,7 +57,34 @@ def heat_thick_substrate(structure_amorph, amorphous_layer_iron, tmp_path_factor
     )
 
 
+@pytest.fixture(scope="module")
+def heat_bandwidth(structure, tmp_path_factory):
+    """a pulse with 7 x 7 nodes of its bandwidth and divergence"""
+    heat = Heat(
+        structure,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=False,
+        disp_messages=False,
+        progress_bar=False,
+    )
+    heat.excitation = {
+        "fluence": [5] * u.mJ / u.cm**2,
+        "delay_pump": [0] * u.ps,
+        "pulse_width": [0.1] * u.ps,
+        "theta": 45 * u.deg,
+        "bandwidth": 20 * u.nm,
+        "divergence": 2 * u.deg,
+    }
+    return heat
+
+
 # benchmarks
+
+
+@pytest.mark.benchmark
+def test_get_absorption_from_multilayer_bandwidth(heat_bandwidth):
+    heat_bandwidth.get_absorption_from_multilayer()
 
 
 @pytest.mark.benchmark

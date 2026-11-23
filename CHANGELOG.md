@@ -28,11 +28,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the instrument function in the examples of the data fitting and the kinematical, dynamical, transient Debye-Waller, and resonant magnetic X-ray scattering instead of the convolution of their results, whose inhomogeneous calculations run in parallel with Dask, if it is installed, and sequentially otherwise
 - `to_angle()` in `udkm1Dsim.helpers`, which converts angles given as pint Quantities to floats in a unit and rejects bare numbers and dimensionless Quantities, as they are ambiguous between deg and rad
 - the polar components of the results of `get_magnetization_map()`, `get_sublattice_magnetization_map()`, and `get_equilibrium_magnetization()` for `polar=True` as separate entries, e.g. `magnetization_amplitude`, `magnetization_phi`, and `magnetization_gamma` with the aliases `amplitude`, `phi`, and `gamma` and the angles in rad, so that the angles are given as Quantities in any unit, e.g. `res.quantity("phi", "deg")`, while the polar arrays stay in rad
+- the spectral `bandwidth` and the `divergence` of the pump pulses of `Heat` as FWHM per pulse, see #259, whose absorption profile is the weighted mean over the nodes of `instrument.profile_nodes()` around the `wavelength` and `theta`:
+  - a `bandwidth` in a length unit, e.g. `10 * u.nm`, is a profile in the wavelength, and in an energy unit, e.g. `0.1 * u.eV`, a profile in the photon energy, while the `divergence` is an angle Quantity in the plane of incidence
+  - the sampling by `bandwidth_profile` and `divergence_profile` (`gauss`, `box`, `lorentz`, `pseudo_voigt`), `*_nodes` (`uniform` or `gaussian_quadrature`), `*_points`, `*_range`, and `*_eta`, as for the `InstrumentParameters`
+  - all nodes of a pulse are calculated by a single call of its multilayer formalism, also for a configured instance, which is copied without its instrument, while Lambert-Beer's law averages the penetration depths of the wavelengths only
+  - the footprint of the fluence is given by the central angle `theta`, as all rays of a pulse hit the same spot
+  - the reported reflection, absorption in the sample, and transmission into the substrate are averaged with the same weights
+  - `Heat.get_pulse_nodes()` returns the wavelengths, angles, and weights of a pulse, and `Heat.create_multilayer_formalism(nodes=True)` a formalism at these nodes
+  - the spreads enter the hash only, if they are not 0 for a pulse, so that the hashes of former results are kept
+  - the sampling is checked by `instrument.profile_nodes()` and too coarse uniform nodes or a single node of a spread are warned for by `instrument.check_nodes()` when the excitation is set, as for the instrument function
+  - the example of the excitation names the interference and the dispersion of the refractive index as reasons for the effect of the bandwidth and shows the averaging of the Fabry-Pérot fringes of a thin Fe film on a thick MgO substrate, i.e. the nodes, the absorption profiles, the convergence with the number of nodes, the divergence, and the temperature rise of a monochromatic and a 100 nm broad pump at 800 nm
 
 ### Changed
 
+- `instrument.profile_nodes()` checks the profile, the nodes, the number of `points` as positive integer, the `range`, and `eta` for all profiles, while `instrument.check_nodes()`, `instrument.PROFILES`, and `instrument.NODES` are shared by the `InstrumentParameters` and the bandwidth and divergence of `Heat`
+- the absorption and fields of the multilayer formalisms compute the Poynting flux by matrix products instead of an einsum of three operands, which makes e.g. the absorption of many photon energies and angles about 1.8 times faster
 - `parse_delays()` is a static method of `Simulation` instead of `Magnetization`, which inherits it
 - the default `fig_size` of `Structure.visualize()` is `[10, 1]` instead of `[20, 1]`
+- the example of the excitation and the N-temperature model uses a Fe film on a transparent MgO substrate as `Layer`s without atoms, with the optical constants of Fe of refractiveindex.info, instead of SRO on STO as unit cells
 - the figures of the examples are 3.4 inches wide and use the `base` and `paper` styles of [mbistyles](https://github.com/MBI-Div-B/mbistyles), if it is installed
 - **breaking:** `conv_with_function()` is in `udkm1Dsim.helpers` instead of `Simulation.conv_with_function()`, e.g. for any one-dimensional result, while the instrument function of the scattering simulations replaces it in the examples
 - **breaking:** the azimuth angle `alpha` of an elliptical polarization of the multilayer formalisms, e.g. `sim.set_polarization("elliptical", "none", polarization_in=(45 * u.deg, 0))`, must be a pint Quantity with an angular unit, while a bare number, which was taken in rad, raises a `TypeError`

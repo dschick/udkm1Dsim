@@ -37,6 +37,7 @@ from tabulate import tabulate
 from ..helpers import to_angle
 from ..structures.parameter_groups import ParameterGroup
 from ..structures.parameters import Parameter
+from .scattering import instrument as _instrument
 
 u = pint.get_application_registry()
 
@@ -274,15 +275,15 @@ class InstrumentParameters(ParameterGroup):
 
     """
 
-    profiles = ("none", "box", "gauss", "lorentz", "pseudo_voigt")
+    profiles = ("none", *_instrument.PROFILES)
     footprints = ("none", "box", "gauss")
     _options = {
         "theta_resolution": profiles,
         "theta_mode": ("quadrature", "convolution"),
-        "theta_nodes": ("uniform", "gaussian_quadrature"),
+        "theta_nodes": _instrument.NODES,
         "energy_resolution": profiles,
         "energy_mode": ("quadrature", "convolution", "qz"),
-        "energy_nodes": ("uniform", "gaussian_quadrature"),
+        "energy_nodes": _instrument.NODES,
         "delay_resolution": profiles,
         "footprint": footprints,
     }
@@ -291,8 +292,6 @@ class InstrumentParameters(ParameterGroup):
     _angles = ("theta_width", "theta_offset")
     # settings of the default instrument, see is_active
     _default_hash_items = None
-    # largest spacing of uniform nodes (FWHM), i.e. the default 7 nodes within +-2 FWHM
-    _max_node_spacing = 2 / 3
 
     def __init__(self):
         self.theta_resolution = "none"
@@ -424,35 +423,19 @@ class InstrumentParameters(ParameterGroup):
                 self._check_nodes(axis)
 
     def _check_nodes(self, axis):
-        """Warn for too few nodes of the quadrature of the ``axis``, i.e. a
-        single node, which has no effect, or uniform nodes, which are more
-        than :attr:`_max_node_spacing` FWHM apart, so that their weights do not
-        follow the profile, e.g. three nodes within :math:`\\pm 2` FWHM, whose
-        outer weights vanish, or two nodes at :math:`\\pm 2` FWHM."""
-        mode = getattr(self, f"{axis}_mode")
-        resolution = getattr(self, f"{axis}_resolution")
-        if mode == "convolution" or resolution == "none":
+        """Warn for too few nodes of the quadrature of the ``axis``, see
+        :func:`.instrument.check_nodes`."""
+        if getattr(self, f"{axis}_mode") == "convolution":
             return
-        nodes = getattr(self, f"{axis}_nodes")
-        points = int(getattr(self, f"{axis}_points").magnitude)
-        node_range = float(getattr(self, f"{axis}_range").magnitude)
-        if points == 1:
-            warnings.warn(
-                f"The {axis}_points is 1, so that the single node of the quadrature is the "
-                f"unshifted point and the {axis} resolution has no effect!",
-                stacklevel=5,
-            )
-        elif nodes == "uniform" and resolution != "box":
-            spacing = 2 * node_range / (points - 1)
-            if spacing > self._max_node_spacing * (1 + 1e-9):
-                needed = int(np.ceil(2 * node_range / self._max_node_spacing)) + 1
-                warnings.warn(
-                    f"The {points} uniform nodes of the {axis} resolution are {spacing:.2g} "
-                    f"FWHM apart within the {axis}_range of {node_range:g} FWHM, which is too "
-                    f"coarse for the profile, so that the resolution is wrong, e.g. too small "
-                    f"or too large! Use at least {needed} {axis}_points for this range.",
-                    stacklevel=5,
-                )
+        _instrument.check_nodes(
+            axis,
+            f"{axis} resolution",
+            getattr(self, f"{axis}_resolution"),
+            getattr(self, f"{axis}_nodes"),
+            getattr(self, f"{axis}_points").magnitude,
+            getattr(self, f"{axis}_range").magnitude,
+            stacklevel=5,
+        )
 
     @property
     def is_delay_active(self):

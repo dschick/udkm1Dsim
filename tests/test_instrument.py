@@ -90,6 +90,40 @@ def test_gauss_nodes_only_for_gauss_and_box(shape):
         ins.profile_nodes(shape, "gaussian_quadrature")
 
 
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"shape": "voigt"}, "profile must be one of"),
+        ({"nodes": "gauss"}, "nodes must be"),
+        ({"points": 0}, "positive integer"),
+        ({"points": 2.5}, "positive integer"),
+        ({"points": True}, "positive integer"),
+        ({"range": 0}, "range of the nodes"),
+        ({"eta": 1.5}, r"\[0, 1\]"),
+    ],
+)
+def test_profile_nodes_are_checked(kwargs, match):
+    """the sampling is checked for all profiles, e.g. also for a box"""
+    kwargs = {"shape": "box", **kwargs}
+    with pytest.raises(ValueError, match=match):
+        ins.profile_nodes(**kwargs)
+    assert len(ins.profile_nodes("gauss", points=7.0)[0]) == 7
+
+
+def test_check_nodes(recwarn):
+    with pytest.warns(UserWarning, match="x_points is 1, .* the x spread has no effect"):
+        ins.check_nodes("x", "x spread", "gauss", "uniform", 1, 2)
+    with pytest.warns(UserWarning, match="Use at least 7 x_points"):
+        ins.check_nodes("x", "x spread", "gauss", "uniform", 3, 2)
+    recwarn.clear()
+    # enough, Gaussian quadrature, or box nodes, and no profile
+    ins.check_nodes("x", "x spread", "gauss", "uniform", 7, 2)
+    ins.check_nodes("x", "x spread", "gauss", "gaussian_quadrature", 3, 2)
+    ins.check_nodes("x", "x spread", "box", "uniform", 2, 2)
+    ins.check_nodes("x", "x spread", "none", "uniform", 1, 2)
+    assert len(recwarn) == 0
+
+
 def test_convolution_matrix():
     x = np.sort(np.r_[np.linspace(0, 10, 201), 3.333])
     K = ins.convolution_matrix(x, 0.5, "gauss", 3)

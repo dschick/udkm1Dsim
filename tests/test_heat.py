@@ -423,6 +423,220 @@ def test_absorption_hash(tmp_path):
     assert hashes == {Parratt: True, "lambert_beer": False}
 
 
+def test_absorption_monochromatic(tmp_path):
+    """a bandwidth and divergence of 0 or a single node is the monochromatic
+    and collimated excitation with its former hash, independent of the
+    sampling"""
+    heat = optical_heat(optical_stack(), tmp_path)
+    dAdz = heat.get_absorption_profile()
+    hash = heat.get_hash(np.r_[0:10:1], 300)
+    excitation = heat.excitation
+    assert_allclose(excitation["bandwidth"], 0 * u.nm)
+    assert_allclose(excitation["divergence"], 0 * u.deg)
+    assert excitation["bandwidth_profile"] == "gauss"
+    assert excitation["divergence_points"] == 7
+    for spreads in [
+        {"bandwidth": None, "divergence": None},
+        {"bandwidth": 0, "divergence": 0 * u.deg, "bandwidth_points": 3},
+        {"bandwidth": 0 * u.eV, "divergence_profile": "box", "divergence_nodes": "uniform"},
+    ]:
+        heat.excitation = spreads
+        np.testing.assert_array_equal(heat.get_absorption_profile(), dAdz)
+        assert heat.get_hash(np.r_[0:10:1], 300) == hash
+    heat.excitation = {"bandwidth": 20 * u.nm, "divergence": 5 * u.deg, "bandwidth_points": 7}
+    assert heat.get_hash(np.r_[0:10:1], 300) != hash
+    # a single node has no effect, which is warned for
+    with pytest.warns(UserWarning) as record:
+        heat.excitation = {"bandwidth_points": 1, "divergence_points": 1}
+    assert [str(warning.message).split(",")[0] for warning in record] == [
+        "The bandwidth_points is 1",
+        "The divergence_points is 1",
+    ]
+    np.testing.assert_allclose(heat.get_absorption_profile(), dAdz, rtol=1e-12)
+    wavelength, theta, weights = heat.get_pulse_nodes()
+    assert_allclose(wavelength, [800] * u.nm)
+    assert_allclose(theta, [60] * u.deg)
+    np.testing.assert_array_equal(weights, [[1]])
+
+
+@pytest.mark.parametrize("absorption", [Parratt, "lambert_beer"])
+def test_absorption_bandwidth(tmp_path, absorption):
+    """the absorption of a pulse with a bandwidth and divergence is the
+    weighted mean of the monochromatic and collimated absorption of its
+    nodes"""
+    S = optical_stack()
+    heat = optical_heat(
+        S, tmp_path, absorption=absorption, bandwidth=30 * u.nm, divergence=4 * u.deg
+    )
+    wavelength, theta, weights = heat.get_pulse_nodes()
+    assert weights.shape == (7, 7)
+    assert np.isclose(np.sum(weights), 1)
+    assert_allclose(wavelength, np.linspace(740, 860, 7) * u.nm)
+    assert_allclose(theta, np.linspace(52, 68, 7) * u.deg)
+    expected = 0
+    for e, wl in enumerate(wavelength):
+        for t, angle in enumerate(theta):
+            single = optical_heat(S, tmp_path, absorption=absorption, wavelength=wl, theta=angle)
+            expected = expected + weights[e, t] * single.get_absorption_profile()
+    dAdz = heat.get_absorption_profile()
+    np.testing.assert_allclose(dAdz, expected, rtol=1e-10)
+    monochromatic = optical_heat(S, tmp_path, absorption=absorption).get_absorption_profile()
+    assert np.max(np.abs(dAdz - monochromatic)) > 1e-4 * np.max(monochromatic)
+    # the photon energies of a bandwidth in an energy unit
+    heat.excitation = {
+        "bandwidth": 0.1 * u.eV,
+        "bandwidth_nodes": "gaussian_quadrature",
+        "bandwidth_points": 5,
+    }
+    wavelength = heat.get_pulse_nodes()[0]
+    energy = (u.planck_constant * u.speed_of_light / wavelength).to("eV")
+    center = (u.planck_constant * u.speed_of_light / (800 * u.nm)).to("eV")
+    x = np.polynomial.hermite_e.hermegauss(5)[0] / (2 * np.sqrt(2 * np.log(2)))
+    assert_allclose(energy, center + x * 0.1 * u.eV, rtol=1e-12)
+
+
+@pytest.mark.parametrize("backside", [False, True])
+def test_absorption_bandwidth_conserves_energy(tmp_path, backside):
+    """the mean absorption of the nodes equals the mean of 1 - R - T"""
+    S = optical_stack(3.7 if backside else 3.7 + 0.01j)
+    heat = optical_heat(
+        S,
+        tmp_path,
+        bandwidth=50 * u.nm,
+        divergence=10 * u.deg,
+        divergence_profile="box",
+        backside=backside,
+    )
+    thickness = S.interface_distances[-1].to("m").magnitude
+    distances = (np.arange(20000) + 0.5) * thickness / 20000
+    absorbed = np.sum(heat.get_absorption_profile(distances)) * thickness / 20000
+    formalism = heat.create_multilayer_formalism(nodes=True)
+    assert formalism.theta.shape == (7, 7)
+    R = formalism.calc_homogeneous_reflectivity_transmissivity()[0]
+    T = formalism.calc_homogeneous_absorption()[8]
+    weights = heat.get_pulse_nodes()[2]
+    assert np.isclose(absorbed, np.sum(weights * (1 - R - T)), rtol=1e-6)
+
+
+def test_absorption_bandwidth_instance(tmp_path):
+    """a configured instance is copied to the nodes without its instrument,
+    while the instance itself is kept"""
+    S = optical_stack()
+    heat = optical_heat(S, tmp_path, absorption=Elzo, bandwidth=20 * u.nm, divergence=3 * u.deg)
+    dAdz = heat.get_absorption_profile()
+    formalism = heat.create_multilayer_formalism()
+    formalism.instrument.theta_resolution = "gauss"
+    formalism.instrument.theta_width = 1 * u.deg
+    heat.excitation = {"absorption": formalism}
+    for backside in [False, True]:
+        heat.excitation = {"backside": backside}
+        nodes = heat.create_multilayer_formalism(nodes=True)
+        assert nodes is not formalism
+        assert nodes._instrument is None
+        assert nodes.theta.shape == (7, 7)
+        assert formalism.theta.shape == (1, 1)
+        assert formalism.instrument.is_active
+        if not backside:
+            np.testing.assert_allclose(heat.get_absorption_profile(), dAdz, rtol=1e-12)
+    assert_allclose(formalism.wl, [800] * u.nm)
+
+
+def test_absorption_bandwidth_per_pulse(tmp_path, monkeypatch, capsys):
+    """the bandwidth and divergence are given per pulse and sorted with the
+    pulses, where pulses with the same spreads are calculated once"""
+    heat = optical_heat(optical_stack(), tmp_path)
+    heat.disp_messages = True
+    heat.excitation = two_pulses(
+        wavelength=800 * u.nm,
+        theta=45 * u.deg,
+        backside=False,
+        polarization="pi",
+        bandwidth=[0.05 * u.eV, 20 * u.nm],
+        divergence=[0, 2] * u.deg,
+        bandwidth_points=[7, 9],
+    )
+    excitation = heat.excitation
+    # sorted by the delays of the pulses
+    assert [f"{width:.4g~P}" for width in excitation["bandwidth"]] == ["20 nm", "0.05 eV"]
+    assert_allclose(excitation["divergence"], [2, 0] * u.deg)
+    assert excitation["bandwidth_points"] == [9, 7]
+    assert [heat.get_pulse_nodes(i)[2].shape for i in range(2)] == [(9, 7), (7, 1)]
+    capsys.readouterr()
+    heat.get_absorption_profile()
+    out = capsys.readouterr().out
+    assert "800 nm (FWHM 20 nm, gauss, 9 uniform nodes), theta = 45 deg (FWHM 2 deg" in out
+    assert "800 nm (FWHM 0.05 eV, gauss, 7 uniform nodes), theta = 45 deg, " in out
+    assert "excitation bandwidth" in repr(heat)
+    # the same spreads of both pulses
+    calls = []
+    calculate = heat._multilayer_absorption
+    monkeypatch.setattr(
+        heat, "_multilayer_absorption", lambda *args: calls.append(args[1]) or calculate(*args)
+    )
+    heat.excitation = {"bandwidth": 20 * u.nm, "divergence": 2 * u.deg, "bandwidth_points": 9}
+    assert "excitation bandwidth  20 nm (gauss, 9 uniform nodes)" in repr(heat)
+    profiles = heat.get_absorption_profile()
+    assert calls == [0]
+    np.testing.assert_array_equal(profiles[0], profiles[1])
+
+
+def test_absorption_bandwidth_metadata(heat, tmp_path):
+    """the bandwidth and divergence of the pulses are saved in the metadata"""
+    heat.excitation = {
+        "fluence": [5, 5] * u.mJ / u.cm**2,
+        "delay_pump": [0, 3] * u.ps,
+        "pulse_width": [0, 0] * u.ps,
+        "absorption": "lambert_beer",
+        "bandwidth": [10 * u.nm, 0.1 * u.eV],
+        "divergence": 2 * u.deg,
+    }
+    res = heat.get_temp_map(np.r_[-1:5:0.5] * u.ps, 300 * u.K)
+    res.save(tmp_path / "temp_map.h5")
+    excitation = type(res).load(tmp_path / "temp_map.h5").attrs["parameters"]["excitation"]
+    assert "bandwidth" in excitation
+    assert "divergence_profile" in excitation
+    heat.excitation = {"bandwidth": 0, "divergence": None}
+
+
+def test_absorption_bandwidth_errors(tmp_path):
+    heat = optical_heat(optical_stack(), tmp_path)
+    for spreads, error, match in [
+        ({"bandwidth": 10}, TypeError, "Quantity"),
+        ({"bandwidth": 10 * u.ps}, ValueError, "length or energy"),
+        ({"bandwidth": -10 * u.nm}, ValueError, "negative"),
+        ({"divergence": 2}, TypeError, "divergence"),
+        ({"divergence": -2 * u.deg}, ValueError, "negative"),
+        ({"bandwidth_profile": "voigt"}, ValueError, "bandwidth_profile"),
+        ({"divergence_nodes": "gauss"}, ValueError, "divergence_nodes"),
+        ({"bandwidth_points": 0}, ValueError, "bandwidth_points"),
+        ({"bandwidth_points": 2.5}, ValueError, "bandwidth_points"),
+        ({"divergence_range": 0}, ValueError, "divergence_range"),
+        ({"bandwidth_eta": 2}, ValueError, "bandwidth_eta"),
+        ({"bandwidth": 500 * u.nm}, ValueError, "below 0"),
+        ({"bandwidth": 2 * u.eV}, ValueError, "below 0"),
+        ({"divergence": 40 * u.deg}, ValueError, r"\(0, 180\) deg"),
+        (
+            {
+                "bandwidth": 10 * u.nm,
+                "bandwidth_profile": "lorentz",
+                "bandwidth_nodes": "gaussian_quadrature",
+            },
+            ValueError,
+            "Gaussian quadrature",
+        ),
+        ({"bandwidth": [10, 20] * u.nm}, ValueError, "each of the 1 pulse"),
+    ]:
+        with pytest.raises(error, match=match):
+            heat.excitation = spreads
+        # the excitation is kept for an invalid excitation
+        assert_allclose(heat.excitation["bandwidth"], 0 * u.nm)
+        assert heat.excitation["bandwidth_profile"] == "gauss"
+        assert heat.excitation["bandwidth_nodes"] == "uniform"
+    # too coarse uniform nodes of the profile, as for the instrument function
+    with pytest.warns(UserWarning, match="3 uniform nodes of the divergence of the pulse 0"):
+        heat.excitation = {"divergence": 2 * u.deg, "divergence_points": 3}
+
+
 def test_get_temperature_after_delta_excitation(heat):
     heat.excitation = {
         "fluence": [10] * u.mJ / u.cm**2,

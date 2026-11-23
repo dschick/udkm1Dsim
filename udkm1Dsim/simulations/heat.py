@@ -28,16 +28,18 @@ __docformat__ = "restructuredtext"
 import operator
 import warnings
 from contextlib import contextmanager
-from copy import copy
+from copy import copy, deepcopy
 from time import time
 
 import numpy as np
 import pint
+import scipy.constants as constants
 from scipy.interpolate import RectBivariateSpline
 from scipy.optimize import brentq
 
 from ..helpers import finderb, make_hash_md5, to_angle
 from .result import find_source, get_entry
+from .scattering import instrument as _instrument
 from .scattering.multilayer import MultilayerScattering
 from .scattering.parratt import Parratt
 from .simulation import Simulation
@@ -52,9 +54,31 @@ _POLARIZATIONS = tuple(MultilayerScattering.polarizations[state] for state in ra
 # excitation parameters, which are defined by a configured formalism instance as
 # absorption
 _INSTANCE_KEYS = ("wavelength", "theta", "azimuth", "polarization")
+# spectral bandwidth and divergence of the pulses with the defaults of the
+# sampling of their profiles by the nodes of the instrument function
+_SPREADS = ("bandwidth", "divergence")
+_SAMPLING_DEFAULTS = {
+    "profile": "gauss",
+    "nodes": "uniform",
+    "points": 7,
+    "range": 2.0,
+    "eta": 0.5,
+}
+_SAMPLING_KEYS = tuple(f"{spread}_{key}" for spread in _SPREADS for key in _SAMPLING_DEFAULTS)
+# h c (eV m) to convert between photon energies and wavelengths
+_HC = constants.h * constants.c / constants.e
 # excitation parameters, which can be given per pulse besides the fluence,
-# delay_pump, and pulse_width
-_PULSE_KEYS = (*_INSTANCE_KEYS, "absorption", "backside")
+# delay_pump, and pulse_width, where the bandwidth_domain is the wavelength or
+# the photon energy of the profile of the bandwidth by its unit
+_PULSE_KEYS = (
+    *_INSTANCE_KEYS,
+    "absorption",
+    "backside",
+    "bandwidth",
+    "bandwidth_domain",
+    "divergence",
+    *_SAMPLING_KEYS,
+)
 
 
 class Heat(Simulation):
@@ -93,7 +117,8 @@ class Heat(Simulation):
         backend (str): pde solver backend - either default scipy or numba.
         excitation (dict{ndarray[float, Quantity]}): excitation parameters
             fluence, delay_pump, pulse_width, wavelength, theta, azimuth,
-            polarization, absorption, backside. The ``fluence``,
+            polarization, absorption, backside, bandwidth, divergence, and
+            the sampling of the bandwidth and divergence. The ``fluence``,
             ``delay_pump``, and ``pulse_width`` are given for each pulse,
             while all other parameters are either a single value for all
             pulses or a list of one value for each pulse, which are sorted by
@@ -113,7 +138,21 @@ class Heat(Simulation):
             :attr:`.MultilayerScattering.azimuth`. The ``theta`` and
             ``azimuth`` are pint Quantities with an angular unit, e.g.
             ``45 * u.deg``, or lists of them, see
-            :func:`~udkm1Dsim.helpers.to_angle`.
+            :func:`~udkm1Dsim.helpers.to_angle`. The spectral ``bandwidth``
+            and the ``divergence`` in the plane of incidence are the FWHM of
+            the spectrum and of the angular spread of a pulse, by default 0
+            for a monochromatic and collimated pulse, see
+            :meth:`get_absorption_profile`. A ``bandwidth`` in a length unit,
+            e.g. ``10 * u.nm``, is a profile in the wavelength, and in an
+            energy unit, e.g. ``0.1 * u.eV``, a profile in the photon energy.
+            The ``divergence`` is an angle Quantity. Their profiles are
+            sampled by ``bandwidth_profile`` and ``divergence_profile``
+            (``'gauss'`` by default, ``'box'``, ``'lorentz'``, or
+            ``'pseudo_voigt'``), ``*_nodes`` (``'uniform'`` by default or
+            ``'gaussian_quadrature'``), ``*_points`` (7), ``*_range`` (2,
+            in units of the FWHM), and ``*_eta`` (0.5, the Lorentzian
+            fraction of a pseudo-Voigt profile), see
+            :func:`.instrument.profile_nodes`.
         boundary_conditions (dict{str, float, Quantity}): boundary conditions of
             the top and bottom boundary for the heat diffusion calculation.
             ``top_type`` or ``bottom_type`` must be one of ``boundary_types``.
@@ -147,6 +186,14 @@ class Heat(Simulation):
             "polarization": "pi",
             "absorption": Parratt,
             "backside": False,
+            "bandwidth": 0.0,
+            "bandwidth_domain": "wavelength",
+            "divergence": 0.0,
+            **{
+                f"{spread}_{key}": value
+                for spread in _SPREADS
+                for key, value in _SAMPLING_DEFAULTS.items()
+            },
         }
         self._distances = np.array([])
         # absorption profiles of a run of calc_temp_map
@@ -186,6 +233,8 @@ class Heat(Simulation):
             ["excitation polarization", self.excitation["polarization"]],
             ["excitation absorption", self._absorption_name()],
             ["excitation backside", self.excitation["backside"]],
+            ["excitation bandwidth", self._spread_text("bandwidth")],
+            ["excitation divergence", self._spread_text("divergence")],
             ["heat diffusion", self.heat_diffusion],
             ["backend", self.backend],
             ["interpolate at interfaces", self.intp_at_interface],
@@ -252,7 +301,9 @@ class Heat(Simulation):
         parameters of the simulation including the ``ode_options``, but not
         the ``backend``, which yields the same results, as well as the sample
         structure hash for relevant thermal parameters and the hash of the
-        absorption formalism of the excitation.
+        absorption formalism of the excitation. The ``bandwidth`` and
+        ``divergence`` of the excitation and their sampling enter only, if
+        they are not 0 for at least one pulse.
 
         Args:
             delays (ndarray[float]): delay grid for the simulation.
@@ -263,12 +314,20 @@ class Heat(Simulation):
             hash (str): unique hash.
 
         """
+        excitation = {**self._excitation, "absorption": self._absorption_name()}
+        for spread in _SPREADS:
+            if not self._spread_active(spread):
+                # a monochromatic and collimated excitation keeps former hashes
+                for key in [spread, *(f"{spread}_{key}" for key in _SAMPLING_DEFAULTS)]:
+                    del excitation[key]
+                if spread == "bandwidth":
+                    del excitation["bandwidth_domain"]
         param = [
             delays,
             init_temp,
             self.heat_diffusion,
             self.intp_at_interface,
-            {**self._excitation, "absorption": self._absorption_name()},
+            excitation,
             self._boundary_conditions,
             self.distances,
             self.ode_options,
@@ -347,7 +406,9 @@ class Heat(Simulation):
 
         Moreover the incidence angle :math:`\vartheta` is taken into account for
         the user-defined incidence fluence in order to project the laser
-        footprint onto the sample surface.
+        footprint onto the sample surface. For a ``divergence`` of the pulse,
+        the central angle ``theta`` gives the footprint, as all rays hit the
+        same spot on the sample.
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation (s).
@@ -493,8 +554,29 @@ class Heat(Simulation):
         Returns the differential absorption profile :math:`\mbox{d}A/\mbox{d}z`
         of every pulse of the excitation by Lambert-Beer's law or its
         multilayer formalism, depending on its ``absorption``. Pulses with the
-        same ``wavelength``, ``theta``, ``azimuth``, ``polarization``,
-        ``absorption``, and ``backside`` are calculated only once.
+        same parameters, besides their ``fluence``, ``delay_pump``, and
+        ``pulse_width``, are calculated only once.
+
+        A pulse with a spectral ``bandwidth`` or a ``divergence`` has the
+        weighted mean profile of its wavelengths :math:`\lambda_e` and
+        angles :math:`\vartheta_t` of :meth:`get_pulse_nodes`
+
+        .. math::
+
+            \left\langle\frac{\mbox{d}A}{\mbox{d}z}\right\rangle(z) =
+            \sum_e \sum_t w_e w_t \frac{\mbox{d}A}{\mbox{d}z}
+            (\lambda_e, \vartheta_t, z),
+
+        which is exact for the deposited energy of a linear medium, as the
+        spectral components of a pulse add incoherently in its time
+        integral, independent of their spectral phase. All rays of a pulse
+        hit the same spot on the sample, so that the incident fluence is
+        projected by :math:`\sin\vartheta` of the central angle only, see
+        :meth:`check_excitation`. The divergence acts in the plane of
+        incidence only, and Lambert-Beer's law does not depend on the angle
+        at all. The nodes must resolve the spectral and angular features of
+        the absorption, e.g. interference fringes of thin films, which is
+        checked best by increasing the ``*_points`` of the nodes.
 
         Args:
             distances (ndarray[float], optional): spatial grid for calculation.
@@ -507,6 +589,39 @@ class Heat(Simulation):
 
         """
         return self._absorption_profiles(distances, pulse_index, "auto")
+
+    def get_pulse_nodes(self, pulse_index=0):
+        r"""get_pulse_nodes
+
+        Wavelengths :math:`\lambda_e`, angles of incidence
+        :math:`\vartheta_t`, and normalized weights :math:`w_e w_t` of the
+        spectral ``bandwidth`` and the ``divergence`` of a pulse of the
+        excitation, see :meth:`get_absorption_profile`, by the nodes of
+        :func:`.instrument.profile_nodes` around its ``wavelength`` and
+        ``theta``. A ``bandwidth`` in a length unit shifts the wavelength
+        :math:`\lambda_e = \lambda + x_e \Delta\lambda`, and in an energy
+        unit the photon energy :math:`E_e = E + x_e \Delta E`, for the nodes
+        :math:`x_e` in units of the FWHM. A monochromatic and collimated
+        pulse has a single node.
+
+        Args:
+            pulse_index (int, optional): index of the pulse, sorted by
+                ``delay_pump``. Defaults to the first pulse.
+
+        Returns:
+            (tuple):
+            - *wavelength (Quantity)* - wavelengths (nm) of shape (E,).
+            - *theta (Quantity)* - angles of incidence (deg) of shape (T,).
+            - *weights (ndarray[float])* - normalized weights of shape
+              (E, T).
+
+        """
+        wavelength, w_e, theta, w_t = self._pulse_nodes(self._check_pulse_index(pulse_index))
+        return (
+            Q_(wavelength, u.m).to("nm"),
+            Q_(theta, u.rad).to("deg"),
+            np.outer(w_e, w_t),
+        )
 
     def get_absorption_from_lambert_beer(self, distances=[], pulse_index=None):
         r"""get_absorption_from_lambert_beer
@@ -561,7 +676,7 @@ class Heat(Simulation):
         """
         return self._absorption_profiles(distances, pulse_index, "multilayer")
 
-    def create_multilayer_formalism(self, cls=None, pulse_index=0):
+    def create_multilayer_formalism(self, cls=None, pulse_index=0, nodes=False):
         """create_multilayer_formalism
 
         Multilayer formalism for the ``wavelength``, ``theta``, ``azimuth``,
@@ -577,12 +692,18 @@ class Heat(Simulation):
                 pulse.
             pulse_index (int, optional): index of the pulse, sorted by
                 ``delay_pump``. Defaults to the first pulse.
+            nodes (bool, optional): set the formalism to the wavelengths and
+                angles of the ``bandwidth`` and ``divergence`` of the pulse,
+                see :meth:`get_pulse_nodes`, where a configured instance is
+                copied without its :attr:`~.Scattering.instrument`. Defaults
+                to False for the ``wavelength`` and ``theta`` of the pulse.
 
         Returns:
             formalism (MultilayerScattering): formalism for the pulse.
 
         """
-        pulse = self._pulse(self._check_pulse_index(pulse_index))
+        index = self._check_pulse_index(pulse_index)
+        pulse = self._pulse(index)
         backside = pulse["backside"]
         if cls is None:
             cls = pulse["absorption"]
@@ -592,12 +713,21 @@ class Heat(Simulation):
                     "The absorption formalism of the excitation must be created for the "
                     "structure of the heat simulation!"
                 )
-            if not backside:
+            if not (backside or nodes):
                 return cls
             # the formalisms read their structure only during the calculation,
             # so that a copy keeps all settings for the reversed structure
             formalism = copy(cls)
-            formalism.S = self.S.reverse()
+            if backside:
+                formalism.S = self.S.reverse()
+            if nodes:
+                # the nodes must not change the experiment of the instance,
+                # while its instrument describes a probe and not the pump
+                formalism.experiment = deepcopy(cls.experiment)
+                formalism._instrument = None
+                wavelength, _, theta, _ = self._pulse_nodes(index)
+                formalism.wl = Q_(wavelength, u.m)
+                formalism.theta = Q_(theta, u.rad)
             return formalism
         if not (isinstance(cls, type) and issubclass(cls, MultilayerScattering)):
             raise TypeError(
@@ -610,8 +740,12 @@ class Heat(Simulation):
             disp_messages=False,
             progress_bar=False,
         )
-        formalism.wl = Q_(np.r_[pulse["wavelength"]], u.m)
-        formalism.theta = Q_(np.r_[pulse["theta"]], u.rad)
+        if nodes:
+            wavelength, _, theta, _ = self._pulse_nodes(index)
+        else:
+            wavelength, theta = np.r_[pulse["wavelength"]], np.r_[pulse["theta"]]
+        formalism.wl = Q_(wavelength, u.m)
+        formalism.theta = Q_(theta, u.rad)
         formalism.azimuth = Q_(pulse["azimuth"], u.rad)
         polarization = pulse["polarization"]
         if polarization not in _POLARIZATIONS:
@@ -682,20 +816,25 @@ class Heat(Simulation):
         if delays:
             label += f" at {', '.join(delays)} ps"
         side = "backside" if pulse["backside"] else "frontside"
-        wavelength = f"{pulse['wavelength'] * 1e9:.4g} nm"
+        wavelength = f"{pulse['wavelength'] * 1e9:.4g} nm" + self._spread_note(pulse, "bandwidth")
+        # percentages without the sign of rounding residues around 0, i.e. -0.0 %
+        percent = {
+            key: round(value * 100, 1) + 0.0 for key, value in report.items() if key != "formalism"
+        }
         if "reflection" not in report:
             return (
                 f"Absorption of {label} by Lambert-Beer's law for {wavelength}, {side}: "
-                f"absorption in the sample of {report['absorption'] * 100:.1f} %."
+                f"absorption in the sample of {percent['absorption']:.1f} %."
             )
         return (
             f"Absorption of {label} by {report['formalism']} for {wavelength}, "
-            f"theta = {np.degrees(pulse['theta']):.4g} deg, "
+            f"theta = {np.degrees(pulse['theta']):.4g} deg"
+            f"{self._spread_note(pulse, 'divergence')}, "
             f"azimuth = {np.degrees(pulse['azimuth']):.4g} deg, "
             f"{pulse['polarization']} polarization, {side}: "
-            f"reflection of {report['reflection'] * 100:.1f} %, "
-            f"absorption in the sample of {report['absorption'] * 100:.1f} %, and "
-            f"transmission into the substrate of {report['substrate'] * 100:.1f} %."
+            f"reflection of {percent['reflection']:.1f} %, "
+            f"absorption in the sample of {percent['absorption']:.1f} %, and "
+            f"transmission into the substrate of {percent['substrate']:.1f} %."
         )
 
     def _lambert_beer_absorption(self, distances, index):
@@ -720,16 +859,17 @@ class Heat(Simulation):
                 distances = np.clip(np.flip(d_end[-1] - distances), 0, d_end[-1])
 
         interfaces = structure._interface_distances()
+        # the wavelengths of the bandwidth, while the angle does not matter
+        wavelengths, weights, _, _ = self._pulse_nodes(index)
 
         N = len(distances)
         dAdz = np.zeros(N)  # initialize relative absorbed energies
-        I0 = 1  # initial intensity
+        I0 = np.ones(len(wavelengths))  # initial intensity of every wavelength
         k = 0  # counter for first layer
         for i in range(len(interfaces) - 1):
             # find the first layer and get properties
-            index = finderb(interfaces[i], d_start)
-            layer = structure.get_layer_handle(index[0])
-            opt_pen_depth = layer.get_opt_pen_depth(pulse["wavelength"] * u.m).to("m").magnitude
+            layer_index = finderb(interfaces[i], d_start)
+            layer = structure.get_layer_handle(layer_index[0])
 
             # get all distances in the current layer we have to
             # calculate the absorption profile for
@@ -742,18 +882,25 @@ class Heat(Simulation):
                     np.logical_and(distances >= interfaces[i], distances < interfaces[i + 1])
                 ]
             m = len(z)
-            if not np.isinf(opt_pen_depth):
-                # the layer is absorbing
-                dAdz[k : k + m] = I0 / opt_pen_depth * np.exp(-(z - interfaces[i]) / opt_pen_depth)
-                # calculate the remaining intensity for the next layer
-                I0 = I0 * np.exp(-(interfaces[i + 1] - interfaces[i]) / opt_pen_depth)
+            for e, wavelength in enumerate(wavelengths):
+                opt_pen_depth = layer.get_opt_pen_depth(wavelength * u.m).to("m").magnitude
+                if not np.isinf(opt_pen_depth):
+                    # the layer is absorbing
+                    dAdz[k : k + m] += (
+                        weights[e]
+                        * I0[e]
+                        / opt_pen_depth
+                        * np.exp(-(z - interfaces[i]) / opt_pen_depth)
+                    )
+                    # calculate the remaining intensity for the next layer
+                    I0[e] = I0[e] * np.exp(-(interfaces[i + 1] - interfaces[i]) / opt_pen_depth)
             k = k + m  # set the counter
 
         if backside:
             # for backside excitation the result must be reversed
             dAdz = np.flip(dAdz)
 
-        return dAdz, {"absorption": 1 - I0}
+        return dAdz, {"absorption": float(np.sum(weights * (1 - I0)))}
 
     def _multilayer_absorption(self, distances, index):
         """absorption profile of a pulse by its multilayer formalism and its
@@ -765,7 +912,8 @@ class Heat(Simulation):
                 "multilayer formalism!"
             )
         backside = pulse["backside"]
-        formalism = self.create_multilayer_formalism(pulse_index=index)
+        formalism = self.create_multilayer_formalism(pulse_index=index, nodes=True)
+        weights = self.get_pulse_nodes(index)[2]
         d_start, d_end, d_mid = formalism.S._layer_distances()
         if len(distances) == 0:
             distances = d_mid
@@ -784,13 +932,15 @@ class Heat(Simulation):
                 "The absorption formalism of the excitation must have a single incoming "
                 "polarization!"
             )
+        # the mean over the nodes of the bandwidth and divergence
+        R = formalism.calc_homogeneous_reflectivity_transmissivity()[0]
         report = {
             "formalism": type(formalism).__name__,
-            "reflection": float(formalism.calc_homogeneous_reflectivity_transmissivity()[0][0, 0]),
-            "absorption": float(np.sum(A_layers[0, 0])),
-            "substrate": float(S_sub[0, 0]),
+            "reflection": float(np.sum(weights * R)),
+            "absorption": float(np.sum(weights * np.sum(A_layers, axis=-1))),
+            "substrate": float(np.sum(weights * S_sub)),
         }
-        dAdz = A[0, 0]
+        dAdz = A[0, 0] if weights.size == 1 else np.einsum("et,etn->n", weights, A)
         if backside:
             # for backside excitation the results must be reversed
             dAdz = np.flip(dAdz)
@@ -1503,9 +1653,27 @@ class Heat(Simulation):
             "polarization": values["polarization"],
             "absorption": values["absorption"],
             "backside": values["backside"],
+            "bandwidth": self._bandwidth_quantity(),
+            "divergence": Q_(values["divergence"], u.rad).to("deg"),
+            **{key: values[key] for key in _SAMPLING_KEYS},
         }
 
         return excitation
+
+    def _bandwidth_quantity(self):
+        """``bandwidth`` of all pulses in nm or eV by its domain, as a list
+        for different domains of the pulses"""
+        widths = [
+            Q_(pulse["bandwidth"], u.m).to("nm")
+            if pulse["bandwidth_domain"] == "wavelength"
+            else Q_(pulse["bandwidth"], u.eV)
+            for pulse in (self._pulse(i) for i in range(self.num_pulses))
+        ]
+        if all(width == widths[0] for width in widths):
+            return widths[0]
+        if all(width.units == widths[0].units for width in widths):
+            return Q_(np.array([width.magnitude for width in widths]), widths[0].units)
+        return widths
 
     @excitation.setter
     def excitation(self, excitation):
@@ -1670,6 +1838,24 @@ class Heat(Simulation):
                     if self._is_per_pulse(backside)
                     else bool(backside)
                 )
+            if "bandwidth" in excitation:
+                self._set_bandwidth(excitation["bandwidth"])
+            if "divergence" in excitation:
+                divergence = excitation["divergence"]
+                divergence = (
+                    np.zeros(())
+                    if divergence is None
+                    else to_angle(divergence, name="excitation divergence")
+                )
+                if np.any(divergence < 0):
+                    raise ValueError("The divergence of the excitation must not be negative!")
+                self._excitation["divergence"] = (
+                    float(divergence) if divergence.ndim == 0 else divergence.ravel()
+                )
+            for key in _SAMPLING_KEYS:
+                if key in excitation:
+                    # checked by profile_nodes() for every pulse below
+                    self._excitation[key] = self._check_per_pulse(excitation[key], lambda v: v)
             self._excitation["absorption"] = absorption
             self._set_instance_parameters(given)
         else:
@@ -1707,6 +1893,143 @@ class Heat(Simulation):
                 self._excitation[key] = value[order]
             elif self._is_per_pulse(value):
                 self._excitation[key] = [value[i] for i in order]
+        # the sampling and nodes of the bandwidth and divergence are valid for
+        # every pulse, while too few nodes of an active spread are warned for
+        for index in range(self.num_pulses):
+            pulse = self._pulse(index)
+            for spread in _SPREADS:
+                self._spread_nodes(index, spread)
+                if pulse[spread] > 0:
+                    _instrument.check_nodes(
+                        spread,
+                        f"{spread} of the pulse {index}",
+                        pulse[f"{spread}_profile"],
+                        pulse[f"{spread}_nodes"],
+                        pulse[f"{spread}_points"],
+                        pulse[f"{spread}_range"],
+                        stacklevel=3,
+                    )
+            self._pulse_nodes(index)
+
+    def _set_bandwidth(self, bandwidth):
+        """sets the ``bandwidth`` of the excitation in m or eV and its
+        ``bandwidth_domain`` by its unit for all or each pulse"""
+
+        def check(value):
+            if value is None or (not isinstance(value, Q_) and value == 0):
+                return 0.0, "wavelength"
+            if not isinstance(value, Q_):
+                raise TypeError(
+                    "The bandwidth of the excitation must be a Quantity in a length or energy "
+                    f"unit, e.g. 10 * u.nm or 0.1 * u.eV, not {value!r}!"
+                )
+            if value.check("[length]"):
+                width, domain = float(value.to("m").magnitude), "wavelength"
+            elif value.check("[energy]"):
+                width, domain = float(value.to("eV").magnitude), "energy"
+            else:
+                raise ValueError(
+                    "The bandwidth of the excitation must be given in a length or energy unit, "
+                    f"not in {value.units}!"
+                )
+            if not (np.isfinite(width) and width >= 0):
+                raise ValueError(
+                    f"The bandwidth of the excitation must not be negative, not {value}!"
+                )
+            return width, domain
+
+        if isinstance(bandwidth, Q_) and np.ndim(bandwidth.magnitude) > 0:
+            bandwidth = list(bandwidth.flatten())
+        if self._is_per_pulse(bandwidth):
+            widths, domains = zip(*(check(value) for value in bandwidth))
+            self._excitation["bandwidth"] = np.asarray(widths, dtype=float)
+            self._excitation["bandwidth_domain"] = list(domains)
+        else:
+            self._excitation["bandwidth"], self._excitation["bandwidth_domain"] = check(bandwidth)
+
+    def _spread_active(self, spread):
+        """the ``bandwidth`` or ``divergence`` is not 0 for at least one pulse"""
+        return bool(np.any(np.asarray(self._excitation[spread], dtype=float) > 0))
+
+    def _spread_nodes(self, index, spread):
+        """nodes in units of the FWHM and weights of the ``bandwidth`` or
+        ``divergence`` of a pulse by :func:`.instrument.profile_nodes`, which
+        also checks their sampling"""
+        pulse = self._pulse(index)
+        try:
+            return _instrument.profile_nodes(
+                *(pulse[f"{spread}_{key}"] for key in _SAMPLING_DEFAULTS)
+            )
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Invalid {spread}_profile, {spread}_nodes, {spread}_points, {spread}_range, "
+                f"or {spread}_eta of the pulse {index}: {error}"
+            ) from None
+
+    def _pulse_nodes(self, index):
+        """wavelengths (m) and angles (rad) of a pulse with the weights of the
+        nodes of its ``bandwidth`` and ``divergence``"""
+        pulse = self._pulse(index)
+
+        def nodes(spread):
+            if pulse[spread] == 0:
+                return np.zeros(1), np.ones(1)
+            return self._spread_nodes(index, spread)
+
+        x, w_e = nodes("bandwidth")
+        if pulse["bandwidth_domain"] == "energy":
+            wavelength = _HC / (_HC / pulse["wavelength"] + x * pulse["bandwidth"])
+        else:
+            wavelength = pulse["wavelength"] + x * pulse["bandwidth"]
+        if not np.all(np.isfinite(wavelength) & (wavelength > 0)):
+            raise ValueError(
+                f"The bandwidth of the pulse {index} yields photon energies or wavelengths of "
+                "the nodes below 0, which needs a smaller bandwidth or bandwidth_range!"
+            )
+        x, w_t = nodes("divergence")
+        theta = pulse["theta"] + x * pulse["divergence"]
+        if not np.all((theta > 0) & (theta < np.pi)):
+            raise ValueError(
+                f"The divergence of the pulse {index} yields angles of incidence of the nodes "
+                "outside of (0, 180) deg, which needs a smaller divergence or "
+                "divergence_range!"
+            )
+        return wavelength, w_e, theta, w_t
+
+    def _spread_note(self, pulse, spread):
+        """note on the FWHM and the nodes of the bandwidth or divergence of a
+        pulse for the messages"""
+        width = pulse[spread]
+        if width == 0:
+            return ""
+        if spread == "divergence":
+            width = f"{np.degrees(width):.4g} deg"
+        elif pulse["bandwidth_domain"] == "wavelength":
+            width = f"{width * 1e9:.4g} nm"
+        else:
+            width = f"{width:.4g} eV"
+        return f" (FWHM {width}, {self._sampling_text(pulse, spread)})"
+
+    @staticmethod
+    def _sampling_text(pulse, spread):
+        """profile and nodes of the bandwidth or divergence of a pulse"""
+        nodes = pulse[f"{spread}_nodes"].replace("_", " ")
+        return f"{pulse[f'{spread}_profile']}, {pulse[f'{spread}_points']} {nodes} nodes"
+
+    def _spread_text(self, spread):
+        """``bandwidth`` or ``divergence`` with its sampling, if it is the
+        same for all pulses with this spread, for the properties of the
+        simulation"""
+        value = self.excitation[spread]
+        if isinstance(value, list):
+            text = ", ".join(f"{item:.4g~P}" for item in value)
+        else:
+            text = f"{value:.4g~P}"
+        pulses = [self._pulse(i) for i in range(self.num_pulses)]
+        samplings = {self._sampling_text(pulse, spread) for pulse in pulses if pulse[spread] > 0}
+        if len(samplings) == 1:
+            text += f" ({samplings.pop()})"
+        return text
 
     def _check_per_pulse(self, value, check):
         """a single checked value for all pulses or a list of checked values
@@ -1845,7 +2168,16 @@ class Heat(Simulation):
         if isinstance(absorption, MultilayerScattering):
             # a configured instance by its identity
             absorption = id(absorption)
-        return tuple(absorption if key == "absorption" else pulse[key] for key in _PULSE_KEYS)
+        pulse["absorption"] = absorption
+        for spread in _SPREADS:
+            if pulse[spread] == 0:
+                # the sampling of a monochromatic or collimated pulse does not
+                # change its absorption
+                for key in _SAMPLING_DEFAULTS:
+                    pulse[f"{spread}_{key}"] = None
+                if spread == "bandwidth":
+                    pulse["bandwidth_domain"] = None
+        return tuple(pulse[key] for key in _PULSE_KEYS)
 
     def _pulse_values(self, key):
         """a per-pulse parameter of all pulses, which is a single value, if
@@ -1853,7 +2185,7 @@ class Heat(Simulation):
         values = [self._pulse(i)[key] for i in range(self.num_pulses)]
         if all(value is values[0] or value == values[0] for value in values):
             return values[0]
-        if key in ("wavelength", "theta", "azimuth"):
+        if key in ("wavelength", "theta", "azimuth", "bandwidth", "divergence"):
             return np.asarray(values, dtype=float)
         return values
 
