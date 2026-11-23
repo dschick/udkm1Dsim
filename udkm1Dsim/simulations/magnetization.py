@@ -150,10 +150,7 @@ class Magnetization(Simulation):
 
         for name in ("strain_map", "temp_map", "mag_amplitude_map"):
             if name in kwargs:
-                value = kwargs.pop(name)
-                if value is not None and np.size(value) > 1e6:
-                    value = np.asarray(value).flatten()[0:1000000]
-                param.append(value)
+                param.append(kwargs.pop(name))
 
         for value in kwargs.values():
             param.append(value)

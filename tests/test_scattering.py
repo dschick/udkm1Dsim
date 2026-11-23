@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import copy
 import warnings
 
 import numpy as np
@@ -1154,6 +1155,30 @@ def test_worker_copy_has_no_cached_matrices(unit_cell_iron):
     assert worker.last_atom_ref_trans_matrices["H"] == []
     assert worker.S is sim.S
     assert sim.last_atom_ref_trans_matrices["H"]
+
+
+def test_cached_atom_matrices_distinguish_atoms_of_the_same_id(unit_cell_iron):
+    """atoms of the same id, but e.g. of different ionicity, do not share
+    their cached reflection-transmission matrices"""
+    ion_cell = copy.deepcopy(unit_cell_iron)
+    ion_cell.atoms[0][0].ionicity = 3
+
+    def reflectivity(sim, S):
+        sim.S = S
+        return sim.homogeneous_reflectivity().R
+
+    neutral, ion = ud.Structure("neutral"), ud.Structure("ion")
+    neutral.add_sub_structure(unit_cell_iron, 10)
+    ion.add_sub_structure(ion_cell, 10)
+    sim = ud.XrayDyn(neutral, True, disp_messages=False, progress_bar=False, save_data=False)
+    sim.energy = np.r_[8000.0] * u.eV
+    sim.qz = np.r_[1.0, 2.0, 3.0, 4.0] / u.nm
+    R_neutral = reflectivity(sim, neutral)
+    R_ion = reflectivity(sim, ion)  # reuses the simulation and its cache
+    fresh = ud.XrayDyn(ion, True, disp_messages=False, progress_bar=False, save_data=False)
+    fresh.energy, fresh.qz = sim.energy, sim.qz
+    np.testing.assert_allclose(R_ion, reflectivity(fresh, ion), rtol=1e-12)
+    assert not np.allclose(R_ion, R_neutral, rtol=1e-3)
 
 
 @pytest.mark.parametrize("cls", [ud.XrayKin, ud.XrayDyn, Elzo, Parratt, BerremanStepanov])

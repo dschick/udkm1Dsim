@@ -486,6 +486,7 @@ class Layer:
                 "magnetic.magnetization",
                 "magnetic.eff_spin",
                 "magnetic.curie_temp",
+                "magnetic.mf_exch_coupling",
                 "magnetic.mag_moment",
                 "magnetic.aniso_exponent",
                 "magnetic.anisotropy",
@@ -517,6 +518,22 @@ class Layer:
                     continue
 
         return R
+
+    def _hash_params(self, **kwargs):
+        """Inputs of :meth:`.Structure.get_hash` of the layer, i.e. its
+        properties of the given types, see :meth:`get_property_dict`, and for
+        the type ``'xray'`` the hashes of its atoms, see :meth:`_atoms_hash`."""
+        param = [self.get_property_dict(**kwargs)]
+        types = kwargs.get("types", "all")
+        if "xray" in (types if isinstance(types, list) else [types]):
+            param.append(self._atoms_hash())
+        return param
+
+    def _atoms_hash(self):
+        """Hashes of the atoms of the layer, see :attr:`.Atom.hash`,
+        e.g. with their positions in a :class:`UnitCell`."""
+        atom = getattr(self, "_atom", None)
+        return [] if atom is None else [atom.hash]
 
     def get_ref_index(self, energy, strain=0.0):
         """get_ref_index
@@ -1328,6 +1345,11 @@ class UnitCell(Layer):
             ],
             tablefmt=style,
         )
+
+    def _atoms_hash(self):
+        """Hashes of the atoms, see :attr:`.Atom.hash`, with their
+        position functions in the unit cell."""
+        return [(atom.hash, position_str) for atom, _, position_str in self.atoms]
 
     def __repr__(self):
         """String representation of this class"""

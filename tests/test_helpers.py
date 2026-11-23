@@ -21,6 +21,18 @@ def test_make_hash_md5():
     assert make_hash_md5(123456) == "e10adc3949ba59abbe56e057f20f883e"
 
 
+def test_make_hash_md5_depends_on_all_values_of_arrays():
+    """the repr of an array shows only its corners and rounded values"""
+    a = np.zeros((100, 100))
+    b = a.copy()
+    b[50, 50] = 1
+    assert make_hash_md5([a]) != make_hash_md5([b])
+    assert make_hash_md5(np.ones(3)) != make_hash_md5(np.ones(3) + 1e-12)
+    assert make_hash_md5(np.ones(4)) != make_hash_md5(np.ones((2, 2)))
+    assert make_hash_md5({"a": a}) == make_hash_md5({"a": a.copy()})
+    assert make_hash_md5(np.ones(3) * ud.u.nm) != make_hash_md5(np.ones(3) * ud.u.m)
+
+
 def test_m_power_x():
     m = np.arange(4)
     m = np.reshape(m, (1, 1, 2, 2))

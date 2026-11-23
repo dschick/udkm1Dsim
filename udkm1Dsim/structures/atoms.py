@@ -32,7 +32,14 @@ import numpy as np
 import pint
 from tabulate import tabulate
 
-from ..helpers import SpectralTable, _format_energy, read_columns, to_energy, undefined_error
+from ..helpers import (
+    SpectralTable,
+    _format_energy,
+    make_hash_md5,
+    read_columns,
+    to_energy,
+    undefined_error,
+)
 from .dielectric import atoms_susceptibility
 from .parameter_groups import AtomMixedParameters, AtomParameters
 
@@ -164,9 +171,28 @@ class Atom:
         # changes of the parameters, e.g. of the ionicity, are notified to the atom
         self.atomic._owner = self
 
+    # attributes, whose changes reset the cached hash, see :attr:`hash`
+    _HASH_INPUTS = frozenset(
+        (
+            "id",
+            "symbol",
+            "atomic",
+            "cromer_mann_coeff",
+            "_atomic_form_factor_coeff",
+            "_magnetic_form_factor_coeff",
+        )
+    )
+
+    def __setattr__(self, name, value):
+        super().__setattr__(name, value)
+        if name in self._HASH_INPUTS:
+            self.__dict__["_hash"] = None
+
     def _update_depending(self):
-        """Called on changes of the atomic parameters to re-read the
-        Cromer-Mann coefficients on a change of the ionicity."""
+        """Called on changes of the atomic parameters to reset the cached
+        hash and to re-read the Cromer-Mann coefficients on a change of the
+        ionicity."""
+        self.__dict__["_hash"] = None
         if self.ionicity != getattr(self, "_cromer_mann_ionicity", None):
             self._read_cromer_mann_coeff()
 
@@ -238,6 +264,32 @@ class Atom:
             + "".join(f"{line}<br>" for line in self._form_factor_lines())
             + self.atomic._html_table()
         )
+
+    def _hash_params(self):
+        """Inputs of the hash of the atom, see :attr:`hash`."""
+        parameters = self.atomic._parameters()
+        return [
+            type(self).__name__,
+            self.id,
+            self.symbol,
+            [repr(parameters[name]) for name in sorted(parameters)],
+            self.atomic_form_factor_coeff,
+            self.magnetic_form_factor_coeff,
+        ]
+
+    @property
+    def hash(self):
+        """str: unique hash of the atom from its id, symbol, atomic
+        parameters, e.g. the ionicity, the Cromer-Mann coefficients, and the
+        magnetization, and its tabulated atomic and magnetic form factors,
+        e.g. for the hash of the X-ray simulations, see
+        :meth:`.Structure.get_hash`. It is cached and calculated again after
+        changes of these inputs, which must be set, e.g.
+        ``atom.atomic_form_factor_coeff = coeff``, as changes of the tables in
+        place are not detected."""
+        if self.__dict__.get("_hash") is None:
+            self.__dict__["_hash"] = make_hash_md5(self._hash_params())
+        return self.__dict__["_hash"]
 
     # ============================================================================
     # form factors
@@ -736,6 +788,8 @@ class AtomMixed(Atom):
         self._magnetic_form_factor_source = os.path.basename(magnetic_path)
         self._atomic_form_factor_path = atomic_path
         self._magnetic_form_factor_path = magnetic_path
+        # changes of the parameters, e.g. of the magnetization, reset the hash
+        self.atomic._owner = self
 
     def form_factor_source(self, magnetic=False):
         """form_factor_source
@@ -830,6 +884,19 @@ class AtomMixed(Atom):
                 tablefmt="html",
             )
         )
+
+    def _update_depending(self):
+        """Called on changes of the atomic parameters to reset the cached
+        hash."""
+        self.__dict__["_hash"] = None
+
+    @property
+    def hash(self):
+        """str: unique hash of the mixed atom, see :attr:`.Atom.hash`, and of
+        its constituents with their fractions, whose cached hashes follow
+        their changes."""
+        constituents = [(atom.hash, fraction) for atom, fraction in self.atoms]
+        return make_hash_md5([Atom.hash.fget(self), constituents])
 
     def add_atom(self, atom, fraction):
         """add_atom

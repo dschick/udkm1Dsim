@@ -457,6 +457,16 @@ class VectorParameter(Parameter):
             raise ValueError(f"Parameter '{self.name}' needs (r, phi, gamma)")
         self._set_polar_rad(arr)
 
+    def __repr__(self):
+        # The repr is part of the hash of the simulation results. For r = 0,
+        # the cartesian components do not give the kept direction, which is
+        # e.g. the initial direction of the magnetization, so that the angles
+        # are added.
+        if self._polar[0] != 0:
+            return super().__repr__()
+        phi, gamma = self._polar[1:].tolist()
+        return f"{super().__repr__()[:-1]}, phi={phi} rad, gamma={gamma} rad)"
+
 
 class TemperatureParameter(Parameter):
     """Parameter with a unit and a magnitude, which depends on temperature.
