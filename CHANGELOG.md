@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0a5] 2026-11-23
+
 ### Added
 
 - the instrument function of all scattering simulations by the `InstrumentParameters` in `sim.instrument`, which apply to the reflectivity of `XrayKin` and `XrayDyn` and the reflectivity, transmissivity, rotation, and ellipticity of the multilayer formalisms, also of their `calc_*()` methods, e.g. for fits, but not to the Jones matrices, fields, and absorption:
