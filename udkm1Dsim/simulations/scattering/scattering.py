@@ -698,6 +698,7 @@ class Scattering(Simulation):
                 f"node{'s' * (num_energy > 1)} x {num_theta} angle node{'s' * (num_theta > 1)})"
             )
         total = None
+        below_surface = False
         try:
             for component in ins.components:
                 energy_c = component["factor"] * energy + component["offset"]
@@ -720,6 +721,14 @@ class Scattering(Simulation):
                     for x_t, w_t in zip(*theta_nodes):
                         th = theta + x_t * theta_width
                         weights = w_e * w_t * np.ones((M, N))
+                        # the rays at or below the surface do not hit the sample
+                        # from above and are calculated at the central angle
+                        # with zero weight, as their angle gives no result
+                        below = th <= 0
+                        if np.any(below):
+                            below_surface = True
+                            weights = np.where(below, 0.0, weights)
+                            th = np.where(below, theta, th)
                         # the beam hits the sample at the angle of the node, also
                         # for the angle of the same qz of the 'qz' mode
                         foot = weights * _instrument.footprint(
@@ -763,6 +772,13 @@ class Scattering(Simulation):
         finally:
             exp.energy = energy0
             setattr(exp, scan, scan0)
+        if below_surface:
+            warnings.warn(
+                "Some nodes of the theta resolution are at or below the surface, i.e. at "
+                "angles <= 0 deg, and do not contribute, so that the intensities at these "
+                "angles are reduced by their weights!",
+                stacklevel=3,
+            )
         if ins.theta_mode == "convolution" and ins.theta_resolution != "none":
             if np.any(theta_width > 0) and not any(
                 _instrument.is_resolved(

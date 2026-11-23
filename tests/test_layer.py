@@ -436,6 +436,27 @@ def test_amorphous_layer_without_atom():
     assert np.allclose(layer.magnetization.magnitude, [0, 0, 0])
 
 
+@pytest.mark.parametrize("given", ["keyword", "group"])
+@pytest.mark.parametrize("with_atom", [False, True])
+def test_amorphous_layer_keeps_given_magnetization(atom_iron, given, with_atom):
+    """a given magnetization takes precedence over the one of the atom, which
+    is only set by a later assignment of the atom"""
+    magnetization = {"r": 1, "phi": 90 * u.deg, "gamma": 90 * u.deg}
+    kwargs = {"atom": atom_iron} if with_atom else {}
+    if given == "keyword":
+        kwargs["magnetization"] = magnetization
+    else:
+        kwargs["magnetic"] = {"magnetization": magnetization}
+    layer = AmorphousLayer("a", "a", 1 * u.nm, 1000 * u.kg / u.m**3, **kwargs)
+    assert np.allclose(layer.magnetization.magnitude, [0, 1, 0])
+    layer.atom = atom_iron
+    assert np.allclose(layer.magnetization.magnitude, atom_iron.magnetization.magnitude)
+
+
+def test_amorphous_layer_takes_magnetization_of_atom(amorphous_layer, atom_iron):
+    assert np.allclose(amorphous_layer.magnetization.magnitude, atom_iron.magnetization.magnitude)
+
+
 def test_amorphous_layer_invalid_atom():
     with pytest.raises(TypeError):
         AmorphousLayer("a", "a", 1 * u.nm, 1000 * u.kg / u.m**3, atom="Fe")
@@ -464,10 +485,12 @@ def test_unit_cell_mass_from_atoms(unit_cell, atom_strontium, atom_oxygen, atom_
 
 def test_unit_cell_spring_const_and_acoustic_impedance(unit_cell):
     assert_approx(unit_cell.spring_const, [1.449] * u.kg / u.s**2, rtol=1e-3)
+    # the impedance is the product of the density and the sound velocity,
+    # independent of the area of the unit cell
     assert_approx(
         unit_cell.elastic.acoustic_impedance.quantity,
-        2.415e6 * u.kg / u.m**2 / u.s,
-        rtol=1e-3,
+        (unit_cell.density * unit_cell.sound_vel).to("kg/m**2/s"),
+        rtol=1e-12,
     )
 
 

@@ -496,6 +496,10 @@ class Atom:
                 f"No Cromer-Mann coefficients tabulated for {self.symbol} "
                 f"(Z = {self.atomic_number_z})!"
             )
+        # f_CM(0) of the neutral atom, which is the reference of the tabulated
+        # f_1(E) of the neutral atom, see get_cm_atomic_form_factor()
+        neutral = entries[entries[:, 1] == 0][0]
+        self._cromer_mann_f0_neutral = float(np.sum(neutral[2:6]) + neutral[10])
         exact = entries[entries[:, 1] == self.ionicity]
         if len(exact) > 0:
             return exact[0]
@@ -534,16 +538,20 @@ class Atom:
             f_{CM}(q_z) = \sum^4_{i=1} a_i \, \exp\left(-b_i \, (q_z/4\pi)^2\right) + c
 
         :math:`\delta f_1(E)` is the dispersion correction with respect to
-        :math:`f_{CM}(0)`:
+        :math:`f_{CM}^0(0)` of the neutral atom, as the tabulated :math:`f_1(E)`
+        and :math:`f_2(E)` are the ones of the neutral atom:
 
         .. math::
 
-            \delta f_1(E) = f_1(E) - f_{CM}(0) = f_1(E) - \left(\sum^4_{i=1} a_i + c\right)
+            \delta f_1(E) = f_1(E) - f_{CM}^0(0)
+            = f_1(E) - \left(\sum^4_{i=1} a_i^0 + c^0\right)
 
-        Thus:
+        where :math:`a_i^0` and :math:`c^0` are the Cromer-Mann coefficients of
+        the neutral atom. Thus, :math:`f(q_z \to 0, E) \approx Z - I + f'(E)`
+        of an ion of the ionicity :math:`I`:
 
         .. math:: f(q_z,E) = \sum^4_{i=1} a_i \, \exp\left(-b_i \, (q_z/4\pi)^2\right)
-           + c + f_1(E) - i f_2(E) - \left(\sum^4_{i=1} a_i + c\right)
+           + c + f_1(E) - i f_2(E) - \left(\sum^4_{i=1} a_i^0 + c^0\right)
 
         Args:
             energy (Quantity, ndarray[float]): photon energy, where floats
@@ -570,8 +578,9 @@ class Atom:
         for i, en in enumerate(energy):
             _qz = qz[i, :].reshape(-1, 1)
             f_cm = np.dot(a, np.exp(np.outer(-b, (_qz / (4 * np.pi)) ** 2))) + c
-            # f_1(E) - i f_2(E) with the dispersion correction with respect to f_CM(0)
-            f[i, :] = f_cm + self.get_atomic_form_factor(en) - (np.sum(a) + c)
+            # f_1(E) - i f_2(E) of the neutral atom with the dispersion
+            # correction with respect to f_CM(0) of the neutral atom
+            f[i, :] = f_cm + self.get_atomic_form_factor(en) - self._cromer_mann_f0_neutral
         return f
 
     def read_magnetic_form_factor_coeff(self, filename=""):

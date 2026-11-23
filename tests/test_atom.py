@@ -162,11 +162,29 @@ def test_atom_get_atomic_form_factor(request, fixture_name, expected):
 @pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_dysprosium", "atom_mixed"])
 @pytest.mark.parametrize("energy", [700, 8000])
 def test_atom_get_cm_atomic_form_factor_at_zero_qz(request, fixture_name, energy):
-    # for q_z -> 0, the Cromer-Mann form factor is the energy-dependent one
+    # for q_z -> 0, the Cromer-Mann form factor is the energy-dependent one of
+    # the neutral atom less the tabulated ionicity, e.g. of Dy1+ the neutral
+    # one, which is the closest tabulated ionicity
     atom = request.getfixturevalue(fixture_name)
+    constituents = getattr(atom, "atoms", None) or [(atom, 1)]
+    ionicity = sum(a.cromer_mann_coeff[1] * fraction for a, fraction in constituents)
     assert atom.get_cm_atomic_form_factor(energy, 0)[0, 0] == pytest.approx(
-        atom.get_atomic_form_factor(energy)
+        atom.get_atomic_form_factor(energy) - ionicity, abs=0.1
     )
+
+
+@pytest.mark.parametrize("symbol, ionicity", [("Fe", 3), ("O", -2), ("Sr", 2), ("Ti", 4)])
+def test_atom_get_cm_atomic_form_factor_of_ions(symbol, ionicity):
+    """the tabulated f_1 and f_2 are the ones of the neutral atom, so that an
+    ion has I electrons less at q_z = 0 and scatters as the neutral atom at
+    large q_z, where the core electrons dominate"""
+    neutral, ion = Atom(symbol), Atom(symbol, ionicity=ionicity)
+    qz = np.array([[0, 8e10]])  # (1/m), i.e. sin(theta)/lambda of 0.64 (1/Å)
+    f_neutral = neutral.get_cm_atomic_form_factor(8000, qz)[0]
+    f_ion = ion.get_cm_atomic_form_factor(8000, qz)[0]
+    assert f_ion[0] == pytest.approx(f_neutral[0] - ionicity, abs=0.1)
+    assert f_ion[1] == pytest.approx(f_neutral[1], abs=0.1)
+    assert np.all(f_ion.imag == f_neutral.imag)
 
 
 # f_0(sin(theta)/lambda) of Hubbell et al., J. Phys. Chem. Ref. Data 4, 471 (1975),

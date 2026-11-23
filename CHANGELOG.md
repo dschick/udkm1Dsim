@@ -67,6 +67,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the `mf_exch_coupling` of several sublattices, whose Curie temperature is only its largest eigenvalue, e.g. for an antiferromagnetic and a ferromagnetic coupling
   - the angles of a zero `VectorParameter`, e.g. a magnetization of `r=0`, whose direction is the initial direction of the magnetization simulations
 - the cached reflection-transmission matrices of the atoms of `XrayDyn` were shared by different atoms of the same id, e.g. `Atom("Fe")` and `Atom("Fe", ionicity=3)`, also after changing the structure of the simulation; they are identified by `Atom.hash` now
+- the Cromer-Mann atomic form factor of ions of `XrayKin` and `XrayDyn` was off by the ionicity $I$ at all $q_z$, i.e. an ion scattered as the neutral atom at $q_z = 0$, as the dispersion correction subtracted $f_{CM}(0)$ of the ion from the tabulated $f_1(E)$ of the neutral atom; it subtracts $f_{CM}(0)$ of the neutral atom now, so that $f(q_z \to 0) \approx Z - I + f'(E)$, while neutral atoms are unchanged; cached results require `force_recalc=True`
+- `Heat` with a configured instance as `absorption` used its `wavelength`, `theta`, `azimuth`, and `polarization` at the time of setting the excitation, so that later changes of the instance were ignored for the absorption profile, the footprint of the fluence, and the metadata, but changed the hash; they are read from the instance at every use now, which must keep a single energy, angle, and incoming polarization
+- the numerical integral of a `TemperatureParameter`, which is used if sympy cannot integrate it, used the function of the last subsystem for all subsystems
+- `check_temp_maps()` of the phonon simulations expanded a temperature difference map of a single delay to the number of subsystems instead of the number of delays for several subsystems
+- the acoustic impedance of a `UnitCell` was wrong for an area other than 1 Å², as the spring constant is normalized to this area; it is the product of the density and the sound velocity now
+- an `AmorphousLayer` replaced a given `magnetization` by the one of its atom, or by zero without an atom; a `magnetization` given on initialization is kept now, while setting the `atom` afterwards still sets the magnetization of the atom
+- the gyrotropic part of a Voigt constant scaled twice with the strain, as it was evaluated with the strained $\varepsilon_{xx}$ and then scaled with the density; it is evaluated with the unstrained $\varepsilon_{xx}$ now, as documented
+- `Dielectric.is_isotropic` ignored an anisotropic `deps_dstrain` of the `photoelastic` strain model, whose anisotropic part was dropped by `Parratt`, `Elzo`, and `Stepanov`; these formalisms reject such layers now
+- an elliptical analyzer of the multilayer formalisms transmitted the polarization of the opposite helicity, e.g. the analyzer `(0 * u.deg, 1)` blocked the light of the same elliptical polarization, as its Jones vector was not conjugated as the ones of the circular and linear analyzers; cached results require `force_recalc=True`
+- the nodes of the angular resolution at or below the surface, i.e. at angles <= 0 deg, gave NaN or unphysical intensities; they do not contribute now, which is warned for
 
 ## [3.0.0a4] 2026-11-16
 

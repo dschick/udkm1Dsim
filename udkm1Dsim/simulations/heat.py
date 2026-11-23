@@ -315,6 +315,12 @@ class Heat(Simulation):
 
         """
         excitation = {**self._excitation, "absorption": self._absorption_name()}
+        if any(
+            isinstance(self._pulse(index)["absorption"], MultilayerScattering)
+            for index in range(self.num_pulses)
+        ):
+            # the current values of configured instances as absorption
+            excitation.update({key: self._pulse_values(key) for key in _INSTANCE_KEYS})
         for spread in _SPREADS:
             if not self._spread_active(spread):
                 # a monochromatic and collimated excitation keeps former hashes
@@ -2083,7 +2089,17 @@ class Heat(Simulation):
     @staticmethod
     def _instance_parameters(formalism):
         """``wavelength``, ``theta``, ``azimuth``, and ``polarization`` of a
-        configured formalism"""
+        configured formalism, which must have a single energy, angle, and
+        incoming polarization, also after changes of the formalism"""
+        if (
+            np.size(formalism.energy.magnitude) != 1
+            or np.size(formalism.theta.magnitude) != 1
+            or np.atleast_2d(formalism.pol_in).shape[0] != 1
+        ):
+            raise ValueError(
+                "The absorption formalism of the excitation must have a single energy, "
+                "angle, and incoming polarization!"
+            )
         return {
             "wavelength": float(formalism.wl.to("m").magnitude.flat[0]),
             "theta": float(formalism.theta.to("rad").magnitude.flat[0]),
@@ -2152,12 +2168,17 @@ class Heat(Simulation):
         return indices
 
     def _pulse(self, index):
-        """the per-pulse excitation parameters of a pulse"""
+        """the per-pulse excitation parameters of a pulse, where a configured
+        instance as ``absorption`` gives its current ``wavelength``,
+        ``theta``, ``azimuth``, and ``polarization``, also after changes of
+        the instance"""
         pulse = {}
         for key in _PULSE_KEYS:
             value = self._excitation[key]
             pulse[key] = value[index] if self._is_per_pulse(value) else value
         pulse["backside"] = bool(pulse["backside"])
+        if isinstance(pulse["absorption"], MultilayerScattering):
+            pulse.update(self._instance_parameters(pulse["absorption"]))
         return pulse
 
     def _pulse_key(self, index):

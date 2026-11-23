@@ -1221,8 +1221,9 @@ def test_magnetic_hash_depends_on_exchange_coupling():
     Curie temperature, i.e. largest eigenvalue, have different hashes"""
     J = np.array([[2, -1], [-1, 3]]) * 1e-21
     hashes = [
-        make_structure((make_layer("J", eff_spin=[0.5, 0.5], mf_exch_coupling=J_ab * u.J), 1))
-        .get_hash(types="magnetic")
+        make_structure(
+            (make_layer("J", eff_spin=[0.5, 0.5], mf_exch_coupling=J_ab * u.J), 1)
+        ).get_hash(types="magnetic")
         for J_ab in (J, np.abs(J))
     ]
     assert hashes[0] != hashes[1]

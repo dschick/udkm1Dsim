@@ -311,6 +311,35 @@ def test_absorption_polarizations(tmp_path):
     assert np.max(np.abs(circular[0] - circular[1])) > 1e-3 * np.max(circular[0])
 
 
+def test_absorption_instance_changed_after_the_excitation(tmp_path):
+    """changes of a configured instance after setting the excitation change
+    its absorption profile, the footprint of the fluence, the metadata, and
+    the hash"""
+    S = optical_stack()
+    heat = optical_heat(S, tmp_path)
+    formalism = heat.create_multilayer_formalism(Parratt)
+    formalism.theta = [60] * u.deg
+    heat.excitation = {"absorption": formalism}
+    delays = np.r_[-1:5:0.1] * u.ps
+    old_hash = heat.get_hash(delays, 300)
+    formalism.theta = [30] * u.deg
+    formalism.wl = [400] * u.nm
+    assert heat.get_hash(delays, 300) != old_hash
+    assert_allclose(heat.excitation["theta"], 30 * u.deg)
+    assert_allclose(heat.excitation["wavelength"], 400 * u.nm)
+    heat.excitation = {"absorption": Parratt, "theta": 30 * u.deg, "wavelength": 400 * u.nm}
+    reference = heat.get_absorption_profile()
+    heat.excitation = {"absorption": formalism}
+    formalism.theta = [60] * u.deg
+    formalism.theta = [30] * u.deg  # changed after setting the excitation
+    np.testing.assert_allclose(heat.get_absorption_profile(), reference, rtol=1e-12)
+    _, fluence, _, _ = heat.check_excitation(delays)
+    np.testing.assert_allclose(fluence, 100 * np.sin(np.deg2rad(30)))
+    formalism.theta = [30, 40] * u.deg
+    with pytest.raises(ValueError, match="single"):
+        heat.get_absorption_profile()
+
+
 def test_absorption_instance(tmp_path):
     """a configured formalism defines the wavelength, angle, and polarization
     of the excitation"""

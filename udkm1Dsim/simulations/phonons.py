@@ -261,7 +261,7 @@ class Phonon(Simulation):
         else:
             if np.shape(delta_temp_map) == (1, L, K):
                 temp = delta_temp_map
-                delta_temp_map = np.zeros([K, L, K])
+                delta_temp_map = np.zeros([M, L, K])
                 delta_temp_map[0, :, :] = temp
             elif (
                 (np.size(delta_temp_map, 0) != M)

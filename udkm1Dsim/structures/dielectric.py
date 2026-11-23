@@ -1604,8 +1604,17 @@ class Dielectric(Parameter):
 
     @property
     def is_isotropic(self):
-        """bool: true if the non-magnetic dispersion is isotropic."""
-        return self._eps0 is not None and self._eps0.scalar
+        """bool: true if the non-magnetic dispersion is isotropic, as well as
+        its photoelastic change ``deps_dstrain`` for the strain model
+        ``photoelastic``."""
+        if self._eps0 is None or not self._eps0.scalar:
+            return False
+        if self._strain_model != "photoelastic":
+            return True
+        deps = self._deps_dstrain
+        if isinstance(deps, Dispersion):
+            return deps.scalar
+        return deps.ndim == 0 or np.array_equal(deps, deps[0, 0] * np.eye(3))
 
     # ------------------------------------------------------------------------
     # calculations
@@ -1666,6 +1675,9 @@ class Dielectric(Parameter):
             # from the frame of the crystal to the frame of the sample
             R = euler_matrix(*self._euler_angles)
             eps0 = np.einsum("ij,mjk,lk->mil", R, eps0, R)
+        # the unstrained eps_xx of e.g. a Voigt constant, whose gyrotropic
+        # part scales with the density below only once
+        eps_xx = eps0[..., 0, 0]
         if self._strain_model == "density":
             eps0 = identity + scale * (eps0 - identity)
         elif self._strain_model == "photoelastic":
@@ -1681,9 +1693,9 @@ class Dielectric(Parameter):
         magnetization = _cartesian_magnetization(magnetization, polar)
         eps_mag = None
         if self._eps_mag is not None and np.any(magnetization):
-            eps_mag = self._eps_mag.evaluate(
-                spectral, density, _VACUUM_ZERO, eps_xx=eps0[..., 0, 0]
-            ) * (scale if np.ndim(scale) == 0 else scale[..., 0, 0])
+            eps_mag = self._eps_mag.evaluate(spectral, density, _VACUUM_ZERO, eps_xx=eps_xx) * (
+                scale if np.ndim(scale) == 0 else scale[..., 0, 0]
+            )
         return gyrotropic_tensor(eps0, eps_mag, magnetization)
 
     def get_ref_index(self, energy, strain=0.0, density=None):
