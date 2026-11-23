@@ -213,23 +213,37 @@ def test_vector_parameter_polar_getter(vector_parameter, cartesian, expected):
 @pytest.mark.parametrize(
     "polar, expected",
     [
-        ((1, 0, 0), (0.0, 0.0, 1.0)),
-        ((2, 90, 0), (2.0, 0.0, 0.0)),
-        ((1, 90, 90), (0.0, 1.0, 0.0)),
-        ((1, 180, 0), (0.0, 0.0, -1.0)),
-        ((np.sqrt(2), 90, 45), (1.0, 1.0, 0.0)),
-        ((0, 45, 30), (0.0, 0.0, 0.0)),
+        ((1, 0 * u.deg, 0 * u.deg), (0.0, 0.0, 1.0)),
+        ((2, 90 * u.deg, 0 * u.deg), (2.0, 0.0, 0.0)),
+        ((1, 90 * u.deg, 90 * u.deg), (0.0, 1.0, 0.0)),
+        ((1, 180 * u.deg, 0 * u.deg), (0.0, 0.0, -1.0)),
+        ((np.sqrt(2), 90 * u.deg, 45 * u.deg), (1.0, 1.0, 0.0)),
+        ((0, 45 * u.deg, 30 * u.deg), (0.0, 0.0, 0.0)),
         # Quantities and unit conversion
         ((2.0 * u.T, 90 * u.deg, 0 * u.deg), (2.0, 0.0, 0.0)),
         ((2000.0 * u.mT, 90 * u.deg, 0 * u.deg), (2.0, 0.0, 0.0)),
         ((2.0 * u.T, np.pi / 2 * u.rad, np.pi / 2 * u.rad), (0.0, 2.0, 0.0)),
-        # mixed: bare floats are r in T and angles in deg
-        ((2.0, np.pi / 2 * u.rad, 90), (0.0, 2.0, 0.0)),
+        # mixed: a bare r in T and angles in different units
+        ((2.0, np.pi / 2 * u.rad, 90 * u.deg), (0.0, 2.0, 0.0)),
     ],
 )
 def test_vector_parameter_polar_setter(vector_parameter, polar, expected):
     vector_parameter.polar = polar
     np.testing.assert_allclose(vector_parameter.magnitude, expected, atol=1e-12)
+
+
+@pytest.mark.parametrize("angle", [90, np.pi / 2, 0.5 * u.dimensionless, 1 * u.sr])
+def test_vector_parameter_angles_are_quantities(vector_parameter, angle):
+    vector_parameter.magnitude = (1.0, 2.0, 3.0)
+    # bare numbers and dimensionless quantities are ambiguous angles
+    for set_angle in (
+        lambda: setattr(vector_parameter, "polar", (1.0, angle, 0 * u.deg)),
+        lambda: setattr(vector_parameter, "gamma", angle),
+        lambda: vector_parameter.set({"phi": angle}),
+    ):
+        with pytest.raises(TypeError, match="angle (phi|gamma) of 'B' must be given"):
+            set_angle()
+    np.testing.assert_array_equal(vector_parameter.magnitude, [1.0, 2.0, 3.0])
 
 
 def test_vector_parameter_angle_unit():
@@ -239,8 +253,8 @@ def test_vector_parameter_angle_unit():
     assert gamma.units == u.rad
     np.testing.assert_allclose([phi.magnitude, gamma.magnitude], [np.pi / 2, np.pi / 2])
 
-    # bare floats are interpreted in the instance's angle_unit
-    vector.polar = (1.0, np.pi / 2, 0.0)
+    # angles are given as quantities in any angular unit
+    vector.polar = (1.0, np.pi / 2 * u.rad, 0 * u.deg)
     np.testing.assert_allclose(vector.magnitude, [1.0, 0.0, 0.0], atol=1e-12)
 
     # switching angle_unit only changes the returned units, not the vector
@@ -266,9 +280,9 @@ def test_vector_parameter_set_r_on_zero_vector(vector_parameter):
 @pytest.mark.parametrize(
     "attribute, value, expected",
     [
-        ("phi", 90, [np.sqrt(1.5), np.sqrt(1.5), 0.0]),
+        ("phi", 90 * u.deg, [np.sqrt(1.5), np.sqrt(1.5), 0.0]),
         ("phi", np.pi / 2 * u.rad, [np.sqrt(1.5), np.sqrt(1.5), 0.0]),
-        ("gamma", 0, [np.sqrt(2), 0.0, 1.0]),
+        ("gamma", 0 * u.deg, [np.sqrt(2), 0.0, 1.0]),
         ("gamma", -45 * u.deg, [1.0, -1.0, 1.0]),
     ],
 )
@@ -288,12 +302,12 @@ def test_vector_parameter_set_angle(vector_parameter, attribute, value, expected
     [
         ("r", -2.0),
         ("r", -2.0 * u.T),
-        ("polar", (-2.0, 90.0, 0.0)),
+        ("polar", (-2.0, 90 * u.deg, 0 * u.deg)),
         ("polar_rad", (-2.0, np.pi / 2, 0.0)),
     ],
 )
 def test_vector_parameter_negative_r(vector_parameter, attribute, value):
-    vector_parameter.polar = (1.0, 90.0, 0.0)
+    vector_parameter.polar = (1.0, 90 * u.deg, 0 * u.deg)
     setattr(vector_parameter, attribute, value)
     # the negative radius reverses the direction and keeps the angles
     assert_approx(vector_parameter.r, -2.0 * u.T)
@@ -304,7 +318,7 @@ def test_vector_parameter_negative_r(vector_parameter, attribute, value):
 
 @pytest.mark.parametrize("r", [-5.0, -1.0, -0.1, 0.1, 1.0, 5.0, 1e3])
 def test_vector_parameter_radius_keeps_angles(vector_parameter, r):
-    vector_parameter.polar = (1.0, 30.0, 60.0)
+    vector_parameter.polar = (1.0, 30 * u.deg, 60 * u.deg)
     direction = vector_parameter.magnitude
     vector_parameter.r = r
     assert_approx(vector_parameter.phi, 30 * u.deg)
@@ -315,9 +329,9 @@ def test_vector_parameter_radius_keeps_angles(vector_parameter, r):
 @pytest.mark.parametrize(
     "polar, norm",
     [
-        ((2.0, 90.0, 0.0), 2.0),
-        ((-2.0, 90.0, 0.0), 2.0),
-        ((0.0, 30.0, 60.0), 0.0),
+        ((2.0, 90 * u.deg, 0 * u.deg), 2.0),
+        ((-2.0, 90 * u.deg, 0 * u.deg), 2.0),
+        ((0.0, 30 * u.deg, 60 * u.deg), 0.0),
     ],
 )
 def test_vector_parameter_norm(vector_parameter, polar, norm):
@@ -336,7 +350,7 @@ def test_vector_parameter_norm_of_cartesian(vector_parameter):
 
 
 def test_vector_parameter_cartesian_gives_non_negative_r(vector_parameter):
-    vector_parameter.polar = (1.0, 90.0, 0.0)
+    vector_parameter.polar = (1.0, 90 * u.deg, 0 * u.deg)
     # the reversed vector is given by the angles, not by a negative radius
     vector_parameter.magnitude = (-1.0, 0.0, 0.0)
     assert_approx(vector_parameter.r, 1.0 * u.T)
@@ -347,11 +361,11 @@ def test_vector_parameter_cartesian_gives_non_negative_r(vector_parameter):
 @pytest.mark.parametrize(
     "polar, cartesian",
     [
-        ((1.0, 90.0, 0.0), [1.0, 0.0, 0.0]),
-        ((1.0, 90.0, 90.0), [0.0, 1.0, 0.0]),
-        ((1.0, 0.0, 45.0), [0.0, 0.0, 1.0]),
-        ((-2.0, 180.0, 0.0), [0.0, 0.0, 2.0]),
-        ((1e-20, 90.0, 180.0), [-1e-20, 0.0, 0.0]),
+        ((1.0, 90 * u.deg, 0 * u.deg), [1.0, 0.0, 0.0]),
+        ((1.0, 90 * u.deg, 90 * u.deg), [0.0, 1.0, 0.0]),
+        ((1.0, 0 * u.deg, 45 * u.deg), [0.0, 0.0, 1.0]),
+        ((-2.0, 180 * u.deg, 0 * u.deg), [0.0, 0.0, 2.0]),
+        ((1e-20, 90 * u.deg, 180 * u.deg), [-1e-20, 0.0, 0.0]),
     ],
 )
 def test_vector_parameter_exact_cartesian(vector_parameter, polar, cartesian):
@@ -379,13 +393,17 @@ def test_vector_parameter_polar_rad_invalid(vector_parameter, input):
 
 
 def test_vector_parameter_from_polar():
-    vector = VectorParameter.from_polar("T", 2.0, 90.0, 90.0, name="B")
+    vector = VectorParameter.from_polar("T", 2.0, 90 * u.deg, 90 * u.deg, name="B")
     assert vector.name == "B"
     assert vector.unit == u.T
     np.testing.assert_allclose(vector.magnitude, [0.0, 2.0, 0.0], atol=1e-12)
 
-    vector = VectorParameter.from_polar("T", 2.0, np.pi / 2, np.pi / 2, angle_unit="rad")
+    # the angle_unit is the unit of the returned angles
+    vector = VectorParameter.from_polar(
+        "T", 2.0, np.pi / 2 * u.rad, np.pi / 2 * u.rad, angle_unit="rad"
+    )
     np.testing.assert_allclose(vector.magnitude, [0.0, 2.0, 0.0], atol=1e-12)
+    assert vector.phi.units == u.rad
 
     # r given in T is converted to the parameter's unit (mT)
     vector = VectorParameter.from_polar("mT", 1.0 * u.T, 90 * u.deg, 0 * u.deg)
@@ -426,11 +444,11 @@ def test_vector_parameter_polar_roundtrip(cartesian):
         ("magnitude", (1.0, 2.0, 3.0)),
         ("quantity", u.Quantity([1.0, 2.0, 3.0], "mT")),
         ("cartesian", (1.0, 2.0, 3.0)),
-        ("polar", (1.0, 90.0, 0.0)),
+        ("polar", (1.0, 90 * u.deg, 0 * u.deg)),
         ("polar_rad", (1.0, 0.5, 0.5)),
         ("r", 2.0),
-        ("phi", 45.0),
-        ("gamma", 45.0),
+        ("phi", 45 * u.deg),
+        ("gamma", 45 * u.deg),
     ],
 )
 def test_vector_parameter_notifies_caller(vector_parameter, attribute, value):
@@ -654,7 +672,7 @@ def test_vector_parameter_pickled_by_former_versions(state, polar_rad):
     "value, polar_rad",
     [
         ((0.0, 2.0, 0.0), [2, np.pi / 2, np.pi / 2]),
-        ({"r": -1.0, "phi": 90.0, "gamma": 0.0}, [-1, np.pi / 2, 0]),
+        ({"r": -1.0, "phi": 90 * u.deg, "gamma": 0 * u.deg}, [-1, np.pi / 2, 0]),
         ({"r": -1.0}, [-1, np.pi / 4, np.pi / 2]),  # the angles are kept
         ({"phi": 0.5 * u.rad}, [1, 0.5, np.pi / 2]),
         ({"x": 1.0}, [np.sqrt(2), np.pi / 3, np.arctan(np.sqrt(0.5))]),  # y and z are kept
@@ -662,7 +680,7 @@ def test_vector_parameter_pickled_by_former_versions(state, polar_rad):
     ],
 )
 def test_vector_parameter_set(vector_parameter, value, polar_rad):
-    vector_parameter.polar = (1.0, 45.0, 90.0)
+    vector_parameter.polar = (1.0, 45 * u.deg, 90 * u.deg)
     caller = DummyCaller()
     vector_parameter._caller = caller
     vector_parameter.set(value)
@@ -678,7 +696,7 @@ def test_vector_parameter_set_from_vector_parameter():
     np.testing.assert_array_equal(target.magnitude, [1e-3, 2e-3, 3e-3])
     assert target.angle_unit == u.rad
     # also a signed radius and undefined angles are copied
-    source.polar = (-1.0, 0.0, 30.0)
+    source.polar = (-1.0, 0 * u.deg, 30 * u.deg)
     target.set(source)
     np.testing.assert_allclose(target.polar_rad, [-1e-3, 0, np.pi / 6])
     # the copy is independent of the source
@@ -687,7 +705,7 @@ def test_vector_parameter_set_from_vector_parameter():
 
 
 def test_vector_parameter_init_by_dict():
-    vector = VectorParameter("T", {"r": -1, "phi": 90, "gamma": 180}, name="B")
+    vector = VectorParameter("T", {"r": -1, "phi": 90 * u.deg, "gamma": 180 * u.deg}, name="B")
     np.testing.assert_array_equal(vector.magnitude, [1.0, 0.0, 0.0])
     np.testing.assert_allclose(vector.polar_rad, [-1, np.pi / 2, np.pi])
 

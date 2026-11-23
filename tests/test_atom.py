@@ -333,11 +333,11 @@ MAGNETIZATION_INPUTS = [
     np.array([0.0, 1.0, 0.0]),
     [0.0, 1.0, 0.0] * u.dimensionless,
     {"r": 1, "phi": 90 * u.deg, "gamma": 90 * u.deg},
-    {"r": 1, "phi": 90, "gamma": 90},  # bare angles in deg
+    {"r": 1, "phi": 90 * u.deg, "gamma": 0.25 * u.turn},  # any angular unit
     {"r": 1, "phi": np.pi / 2 * u.rad, "gamma": np.pi / 2 * u.rad},
     {"x": 0, "y": 1, "z": 0},
     {"y": 1},  # the missing components are zero
-    VectorParameter.from_polar("", 1, 90, 90),
+    VectorParameter.from_polar("", 1, 90 * u.deg, 90 * u.deg),
 ]
 
 
@@ -405,8 +405,16 @@ def test_magnetization_invalid_dict(magnetization):
         Layer("Fe", "Fe", magnetization=magnetization)
 
 
+def test_magnetization_bare_angles():
+    # bare numbers are ambiguous angles
+    with pytest.raises(TypeError, match="angle phi"):
+        Atom("Fe", magnetization={"r": 1, "phi": 90, "gamma": 0 * u.deg})
+    with pytest.raises(TypeError, match="angle gamma"):
+        Layer("Fe", "Fe", magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 0})
+
+
 def test_amorphous_layer_inherits_magnetization_of_atom():
-    atom = Atom("Fe", magnetization={"r": -1, "phi": 0, "gamma": 30})
+    atom = Atom("Fe", magnetization={"r": -1, "phi": 0 * u.deg, "gamma": 30 * u.deg})
     layer = AmorphousLayer("Fe", "Fe", atom=atom)
     np.testing.assert_allclose(layer.magnetic.magnetization.polar_rad, [-1, 0, np.pi / 6])
     # the layer has its own copy

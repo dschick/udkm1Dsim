@@ -34,6 +34,7 @@ import pint
 import scipy.constants as constants
 from tabulate import tabulate
 
+from ..helpers import to_angle
 from ..structures.parameter_groups import ParameterGroup
 from ..structures.parameters import Parameter
 
@@ -221,16 +222,18 @@ class InstrumentParameters(ParameterGroup):
     are described in the module
     :mod:`~udkm1Dsim.simulations.scattering.instrument`.
 
-    Bare numbers of the angles are degrees, of the energies eV, of the
-    widths of the delays ps, and of the lengths mm.
+    The angles ``theta_width`` and ``theta_offset`` are pint Quantities
+    with an angular unit, e.g. ``0.05 * u.deg``, or lists of them, see
+    :func:`~udkm1Dsim.helpers.to_angle`, while bare numbers of the energies
+    are eV, of the widths of the delays ps, and of the lengths mm.
 
     Attributes:
         theta_resolution (str): profile of the angular resolution, i.e.
             ``'none'`` (default) for no angular resolution, ``'box'``,
             ``'gauss'``, ``'lorentz'``, or ``'pseudo_voigt'``.
-        theta_width (ndarray[float]): FWHM of the angular resolution (deg),
-            a scalar or an array along the angles or of the shape (M, N) of
-            the experiment.
+        theta_width (Quantity): FWHM of the angular resolution (deg), a
+            scalar or an array along the angles or of the shape (M, N) of the
+            experiment.
         theta_eta (float): Lorentzian fraction of a pseudo-Voigt profile.
         theta_mode (str): ``'quadrature'`` or ``'convolution'``.
         theta_nodes (str): ``'uniform'`` or ``'gaussian_quadrature'`` nodes.
@@ -263,7 +266,7 @@ class InstrumentParameters(ParameterGroup):
         footprint (str): ``'none'``, ``'box'``, or ``'gauss'`` beam.
         beam_width (float): FWHM or full width of the beam (mm).
         sample_length (float): length of the sample along the beam (mm).
-        theta_offset (float): offset of the angles (deg).
+        theta_offset (Quantity): offset of the angles (deg).
         energy_offset (float): offset of the photon energies (eV).
         I0 (float): scale of the intensities :math:`I_0`.
         background (float): background of the intensities
@@ -284,6 +287,8 @@ class InstrumentParameters(ParameterGroup):
         "footprint": footprints,
     }
     _spectrum_keys = ("offset", "factor", "weight", "width")
+    # angles, which must be given as Quantities, see to_angle
+    _angles = ("theta_width", "theta_offset")
     # settings of the default instrument, see is_active
     _default_hash_items = None
     # largest spacing of uniform nodes (FWHM), i.e. the default 7 nodes within +-2 FWHM
@@ -320,9 +325,15 @@ class InstrumentParameters(ParameterGroup):
         self._connect_parameters()
 
     def __setattr__(self, name, value):
-        """The options are checked and the spectrum is parsed on
+        """The options and angles are checked and the spectrum is parsed on
         assignment."""
-        if name in self._options:
+        if name in self._angles:
+            if isinstance(value, Parameter):
+                to_angle(value.quantity, name=name)
+            else:
+                value = to_angle(value, "deg", name=name)
+                value = float(value) if value.ndim == 0 else value
+        elif name in self._options:
             if value not in self._options[name]:
                 raise ValueError(
                     f"The {name} must be one of {', '.join(map(repr, self._options[name]))}, "

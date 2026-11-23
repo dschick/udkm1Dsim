@@ -278,7 +278,10 @@ def test_atoms():
 
 def test_magnetization_of_layers():
     zero = Layer(
-        "zero", "zero", thickness=1 * u.nm, magnetization={"r": 0, "phi": 30, "gamma": 60}
+        "zero",
+        "zero",
+        thickness=1 * u.nm,
+        magnetization={"r": 0, "phi": 30 * u.deg, "gamma": 60 * u.deg},
     )
     reversed_ = Layer(
         "reversed",
@@ -325,7 +328,7 @@ def test_sublattices():
         eff_spin=[0.5, 0.5],
         mf_exch_coupling=EXCHANGE * u.J,
         concentration=[0.4, 0.6],
-        magnetization=[(0, 0, 1), {"r": -0.5, "phi": 0, "gamma": 0}],
+        magnetization=[(0, 0, 1), {"r": -0.5, "phi": 0 * u.deg, "gamma": 0 * u.deg}],
     )
     S = Structure("sublattices")
     S.add_sub_structure(layer)
@@ -468,7 +471,7 @@ def test_dielectric_tensor():
         eps_mag=Dispersion.from_array(None, 0.01j, kind="voigt"),
         strain_model="photoelastic",
         deps_dstrain=[0.1, 0.2, 0.3 + 0.01j],
-        euler_angles=(10, 20.5 * u.deg, 0.1 * u.rad),
+        euler_angles=(10 * u.deg, 20.5 * u.deg, 0.1 * u.rad),
     )
     dielectric.display_energy = 800 * u.nm
     deps = Dielectric(eps0=eps0, strain_model="photoelastic", deps_dstrain=eps0)

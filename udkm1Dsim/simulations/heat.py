@@ -36,7 +36,7 @@ import pint
 from scipy.interpolate import RectBivariateSpline
 from scipy.optimize import brentq
 
-from ..helpers import finderb, make_hash_md5
+from ..helpers import finderb, make_hash_md5, to_angle
 from .result import find_source, get_entry
 from .scattering.multilayer import MultilayerScattering
 from .scattering.parratt import Parratt
@@ -110,7 +110,10 @@ class Heat(Simulation):
             ``wavelength``, ``theta``, ``azimuth``, and ``polarization``. The
             ``azimuth`` of the plane of incidence relative to the sample
             applies to the multilayer formalisms only, see
-            :attr:`.MultilayerScattering.azimuth`.
+            :attr:`.MultilayerScattering.azimuth`. The ``theta`` and
+            ``azimuth`` are pint Quantities with an angular unit, e.g.
+            ``45 * u.deg``, or lists of them, see
+            :func:`~udkm1Dsim.helpers.to_angle`.
         boundary_conditions (dict{str, float, Quantity}): boundary conditions of
             the top and bottom boundary for the heat diffusion calculation.
             ``top_type`` or ``bottom_type`` must be one of ``boundary_types``.
@@ -1648,9 +1651,13 @@ class Heat(Simulation):
                     f"The {', '.join(given)} of the excitation must not be given for a "
                     "configured instance as absorption, which defines them!"
                 )
-            for key, unit in [("wavelength", "m"), ("theta", "rad"), ("azimuth", "rad")]:
+            for key in ("wavelength", "theta", "azimuth"):
                 if key in excitation:
-                    value = np.asarray(excitation[key].to(unit).magnitude, dtype=float)
+                    value = (
+                        np.asarray(excitation[key].to("m").magnitude, dtype=float)
+                        if key == "wavelength"
+                        else to_angle(excitation[key], name=f"excitation {key}")
+                    )
                     self._excitation[key] = float(value) if value.ndim == 0 else value.ravel()
             if "polarization" in excitation:
                 self._excitation["polarization"] = self._check_per_pulse(

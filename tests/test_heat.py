@@ -88,6 +88,12 @@ def test_check_excitation(heat):
     assert np.allclose(delay_pump, [0.0])
     assert np.allclose(pulse_width, [1.0e-12])
 
+    # the angles are quantities, also per pulse, but no bare numbers
+    for key in ("theta", "azimuth"):
+        with pytest.raises(TypeError, match=f"excitation {key} must be given"):
+            heat.excitation = {key: 0.5}
+    np.testing.assert_allclose(heat.excitation["theta"].to("deg").magnitude, 45)
+
     with pytest.raises(ValueError, match="polarization"):
         heat.excitation = {
             "fluence": [10] * u.mJ / u.cm**2,
@@ -562,6 +568,10 @@ def test_per_pulse_excitation(tmp_path):
     assert_allclose(heat.excitation["wavelength"], [600, 800] * u.nm)
     with pytest.raises(ValueError, match="pulse 1"):
         heat.excitation = {"wavelength": [600, 500] * u.nm}
+
+    # a list of angle quantities is a per-pulse angle as well
+    heat.excitation = two_pulses(theta=[70 * u.deg, 0.25 * u.turn])
+    assert_allclose(heat.excitation["theta"], [90, 70] * u.deg)
 
 
 def test_per_pulse_absorption_profiles(tmp_path, monkeypatch):

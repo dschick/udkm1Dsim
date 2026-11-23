@@ -43,6 +43,7 @@ from ..helpers import (
     format_number,
     latex_to_html,
     latex_to_text,
+    to_angle,
 )
 
 u = pint.get_application_registry()
@@ -192,8 +193,9 @@ class VectorParameter(Parameter):
     The vector can be given on initialization and by :meth:`set` as
 
     - cartesian components, e.g. ``(0, 0, 1)`` or a pint Quantity,
-    - dict of polar components, e.g. ``{"r": -1, "phi": 90, "gamma": 0}``,
-      with bare-float angles in `angle_unit`,
+    - dict of polar components, e.g.
+      ``{"r": -1, "phi": 90 * u.deg, "gamma": 0 * u.deg}``, with the angles
+      as angle Quantities, see :func:`~udkm1Dsim.helpers.to_angle`,
     - dict of cartesian components, e.g. ``{"x": 0, "y": 0, "z": 1}``,
     - another VectorParameter, whose polar form is copied.
 
@@ -205,7 +207,7 @@ class VectorParameter(Parameter):
     _cartesian_precision = 1e-15
 
     def __init__(self, unit, magnitude=(0.0, 0.0, 0.0), name="", angle_unit="deg", symbol=""):
-        self.angle_unit = u.Unit(angle_unit)  # unit for bare-float angles
+        self.angle_unit = u.Unit(angle_unit)  # unit of the returned angles
         self._polar = np.zeros(3)  # [r, phi, gamma] with the angles in rad
         self._cartesian = None  # cartesian components, given or calculated
         super().__init__(unit, (0.0, 0.0, 0.0), name, symbol)
@@ -281,6 +283,11 @@ class VectorParameter(Parameter):
             value = value * (default if default is not None else unit)
         return value.to(unit).magnitude
 
+    def _to_angle(self, value, key):
+        """Float in rad of the angle ``key`` given as angle Quantity."""
+        name = f"angle {key} of '{self.name}'" if self.name else f"angle {key} of the vector"
+        return float(to_angle(value, name=name))
+
     def _notify(self):
         if self._caller is not None:
             self._caller._update_depending()
@@ -352,7 +359,7 @@ class VectorParameter(Parameter):
         if index == 0:
             polar[0] = self._to_magnitude(value, self.unit)
         else:
-            polar[index] = self._to_magnitude(value, u.rad, self.angle_unit)
+            polar[index] = self._to_angle(value, self._polar_keys[index])
         self._set_polar_rad(polar)
 
     @property
@@ -397,8 +404,8 @@ class VectorParameter(Parameter):
         self._set_polar_rad(
             [
                 self._to_magnitude(r, self.unit),
-                self._to_magnitude(phi, u.rad, self.angle_unit),
-                self._to_magnitude(gamma, u.rad, self.angle_unit),
+                self._to_angle(phi, "phi"),
+                self._to_angle(gamma, "gamma"),
             ]
         )
 

@@ -286,6 +286,13 @@ def _read_quantity(value):
     return value
 
 
+def _read_angle(value):
+    """Angle Quantity of an input, whose bare numbers are taken in deg, as
+    written by :func:`_write_angle`."""
+    value = _read_quantity(value)
+    return value if isinstance(value, Q_) else Q_(value, "deg")
+
+
 def _plain(value):
     """Nested lists of Python numbers from numpy types."""
     if isinstance(value, (list, tuple)):
@@ -344,7 +351,12 @@ def _read_vector(value, unit=""):
     floats in deg."""
     vector = VectorParameter(unit)
     if isinstance(value, dict):
-        vector.set({key: _read_quantity(v) for key, v in value.items()})
+        vector.set(
+            {
+                key: _read_angle(v) if key in ("phi", "gamma") else _read_quantity(v)
+                for key, v in value.items()
+            }
+        )
     else:
         vector.set(_read_quantity(value))
     return vector
@@ -1022,7 +1034,7 @@ class _Reader:
                 self.dispersion(deps) if isinstance(deps, dict) else _read_complex_array(deps)
             )
         if "euler_angles" in data:
-            kwargs["euler_angles"] = [_read_quantity(a) for a in data.pop("euler_angles")]
+            kwargs["euler_angles"] = [_read_angle(a) for a in data.pop("euler_angles")]
         energy = data.pop("display_energy", None)
         self._check_empty(data, "dielectric")
         dielectric = Dielectric(**kwargs)

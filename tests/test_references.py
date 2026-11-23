@@ -291,7 +291,7 @@ def test_euler_angles_of_pygtm(name):
     dielectric = ud.Dielectric(
         eps0=ud.Dispersion.from_array([1e-3, 1e5], np.stack([principal] * 2), kind="eps"),
         strain_model="none",
-        euler_angles=(theta, 90 - psi, -phi),
+        euler_angles=(theta, 90 - psi, -phi) * u.deg,
     )
     np.testing.assert_allclose(
         dielectric.get_tensor(meta["energy"])[0], data["eps"][1], atol=1e-14
