@@ -393,8 +393,10 @@ class VectorParameter(Parameter):
     # ---- polar (r, phi, gamma) -------------------------------------------
     def _set_polar_rad(self, polar):
         polar = np.array(polar, dtype=float)
-        # keep the given angles with gamma in -pi .. pi
-        polar[2] = np.arctan2(np.sin(polar[2]), np.cos(polar[2]))
+        # keep the given angles with gamma in -pi .. pi, which are wrapped only
+        # outside of this range, so that angles within it are kept exactly
+        if not -np.pi <= polar[2] <= np.pi:
+            polar[2] = np.arctan2(np.sin(polar[2]), np.cos(polar[2]))
         self._polar = polar
         self._cartesian = None
         self._notify()

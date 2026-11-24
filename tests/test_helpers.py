@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import numpy as np
 import pytest
+from scipy.special import erf
 
 import udkm1Dsim as ud
 from udkm1Dsim.helpers import (
@@ -169,23 +170,42 @@ def test_conv_with_function():
 
     x = np.r_[0:10:1]
     y = np.r_[0:10:1]
-    assert np.allclose(
+    # symmetric about the center, including the last point, with the first
+    # and last value held beyond the ends
+    np.testing.assert_allclose(
         conv_with_function(y, x, handle),
-        np.array(
-            [
-                0.22840624,
-                1.01047185,
-                2.00006975,
-                3.00000006,
-                4.0,
-                4.99999943,
-                5.99937279,
-                6.90631129,
-                6.02811867,
-                6.02811867,
-            ]
-        ),
+        [
+            0.22840624,
+            1.01047185,
+            2.00006975,
+            3.00000006,
+            4.0,
+            5.0,
+            5.99999994,
+            6.99993025,
+            7.98952815,
+            8.77159376,
+        ],
+        rtol=1e-7,
     )
+
+
+def test_conv_with_function_has_no_shift_and_keeps_the_ends():
+    """a step on an even number of points is convolved to the error
+    function at its position, and a constant stays constant at the ends"""
+    sigma = 0.5
+
+    def handle(x):
+        return np.exp(-(x**2) / (2 * sigma**2))
+
+    x = np.linspace(-10, 10, 100)
+    step = conv_with_function((x > 0).astype(float), x, handle)
+    np.testing.assert_allclose(step, 0.5 * (1 + erf(x / (np.sqrt(2) * sigma))), atol=2e-3)
+    np.testing.assert_allclose(step + step[::-1], 1, atol=1e-12)
+    np.testing.assert_allclose(conv_with_function(np.ones(100), x, handle), 1)
+    # a non-equidistant grid is interpolated to its smallest spacing
+    x = np.r_[0:5:0.5, 5:20:1.5]
+    np.testing.assert_allclose(conv_with_function(np.full(len(x), 2.0), x, handle), 2)
 
 
 def test_to_angle():

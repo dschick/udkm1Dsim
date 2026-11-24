@@ -443,6 +443,27 @@ def test_llg_magnetization_amplitude(tmp_path):
         llg.get_magnetization_map(delays, mag_amplitude_map=-amplitude_map).magnetization_map
 
 
+@pytest.mark.parametrize("aniso_exponent, warns", [(0, True), (1, False), (3, False)])
+def test_llg_warns_for_diverging_anisotropy(tmp_path, recwarn, aniso_exponent, warns):
+    """the anisotropy field scales as m**(aniso_exponent - 1) and diverges for
+    a vanishing amplitude and an aniso_exponent < 1"""
+    layer = make_layer(
+        "m",
+        gilbert_damping=0.1,
+        anisotropy=[0, 0, 1e5] * u.J / u.m**3,
+        aniso_exponent=aniso_exponent,
+    )
+    llg = simulation(LLG, make_structure((layer, 2)), tmp_path)
+    delays = np.r_[0:2:0.5] * u.ps
+    amplitude_map = np.linspace(1, 0, len(delays))[:, np.newaxis] * np.ones((1, 2))
+    llg.get_magnetization_map(delays, mag_amplitude_map=amplitude_map)
+    messages = [str(w.message) for w in recwarn if "diverge for aniso_exponent" in str(w.message)]
+    assert bool(messages) is warns
+    recwarn.clear()
+    llg.get_magnetization_map(delays, mag_amplitude_map=np.ones_like(amplitude_map))
+    assert not [w for w in recwarn if "diverge for aniso_exponent" in str(w.message)]
+
+
 def test_llg_non_magnetic_layers(tmp_path):
     """layers without a saturation magnetization are not magnetic"""
     spacer = make_layer("s", mag_saturation=0 * u.J / u.T / u.m**3)

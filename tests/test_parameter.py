@@ -151,6 +151,15 @@ def test_temperature_parameter_numerical_integral_per_sub_system(monkeypatch):
 # VectorParameter
 
 
+def test_vector_parameter_keeps_gamma_within_its_range_exactly():
+    vector = VectorParameter("")
+    for gamma in np.linspace(-180, 180, 3601):
+        vector.set({"r": 1, "phi": 90 * u.deg, "gamma": gamma * u.deg})
+        assert vector.polar_rad[2] == np.deg2rad(gamma)
+    vector.set({"r": 1, "phi": 90 * u.deg, "gamma": 270 * u.deg})
+    assert vector.gamma.magnitude == pytest.approx(-90)
+
+
 class DummyCaller:
     """Counts the notifications a Parameter sends to its owner."""
 
