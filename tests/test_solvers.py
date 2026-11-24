@@ -498,3 +498,37 @@ def test_longitudinal_field_follows_the_sign_of_the_sublattice_exchange():
     expected = 1e-21 / (7.63 * mu_B) * (-0.652 - 0.652) / 0.377 * 0.377
     assert np.isclose(field(-1e-21, 1), expected, rtol=1e-12)
     assert field(-1e-21, 1) < -1
+
+
+@pytest.mark.parametrize("me_a", [0.0, 0.377])
+def test_longitudinal_field_is_continuous_through_zero_norm(me_a):
+    """the signed projection of the other sublattice jumps between +-m_b for
+    a norm m_a passing through zero, e.g. on the reversal of the TM sublattice
+    of a ferrimagnet, which stalled the integrators of the eLLB; it is
+    regularized below PROJECTION_WIDTH, so that the ratio of the field to the
+    magnetization, which enters the exchange-relaxation torque, is continuous,
+    while the field above the width is unchanged"""
+    mu_B = constants.physical_constants["Bohr magneton"][0]
+    mag = SimpleNamespace(
+        eff_spin=np.full((1, 2), np.inf),
+        mf_exch_coupling=np.array([[[1e-21, -1e-21], [-1e-21, 3e-21]]]),
+        mag_moment=np.array([[1.92, 7.63]]) * mu_B,
+        active=np.ones((1, 2)),
+    )
+    me, chi = np.array([[me_a, 0.652]]), np.array([[1e-3, 2e-3]])
+
+    def field(m_z):
+        m = np.array([[[0, 0, m_z], [0, 0, -0.652]]])
+        return magnetization_scipy.longitudinal_field(m, np.abs(m[..., 2]), me, chi, mag)[0, 0, 2]
+
+    # continuous through zero, where the projection vanishes
+    assert np.isclose(field(1e-9) / 1e-9, field(-1e-9) / -1e-9, rtol=1e-3)
+    # unchanged above the width
+    m_a = 2 * magnetization_scipy.PROJECTION_WIDTH
+    pref = 1 / 1e-3 + 1e-21 / (1.92 * mu_B) * 2e-3 / 1e-3
+    if me_a > 0:
+        # tau = m_e,b for the antiparallel alignment of the ground state
+        expected = -pref * (m_a - me_a) / me_a * m_a
+    else:
+        expected = -pref * m_a + 1e-21 / (1.92 * mu_B) * 0.652
+    assert np.isclose(field(m_a), expected, rtol=1e-12)
