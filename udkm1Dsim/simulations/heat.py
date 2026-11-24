@@ -1378,7 +1378,13 @@ class Heat(Simulation):
 
         """
         t1 = time()
-        init_temp = self.check_initial_temperature(init_temp, distances)
+        init_temp = self.check_initial_temperature(init_temp, distances).copy()
+        # the nodes of a temperature boundary are at the boundary value
+        bc = self._boundary_conditions
+        if bc["top_type"] == 1:
+            init_temp[0, :] = bc["top_value"]
+        if bc["bottom_type"] == 1:
+            init_temp[-1, :] = bc["bottom_value"]
         d_start, _, _ = self.S._layer_distances()
 
         if np.any(fluence):

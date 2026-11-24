@@ -586,8 +586,26 @@ class Scattering(Simulation):
 
             P(\vartheta) = \sqrt{(1-\mbox{pol}) + \mbox{pol} \cdot \cos^2(2\vartheta)}
 
-        which is the root of the mean intensity factor of the :math:`\sigma`
-        and :math:`\pi` components for unpolarized X-rays.
+        which is the root of the mean intensity factor
+        :math:`(1 + \cos^2(2\vartheta))/2` of the :math:`\sigma` and
+        :math:`\pi` components for unpolarized X-rays of
+        :cite:t:`alsnielsen2011`.
+
+        This factor is exact for the kinematical theory of :class:`.XrayKin`,
+        whose intensities are linear in :math:`P^2`. In the dynamical theory
+        of :class:`.XrayDyn`, the reflectivity is not linear in :math:`P^2`,
+        so that the factor is an approximation for unpolarized X-rays, which
+        overestimates the reflectivity of thick crystals, e.g. their
+        integrated reflectivity, which is proportional to the Darwin width and
+        hence to :math:`|P|`, by
+        :math:`\sqrt{(1 + \cos^2 2\vartheta)/2} \, / \, ((1 + |\cos 2\vartheta|)/2)`,
+        i.e. by about 10 % for Si(004) at 8 keV, while thin films agree in the
+        kinematical limit. The correct solution would be the average of the
+        intensities of separate calculations for the :math:`\sigma` and
+        :math:`\pi` polarization, as for the multilayer formalisms, which is
+        dropped in terms of computational efficiency. Hence, the
+        :math:`\sigma` and :math:`\pi` polarization should be calculated
+        separately and averaged for quantitative results of thick crystals.
 
         Args:
             theta (ndarray[float]): incidence angle.

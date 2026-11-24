@@ -58,6 +58,14 @@ class XrayDyn(Scattering):
     :class:`~udkm1Dsim.simulations.scattering.elzo.Elzo` for homogeneous
     layers.
 
+    Unpolarized X-rays are approximated by the mean polarization factor of
+    :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.calc_polarization_factor`,
+    which overestimates the reflectivity of thick crystals, e.g. by about
+    10 % for the integrated reflectivity of Si(004) at 8 keV, instead of the
+    correct average of separate calculations for the :math:`\sigma` and
+    :math:`\pi` polarization, which is dropped in terms of computational
+    efficiency.
+
     Args:
         S (Structure): sample to do simulations with.
         force_recalc (boolean): force recalculation of results.

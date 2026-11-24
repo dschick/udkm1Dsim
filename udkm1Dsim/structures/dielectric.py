@@ -64,6 +64,7 @@ from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 import pint
+from scipy import constants
 
 from ..helpers import (
     SpectralTable,
@@ -82,10 +83,16 @@ from .parameters import Parameter
 
 u = pint.get_application_registry()
 
-# factor of the susceptibility from the atomic form factors, see
-# :meth:`.Atom.get_susceptibility`, for the photon energy in eV and the molar
-# density in mol/cm³
-_ATOMIC_SUSCEPTIBILITY_FACTOR = 830.9471
+# factor r_e (hc)² N_A / pi of the susceptibility from the atomic form
+# factors, see :meth:`.Atom.get_susceptibility`, for the photon energy in eV
+# and the molar density in mol/cm³, i.e. 830.358 by the CODATA constants
+_ATOMIC_SUSCEPTIBILITY_FACTOR = (
+    constants.physical_constants["classical electron radius"][0]
+    * (constants.h * constants.c / constants.e) ** 2
+    * constants.N_A
+    / constants.pi
+    * 1e6
+)
 # invalid values in the tables of Henke et al.
 _INVALID_FORM_FACTOR = -9000
 # vacuum contributions of a dispersion: 1 for the non-magnetic part and
