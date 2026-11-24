@@ -11,7 +11,8 @@ import sympy as sp
 from pint.testing import assert_allclose as assert_approx
 from pint.testing import assert_equal
 
-from udkm1Dsim import AmorphousLayer, Atom, AtomMixed, Dielectric, Dispersion, Layer, UnitCell, u
+from udkm1Dsim import Atom, Dielectric, Dispersion, Layer, UnitCell, u
+from udkm1Dsim.structures.dielectric import gyrotropic_tensor
 from udkm1Dsim.structures.parameter_groups import (
     ElasticParameters,
     LatticeParameters,
@@ -246,7 +247,7 @@ def test_layer_exch_relax_rate_and_concentration(layer):
     assert layer.magnetic.concentration.magnitude == 0.25
 
 
-def test_layer_dielectric_tensor_of_sublattices_needs_magnetization():
+def test_layer_dielectric_tensor_of_sublattices_without_gyrotropic_part():
     layer = Layer(
         "AFM",
         "AFM",
@@ -254,10 +255,84 @@ def test_layer_dielectric_tensor_of_sublattices_needs_magnetization():
         magnetization=[(1, 0, 0), (-1, 0, 0)],
         dielectric=Dispersion.from_ref_index(1.5),
     )
-    with pytest.raises(NotImplementedError, match="several sublattices"):
+    assert np.allclose(layer.get_dielectric_tensor(1.55 * u.eV), 1.5**2 * np.eye(3))
+
+
+def _ferrimagnet(eps_mag, gyrotropy=None):
+    """a layer with two antiparallel sublattices of different saturation
+    magnetizations and gyrotropic dispersions"""
+    return Layer(
+        "ferri",
+        "ferri",
+        eff_spin=[0.5, 0.5],
+        mf_exch_coupling=EXCHANGE * u.J,
+        mag_saturation=[3e5, 1e5] * u.A / u.m,
+        magnetization=[(0, 0, 1), (0, 0, -1)],
+        dielectric=Dielectric(
+            eps0=Dispersion.from_ref_index(1.5), eps_mag=eps_mag, gyrotropy=gyrotropy
+        ),
+    )
+
+
+EPS_MAG = [
+    Dispersion.from_array(None, 0.1, kind="eps"),
+    Dispersion.from_array(None, 0.03j, kind="eps"),
+]
+
+
+def test_gyrotropy_of_sublattices_must_be_chosen():
+    layer = _ferrimagnet(EPS_MAG)
+    with pytest.raises(ValueError, match="Layer 'ferri'.*2 magnetic sublattices.*gyrotropy"):
         layer.get_dielectric_tensor(1.55 * u.eV)
-    tensor = layer.get_dielectric_tensor(1.55 * u.eV, magnetization=(0, 0, 0))
-    assert np.allclose(tensor, 1.5**2 * np.eye(3))
+    with pytest.raises(ValueError, match="gyrotropy must be one of"):
+        layer.optical.dielectric.gyrotropy = "average"
+
+
+def test_gyrotropy_net_and_sublattices():
+    eps0 = 1.5**2 * np.eye(3)
+    layer = _ferrimagnet(EPS_MAG, "net")
+    # the sum of the dispersions couples to the net magnetization weighted by M_s
+    m_net = (3 * 1 + 1 * -1) / 4
+    eps = layer.get_dielectric_tensor(1.55 * u.eV)[0]
+    np.testing.assert_allclose(eps, gyrotropic_tensor(eps0, [0.1 + 0.03j], (0, 0, m_net))[0])
+    # every dispersion couples to the magnetization of its sublattice
+    layer.optical.dielectric.gyrotropy = "sublattices"
+    eps = layer.get_dielectric_tensor(1.55 * u.eV)[0]
+    np.testing.assert_allclose(eps, gyrotropic_tensor(eps0, [0.1 - 0.03j], (0, 0, 1))[0])
+    # given magnetizations of the sublattices, e.g. of a sublattice map
+    eps = layer.get_dielectric_tensor(1.55 * u.eV, magnetization=[(0, 0, 1), (0, 0, 1)])[0]
+    np.testing.assert_allclose(eps, gyrotropic_tensor(eps0, [0.1 + 0.03j], (0, 0, 1))[0])
+    with pytest.raises(ValueError, match="requires the magnetizations of all 2 sublattices"):
+        layer.get_dielectric_tensor(1.55 * u.eV, magnetization=(0, 0, 1))
+    # a single dispersion cannot couple to several sublattices
+    layer.optical.dielectric.eps_mag = EPS_MAG[0]
+    with pytest.raises(ValueError, match="one gyrotropic dispersion per sublattice"):
+        layer.get_dielectric_tensor(1.55 * u.eV)
+    layer.optical.dielectric.gyrotropy = "net"
+    eps = layer.get_dielectric_tensor(1.55 * u.eV)[0]
+    np.testing.assert_allclose(eps, gyrotropic_tensor(eps0, [0.1], (0, 0, m_net))[0])
+    assert "gyrotropy=net" in repr(layer.optical.dielectric)
+    assert "gyrotropy net" in str(layer.optical.dielectric)
+
+
+def test_dielectric_from_atoms_of_sublattices():
+    Fe, Ni, O = Atom("Fe"), Atom("Ni"), Atom("O")
+    atoms = [(Fe, 0.5), (Ni, 0.25), (O, 0.25)]
+    dielectric = Dielectric.from_atoms(atoms, sublattices=[0, 1, None])
+    assert dielectric.gyrotropy == "sublattices"
+    assert len(dielectric.eps_mag) == 2
+    energy = np.array([700.0, 710.0, 850.0])
+    total = Dielectric.from_atoms(atoms).eps_mag.chi(energy, 5000)
+    parts = [part.chi(energy, 5000) for part in dielectric.eps_mag]
+    # the parts of the sublattices sum up to the gyrotropic part of all atoms
+    np.testing.assert_allclose(parts[0] + parts[1], total)
+    assert "magnetic form factors of Fe in" in str(dielectric)
+    with pytest.raises(ValueError, match="one sublattice each"):
+        Dielectric.from_atoms(atoms, sublattices=[0, 1])
+    with pytest.raises(ValueError, match="indices from 0"):
+        Dielectric.from_atoms(atoms, sublattices=[0, -1, None])
+    with pytest.raises(ValueError, match="at least one sublattice"):
+        Dielectric(eps0=Dispersion.from_ref_index(1), eps_mag=[None, None])
 
 
 def test_layer_get_property_dict(layer):
@@ -389,7 +464,7 @@ def test_layer_magnetization(layer):
     [
         ("layer", "Layer: base layer"),
         ("vacuum", "Vacuum layer of thickness: 1 nm"),
-        ("amorphous_layer", "AmorphousLayer: amorphous layer"),
+        ("amorphous_layer", "Layer: amorphous layer"),
         ("unit_cell", "UnitCell: unit_cell"),
     ],
 )
@@ -423,38 +498,17 @@ def test_vacuum(vacuum):
 
 
 # ============================================================================
-# AmorphousLayer
+# removed AmorphousLayer
 # ============================================================================
 
 
-def test_amorphous_layer_atom(amorphous_layer, atom_iron):
-    assert amorphous_layer.atom is atom_iron
+def test_amorphous_layer_was_removed():
+    import udkm1Dsim as ud
 
-
-def test_amorphous_layer_without_atom():
-    layer = AmorphousLayer("a", "a", 1 * u.nm, 1000 * u.kg / u.m**3)
-    assert np.allclose(layer.magnetization.magnitude, [0, 0, 0])
-
-
-@pytest.mark.parametrize("given", ["keyword", "group"])
-@pytest.mark.parametrize("with_atom", [False, True])
-def test_amorphous_layer_keeps_given_magnetization(atom_iron, given, with_atom):
-    """a given magnetization takes precedence over the one of the atom, which
-    is only set by a later assignment of the atom"""
-    magnetization = {"r": 1, "phi": 90 * u.deg, "gamma": 90 * u.deg}
-    kwargs = {"atom": atom_iron} if with_atom else {}
-    if given == "keyword":
-        kwargs["magnetization"] = magnetization
-    else:
-        kwargs["magnetic"] = {"magnetization": magnetization}
-    layer = AmorphousLayer("a", "a", 1 * u.nm, 1000 * u.kg / u.m**3, **kwargs)
-    assert np.allclose(layer.magnetization.magnitude, [0, 1, 0])
-    layer.atom = atom_iron
-    assert np.allclose(layer.magnetization.magnitude, atom_iron.magnetization.magnitude)
-
-
-def test_amorphous_layer_takes_magnetization_of_atom(amorphous_layer, atom_iron):
-    assert np.allclose(amorphous_layer.magnetization.magnitude, atom_iron.magnetization.magnitude)
+    with pytest.raises(AttributeError, match="AmorphousLayer was removed.*Dielectric.from_atoms"):
+        ud.AmorphousLayer
+    with pytest.raises(AttributeError, match="has no attribute 'Amorphous'"):
+        ud.Amorphous
 
 
 @pytest.mark.parametrize(
@@ -466,7 +520,7 @@ def test_amorphous_layer_takes_magnetization_of_atom(amorphous_layer, atom_iron)
             r"\(\) got an unexpected keyword argument 'heat_capcity' "
             r"\(did you mean 'heat_capacity'\?\)",
         ),
-        (AmorphousLayer, {"atom_": None}, r"'atom_' \(did you mean 'atom'\?\)"),
+        (Layer, {"atom": None}, r"unexpected keyword argument 'atom'"),
         (
             UnitCell,
             {"c_axis": 3 * u.angstrom, "sound_velocity": 5 * u.nm / u.ps, "xyz": 1},
@@ -492,11 +546,6 @@ def test_layer_gyromagnetic_ratio(gyromagnetic_ratio, expected):
         Layer("a", "a", gyromagnetic_ratio=1.761e11)
     with pytest.raises(ValueError, match="negative sign"):
         layer.gyromagnetic_ratio = [-1.761e11, 1.761e11]
-
-
-def test_amorphous_layer_invalid_atom():
-    with pytest.raises(TypeError):
-        AmorphousLayer("a", "a", 1 * u.nm, 1000 * u.kg / u.m**3, atom="Fe")
 
 
 # ============================================================================
@@ -710,8 +759,8 @@ def test_parameter_group_deepcopy_does_not_copy_layer(amorphous_layer):
     assert group.heat_capacity._caller is group
 
 
-def test_amorphous_layer_init_with_structural_group():
-    layer = AmorphousLayer(
+def test_layer_init_with_structural_group():
+    layer = Layer(
         "a", "a", structural=StructuralParameters(thickness=2 * u.nm, density=1000 * u.kg / u.m**3)
     )
     assert_approx(layer.mass, 2e-26 * u.kg)
@@ -1010,26 +1059,142 @@ def test_inconsistent_sublattices_raise(kwargs, message):
         MagneticParameters(**kwargs).check_sublattices()
 
 
-def test_layer_sublattices_from_mixed_atom():
-    """every constituent of a mixed atom forms a sublattice of the layer"""
-    Gd = Atom("Gd", magnetization=(0, 0, -1))
-    Fe = Atom("Fe", magnetization=(0, 0, 1))
-    GdFe = AtomMixed("GdFe")
-    GdFe.add_atom(Gd, 0.25)
-    GdFe.add_atom(Fe, 0.75)
-    layer = AmorphousLayer(
-        "GdFe",
-        "GdFe",
-        thickness=1 * u.nm,
-        density=7000 * u.kg / u.m**3,
-        atom=GdFe,
+# number density of the atoms and the atomic magnetic moment, issue #244
+
+
+def test_number_density_from_molar_mass(layer):
+    layer = copy.deepcopy(layer)
+    # without a molar mass the number density is unknown, i.e. zero
+    assert layer.structural.number_density.magnitude == 0
+    layer.structural.molar_mass = 58.69 * u.g / u.mol
+    n = layer.density / (58.69 * u.g / u.mol) * u.N_A
+    assert_approx(layer.structural.number_density.quantity, n.to("1/m**3"))
+    # it follows the density and cannot be set
+    layer.density = 2 * layer.density
+    assert_approx(layer.structural.number_density.quantity, 2 * n.to("1/m**3"))
+    with pytest.raises(AttributeError, match="derived"):
+        layer.structural.number_density = 1
+
+
+def test_molar_mass_from_atoms(unit_cell, atom_strontium, atom_oxygen, atom_titanium):
+    atoms = (atom_strontium, atom_oxygen, atom_titanium)
+    assert_approx(
+        unit_cell.structural.molar_mass.quantity,
+        (sum((atom.mass for atom in atoms), 0 * u.kg) / 3 * u.N_A).to("kg/mol"),
+    )
+    # the number density of a unit cell is the number of its atoms per volume
+    assert_approx(
+        unit_cell.structural.number_density.quantity,
+        (3 / unit_cell.structural.volume.quantity).to("1/m**3"),
+    )
+    # it follows the atoms
+    uc = copy.deepcopy(unit_cell)
+    uc.add_atom(atom_strontium, 0.25)
+    assert_approx(
+        uc.structural.number_density.quantity,
+        (4 / uc.structural.volume.quantity).to("1/m**3"),
+    )
+
+
+def test_mag_moment_is_derived_and_follows_changes(layer):
+    layer = copy.deepcopy(layer)
+    layer.magnetic = MagneticParameters(mag_saturation=5.1e5 * u.A / u.m)
+    layer.density = 8908 * u.kg / u.m**3
+    # zero without a number density
+    assert layer.magnetic.mag_moment.magnitude == 0
+    assert "mag_moment" in layer.magnetic._derived
+
+    def expected():
+        n = layer.structural.number_density.quantity
+        return (layer.mag_saturation / (layer.concentration * n)).to("A*m**2")
+
+    layer.structural.molar_mass = 58.69 * u.g / u.mol
+    assert_approx(layer.mag_moment, expected())
+    # Ni with about 0.6 mu_B
+    assert abs(layer.mag_moment.to("bohr_magneton").magnitude - 0.6) < 0.01
+    for name, value in (
+        ("density", 8000 * u.kg / u.m**3),
+        ("mag_saturation", 4.9e5 * u.A / u.m),
+        ("concentration", 0.5),
+    ):
+        setattr(layer, name, value)
+        assert_approx(layer.mag_moment, expected())
+    layer.structural.molar_mass = 50 * u.g / u.mol
+    assert_approx(layer.mag_moment, expected())
+    # a given moment is not derived anymore
+    layer.mag_moment = 0.62 * u.bohr_magneton
+    assert "mag_moment" not in layer.magnetic._derived
+    layer.density = 9000 * u.kg / u.m**3
+    assert_approx(layer.mag_moment, (0.62 * u.bohr_magneton).to("A*m**2"))
+
+
+def test_mag_moment_per_sublattice(layer):
+    layer = copy.deepcopy(layer)
+    layer.magnetic = MagneticParameters(
+        mag_saturation=[1e5, 3e5] * u.A / u.m,
+        concentration=[0.25, 0.75],
         eff_spin=[3.5, 0.5],
         mf_exch_coupling=EXCHANGE * u.J,
+        magnetization=[(0, 0, -1), (0, 0, 1)],
     )
-    assert layer.num_sublattices == 2
-    assert_approx(layer.magnetization, [[0, 0, -1], [0, 0, 1]] * u.dimensionless)
-    layer.magnetization = [(1, 0, 0), (-1, 0, 0)]
-    assert_approx(layer.magnetization, [[1, 0, 0], [-1, 0, 0]] * u.dimensionless)
-    # a single constituent per layer keeps the magnetization of the mixed atom
-    single = AmorphousLayer("GdFe", "GdFe", thickness=1 * u.nm, atom=GdFe)
-    assert single.num_sublattices == 1
+    layer.density = 7000 * u.kg / u.m**3
+    layer.structural.molar_mass = 80 * u.g / u.mol
+    n = layer.structural.number_density.magnitude
+    np.testing.assert_allclose(
+        layer.magnetic.mag_moment.magnitude, np.array([1e5, 3e5]) / (np.array([0.25, 0.75]) * n)
+    )
+
+
+def test_check_mag_moment_warns_for_inconsistent_moments(layer):
+    layer = copy.deepcopy(layer)
+    layer.magnetic = MagneticParameters(
+        mag_saturation=4.9e5 * u.A / u.m, mag_moment=0.62 * u.bohr_magneton
+    )
+    layer.density = 8908 * u.kg / u.m**3
+    # without a number density nothing is checked
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        layer.magnetic.check_mag_moment()
+    # Ni of issue #244, whose saturation magnetization at room temperature
+    # differs by 7% from the moment
+    layer.structural.molar_mass = 58.69 * u.g / u.mol
+    with pytest.warns(UserWarning, match=r"differs by 7\.\d% .* value at 0 K"):
+        layer.magnetic.check_mag_moment()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        layer.magnetic.check_mag_moment(rtol=0.1)
+        # consistent values do not warn
+        layer.mag_moment = layer.magnetic._moment_from_number_density()
+        layer.magnetic.check_mag_moment()
+
+
+def test_mag_saturation_at_zero(layer):
+    from udkm1Dsim.simulations.solvers.mean_field import mean_field_magnetization
+
+    magnetic = copy.deepcopy(layer.magnetic)
+    magnetic.eff_spin = 0.5
+    magnetic.curie_temp = 627 * u.K
+    m_e = mean_field_magnetization(293 / 627, 0.5)
+    M_s = magnetic.mag_saturation_at_zero(4.9e5 * u.A / u.m, 293 * u.K)
+    assert_approx(M_s, 4.9e5 / m_e * u.A / u.m)
+    # Ni of about 5.1e5 A/m at 0 K
+    assert abs(M_s.magnitude / 5.1e5 - 1) < 0.02
+    # floats are taken in A/m and K, and 0 K is unchanged
+    assert_approx(magnetic.mag_saturation_at_zero(4.9e5, 0), 4.9e5 * u.A / u.m)
+    with pytest.raises(ValueError, match="below the Curie temperature"):
+        magnetic.mag_saturation_at_zero(4.9e5, 700 * u.K)
+    magnetic.eff_spin = 0
+    with pytest.raises(ValueError, match="effective spin"):
+        magnetic.mag_saturation_at_zero(4.9e5, 293 * u.K)
+
+
+def test_mag_saturation_at_zero_of_sublattices():
+    from udkm1Dsim.simulations.solvers.mean_field import mean_field_magnetization_coupled
+
+    magnetic = MagneticParameters(
+        eff_spin=[3.5, 0.5], mf_exch_coupling=EXCHANGE * u.J, magnetization=[(0, 0, 1)] * 2
+    )
+    temp = 0.5 * magnetic.curie_temp.magnitude
+    m_e = mean_field_magnetization_coupled(temp, EXCHANGE, [3.5, 0.5])[0]
+    M_s = magnetic.mag_saturation_at_zero([1e5, 3e5] * u.A / u.m, temp * u.K)
+    assert_approx(M_s, np.array([1e5, 3e5]) / np.abs(m_e) * u.A / u.m)

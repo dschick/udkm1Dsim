@@ -143,6 +143,8 @@ def stack_magnetic_parameters(layers):
     """
     N = len(layers)
     sizes = [layer.check_sublattices() for layer in layers]
+    for layer in layers:
+        layer.check_mag_moment()
     P = max(sizes, default=1)
     mag = SimpleNamespace(active=np.zeros((N, P)))
     for k, p in enumerate(sizes):

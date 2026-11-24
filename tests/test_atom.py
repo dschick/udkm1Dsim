@@ -10,7 +10,6 @@ import pytest
 from pint.testing import assert_allclose, assert_equal
 
 from udkm1Dsim import (
-    AmorphousLayer,
     Atom,
     AtomMixed,
     AtomMixedParameters,
@@ -429,15 +428,6 @@ def test_magnetization_bare_angles():
         Atom("Fe", magnetization={"r": 1, "phi": 90, "gamma": 0 * u.deg})
     with pytest.raises(TypeError, match="angle gamma"):
         Layer("Fe", "Fe", magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 0})
-
-
-def test_amorphous_layer_inherits_magnetization_of_atom():
-    atom = Atom("Fe", magnetization={"r": -1, "phi": 0 * u.deg, "gamma": 30 * u.deg})
-    layer = AmorphousLayer("Fe", "Fe", atom=atom)
-    np.testing.assert_allclose(layer.magnetic.magnetization.polar_rad, [-1, 0, np.pi / 6])
-    # the layer has its own copy
-    atom.magnetization = {"r": 1}
-    assert_allclose(layer.magnetic.magnetization.r, -1 * u.dimensionless)
 
 
 def test_atom_mixed_parameters(atom_mixed, atom_iron, atom_dysprosium):

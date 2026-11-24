@@ -12,14 +12,12 @@ from udkm1Dsim import LLB, LLG, iLLG, u
 @pytest.fixture(scope="module")
 def structure_magnetic():
     """a Ni-like film with all parameters of the LLG, iLLG, and LLB"""
-    atom = ud.Atom("Ni")
-    atom.magnetization = (1, 0, 0)
-    layer = ud.AmorphousLayer(
+    layer = ud.Layer(
         "Ni",
         "Ni",
         thickness=1 * u.nm,
         density=8900 * u.kg / u.m**3,
-        atom=atom,
+        magnetization=(1, 0, 0),
         heat_capacity=444 * u.J / (u.kg * u.K),
         therm_cond=90 * u.W / (u.m * u.K),
         lin_therm_exp=1.3e-5,

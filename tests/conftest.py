@@ -3,9 +3,9 @@
 import pytest
 
 from udkm1Dsim import (
-    AmorphousLayer,
     Atom,
     AtomMixed,
+    Dielectric,
     Dispersion,
     Layer,
     Parameter,
@@ -162,12 +162,13 @@ def vacuum(properties):
 
 @pytest.fixture(scope="module")
 def amorphous_layer(atom_iron, properties):
-    return AmorphousLayer(
+    """an amorphous layer with the magnetization of the iron atom"""
+    return Layer(
         id="amorphous_layer",
         name="amorphous layer",
         thickness=1 * u.nm,
         density=5000 * u.kg / u.m**3,
-        atom=atom_iron,
+        magnetization=atom_iron.atomic.magnetization,
         **properties,
     )
 
@@ -183,28 +184,38 @@ def unit_cell(atom_strontium, atom_oxygen, atom_titanium, properties):
 
 @pytest.fixture(scope="module")
 def amorphous_layer_iron(atom_iron, properties):
-    layer = AmorphousLayer(
+    """an amorphous layer of iron with the dielectric and magnetization of the atom"""
+    return Layer(
         id="amorphous_layer_Fe",
         name="amorphous layer iron",
         thickness=1 * u.nm,
         density=5000 * u.kg / u.m**3,
-        atom=atom_iron,
-        **properties,
+        magnetization=atom_iron.atomic.magnetization,
+        **{
+            **properties,
+            "dielectric": Dielectric.from_atoms(
+                atom_iron, fallback=Dispersion.from_ref_index(REF_INDEX)
+            ),
+        },
     )
-    return _dielectric_from_atoms_and_optics(layer)
 
 
 @pytest.fixture(scope="module")
 def amorphous_layer_oxygen(atom_oxygen, properties):
-    layer = AmorphousLayer(
+    """an amorphous layer of oxygen with the dielectric and magnetization of the atom"""
+    return Layer(
         id="amorphous_layer_O",
         name="amorphous layer oxygen",
         thickness=1 * u.nm,
         density=5000 * u.kg / u.m**3,
-        atom=atom_oxygen,
-        **properties,
+        magnetization=atom_oxygen.atomic.magnetization,
+        **{
+            **properties,
+            "dielectric": Dielectric.from_atoms(
+                atom_oxygen, fallback=Dispersion.from_ref_index(REF_INDEX)
+            ),
+        },
     )
-    return _dielectric_from_atoms_and_optics(layer)
 
 
 @pytest.fixture(scope="module")
