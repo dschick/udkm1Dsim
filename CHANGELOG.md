@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0a6] 2026-11-24
+
 ### Added
 
 - a warning of `LLG` and `iLLG` for anisotropy or magnetoelastic fields, which scale as $m^{\beta - 1}$ with the magnetization amplitude $m$ and diverge for an `aniso_exponent` $\beta < 1$, e.g. the default 0, if the amplitude drops below 1e-3, e.g. at the Curie temperature
