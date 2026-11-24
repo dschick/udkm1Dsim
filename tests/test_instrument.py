@@ -124,6 +124,42 @@ def test_check_nodes(recwarn):
     assert len(recwarn) == 0
 
 
+@pytest.mark.parametrize("shape", ["box", "gauss", "lorentz", "pseudo_voigt"])
+@pytest.mark.parametrize("range_", [0.5, 2, 7])
+def test_profile_area_is_the_integral_within_the_range(shape, range_):
+    x = np.linspace(-range_, range_, 200001)
+    area = np.trapezoid(ins.profile(shape, x, 0.3), x)
+    # the trapezoidal rule is less accurate at the jumps of the box
+    assert ins.profile_area(shape, range_, 0.3) == pytest.approx(
+        area, abs=1e-4 if shape == "box" else 1e-6
+    )
+
+
+def test_check_range(recwarn):
+    """the wings of a Lorentzian are cut by the default range of 2 FWHM"""
+    with pytest.warns(UserWarning, match="Only 84.4% of the lorentz.*at least 6.4 FWHM"):
+        ins.check_range("x", "x spread", "lorentz", 2)
+    with pytest.warns(UserWarning, match="Only 92.2% of the pseudo_voigt.*at least 3.2 FWHM"):
+        ins.check_range("x", "x spread", "pseudo_voigt", 2, 0.5)
+    recwarn.clear()
+    ins.check_range("x", "x spread", "lorentz", 6.4)
+    ins.check_range("x", "x spread", "pseudo_voigt", 2, 0.02)
+    ins.check_range("x", "x spread", "gauss", 1)
+    assert len(recwarn) == 0
+
+
+def test_truncated_lorentzian_resolution_is_warned(parratt, recwarn):
+    parratt.instrument.theta_resolution = "lorentz"
+    parratt.instrument.theta_width = 0.02 * u.deg  # all nodes above the surface
+    with pytest.warns(UserWarning, match="lorentz profile of the theta resolution"):
+        parratt.homogeneous_reflectivity_transmissivity()
+    recwarn.clear()
+    parratt.instrument.theta_range = 6.4
+    parratt.instrument.theta_points = 21
+    parratt.homogeneous_reflectivity_transmissivity()
+    assert not [str(w.message) for w in recwarn if "resolution" in str(w.message)]
+
+
 def test_convolution_matrix():
     x = np.sort(np.r_[np.linspace(0, 10, 201), 3.333])
     K = ins.convolution_matrix(x, 0.5, "gauss", 3)
@@ -335,6 +371,7 @@ def test_metadata_of_the_instrument(parratt, tmp_path):
         ("pseudo_voigt", "uniform"),
     ],
 )
+@pytest.mark.filterwarnings("ignore:Only")  # the truncated Lorentzian wings
 def test_theta_quadrature_is_the_weighted_average(parratt, shape, nodes):
     theta = parratt.theta.to("deg").magnitude
     R0 = parratt.calc_homogeneous_reflectivity_transmissivity()[0]
@@ -550,6 +587,7 @@ def test_rotation_ellipticity_of_a_single_node(magnetic_elzo):
     assert not np.allclose(rotation, expected[0])
 
 
+@pytest.mark.filterwarnings("ignore:Only")  # the truncated Lorentzian wings
 def test_inhomogeneous_equals_homogeneous_with_instrument(magnetic_elzo, tmp_path):
     magnetic_elzo.instrument.theta_resolution = "gauss"
     magnetic_elzo.instrument.theta_width = 1 * u.deg

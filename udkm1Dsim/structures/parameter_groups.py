@@ -432,7 +432,7 @@ class ThermalParameters(ParameterGroup):
     ):
         self.therm_cond = TemperatureParameter("W/(m K)", therm_cond, symbol=r"\kappa")
         self.heat_capacity = TemperatureParameter("J/(kg K)", heat_capacity, symbol="c")
-        self.lin_therm_exp = TemperatureParameter("", lin_therm_exp, symbol=r"\alpha")
+        self.lin_therm_exp = TemperatureParameter("1/K", lin_therm_exp, symbol=r"\alpha")
         self.sub_system_coupling = TemperatureParameter("W/m**3", sub_system_coupling, symbol="G")
         self.deb_wal_fac = TemperatureParameter("m**2", deb_wal_fac, symbol=r"\langle u^2 \rangle")
         self.num_sub_systems = Parameter("", 0, symbol="N")
@@ -640,8 +640,10 @@ class MagneticParameters(ParameterGroup):
             :math:`\alpha` of the LLG per sublattice.
         gyromagnetic_ratio (float, ndarray[float]): gyromagnetic ratio
             :math:`\gamma = -g \mu_B / \hbar` of the magnetization dynamics
-            per sublattice, including its negative sign (rad/(s T)). Defaults
-            to the one of a free electron
+            per sublattice, including its negative sign (rad/(s T)), where
+            positive values raise an error and a frequency, e.g. of
+            :math:`\gamma/2\pi` in GHz/T, is converted by :math:`2\pi` rad
+            per cycle. Defaults to the one of a free electron
             :math:`\gamma_e = -1.761\times10^{11}` rad/(s T).
         inertial_time (float, ndarray[float]): inertial relaxation time
             :math:`\tau` of the inertial LLG per sublattice (s).
@@ -946,6 +948,22 @@ class MagneticParameters(ParameterGroup):
             self.concentration.magnitude = 1.0 / self.num_sublattices
         self.check_array(self.exch_stiffness, "Exchange stiffness")
         self.check_anisotropy()
+        self.check_gyromagnetic_ratio()
+
+    def check_gyromagnetic_ratio(self):
+        r"""check_gyromagnetic_ratio
+
+        The gyromagnetic ratio :math:`\gamma = -g \mu_B / \hbar` of the
+        magnetization dynamics includes its negative sign, as a positive one
+        reverses the precession and turns the damping into an anti-damping.
+
+        """
+        if np.any(np.asarray(self.gyromagnetic_ratio.magnitude) > 0):
+            raise ValueError(
+                "The gyromagnetic_ratio must include its negative sign, e.g. "
+                "-1.761e11 rad/(s T) of a free electron, or -28.02 GHz/T for gamma/2pi, "
+                f"not {self.gyromagnetic_ratio.magnitude} rad/(s T)!"
+            )
 
     def calc_mf_exchange_coupling(self):
         r"""calc_mf_exchange_coupling

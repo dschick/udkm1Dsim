@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `instrument.profile_area()` with the area of a profile within its `range` and `instrument.check_range()`, which warns for a `lorentz` or `pseudo_voigt` profile of the instrument function or of the `bandwidth` and `divergence` of `Heat`, of which less than 95 % lie within the `range` of the uniform nodes or the convolution, e.g. 84 % of a Lorentzian within the default range of 2 FWHM, so that its wings are missing
+- a warning of `Elzo` and `BerremanElzo` for a transfer matrix, which grows beyond `MAX_TRANSFER_MATRIX` = 1e12 by thick evanescent or absorbing layers, so that the transmission loses its precision, while the reflection, fields, and absorption keep it, with the hint to `Stepanov` and `BerremanStepanov`
+- a warning of the multilayer formalisms for a layer without magnetization, whose atoms are magnetized and whose dielectric tensor has a gyrotropic part, e.g. of a `UnitCell`, which follows the magnetization of the layer, not of its atoms
+
+### Changed
+
+- **breaking**: unknown keyword arguments of `Layer`, `AmorphousLayer`, and `UnitCell`, which are neither a parameter group nor one of their parameters, e.g. a misspelled `heat_capcity`, raise a `TypeError` with the closest known name as hint, e.g. "did you mean 'heat_capacity'?", instead of being ignored
+- **breaking**: a positive `gyromagnetic_ratio` raises an error, as it includes its negative sign and a positive one reverses the precession and turns the damping into an anti-damping
+- a `gyromagnetic_ratio` given as frequency, e.g. $\gamma/2\pi$ in GHz/T, is converted by $2\pi$ rad per cycle, as pint takes rad as dimensionless and Hz as 1/s, which gave a precession $2\pi$ too slow before
+- **breaking**: Quantities of a `TemperatureParameter` are converted to its unit instead of to SI base units, so that a wrong dimension raises a `DimensionalityError`, e.g. a molar heat capacity in J/(mol K), and the `lin_therm_exp` has the unit 1/K instead of being dimensionless
+- the functions of a `TemperatureParameter` and their integrals use SciPy besides NumPy, e.g. for Bessel functions, and an analytical integral, which cannot be evaluated, e.g. of a hypergeometric function, falls back to the numerical integration
+
 ## [3.0.0a5] 2026-11-23
 
 ### Added

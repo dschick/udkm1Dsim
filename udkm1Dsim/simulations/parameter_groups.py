@@ -419,8 +419,19 @@ class InstrumentParameters(ParameterGroup):
                     f"that the {axis} resolution has no effect!",
                     stacklevel=4,
                 )
-            elif width and axis != "delay":
-                self._check_nodes(axis)
+            elif width:
+                if axis != "delay":
+                    self._check_nodes(axis)
+                if axis == "delay" or getattr(self, f"{axis}_nodes") == "uniform":
+                    # the uniform nodes and the convolution are truncated
+                    _instrument.check_range(
+                        axis,
+                        f"{axis} resolution",
+                        resolution,
+                        getattr(self, f"{axis}_range").magnitude,
+                        getattr(self, f"{axis}_eta").magnitude,
+                        stacklevel=4,
+                    )
 
     def _check_nodes(self, axis):
         """Warn for too few nodes of the quadrature of the ``axis``, see

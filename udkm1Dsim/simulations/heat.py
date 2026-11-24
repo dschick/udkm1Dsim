@@ -1915,6 +1915,15 @@ class Heat(Simulation):
                         pulse[f"{spread}_range"],
                         stacklevel=3,
                     )
+                    if pulse[f"{spread}_nodes"] == "uniform":
+                        _instrument.check_range(
+                            spread,
+                            f"{spread} of the pulse {index}",
+                            pulse[f"{spread}_profile"],
+                            pulse[f"{spread}_range"],
+                            pulse[f"{spread}_eta"],
+                            stacklevel=3,
+                        )
             self._pulse_nodes(index)
 
     def _set_bandwidth(self, bandwidth):

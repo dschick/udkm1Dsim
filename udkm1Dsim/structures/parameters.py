@@ -74,7 +74,7 @@ class Parameter:
     @magnitude.setter
     def magnitude(self, value):
         if isinstance(value, u.Quantity):
-            self._magnitude = value.to(self.unit).magnitude
+            self._magnitude = self._cycles_to_rad(value).to(self.unit).magnitude
         elif isinstance(value, (int, float, complex, np.number, np.ndarray)):
             self._magnitude = value
         elif isinstance(value, (list, tuple)):
@@ -84,6 +84,19 @@ class Parameter:
 
         if self._caller is not None:
             self._caller._update_depending()
+
+    def _cycles_to_rad(self, value):
+        r"""A frequency in Hz of a parameter in rad, e.g. the gyromagnetic
+        ratio :math:`\gamma/2\pi` in GHz/T, is converted by :math:`2\pi`
+        rad per cycle, as pint takes rad as dimensionless and Hz as 1/s."""
+        if "radian" not in dict(self.unit._units):
+            return value
+        # any angle unit, e.g. deg or turn, is radian in the root units
+        if "radian" in dict(value.to_root_units().unit_items()):
+            return value
+        if any(name.endswith("hertz") for name in dict(value.unit_items())):
+            return value * (2 * np.pi * u.rad)
+        return value
 
     @property
     def quantity(self):
@@ -582,7 +595,9 @@ class TemperatureParameter(Parameter):
             T_scalar = symbols("T")
             T_vector = [list(symarray("T", self._num_sub_systems))]
             self._functional = [
-                lambdify(T_vector if takes_vector else T_scalar, expression, modules="numpy")
+                lambdify(
+                    T_vector if takes_vector else T_scalar, expression, modules=["numpy", "scipy"]
+                )
                 for expression, takes_vector in zip(
                     self._magnitude, self._takes_temperature_vector
                 )
@@ -608,7 +623,13 @@ class TemperatureParameter(Parameter):
 
                 try:
                     integral = integrate(expression, T)
-                    self._integral.append(lambdify(T, integral, modules="numpy"))
+                    function = lambdify(T, integral, modules=["numpy", "scipy"])
+                    if len(syms) == 1:
+                        # e.g. special functions without numerical implementation
+                        # fail only on their evaluation
+                        if not np.isfinite(function(300.0)):
+                            raise ValueError("The integral cannot be evaluated!")
+                    self._integral.append(function)
                     self._integral_expr.append(integral)
                 except Exception:
                     warnings.warn(
@@ -674,7 +695,8 @@ class TemperatureParameter(Parameter):
             elif isinstance(input, (int, float)):
                 input = str(input)
             elif isinstance(input, u.Quantity):
-                input = str(input.to_base_units().magnitude)
+                # raises a DimensionalityError for a wrong unit, e.g. J/(mol K)
+                input = str(input.to(self.unit).magnitude)
 
             if "_" in input:
                 # the temperature is input as a vector

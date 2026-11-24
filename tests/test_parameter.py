@@ -7,6 +7,8 @@ import pint
 import pytest
 import sympy as sp
 from pint.testing import assert_allclose as assert_approx
+from scipy.integrate import quad
+from scipy.special import j0
 
 from udkm1Dsim import Parameter, TemperatureParameter, VectorParameter, u
 from udkm1Dsim.helpers import (
@@ -44,8 +46,8 @@ def test_parameter(parameter, input, expected):
     [
         (1, 1.0, "1.0"),
         (1.0, 1.0, "1.0"),
-        (1.0 * u.m, 1.0, "1.0"),
-        (1.0 * u.nm, 1.0e-9, "1e-09"),
+        (1.0 * u.J / u.kg / u.K, 1.0, "1.0"),
+        (1.0 * u.J / u.g / u.K, 1.0e3, "1000.0"),
         ("1", 1.0, "1"),
         ("1.0", 1.0, "1.0"),
         ("1.0*T", 300.0, "1.0*T"),
@@ -67,11 +69,11 @@ def test_temperature_parameter(temperature_parameter, input, expected, expected_
     [
         ([1, 2, 3], [1, 2, 3], ["1.0", "2.0", "3.0"]),
         ([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], ["1.0", "2.0", "3.0"]),
-        ([1.0 * u.m, 2.0 * u.m, 3.0 * u.m], [1.0, 2.0, 3.0], ["1.0", "2.0", "3.0"]),
+        ([1.0 * u.J / u.kg / u.K] * 3, [1.0, 1.0, 1.0], ["1.0", "1.0", "1.0"]),
         (
-            [1.0 * u.nm, 2.0 * u.nm, 2.0 * u.nm],
-            [1.0e-9, 2.0e-9, 2.0e-9],
-            ["1e-09", "2e-09", "2e-09"],
+            [1.0 * u.J / u.g / u.K, 2.0 * u.J / u.g / u.K, 2.0 * u.J / u.g / u.K],
+            [1.0e3, 2.0e3, 2.0e3],
+            ["1000.0", "2000.0", "2000.0"],
         ),
         (["1", "2", "3"], [1.0, 2.0, 3.0], ["1", "2", "3"]),
         (["1.0", "2.0", "3.0"], [1.0, 2.0, 3.0], ["1.0", "2.0", "3.0"]),
@@ -98,6 +100,39 @@ def test_temperature_parameter_list(temperature_parameter, input, expected, expe
         else:
             assert functional(300) == expected[i]
         assert expression.equals(sp.sympify(expected_expr[i]))
+
+
+def test_temperature_parameter_rejects_wrong_units(temperature_parameter):
+    """a Quantity is converted to the unit of the parameter, e.g. a molar
+    heat capacity is no specific one"""
+    with pytest.raises(pint.DimensionalityError):
+        temperature_parameter.quantity = 25 * u.J / u.mol / u.K
+    with pytest.raises(pint.DimensionalityError):
+        temperature_parameter.quantity = [1 * u.J / u.kg / u.K, 1 * u.m]
+
+
+def test_temperature_parameter_integral_falls_back_for_special_functions():
+    """sympy integrates to a hypergeometric function without numerical
+    implementation, so that the integral is calculated numerically"""
+    parameter = TemperatureParameter("J/kg/K", "T**0.3*besselj(0, T/100)", "heat_capacity")
+    with pytest.warns(UserWarning, match="numerically"):
+        integral = parameter.integral[0]
+    expected = quad(lambda T: T**0.3 * j0(T / 100), 0, 300)[0]
+    assert integral(300.0) == pytest.approx(expected, rel=1e-8)
+
+
+def test_parameter_converts_cycles_to_rad():
+    """a frequency per tesla is gamma/2pi, as pint takes rad as dimensionless"""
+    parameter = Parameter("rad/(s*T)", -28.025 * u.GHz / u.T)
+    assert parameter.magnitude == pytest.approx(-2 * np.pi * 28.025e9)
+    parameter.magnitude = -1.761e11 / u.s / u.T
+    assert parameter.magnitude == pytest.approx(-1.761e11)
+    assert Parameter("1/s", 1 * u.GHz).magnitude == pytest.approx(1e9)
+    # an explicit angle unit of the cycles is not converted twice
+    parameter.magnitude = -28.025 * u.GHz * u.turn / u.T
+    assert parameter.magnitude == pytest.approx(-2 * np.pi * 28.025e9)
+    parameter.magnitude = -1.009e13 * u.deg / u.s / u.T
+    assert parameter.magnitude == pytest.approx(np.deg2rad(-1.009e13))
 
 
 def test_temperature_parameter_numerical_integral_per_sub_system(monkeypatch):
