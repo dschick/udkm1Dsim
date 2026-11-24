@@ -1212,7 +1212,10 @@ class LLG(Magnetization):
     <udkm1Dsim.simulations.solvers.magnetization_scipy.sublattice_exchange_field>`,
     which couples the sublattices of ferri- and antiferromagnets. The
     temperature dependence of the anisotropy and magnetoelastic fields is
-    scaled with the magnetization amplitude :math:`m(t)`. Magnetic layers are
+    scaled with the magnetization amplitude :math:`m(t)` as
+    :math:`m^{\beta-1}` with the ``aniso_exponent`` :math:`\beta`, so that
+    they diverge for :math:`\beta < 1` at a vanishing amplitude, e.g. at the
+    Curie temperature, which is warned for. Magnetic layers are
     those with a saturation magnetization. Every sublattice :math:`a` of a
     layer, see :class:`~udkm1Dsim.structures.parameter_groups.MagneticParameters`,
     has its own unit vector :math:`\mathbf{n}_a`, amplitude :math:`m_a(t)` and
@@ -1368,6 +1371,7 @@ class LLG(Magnetization):
         layers = self.calc_magnetic_parameters(is_magnetic)
         self.check_parameters(layers)
         P = magnetization_scipy.stack_magnetic_parameters(layers).active.shape[1]
+        self._warn_for_diverging_anisotropy(layers, amplitude_map[:, is_magnetic, :P])
 
         inputs = magnetization_scipy.prepare_inputs(
             delays,
@@ -1398,6 +1402,28 @@ class LLG(Magnetization):
                 magnetic layers.
 
         """
+
+    @staticmethod
+    def _warn_for_diverging_anisotropy(layers, amplitude_map):
+        """warns for anisotropy or magnetoelastic fields of the sublattices,
+        which scale as m**(aniso_exponent - 1) with the amplitude m and
+        diverge for an aniso_exponent < 1, if the amplitude drops below 1e-3,
+        e.g. at the Curie temperature"""
+        for index, layer in enumerate(layers):
+            anisotropic = np.any(layer.sublattice_values("anisotropy") != 0, axis=1) | (
+                layer.sublattice_values("magnetoelastic_coupling") != 0
+            )
+            exponents = layer.sublattice_values("aniso_exponent")
+            smallest = np.min(amplitude_map[:, index, : len(exponents)], axis=0)
+            if np.any(anisotropic & (exponents < 1) & (smallest < 1e-3)):
+                warnings.warn(
+                    "The anisotropy and magnetoelastic fields scale as "
+                    "m**(aniso_exponent - 1) with the magnetization amplitude m, which drops "
+                    f"to {np.min(smallest):.1e}, so that they diverge for aniso_exponent < 1 "
+                    "- it is 3 for a uniaxial anisotropy following the Callen-Callen law!",
+                    stacklevel=3,
+                )
+                return
 
     def calc_initial_state(self, init_dir, inputs, is_magnetic, **kwargs):
         r"""calc_initial_state

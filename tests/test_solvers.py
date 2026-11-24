@@ -323,6 +323,23 @@ def test_langevin_is_classical_limit():
     assert np.isclose(m, mean_field.langevin(J * m / (constants.k * 250.0)), atol=1e-8)
 
 
+@pytest.mark.parametrize("S", [0.5, 2.0])
+def test_equilibrium_tables_at_low_temperatures(S):
+    """the longitudinal damping and susceptibility of the quantum LLB both
+    decrease as exp(-zeta/S), while their ratio, which gives the longitudinal
+    relaxation, is proportional to the temperature, also below the
+    temperatures, where both would underflow"""
+    Tc = 630.0
+    J = np.array([[3 * S / (S + 1) * constants.k * Tc]])
+    grid = mean_field.temperature_grid(700, [Tc])
+    tables = mean_field.equilibrium_tables(grid, J, [S], [0.4 * 9.274e-24], [0.01], np.ones(1))
+    _, a_par, _, chi = tables[0]
+    assert np.all(a_par > 0) and np.all(chi >= mean_field.TABLE_MIN)
+    low = grid < Tc / 20
+    ratio = a_par[low] / chi[low] * Tc / grid[low]
+    np.testing.assert_allclose(ratio, ratio[-1], rtol=1e-3)
+
+
 def test_equilibrium_tables():
     """the equilibrium tables reproduce the Brillouin mean field of the
     layer's spin, their classical limit S -> inf is the Langevin one with

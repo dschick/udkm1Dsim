@@ -87,7 +87,13 @@ import scipy.constants as constants
 from scipy.integrate import solve_ivp
 from tqdm.auto import tqdm
 
-from .mean_field import TABLE, equilibrium_tables, interpolate_tables, temperature_grid
+from .mean_field import (
+    ORDERED_MIN,
+    TABLE,
+    equilibrium_tables,
+    interpolate_tables,
+    temperature_grid,
+)
 
 # gyromagnetic ratio of a free electron (rad s^-1 T^-1), including its sign
 GAMMA_E = -constants.physical_constants["electron gyromag. ratio"][0]
@@ -620,7 +626,8 @@ def longitudinal_field(m, m_norm, me, chi, mag):
     cubic = _cubic_coefficients(mag.eff_spin) * np.diagonal(mag.mf_exch_coupling, axis1=1, axis2=2)
     coef = np.zeros((N, P))
     for a in range(P):
-        below = me[:, a] > 1e-6
+        # the ordered phase as in the equilibrium tables
+        below = me[:, a] > ORDERED_MIN
         me_safe = np.where(below, me[:, a], 1.0)
         pref = 1 / chi_safe[:, a]
         cross_term = np.zeros(N)

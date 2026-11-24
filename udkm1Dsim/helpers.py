@@ -52,6 +52,7 @@ import re
 
 import numpy as np
 import pint
+from scipy.signal import oaconvolve
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.pretty.pretty_symbology import greek_unicode
 from sympy.printing.str import StrPrinter
@@ -275,7 +276,11 @@ def conv_with_function(y, x, handle):
     on the argument array :math:`x`, e.g. a transient result along the
     delays with the time resolution of an experiment. The data are
     interpolated to an equidistant grid of the smallest spacing of
-    :math:`x` for the convolution.
+    :math:`x` including both ends for the convolution, and the function is
+    sampled symmetrically around zero and normalized to unit sum. Beyond
+    the ends of :math:`x`, the first and last value of :math:`y` are held,
+    e.g. the unexcited sample before the excitation, as for
+    :func:`~udkm1Dsim.simulations.scattering.instrument.convolve_delays`.
 
     Args:
         y (ndarray[float]): y data.
@@ -286,18 +291,18 @@ def conv_with_function(y, x, handle):
         y_conv (ndarray[float]): convoluted data.
 
     """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
     dx = np.min(np.diff(x))
-    x_lin = np.r_[np.min(x) : np.max(x) : dx]
+    num = int(np.rint((np.max(x) - np.min(x)) / dx)) + 1
+    x_lin = np.min(x) + dx * np.arange(num)
     y_lin = np.interp(x_lin, x, y)
-    x0 = np.mean(x_lin)
-    y_handle = handle(x_lin - x0)
-
-    temp = np.convolve(y_lin, y_handle / y_handle.sum(), mode="same")
-
-    y_conv = np.interp(x, x_lin, temp)
-    # finally remove NaN entries due to the interpolation
-    y_conv[np.isnan(y_conv)] = 0
-    return y_conv
+    # symmetric kernel of the full width of the grid, centered at zero
+    kernel = handle(dx * np.arange(-(num - 1), num))
+    kernel = kernel / np.sum(kernel)
+    padded = np.pad(y_lin, num - 1, mode="edge")
+    temp = oaconvolve(padded, kernel, mode="valid")
+    return np.interp(x, x_lin, temp)
 
 
 def convert_polar_to_cartesian(polar):

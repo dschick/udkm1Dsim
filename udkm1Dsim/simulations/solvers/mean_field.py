@@ -57,6 +57,8 @@ __all__ = [
     "TABLE",
     "CHI_MAX",
     "CHI_MIN",
+    "TABLE_MIN",
+    "ORDERED_MIN",
     "temperature_grid",
     "equilibrium_tables",
     "longitudinal_susceptibility",
@@ -384,6 +386,11 @@ TABLE = {"mag": 0, "alpha_par": 1, "alpha_perp": 2, "chi": 3}
 # underflows at very low temperatures
 CHI_MAX = 1e12
 CHI_MIN = 1e-300
+# smallest longitudinal damping and susceptibility of the quantum LLB in the
+# tables, below which their ratio is extrapolated, see equilibrium_tables()
+TABLE_MIN = 1e-250
+# smallest equilibrium magnetization of the ordered phase
+ORDERED_MIN = 1e-8
 
 
 def temperature_grid(temp_max, curie_temps, n_grid=4000, n_dense=200):
@@ -465,14 +472,36 @@ def equilibrium_tables(temp_grid, mf_exch_coupling, eff_spins, mag_moments, lamb
     me = np.abs(mean_field_magnetization_coupled(temp_grid, J, spins))
     J_abs = np.abs(J)
     zeta = (me @ J_abs.T) / (constants.k * temp_grid[:, np.newaxis])
-    below = (temp_grid[:, np.newaxis] < curie_temp) & (me > 1e-8)
+    below = (temp_grid[:, np.newaxis] < curie_temp) & (me > ORDERED_MIN)
     alpha_par, alpha_perp = damping_parameters(temp_grid, me, zeta, spins, lam, curie_temp, below)
     chi = longitudinal_susceptibility(temp_grid, zeta, spins, J_abs, mu)
+    _extrapolate_low_temperatures(temp_grid, alpha_par, chi)
     tables[:p, TABLE["mag"]] = me.T
     tables[:p, TABLE["alpha_par"]] = alpha_par.T
     tables[:p, TABLE["alpha_perp"]] = alpha_perp.T
     tables[:p, TABLE["chi"]] = chi.T
     return tables
+
+
+def _extrapolate_low_temperatures(temp_grid, alpha_par, chi):
+    r"""Extrapolates the longitudinal damping :math:`\alpha^\parallel` and
+    susceptibility :math:`\chi` of the quantum LLB in place to the low
+    temperatures, where they fall below :data:`TABLE_MIN`, e.g. below about
+    :math:`T_C/300` for :math:`S = 1/2`. Both decrease as
+    :math:`\exp(-\zeta_e/S)`, so that they underflow, while their ratio,
+    which gives the longitudinal relaxation, is proportional to the
+    temperature. Hence, :math:`\chi` is held at its value at the lowest
+    temperature :math:`T^*` above the limit, and :math:`\alpha^\parallel`
+    decreases as :math:`\alpha^\parallel(T^*)\, T / T^*`, which keeps both
+    finite and their ratio proportional to the temperature. The temperature
+    grid is ascending."""
+    representable = (alpha_par > TABLE_MIN) & (chi > TABLE_MIN)
+    for a in range(alpha_par.shape[1]):
+        if representable[0, a] or not np.any(representable[:, a]):
+            continue
+        ref = int(np.argmax(representable[:, a]))
+        alpha_par[:ref, a] = alpha_par[ref, a] * temp_grid[:ref] / temp_grid[ref]
+        chi[:ref, a] = chi[ref, a]
 
 
 def longitudinal_susceptibility(temps, zeta, eff_spins, mf_exch_coupling_abs, mag_moments):
@@ -582,7 +611,9 @@ def damping_parameters(temps, me, zeta, eff_spins, lambdas, curie_temp, below):
         factor = np.where(np.isinf(spins), 1.0, spins / (spins + 1))
         reduced = factor * me / np.maximum(zeta, 1e-300)
         q = np.where(np.isinf(spins), 0.0, zeta / (2 * spins))
-        two_q_over_sinh = np.where(q > 1e-6, 2 * q / np.sinh(np.minimum(2 * q, 700.0)), 1.0)
+        # 2q / sinh(2q) without the overflow of sinh, which underflows to 0
+        decay = np.exp(-2 * q)
+        two_q_over_sinh = np.where(q > 1e-6, 4 * q * decay / (1 - decay**2), 1.0)
         tanh_over_q = np.where(q > 1e-6, np.tanh(q) / np.maximum(q, 1e-300), 1.0)
     para = 2 * lambdas * temps[:, np.newaxis] / (3 * curie_temp)
     alpha_par = np.where(below, 2 * lambdas * reduced * two_q_over_sinh, para)
