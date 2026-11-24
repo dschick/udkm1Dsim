@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- the signed projection $\tau_{ab}$ of the other sublattice in the longitudinal field of the `LLB`, which jumped between $\pm m_b$ when the norm $m_a$ of a sublattice passes through zero, e.g. on the reversal of the transition-metal sublattice of a ferrimagnet, so that the integrators of the eLLB with `exchange_relaxation=True` stalled for minutes, e.g. in the example with tighter `ode_options` or for other samples and fluences; $m_a$ in its denominators is regularized below `PROJECTION_WIDTH` = 1e-3, which leaves the results of runs, which passed before, unchanged within the precision of the integrator; cached results require `force_recalc=True`
+
 ## [3.0.0a6] 2026-11-24
 
 ### Added
