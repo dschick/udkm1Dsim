@@ -189,13 +189,15 @@ def force_from_spring(d_X1, d_X2, spring_consts):
 
     .. math::
 
-        F_i^{spring} = -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1})
+        F_i^{spring} = -k_{i-1}(x_i-x_{i-1})-k_i(x_i-x_{i+1})
 
-    We introduce-higher order inter-atomic potentials by
+    with the spring :math:`k_i` between the masses :math:`i` and
+    :math:`i+1`, so that the spring of the last mass is unused. We introduce
+    higher-order inter-atomic potentials by
 
     .. math::
 
-        k_i(x_i-x_{i-1}) = \sum_{j=1}^{M} k_i^j (x_i-x_{i-1})^j
+        k_{i-1}(x_i-x_{i-1}) = \sum_{j=1}^{M} k_{i-1}^j (x_i-x_{i-1})^j
 
     where :math:`M` is the order of the spring constants.
 

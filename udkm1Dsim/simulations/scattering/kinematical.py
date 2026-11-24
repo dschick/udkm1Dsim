@@ -45,7 +45,12 @@ r_0 = constants.physical_constants["classical electron radius"][0]
 class XrayKin(Scattering):
     r"""XrayKin
 
-    Kinetic X-ray scattering simulations following :cite:t:`warren1990`.
+    Kinematical X-ray scattering simulations following :cite:t:`warren1990`.
+
+    In contrast to :class:`.XrayDyn`, the Debye-Waller factor ``deb_wal_fac``
+    of the layers and their temperatures are not taken into account, so that
+    both agree in the limit of thin films only for a vanishing Debye-Waller
+    factor.
 
     The superstrate is neglected, and the substrate is only included if it
     is a :class:`.UnitCell`. Any other superstrate or substrate than
@@ -125,7 +130,10 @@ class XrayKin(Scattering):
 
         .. math::
 
-            S(E,q_z,\epsilon) = \sum_i^N f_i \, \exp(-i q_z z_i(\epsilon))
+            S(E,q_z,\epsilon) = \sum_i^N f_i \, \exp(i q_z z_i(\epsilon))
+
+        with the same sign as the interference function
+        :meth:`calc_interference_function`.
 
         Args:
             energy (float, Quantity): photon energy.

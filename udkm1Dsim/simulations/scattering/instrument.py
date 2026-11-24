@@ -156,8 +156,10 @@ def profile_nodes(shape, nodes="uniform", points=7, range=2.0, eta=0.5):
     * ``'uniform'``: equidistant nodes
       :math:`x_i = -r + 2 r\, i / (n - 1)` with the weights of the
       trapezoidal rule :math:`w_i \propto p(x_i)`, halved at both ends, as
-      the full convolution of GenX, which are robust for narrow features,
-      e.g. Bragg peaks or resonances. A box has the centers of :math:`n`
+      the full convolution of GenX. Features narrower than their spacing,
+      e.g. sharp Bragg peaks or resonances, appear as a comb of shifted
+      copies on a dense grid, which needs more nodes or the convolution, see
+      :func:`convolve_on_grid`. A box has the centers of :math:`n`
       equal parts :math:`x_i = (i + 1/2) / n - 1/2` with :math:`w_i = 1/n`.
     * ``'gaussian_quadrature'``: the nodes of the Gaussian quadrature, i.e. the
       Gauss-Hermite nodes of a Gaussian of the standard deviation

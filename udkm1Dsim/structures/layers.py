@@ -723,7 +723,7 @@ class Layer:
 
     @property
     def therm_cond_expr(self):
-        """Expressions of the thermal conductivities as Quantities."""
+        """Sympy expressions of the thermal conductivities per subsystem in (W/(m K))."""
         return self.thermal.therm_cond.quantity
 
     @property
@@ -739,7 +739,7 @@ class Layer:
 
     @property
     def heat_capacity_expr(self):
-        """Expressions of the heat capacities as Quantities."""
+        """Sympy expressions of the heat capacities per subsystem in (J/(kg K))."""
         return self.thermal.heat_capacity.quantity
 
     @property
@@ -755,7 +755,8 @@ class Layer:
 
     @property
     def lin_therm_exp_expr(self):
-        """Expressions of the linear thermal expansion coefficients as Quantities."""
+        """Sympy expressions of the linear thermal expansion coefficients per subsystem in
+        (1/K)."""
         return self.thermal.lin_therm_exp.quantity
 
     @property
@@ -816,7 +817,7 @@ class Layer:
 
     @property
     def deb_wal_fac_expr(self):
-        """Expressions of the Debye-Waller factors as Quantities."""
+        """Sympy expressions of the Debye-Waller factors per subsystem in (m²)."""
         return self.thermal.deb_wal_fac.quantity
 
     @property

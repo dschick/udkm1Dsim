@@ -995,8 +995,14 @@ class Magnetization(Simulation):
         :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.relax_directions`
         and :attr:`equilibrium_options`. The amplitudes are those of the model
         at the given profiles, i.e. the mean-field magnetization for the
-        :class:`LLB`, which neglects the tiny increase of the amplitude by
-        the longitudinal components of the field. The initial directions
+        :class:`LLB`, which neglects the increase of the amplitude by the
+        longitudinal components of the field, e.g. of an external field or of
+        a uniaxial anisotropy along the easy axis. This increase is small far
+        below the Curie temperature, but large close to it, where the
+        longitudinal susceptibility diverges, e.g. 26 % at 2 K below
+        :math:`T_C` for an anisotropy of :math:`10^6` J/m³ with
+        ``aniso_exponent`` 2, so that the dynamics of the :class:`LLB` then
+        start away from its own equilibrium. The initial directions
         select the equilibrium if there are several, e.g. the branch of a
         hysteresis, and an unstable
         equilibrium, e.g. a magnetization exactly perpendicular to an easy

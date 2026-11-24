@@ -478,14 +478,19 @@ class PhononNum(Phonon):
 
         .. math::
 
-            m_i\ddot{x}_i = & -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1}) \\
-            & -\gamma_i(\dot{x}_i-\dot{x}_{i-1})-\gamma_{i+1}(\dot{x}_i-\dot{x}_{i+1})
+            m_i\ddot{x}_i = & -k_{i-1}(x_i-x_{i-1})-k_i(x_i-x_{i+1}) \\
+            & -\gamma_{i-1}(\dot{x}_i-\dot{x}_{i-1})-\gamma_i(\dot{x}_i-\dot{x}_{i+1})
             + F_i^{heat}(t)
 
         where :math:`x_i(t) = z_{i}(t) - z_i^0` is the shift of each layer.
         :math:`m_i` is the mass and :math:`k_i = m_i\, v_i^2/d_i^2` is the
-        spring constant of each layer. Furthermore an empirical damping
-        :math:`\gamma_i` (kg/s) of the springs is introduced, which act as
+        spring constant of each layer, which couples it to the next layer
+        :math:`i+1`, so that the spring constant of the last layer is unused.
+        The masses, spring constants, and damping are normalized to the unit
+        area of 1 Å², see the ``mass_unit_area`` of the layers. Furthermore an
+        empirical damping :math:`\gamma_i` (kg/s) of the spring of each layer
+        is introduced, e.g. :math:`\gamma_i = \eta_i\, (1\,Å^2) / d_i` for a
+        viscosity :math:`\eta_i` (Pa s), whose springs act as
         dashpots with a force proportional to the rate of their deformation,
         so that the damping rate :math:`\gamma_i q^2 d_i^2 / 2 m_i` of a
         phonon grows with the square of its wave vector :math:`q`, and the
@@ -507,13 +512,13 @@ class PhononNum(Phonon):
 
         .. math::
 
-            F_i^{spring} = -k_i(x_i-x_{i-1})-k_{i+1}(x_i-x_{i+1})
+            F_i^{spring} = -k_{i-1}(x_i-x_{i-1})-k_i(x_i-x_{i+1})
 
         includes:
 
         .. math::
 
-            k_i(x_i-x_{i-1}) = \sum_{j=1}^{M-1} k_i^j (x_i-x_{i-1})^j
+            k_{i-1}(x_i-x_{i-1}) = \sum_{j=1}^{M-1} k_{i-1}^j (x_i-x_{i-1})^j
 
         Args:
             delays (ndarray[Quantity]): delays range of simulation (s).
