@@ -571,8 +571,15 @@ def longitudinal_field(m, m_norm, me, chi, mag):
             {m_{e,a}}\right] \mathbf{m}_a
 
     below the ordering temperature, with the projection
-    :math:`\tau_{ab} = |\mathbf{m}_a \cdot \mathbf{m}_b|/m_a` of the other
-    sublattice onto :math:`\mathbf{m}_a`, and
+    :math:`\tau_{ab} = \mathrm{sgn}(J_{ab})\, \mathbf{m}_a \cdot \mathbf{m}_b/m_a`
+    of the other sublattice onto :math:`\mathbf{m}_a` relative to the
+    alignment of the ground state, i.e. parallel for a ferromagnetic and
+    antiparallel for an antiferromagnetic coupling, so that
+    :math:`|J_{ab}| \tau_{ab} = J_{ab}\, \mathbf{m}_a \cdot \mathbf{m}_b/m_a`
+    is the longitudinal exchange field of :cite:t:`atxitia2012` Eqs. (10)
+    and (11) with the signed exchange. For a wrong alignment, e.g. the
+    transient ferromagnetic-like state of an antiferromagnetic coupling,
+    :math:`\tau_{ab} < 0`, and
 
     .. math::
 
@@ -621,7 +628,8 @@ def longitudinal_field(m, m_norm, me, chi, mag):
     N, P = m_norm.shape
     mu = _safe_moments(mag.mag_moment)
     m_safe = np.maximum(m_norm, MIN_MAG)
-    J_off = np.abs(_off_diagonal(mag.mf_exch_coupling))
+    J_signed = _off_diagonal(mag.mf_exch_coupling)
+    J_off = np.abs(J_signed)
     chi_safe = np.where(chi != 0, chi, np.inf)
     cubic = _cubic_coefficients(mag.eff_spin) * np.diagonal(mag.mf_exch_coupling, axis1=1, axis2=2)
     coef = np.zeros((N, P))
@@ -636,7 +644,11 @@ def longitudinal_field(m, m_norm, me, chi, mag):
                 continue
             Jab = mag.active[:, b] * J_off[:, a, b] / mu[:, a]
             pref = pref + Jab * chi[:, b] / chi_safe[:, a]
-            tau = np.abs(np.einsum("ni,ni->n", m[:, a], m[:, b])) / m_safe[:, a]
+            # projection relative to the alignment of the ground state, i.e.
+            # parallel for a positive and antiparallel for a negative J_ab
+            tau = (
+                np.sign(J_signed[:, a, b]) * np.einsum("ni,ni->n", m[:, a], m[:, b]) / m_safe[:, a]
+            )
             cross_term += np.where(
                 below, Jab * (tau - me[:, b]) / me_safe, Jab * tau / m_safe[:, a]
             )

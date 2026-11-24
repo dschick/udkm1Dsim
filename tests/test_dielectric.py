@@ -6,6 +6,7 @@ import numpy as np
 import pint
 import pytest
 from pint.testing import assert_allclose
+from scipy import constants
 
 from udkm1Dsim import (
     AmorphousLayer,
@@ -441,12 +442,13 @@ def iron():
 def test_atom_get_susceptibility(iron):
     energy = np.array([700.0, 710.0])
     chi0, chim = iron.get_susceptibility(energy, 7874)
-    molar_density = 7874 / 1000 / iron.mass_number_a
-    factor = 830.9471 / energy**2
-    np.testing.assert_allclose(chi0, -factor * molar_density * iron.get_atomic_form_factor(energy))
-    np.testing.assert_allclose(
-        chim, factor * molar_density * iron.get_magnetic_form_factor(energy)
-    )
+    # chi = -r_e lambda^2 n_a f / pi of Elzo et al. (2012) with the CODATA constants
+    r_e = constants.physical_constants["classical electron radius"][0]
+    wavelength = constants.h * constants.c / (energy * constants.e)
+    n_a = 7874 * constants.N_A / (iron.mass_number_a * 1e-3)
+    factor = r_e * wavelength**2 / np.pi * n_a
+    np.testing.assert_allclose(chi0, -factor * iron.get_atomic_form_factor(energy), rtol=1e-12)
+    np.testing.assert_allclose(chim, factor * iron.get_magnetic_form_factor(energy), rtol=1e-12)
 
 
 def test_layer_dielectric_from_atoms(iron):
@@ -525,7 +527,7 @@ def test_dielectric_display(iron):
     assert "n(800 nm) = 2.87 + 3.36i" in text
     assert "not defined, only from" in text
     dielectric.display_energy = 707
-    assert "n(707 eV) = 1 + (0.0002647 + 0.0002143i)" in str(dielectric)
+    assert "n(707 eV) = 1 + (0.0002645 + 0.0002141i)" in str(dielectric)
     html = layer.optical._html_table()
     assert '<td rowspan="4">dielectric</td>' in html
     assert "<sup>0</sup>(707 eV)" in html

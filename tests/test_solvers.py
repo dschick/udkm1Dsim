@@ -69,8 +69,9 @@ def test_ode_func_groups():
             source[ii, iii] = sub_system_coupling[idx][iii](T[ii, :])
     dx = d_x_grid[0]
     ref = np.zeros([N, K])
-    ref[0] = (ks[0] * (T[1] - T[0]) / dx**2 + source[0]) / cs[0] / densities[0]
-    ref[-1] = (ks[-1] * (T[-2] - T[-1]) / dx**2 + source[-1]) / cs[-1] / densities[-1]
+    # the boundary nodes have half cells as control volume
+    ref[0] = (2 * ks[0] * (T[1] - T[0]) / dx**2 + source[0]) / cs[0] / densities[0]
+    ref[-1] = (2 * ks[-1] * (T[-2] - T[-1]) / dx**2 + source[-1]) / cs[-1] / densities[-1]
     for ii in range(1, N - 1):
         ref[ii] = (
             (
@@ -466,3 +467,34 @@ def test_longitudinal_field_above_curie_temp(eff_spin):
     c = magnetization_scipy._cubic_coefficients(np.array([eff_spin]))[0]
     expected = -1 / chi * (1 + c * T_C / (T - T_C) * 0.3**2) * m
     assert np.allclose(B, expected, rtol=1e-12)
+
+
+def test_longitudinal_field_follows_the_sign_of_the_sublattice_exchange():
+    """the projection of the other sublattice is signed relative to the
+    alignment of the ground state, as by Atxitia et al. (2012) Eqs. (10) and
+    (11), so that a ferromagnetic coupling of parallel and an
+    antiferromagnetic coupling of antiparallel sublattices give the same
+    field, while parallel sublattices of an antiferromagnetic coupling, e.g.
+    the transient ferromagnetic-like state of all-optical switching, reduce
+    the longitudinal field"""
+    mu_B = constants.physical_constants["Bohr magneton"][0]
+    me, chi = np.array([[0.377, 0.652]]), np.array([[1e-3, 2e-3]])
+
+    def field(J_ab, sign_b):
+        mag = SimpleNamespace(
+            eff_spin=np.full((1, 2), np.inf),
+            mf_exch_coupling=np.array([[[1e-21, J_ab], [J_ab, 3e-21]]]),
+            mag_moment=np.array([[7.63, 2.217]]) * mu_B,
+            active=np.ones((1, 2)),
+        )
+        m = np.array([[[0, 0, 0.377], [0, 0, sign_b * 0.652]]])
+        m_norm = np.abs(m[..., 2])
+        return magnetization_scipy.longitudinal_field(m, m_norm, me, chi, mag)[0, 0, 2]
+
+    # the equilibrium of both alignments has no longitudinal field
+    assert np.isclose(field(1e-21, 1), 0, atol=1e-12)
+    assert np.isclose(field(-1e-21, -1), 0, atol=1e-12)
+    # parallel sublattices of an antiferromagnetic coupling, tau = -m_e,b
+    expected = 1e-21 / (7.63 * mu_B) * (-0.652 - 0.652) / 0.377 * 0.377
+    assert np.isclose(field(-1e-21, 1), expected, rtol=1e-12)
+    assert field(-1e-21, 1) < -1

@@ -1064,3 +1064,55 @@ def test_heat_inconsistent_num_sub_systems_raises(tmp_path):
     heat = Heat(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
     with pytest.raises(ValueError, match="'therm_cond' has 1"):
         heat.get_temp_map(np.r_[0:1:0.1] * u.ps, 300 * u.K)
+
+
+@pytest.mark.parametrize("hot", [0, -1], ids=["surface", "bottom"])
+def test_heat_diffusion_conserves_energy_at_isolating_boundaries(tmp_path, hot):
+    """the boundary nodes have half cells, so that a hot boundary node
+    equilibrates to the mean temperature of the trapezoidal rule"""
+    layer = Layer(
+        "a",
+        "a",
+        thickness=1 * u.nm,
+        density=1000 * u.kg / u.m**3,
+        heat_capacity=500 * u.J / u.kg / u.K,
+        therm_cond=10 * u.W / u.m / u.K,
+    )
+    S = Structure("s")
+    S.add_sub_structure(layer, 10)
+    heat = Heat(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
+    heat.boundary_conditions = {"top_type": "isolator", "bottom_type": "isolator"}
+    distances = np.linspace(0, 10e-9, 11)
+    init_temp = np.full((11, 1), 300.0)
+    init_temp[hot] = 400
+    delays = np.r_[0, 1e-9]
+    temp_map = heat.calc_heat_diffusion(
+        init_temp, distances, delays, np.r_[0.0], np.r_[0.0], np.r_[0.0]
+    )
+    np.testing.assert_allclose(temp_map[-1], 305.0, rtol=1e-6)
+
+
+def test_temperature_boundary_holds_its_node(tmp_path):
+    layer = Layer(
+        "a",
+        "a",
+        thickness=1 * u.nm,
+        density=1000 * u.kg / u.m**3,
+        heat_capacity=500 * u.J / u.kg / u.K,
+        therm_cond=10 * u.W / u.m / u.K,
+    )
+    S = Structure("s")
+    S.add_sub_structure(layer, 10)
+    heat = Heat(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
+    heat.boundary_conditions = {
+        "top_type": "temperature",
+        "top_value": 350 * u.K,
+        "bottom_type": "isolator",
+    }
+    distances = np.linspace(0, 10e-9, 11)
+    delays = np.r_[0, 1e-12, 1e-9]
+    temp_map = heat.calc_heat_diffusion(
+        np.full((11, 1), 300.0), distances, delays, np.r_[0.0], np.r_[0.0], np.r_[0.0]
+    )
+    np.testing.assert_allclose(temp_map[:, 0], 350)
+    np.testing.assert_allclose(temp_map[-1], 350, rtol=1e-6)

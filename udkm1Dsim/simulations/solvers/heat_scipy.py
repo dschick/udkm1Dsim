@@ -328,13 +328,17 @@ def odefunc(
             cs[sel, iii] = heat_capacities[idx][iii](T_sel[:, iii])
             source[sel, iii] += sub_system_coupling[idx][iii](T_vec)
 
-    # boundary conditions
+    # boundary conditions - the boundary nodes at the surface and the bottom
+    # have the half cells d/2 of their neighbouring spacing d as control
+    # volume, as the interior nodes have the mean of both spacings, so that
+    # the energy is conserved for the isolator; a temperature boundary keeps
+    # its node at the boundary value, which is set on the initial temperature
     if bc_top_type == 1:  # temperature
         u[0, :] = bc_top_value
     elif bc_top_type == 2:  # flux
         dudt[0, :] = (
             (
-                (ks[0, :] * (u[1, :] - u[0, :]) / d_x_grid[0] + bc_top_value) / d_x_grid[0]
+                (ks[0, :] * (u[1, :] - u[0, :]) / d_x_grid[0] + bc_top_value) / (d_x_grid[0] / 2)
                 + source[0, :]
             )
             / cs[0, :]
@@ -342,7 +346,9 @@ def odefunc(
         )
     else:  # isolator
         dudt[0, :] = (
-            (ks[0, :] * (u[1, :] - u[0, :]) / d_x_grid[0] ** 2 + source[0, :]) / cs[0, :] / rhos[0]
+            (ks[0, :] * (u[1, :] - u[0, :]) / d_x_grid[0] / (d_x_grid[0] / 2) + source[0, :])
+            / cs[0, :]
+            / rhos[0]
         )
 
     if bc_bottom_type == 1:  # temperature
@@ -350,7 +356,8 @@ def odefunc(
     elif bc_bottom_type == 2:  # flux
         dudt[-1, :] = (
             (
-                (bc_bottom_value - ks[-1, :] * (u[-1, :] - u[-2, :]) / d_x_grid[-1]) / d_x_grid[-1]
+                (bc_bottom_value - ks[-1, :] * (u[-1, :] - u[-2, :]) / d_x_grid[-1])
+                / (d_x_grid[-1] / 2)
                 + source[-1, :]
             )
             / cs[-1, :]
@@ -358,7 +365,7 @@ def odefunc(
         )
     else:  # isolator
         dudt[-1, :] = (
-            (ks[-1, :] * (u[-2, :] - u[-1, :]) / d_x_grid[-1] ** 2 + source[-1, :])
+            (ks[-1, :] * (u[-2, :] - u[-1, :]) / d_x_grid[-1] / (d_x_grid[-1] / 2) + source[-1, :])
             / cs[-1, :]
             / rhos[-1]
         )
