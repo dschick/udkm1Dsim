@@ -476,9 +476,13 @@ class ElasticParameters(ParameterGroup):
     Attributes:
         sound_vel (float): longitudinal sound velocity in the layer :math:`v` (m/s).
         phonon_damping (float): damping constant of phonon propagation :math:`\gamma` (kg/s)
-            of the spring of the layer, which acts as dashpot to the next layer.
+            of the spring of the layer, which acts as dashpot to the next layer,
+            normalized to the unit area of 1 Å² as the ``mass_unit_area``,
+            e.g. :math:`\gamma = \eta\, (1\,Å^2) / d` for a viscosity
+            :math:`\eta` (Pa s) and the thickness :math:`d`.
         spring_const (ndarray[float]): spring constant :math:`k` of the layer
-            (kg/s²) and higher orders.
+            (kg/s²) and higher orders, which couples the layer to the next one
+            and is normalized to the unit area of 1 Å² as the ``mass_unit_area``.
         acoustic_impedance (float): acoustic impedance of a layer :math:`Z` (kg/(m² s)).
 
     """

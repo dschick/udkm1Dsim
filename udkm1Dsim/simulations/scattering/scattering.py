@@ -584,7 +584,10 @@ class Scattering(Simulation):
 
         .. math::
 
-            P(\vartheta) = \sqrt{(1-\mbox{pol}) + \mbox{pol} \cdot \cos(2\vartheta)}
+            P(\vartheta) = \sqrt{(1-\mbox{pol}) + \mbox{pol} \cdot \cos^2(2\vartheta)}
+
+        which is the root of the mean intensity factor of the :math:`\sigma`
+        and :math:`\pi` components for unpolarized X-rays.
 
         Args:
             theta (ndarray[float]): incidence angle.

@@ -186,10 +186,13 @@ class InstrumentParameters(ParameterGroup):
 
     The ``nodes`` of the quadrature are either ``'uniform'`` with the
     weights of the profile on ``points`` equidistant nodes within
-    :math:`\pm` ``range`` times the width, which is robust for narrow
-    features, or ``'gaussian_quadrature'``, i.e. Gauss-Hermite nodes of a Gaussian
-    and Gauss-Legendre nodes of a box profile, which are more efficient for
-    smooth curves. The widths are scalars or arrays along the energies of
+    :math:`\pm` ``range`` times the width, or ``'gaussian_quadrature'``, i.e.
+    Gauss-Hermite nodes of a Gaussian and Gauss-Legendre nodes of a box
+    profile, which are more efficient for smooth curves. Both sample the
+    curve at shifted copies of the experiment, so that features narrower than
+    the spacing of the nodes, e.g. the default 2/3 of the FWHM, appear as a
+    comb of shifted copies on a dense grid, for which the ``'convolution'``
+    or more ``points`` are needed. The widths are scalars or arrays along the energies of
     the experiment for the energy and along its angles or of its shape
     (M, N) for the angle, e.g. for a curvature of the sample, whose
     footprint spreads the angle, or a spectral bandwidth of constant

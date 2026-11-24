@@ -44,12 +44,22 @@ class Parratt(MultilayerScattering):
     isotropic dielectric tensors of all layers. The interface roughness
     :math:`\sigma_j` is included by the factor of :cite:t:`nevot1980`
 
-    .. math:: r_j \rightarrow r_j \exp(-2 k_{z,j-1} k_{z,j} \sigma_j^2)
+    .. math::
+
+        r_j \rightarrow r_j \exp(-2 k_{z,j-1} k_{z,j} \sigma_j^2), \quad
+        \tau_j \rightarrow \tau_j \frac{n_j^2 - r_j^2 p_j^2}{n_j (1 - r_j^2)}
 
     with the normal wave-vector components
     :math:`k_{z,j} = k \sqrt{\varepsilon_j - \cos^2\theta}` above and below the
-    interface, which differs slightly from the roughness matrices of
-    :class:`~udkm1Dsim.simulations.scattering.elzo.Elzo`.
+    interface, the reflection and transmission coefficients :math:`r_j` and
+    :math:`\tau_j` of the interface without roughness,
+    :math:`n_j = \exp(-(k_{z,j} - k_{z,j-1})^2 \sigma_j^2 / 2)`, and
+    :math:`p_j = \exp(-(k_{z,j} + k_{z,j-1})^2 \sigma_j^2 / 2)`. These are the
+    coefficients of the roughness matrices of
+    :class:`~udkm1Dsim.simulations.scattering.elzo.Elzo` and
+    :class:`~udkm1Dsim.simulations.scattering.stepanov.Stepanov`, so that all
+    formalisms agree for rough isotropic stacks, also for the transmission,
+    fields, and absorption.
 
     The reflection coefficients of the interfaces are
 
@@ -231,11 +241,10 @@ class Parratt(MultilayerScattering):
             # transmission of the electric field from the magnetic field
             tau_p = (1 + r_p) * (n_a / n_b)
             if sigma > 0:
-                r_s = r_s * np.exp(-2 * k_a * k_b * sigma**2)
-                r_p = r_p * np.exp(-2 * k_a * k_b * sigma**2)
-                damping = np.exp((k_b - k_a) ** 2 * sigma**2 / 2)
-                tau_s = tau_s * damping
-                tau_p = tau_p * damping
+                (r_s, tau_s), (r_p, tau_p) = (
+                    _rough_interface(r, tau, k_a, k_b, sigma)
+                    for r, tau in ((r_s, tau_s), (r_p, tau_p))
+                )
             denominator_s = 1 + r_s * X_s
             denominator_p = 1 + r_p * X_p
             t_s *= tau_s * phase_b / denominator_s
@@ -305,11 +314,10 @@ class Parratt(MultilayerScattering):
                 tau_s = 1 + r_s
                 tau_p = (1 + r_p) * (n_a / n)
                 if sigma > 0:
-                    r_s = r_s * np.exp(-2 * k_a * k_z * sigma**2)
-                    r_p = r_p * np.exp(-2 * k_a * k_z * sigma**2)
-                    damping = np.exp((k_z - k_a) ** 2 * sigma**2 / 2)
-                    tau_s = tau_s * damping
-                    tau_p = tau_p * damping
+                    (r_s, tau_s), (r_p, tau_p) = (
+                        _rough_interface(r, tau, k_a, k_z, sigma)
+                        for r, tau in ((r_s, tau_s), (r_p, tau_p))
+                    )
                 X = np.zeros(q.shape + (4, 4), dtype=np.complex128)
                 for m, (r, tau) in enumerate(((r_s, tau_s), (r_p, tau_p))):
                     t_inv = tau / (1 - r**2)
@@ -381,3 +389,19 @@ class Parratt(MultilayerScattering):
         CPU cache and results in several blocks for the progress bar and the
         parallel calculation"""
         return max(1, 2**13 // max(1, np.size(self.experiment.theta.magnitude)))
+
+
+def _rough_interface(r, tau, k_a, k_b, sigma):
+    r"""reflection and transmission coefficients of a rough interface of the
+    roughness :math:`\sigma` between the normal wave-vector components
+    :math:`k_a` above and :math:`k_b` below, as by the roughness matrices of
+    the other formalisms, which multiply the interface matrix by
+    :math:`n = \exp(-(k_b - k_a)^2 \sigma^2 / 2)` for the same and by
+    :math:`p = \exp(-(k_b + k_a)^2 \sigma^2 / 2)` for the opposite direction
+    of the modes, i.e. the factor of :cite:t:`nevot1980` for the reflection
+
+    .. math:: \tilde{r} = r \, p / n = r \exp(-2 k_a k_b \sigma^2), \quad
+        \tilde{\tau} = \tau \frac{n^2 - r^2 p^2}{n (1 - r^2)}"""
+    n = np.exp(-((k_b - k_a) ** 2) * sigma**2 / 2)
+    p = np.exp(-((k_b + k_a) ** 2) * sigma**2 / 2)
+    return r * p / n, tau * (n**2 - r**2 * p**2) / (n * (1 - r**2))

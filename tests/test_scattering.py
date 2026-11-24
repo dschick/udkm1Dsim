@@ -264,6 +264,28 @@ def test_parratt_roughness():
     )
 
 
+def test_rough_stacks_of_formalisms_agree():
+    """Parratt has the transmission coefficients of the roughness matrices
+    of the other formalisms, so that all agree for rough isotropic stacks"""
+    S = optical_stack(substrate_layer())
+    for layer in S.unique_layers[1]:
+        layer.structural.roughness = 5 * u.nm
+    stack = Structure("periodic")
+    stack.add_sub_structure(S, 3)
+    sub = substrate_layer()
+    sub.structural.roughness = 3 * u.nm
+    stack.add_substrate(sub)
+    results = []
+    for cls in FORMALISMS:
+        sim = simulation(cls, stack, np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 90] * u.deg)
+        jones = sim.homogeneous_jones_matrices()
+        absorption = sim.homogeneous_absorption().absorption_matrix
+        results.append((jones.jones_reflection, jones.jones_transmission, absorption))
+    for other in results[1:]:
+        for value, reference in zip(other, results[0]):
+            assert relative(value, reference) < 1e-10
+
+
 # ============================================================================
 # comparison of the formalisms
 # ============================================================================
@@ -1443,6 +1465,33 @@ def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, atomistic_maps):
         xray_dyn.inhomogeneous_reflectivity(strain_map, strain_vectors=np.array([]))
     with pytest.raises(ValueError):
         xray_dyn.inhomogeneous_reflectivity(strain_map, temp_map=np.ones([11, 20, 2]))
+
+
+@pytest.mark.parametrize("polarization", ["sigma", "pi", "unpolarized"])
+def test_xray_kin_equals_xray_dyn_for_thin_films(unit_cell_iron, polarization):
+    """the kinematical theory is the limit of the dynamical one for thin
+    films without Debye-Waller factor, which XrayKin neglects, while their
+    difference grows with the thickness by the multiple scattering"""
+    unit_cell = copy.deepcopy(unit_cell_iron)  # do not alter the module-scoped fixture
+    unit_cell.deb_wal_fac = 0 * u.m**2
+    differences = []
+    for num_cells in (5, 20, 200):
+        S = ud.Structure("film")
+        S.add_sub_structure(unit_cell, num_cells)
+        R = []
+        for cls in (ud.XrayKin, ud.XrayDyn):
+            sim = cls(S, True, save_data=False, disp_messages=False, progress_bar=False)
+            sim.energy = 8047.8 * u.eV
+            sim.set_polarization(polarization, "none")
+            sim.qz = np.linspace(1.0, 1.5, 1001) / u.angstrom  # around the (001) peak
+            R.append(sim.calc_homogeneous_reflectivity()[0][0])
+        kin, dyn = R
+        differences.append(abs(np.sum(kin) / np.sum(dyn) - 1))
+        if num_cells == 5:
+            assert np.argmax(kin) == np.argmax(dyn)
+            assert np.max(kin) == pytest.approx(np.max(dyn), rel=1e-3)
+    assert differences[0] < 1e-3
+    assert differences[0] < differences[1] < differences[2]
 
 
 def test_xray_calc_methods_equal_results(xray_kin, xray_dyn, atomistic_maps):

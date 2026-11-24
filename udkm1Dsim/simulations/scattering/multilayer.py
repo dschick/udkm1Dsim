@@ -23,7 +23,9 @@
 
 """Common base of the multilayer formalisms, which calculate the reflectivity
 and transmissivity of a stack of homogeneous layers from their dielectric
-tensors, see :class:`.Dielectric`.
+tensors, see :class:`.Dielectric`. The transmissivity is the intensity of the
+electric field at the bottom of the substrate, not the transmitted energy
+flux, see :meth:`MultilayerScattering.calc_reflectivity_transmissivity`.
 
 The magnetization and the dielectric tensor are given in the frame of the
 sample of :cite:t:`elzo2012`: the surface is the :math:`xy`-plane, the surface
@@ -667,6 +669,17 @@ class MultilayerScattering(Scattering):
         in the linear :math:`(\\sigma, \\pi)` basis for the incoming and
         analyzer polarization, e.g. from :meth:`homogeneous_jones_matrices`
         or :meth:`inhomogeneous_jones_matrices`.
+
+        The reflectivity :math:`R = |E_r|^2` is the reflected energy flux
+        relative to the incident one, as both travel in the superstrate. The
+        transmissivity :math:`T = |E_t|^2` is the intensity of the electric
+        field at the bottom of the last layer of the substrate relative to the
+        incident one, but not the transmitted energy flux, which differs by
+        the refractive index and the direction of the wave in the substrate,
+        e.g. :math:`T = 0.64` and :math:`R = 0.04` for glass of :math:`n = 1.5`
+        at normal incidence, so that :math:`R + T \\neq 1`. The energy flux
+        into the substrate is its ``substrate_flux``, see
+        :meth:`homogeneous_absorption`.
 
         Unpolarized incoming light is an incoherent mixture of two orthogonal
         polarizations, so that its intensities are the average of the ones
