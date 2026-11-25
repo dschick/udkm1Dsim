@@ -101,6 +101,10 @@ GAMMA_E = -constants.physical_constants["electron gyromag. ratio"][0]
 # floor for magnetization norms that appear in denominators
 MIN_MAG = 1e-12
 
+# norm below which the projection of the other sublattice in the longitudinal field is
+# regularized, which keeps it continuous for a norm passing through zero
+PROJECTION_WIDTH = 1e-3
+
 Inputs = namedtuple("Inputs", ["delays", "B_ext", "amplitude_map", "temp_map", "strain_map"])
 Inputs.__doc__ = r"""Time-dependent inputs of the solver on the delay grid.
 
@@ -590,7 +594,19 @@ def longitudinal_field(m, m_norm, me, chi, mag):
             + \sum_{b \neq a}\frac{|J_{ab}|}{\mu_a}\frac{\tau_{ab}}{m_a}\right]
             \mathbf{m}_a
 
-    at and above it, where :math:`m_{e,a} = 0`. It pulls the norm of every
+    at and above it, where :math:`m_{e,a} = 0`.
+
+    The projection jumps between :math:`\pm m_b` when the norm :math:`m_a`
+    passes through zero, e.g. when the transition-metal sublattice of a
+    ferrimagnet reverses, which stalls the integrators in combination with
+    the exchange-relaxation torque. Hence, :math:`m_a` in the denominators of
+    :math:`\tau_{ab}` and :math:`\tau_{ab}/m_a` is replaced by
+    :math:`(m_a^2 + \delta^2)/(2\delta)` below
+    :math:`\delta = 10^{-3}` (``PROJECTION_WIDTH``), which is continuous and
+    continuously differentiable at :math:`\delta` and lets
+    :math:`\tau_{ab}` pass continuously through zero.
+
+    The longitudinal field pulls the norm of every
     sublattice towards its equilibrium :math:`m_{e,a}(T)` with the
     longitudinal susceptibility :math:`\chi_a(T)` (1/T). For a single
     sublattice it reduces to the thermal field
@@ -629,7 +645,9 @@ def longitudinal_field(m, m_norm, me, chi, mag):
     """
     N, P = m_norm.shape
     mu = _safe_moments(mag.mag_moment)
-    m_safe = np.maximum(m_norm, MIN_MAG)
+    # norm of the projection, which is regularized below PROJECTION_WIDTH
+    width = PROJECTION_WIDTH
+    m_reg = np.where(m_norm >= width, m_norm, (m_norm**2 + width**2) / (2 * width))
     J_signed = _off_diagonal(mag.mf_exch_coupling)
     J_off = np.abs(J_signed)
     chi_safe = np.where(chi != 0, chi, np.inf)
@@ -648,11 +666,10 @@ def longitudinal_field(m, m_norm, me, chi, mag):
             pref = pref + Jab * chi[:, b] / chi_safe[:, a]
             # projection relative to the alignment of the ground state, i.e.
             # parallel for a positive and antiparallel for a negative J_ab
-            tau = (
-                np.sign(J_signed[:, a, b]) * np.einsum("ni,ni->n", m[:, a], m[:, b]) / m_safe[:, a]
-            )
+            m_ab = np.einsum("ni,ni->n", m[:, a], m[:, b])
+            tau = np.sign(J_signed[:, a, b]) * m_ab / m_reg[:, a]
             cross_term += np.where(
-                below, Jab * (tau - me[:, b]) / me_safe, Jab * tau / m_safe[:, a]
+                below, Jab * (tau - me[:, b]) / me_safe, Jab * tau / m_reg[:, a]
             )
         uncoupled = np.sum(mag.active * J_off[:, a, :], axis=1) == 0
         cubic_term = np.where(uncoupled, cubic[:, a] / mu[:, a] * m_norm[:, a] ** 2, 0.0)
