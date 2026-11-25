@@ -569,6 +569,33 @@ def test_unit_cell_mass_from_atoms(unit_cell, atom_strontium, atom_oxygen, atom_
     assert_approx(unit_cell.mass_unit_area, mass * u.angstrom**2 / unit_cell.area)
 
 
+def test_unit_cell_follows_changes_of_its_atoms(atom_mixed, atom_oxygen, properties):
+    """a unit cell holds references to its atoms, so that its mass and density
+    follow later changes of a mixed atom, also for copies and pickles"""
+    mixed = copy.deepcopy(atom_mixed)  # the fixture is shared
+    uc = UnitCell("uc", "uc", c_axis=5.0 * u.angstrom, **properties)
+    uc.add_atom(mixed, 0.0)
+    uc.add_atom(atom_oxygen, 0.5)
+    other = UnitCell("other", "other", c_axis=5.0 * u.angstrom, **properties)
+    other.add_atom(mixed, 0.0)
+    copied = copy.deepcopy([uc, other])
+    density, other_density = uc.density, other.density
+
+    mixed.add_atom(Atom("Gd"), 0.2)
+    assert_approx(uc.mass, mixed.mass + atom_oxygen.mass)
+    assert_approx(uc.density, uc.mass / uc.volume)
+    assert other.density > other_density
+    # the copies follow their own copied atom, which they share
+    assert_equal(copied[0].density, density)
+    copied_mixed = copied[0].atoms[0][0]
+    assert copied_mixed is copied[1].atoms[0][0]
+    copied_mixed.add_atom(Atom("Gd"), 0.2)
+    assert_approx(copied[0].density, uc.density)
+    assert_approx(copied[1].density, other.density)
+    # an atom is pickled without the unit cells containing it
+    assert pickle.loads(pickle.dumps(atom_oxygen)).mass == atom_oxygen.mass
+
+
 def test_unit_cell_spring_const_and_acoustic_impedance(unit_cell):
     assert_approx(unit_cell.spring_const, [1.449] * u.kg / u.s**2, rtol=1e-3)
     # the impedance is the product of the density and the sound velocity,

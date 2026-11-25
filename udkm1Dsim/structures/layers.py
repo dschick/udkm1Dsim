@@ -111,6 +111,13 @@ class _GroupAttribute:
 class Layer:
     r"""Layer
 
+    Generic, homogeneous slab of any material, e.g. an amorphous,
+    polycrystalline, or single-crystalline solid, a liquid, or a gas, which
+    is given only by its physical properties without any assumption on its
+    internal structure. Only X-ray diffraction by :class:`.XrayKin` and
+    :class:`.XrayDyn` requires the positions of the atoms of a
+    :class:`UnitCell`.
+
     A layer consists of structural, thermal, elastic, optical, and magnetic properties.
     These properties are organized into dedicated parameter groups:
 
@@ -1439,6 +1446,8 @@ class UnitCell(Layer):
         self.atoms.sort(key=lambda x: x[1](0))
         # increase the number of atoms
         self.num_atoms = self.num_atoms + 1
+        # the unit cell follows later changes of the atom, e.g. of a mixed atom
+        atom._register_owner(self)
 
         # drop automatic magnetization calculation for unitcell
         # self.magnetization.append([atom.mag_amplitude, atom.mag_phi, atom.mag_gamma])
@@ -1617,6 +1626,17 @@ class UnitCell(Layer):
     # ============================================================================
     # Private methods
     # ============================================================================
+
+    def _atom_changed(self):
+        """Called on changes of an atom of the unit cell, e.g. of the
+        constituents of a mixed atom, to update its mass and density."""
+        self._update_depending()
+
+    def __setstate__(self, state):
+        # a copied or unpickled unit cell follows the changes of its atoms
+        self.__dict__.update(state)
+        for atom, _, _ in self.atoms:
+            atom._register_owner(self)
 
     def _update_layer(self):
         """The thickness and area of a unit cell are given by its lattice and

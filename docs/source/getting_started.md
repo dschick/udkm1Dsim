@@ -1,8 +1,9 @@
 # Getting Started
 
 The **udkm1Dsim** toolbox provides a comprehensive framework for defining 
-arbitrary layered structures at the atomic level, supported by a rich database 
-of element-specific physical properties. Ultrafast excitation is described using 
+arbitrary layered structures from homogeneous layers down to the atomic level, 
+supported by a rich database of element-specific physical properties. 
+Ultrafast excitation is described using 
 an *N*-temperature model, a widely used approach for simulating energy transfer 
 following ultrafast optical excitation. Structural dynamics driven by thermally 
 induced stresses are calculated using a linear-chain model of coupled masses and 
@@ -60,12 +61,23 @@ The sketch illustrates the internal architecture of **udkm1Dsim** toolbox.
 All physical material properties are stored in a 
 {py:class}`Structure <udkm1Dsim.structures.structure.Structure>` 
 object composed of {py:class}`Layer <udkm1Dsim.structures.layers.Layer>` 
-objects, which in turn consist of 
-{py:class}`Atom <udkm1Dsim.structures.atoms.Atom>` objects.
+objects, i.e. homogeneous layers of any material without any assumption on 
+their internal structure. Only a 
+{py:class}`UnitCell <udkm1Dsim.structures.layers.UnitCell>`, which is 
+required for X-ray diffraction, consists of 
+{py:class}`Atom <udkm1Dsim.structures.atoms.Atom>` objects at their positions. 
+The optical and X-ray properties of every layer are given by its 
+{py:class}`Dielectric <udkm1Dsim.structures.dielectric.Dielectric>` tensor, 
+which follows from {py:class}`Dispersion <udkm1Dsim.structures.dielectric.Dispersion>`s, 
+e.g. tabulated optical constants, and/or from the atomic and magnetic form 
+factors of {py:class}`Atom <udkm1Dsim.structures.atoms.Atom>`s.
 
 All simulation modules operate on the same 
 {py:class}`Structure <udkm1Dsim.structures.structure.Structure>` 
 instance, ensuring consistency and reproducibility across different calculations.
+
+:::
+::::
 
 The simulation framework is highly modular. The simulations return their results 
 as a dedicated {py:class}`Result <udkm1Dsim.simulations.result.Result>` class, which holds plain 
@@ -74,9 +86,6 @@ simulation. Results can be inspected, saved to HDF5 files, or passed on directly
 as input of subsequent simulations, which accept plain `numpy` arrays as well, 
 allowing users to build customized workflows with ease, see the 
 [simulations and results example](#example_simulations_and_results).
-
-:::
-::::
 
 (coordinate_system)=
 ## Definitions
