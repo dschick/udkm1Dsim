@@ -75,12 +75,11 @@ def test_layer_int_lin_therm_exp_expr(layer):
 
 
 def test_layer_nonintegratable_lin_therm_exp(layer):
-    with pytest.warns(UserWarning):
-        layer.lin_therm_exp = "1/abs(T-300)"
-        # integration is only carried out when explicitly called
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    layer.lin_therm_exp = "1/abs(T-300)"
+    # integration is only carried out when explicitly called
+    with pytest.warns(UserWarning, match="integration of lin_therm_exp did not work"):
         layer.int_lin_therm_exp
-    # reset to original value
-    layer.lin_therm_exp = 1e-5
 
 
 def test_layer_heat_capacity(layer):
@@ -101,12 +100,10 @@ def test_layer_int_heat_capacity_expr(layer):
 
 
 def test_layer_nonintegratable_heat_capacity(layer):
-    with pytest.warns(UserWarning):
-        layer.heat_capacity = "1/abs(T-300)"
-        # integration is only carried out when explicitly called
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    layer.heat_capacity = "1/abs(T-300)"
+    with pytest.warns(UserWarning, match="integration of heat_capacity did not work"):
         layer.int_heat_capacity
-    # reset to original value
-    layer.heat_capacity = 500 * (u.J / u.kg / u.K)
 
 
 def test_layer_sub_system_coupling(layer):
@@ -159,6 +156,7 @@ def test_layer_phonon_damping(layer):
 
 
 def test_layer_set_ho_spring_constants(layer):
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
     assert layer.spring_const == 0.0
     layer.set_ho_spring_constants([1.0, 2.0, 3.0])
     assert np.allclose(layer.spring_const, [0.0, 1.0, 2.0, 3.0] * u.kg / u.s**2)
@@ -198,7 +196,8 @@ def test_layer_curie_temp(layer):
 
 
 def test_layer_mf_exch_coupling(layer):
-    assert_approx(layer.mf_exch_coupling, 2.07e-21 * u.m**2 * u.kg / u.s**2, rtol=1e-2)
+    # 3 S / (S + 1) k_B T_C for S = 1 and T_C = 100 K
+    assert_approx(layer.mf_exch_coupling, 1.5 * u.k_B * 100 * u.K, rtol=1e-12)
 
 
 def test_layer_lamda(layer):
@@ -206,8 +205,7 @@ def test_layer_lamda(layer):
 
 
 def test_layer_mag_moment(layer):
-    # asserat_equal does not work on because of last digit uncertainty
-    assert_approx(layer.mag_moment, 1 * u.bohr_magneton, rtol=1e-2)
+    assert_approx(layer.mag_moment, 1 * u.bohr_magneton, rtol=1e-12)
 
 
 def test_layer_set_magnetic_parameters_after_creation(layer):
@@ -219,6 +217,37 @@ def test_layer_set_magnetic_parameters_after_creation(layer):
     assert_approx(layer.mf_exch_coupling, 3 * 2 / 3 * u.boltzmann_constant * 200 * u.K)
     assert_equal(layer.anisotropy, [5, 5, 5] * u.J / u.m**3)
     assert_equal(layer.exch_stiffness, [1, 2, 3] * u.J / u.m)
+
+
+@pytest.mark.parametrize(
+    "name, value",
+    [
+        ("lamda", 0.05),
+        ("aniso_exponent", 2.5),
+        ("mag_saturation", 1.2e6 * u.A / u.m),
+        ("gilbert_damping", 0.02),
+        ("gyromagnetic_ratio", -1.7e11 * u.rad / u.s / u.T),
+        ("inertial_time", 50 * u.fs),
+        ("magnetoelastic_coupling", -3e6 * u.J / u.m**3),
+        ("exch_relax_rate", 0.1),
+    ],
+)
+def test_layer_magnetic_shortcuts(layer, name, value):
+    """the shortcuts of the layer set and get the parameter of the same name
+    of its magnetic parameters"""
+    layer = copy.deepcopy(layer)  # do not alter the module-scoped fixture
+    others = {
+        other: copy.deepcopy(getattr(layer.magnetic, other).quantity)
+        for other in ("lamda", "gilbert_damping", "inertial_time", "exch_relax_rate")
+        if other != name
+    }
+    setattr(layer, name, value)
+    expected = value if isinstance(value, u.Quantity) else value * u.dimensionless
+    assert_approx(getattr(layer.magnetic, name).quantity, expected, rtol=1e-12)
+    assert_approx(getattr(layer, name), expected, rtol=1e-12)
+    # the other parameters are kept
+    for other, quantity in others.items():
+        assert_equal(getattr(layer.magnetic, other).quantity, quantity)
 
 
 def test_layer_aniso_exponent(layer):
@@ -687,8 +716,16 @@ def test_unit_cell_strain_dependent_position(atom_oxygen, atom_strontium):
 
 def test_unit_cell_position_as_function_raises(atom_oxygen):
     uc = UnitCell("uc", "uc", 5 * u.angstrom)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="string representation"):
         uc.add_atom(atom_oxygen, lambda s: s)
+
+
+def test_unit_cell_invalid_position_string_raises(atom_oxygen):
+    """an invalid position must not add an atom without a position"""
+    uc = UnitCell("uc", "uc", 5 * u.angstrom)
+    with pytest.raises(ValueError, match="atom position"):
+        uc.add_atom(atom_oxygen, "0.1*(s +")
+    assert uc.num_atoms == 0
 
 
 # ============================================================================

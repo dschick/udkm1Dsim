@@ -562,6 +562,90 @@ def test_dielectric_tensor():
     assert read.unique_layers[1][2].optical.dielectric.strain_model == "density"
 
 
+def test_angles_in_deg():
+    """the YAML writes and reads bare angles in deg, e.g. of the Euler angles
+    and the polar magnetization"""
+    layer = Layer(
+        "z",
+        "z",
+        thickness=1 * u.nm,
+        magnetization={"r": 0.5, "phi": 30 * u.deg, "gamma": 60 * u.deg},
+    )
+    layer.optical.dielectric = Dielectric(
+        eps0=Dispersion.from_ref_index(2 + 0.1j),
+        euler_angles=(10 * u.deg, 20.5 * u.deg, 0.1 * u.rad),
+    )
+    text, _ = round_trip(single(layer))
+    data = yaml.safe_load(text)["layers"]["z"]
+    assert data["optical"]["dielectric"]["euler_angles"][:2] == [10, 20.5]
+    magnetization = data["magnetic"]["magnetization"]
+    assert u.Quantity(magnetization["phi"]).to("deg").magnitude == pytest.approx(30)
+    hand_written = """
+format_version: 1
+layers:
+  z:
+    type: Layer
+    name: z
+    structural:
+      thickness: 1 nm
+    optical:
+      dielectric:
+        eps0:
+          ref_index: 2+0.1j
+        euler_angles: [10, 20, 30]
+    magnetic:
+      magnetization:
+        r: 0.5
+        phi: 90
+        gamma: 45
+structure:
+  name: s
+  sub_structures:
+  - [z, 1]
+"""
+    read = Structure.from_yaml(hand_written).get_layer_handle(0)
+    np.testing.assert_allclose(
+        read.optical.dielectric._euler_angles, np.deg2rad([10, 20, 30]), rtol=1e-12
+    )
+    np.testing.assert_allclose(
+        read.magnetic.magnetization.polar_rad, [0.5, np.pi / 2, np.pi / 4], rtol=1e-12
+    )
+
+
+def test_round_trip_of_non_default_parameters():
+    """parameters which the layers of the conftest keep at their defaults"""
+    layer = Layer(
+        "a",
+        "a",
+        thickness=1 * u.nm,
+        density=7000 * u.kg / u.m**3,
+        deb_wal_fac=0.3 * u.angstrom**2,
+        curie_temp=600 * u.K,
+        mag_moment=2 * u.bohr_magneton,
+        mag_saturation=1.2e6 * u.A / u.m,
+        gilbert_damping=0.02,
+        gyromagnetic_ratio=-1.7e11 * u.rad / u.s / u.T,
+        inertial_time=50 * u.fs,
+        magnetoelastic_coupling=-3e6 * u.J / u.m**3,
+        exch_relax_rate=0.1,
+        magnetization=(1, 0, 0),
+    )
+    _, read = round_trip(single(layer))
+    assert_same_structure(single(layer), read)
+    copy = read.get_layer_handle(0)
+    for group, name in [
+        ("thermal", "deb_wal_fac"),
+        ("magnetic", "mag_saturation"),
+        ("magnetic", "gilbert_damping"),
+        ("magnetic", "gyromagnetic_ratio"),
+        ("magnetic", "inertial_time"),
+        ("magnetic", "magnetoelastic_coupling"),
+        ("magnetic", "exch_relax_rate"),
+    ]:
+        original = getattr(getattr(layer, group), name)
+        assert getattr(getattr(copy, group), name).quantity == original.quantity, name
+
+
 def test_refractiveindex():
     pytest.importorskip("refractiveindex")
     dispersion = Dispersion.from_refractiveindex("main", "Cr", "Johnson", num=200)

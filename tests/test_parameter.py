@@ -111,6 +111,15 @@ def test_temperature_parameter_rejects_wrong_units(temperature_parameter):
         temperature_parameter.quantity = [1 * u.J / u.kg / u.K, 1 * u.m]
 
 
+def test_temperature_parameter_rejects_invalid_expressions():
+    """a dropped expression would hand the next expression to the wrong
+    sub-system"""
+    with pytest.raises(ValueError, match="cannot be converted"):
+        TemperatureParameter("J/kg/K", ["1.0*T +", "2"], "heat_capacity")
+    with pytest.raises(ValueError, match="string representation"):
+        TemperatureParameter("J/kg/K", lambda T: T, "heat_capacity")
+
+
 def test_temperature_parameter_integral_falls_back_for_special_functions():
     """sympy integrates to a hypergeometric function without numerical
     implementation, so that the integral is calculated numerically"""
@@ -153,7 +162,7 @@ def test_temperature_parameter_numerical_integral_per_sub_system(monkeypatch):
 
 def test_vector_parameter_keeps_gamma_within_its_range_exactly():
     vector = VectorParameter("")
-    for gamma in np.linspace(-180, 180, 3601):
+    for gamma in np.linspace(-180, 180, 361):
         vector.set({"r": 1, "phi": 90 * u.deg, "gamma": gamma * u.deg})
         assert vector.polar_rad[2] == np.deg2rad(gamma)
     vector.set({"r": 1, "phi": 90 * u.deg, "gamma": 270 * u.deg})

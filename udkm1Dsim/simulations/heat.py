@@ -343,8 +343,9 @@ class Heat(Simulation):
                 # the formalism depends also on the roughness and magnetization
                 param.append(self.create_multilayer_formalism(pulse_index=index).get_hash())
 
-        for value in kwargs.values():
-            param.append(value)
+        # with their names, as different inputs may have equal values
+        for name, value in kwargs.items():
+            param.append((name, value))
 
         return self.S.get_hash(types="heat") + "_" + make_hash_md5(param)
 
@@ -1624,9 +1625,10 @@ class Heat(Simulation):
                         energy_flux_map[i, j, k, 1] = volumes[j] * sub_system_couplings[j][k](
                             temp_map[i, j, :]
                         )
-                        energy_flux_map[i, j, k, 2] = (
-                            energy_flux_map[i, j, k, 0] - energy_flux_map[i, j, k, 1]
-                        )
+                    # the rest of the total flux is the one by diffusion
+                    energy_flux_map[i, j, k, 2] = (
+                        energy_flux_map[i, j, k, 0] - energy_flux_map[i, j, k, 1]
+                    )
 
         self.disp_message(f"Elapsed time for _energy_flux_map_: {time() - t1:f} s")
 

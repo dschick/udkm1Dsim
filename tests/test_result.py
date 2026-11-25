@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+import copy
+import pickle
+
 import numpy as np
 import pytest
 
@@ -62,9 +65,30 @@ def test_aliases(result, tmp_path):
         result.add("R", np.ones(3))
     with pytest.raises(ValueError, match="reserved"):
         result.add("other", np.ones(3), aliases="data")
-    pytest.importorskip("h5py")
     result.save(tmp_path / "aliases.h5")
     assert Result.load(tmp_path / "aliases.h5").aliases == result.aliases
+
+
+def test_add_quantities(result):
+    """a Quantity keeps its own unit or is converted to the given one"""
+    result.add("energy", np.r_[1, 2] * u.mJ)
+    assert result.unit("energy") == "mJ"
+    np.testing.assert_array_equal(result.energy, [1, 2])
+    result.add("power", np.r_[1, 2] * u.mW, unit="W")
+    assert result.unit("power") == "W"
+    np.testing.assert_allclose(result.power, [1e-3, 2e-3])
+    assert result.quantity("energy", "J").magnitude.tolist() == [1e-3, 2e-3]
+
+
+def test_copy_and_pickle(result):
+    """copies and pickles keep all entries without recursion of the dynamic
+    attribute access"""
+    for other in (copy.deepcopy(result), pickle.loads(pickle.dumps(result))):
+        assert list(other.keys()) == list(result.keys())
+        np.testing.assert_array_equal(other.temp_map, result.temp_map)
+        assert other.unit("temp_map") == "K"
+        assert other.attrs == result.attrs
+        assert other.temp_map is not result.temp_map
 
 
 def test_no_unpacking(result):
@@ -104,7 +128,8 @@ def test_repr(result):
 
 
 def test_save_load(result, tmp_path):
-    h5py = pytest.importorskip("h5py")
+    import h5py
+
     result.add("list", [np.ones(2), np.ones(3)])
     filename = tmp_path / "result.h5"
     with pytest.warns(UserWarning, match="list is no array"):
@@ -114,6 +139,8 @@ def test_save_load(result, tmp_path):
     np.testing.assert_array_equal(loaded.field, result.field)
     np.testing.assert_array_equal(loaded.delays, result.delays)
     assert loaded.unit("distances") == "nm"
+    assert loaded.unit("temp_map") == "K"
+    assert loaded.unit("delays") == "s"
     assert loaded.dims("field") == ("delays", "distances")
     assert loaded.attrs["title"] == "test"
     assert loaded.attrs["parameters"] == {"force recalc": False, "size": 3}
@@ -126,7 +153,6 @@ def test_save_load(result, tmp_path):
 def test_save_load_metadata(result, tmp_path):
     """dicts of metadata are saved as groups with Quantities, None, lists of
     arrays of different shapes, and nested dicts"""
-    pytest.importorskip("h5py")
     result.attrs["parameters"] = {
         "fluence": [5, 10] * u.mJ / u.cm**2,
         "theta": 45 * u.deg,
@@ -134,6 +160,7 @@ def test_save_load_metadata(result, tmp_path):
         "diffusion": True,
         "size": 3,
         "pol_in": np.r_[1, 1j],
+        "labels": np.array(["electrons", "phonons"]),
         "ode_options": {"method": "RK45", "first_step": None, "max_step": np.inf},
     }
     result.attrs["inputs"] = {"strain_vectors": [np.r_[0, 1], np.r_[0:3]], "empty": []}
@@ -148,6 +175,7 @@ def test_save_load_metadata(result, tmp_path):
     assert parameters["polarization"] == "sigma"
     assert parameters["diffusion"] is True and parameters["size"] == 3
     np.testing.assert_array_equal(parameters["pol_in"], [1, 1j])
+    assert list(parameters["labels"]) == ["electrons", "phonons"]
     assert parameters["ode_options"] == {"method": "RK45", "first_step": None, "max_step": np.inf}
     strain_vectors = loaded.attrs["inputs"]["strain_vectors"]
     assert len(strain_vectors) == 2
@@ -160,7 +188,8 @@ def test_save_load_metadata(result, tmp_path):
 
 def test_load_parameters_of_previous_versions(result, tmp_path):
     """the parameters were attributes of the group parameters before"""
-    h5py = pytest.importorskip("h5py")
+    import h5py
+
     filename = tmp_path / "result.h5"
     del result.attrs["parameters"]
     result.save(filename)
@@ -187,6 +216,8 @@ def test_to_xarray(result):
     assert dataset["temp_map"].dims == ("delays", "distances")
     assert dataset["field"].dims == ("delays", "distances", "field_dim_2")
     assert dataset["temp_map"].attrs["units"] == "K"
+    assert dataset["delays"].attrs["units"] == "s"
+    assert dataset["distances"].attrs["units"] == "nm"
     np.testing.assert_allclose(dataset["delays"], result.delays)
     assert dataset.attrs["hash"] == "abc"
 
@@ -213,9 +244,10 @@ def test_chained_results(structure, tmp_path):
     assert strain.attrs["simulation"] == "PhononNum"
     assert strain.attrs["hash"] == pnum.get_hash(delays, temp_map, delta_temp_map)
     # the structure is saved as YAML and the input maps by their hashes
-    assert Structure.from_yaml(strain.attrs["structure"]).get_hash(
-        types="phonon"
-    ) == structure.get_hash(types="phonon")
+    # the oxygen of the fixture has an ionicity without Cromer-Mann table
+    with pytest.warns(UserWarning, match="closest ionicity 0"):
+        restored = Structure.from_yaml(strain.attrs["structure"])
+    assert restored.get_hash(types="phonon") == structure.get_hash(types="phonon")
     assert strain.attrs["input_hashes"] == {
         "temp_map": temp.entry_hash("temp_map"),
         "delta_temp_map": temp.entry_hash("delta_temp_map"),

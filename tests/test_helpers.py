@@ -32,6 +32,12 @@ def test_make_hash_md5_depends_on_all_values_of_arrays():
     assert make_hash_md5(np.ones(4)) != make_hash_md5(np.ones((2, 2)))
     assert make_hash_md5({"a": a}) == make_hash_md5({"a": a.copy()})
     assert make_hash_md5(np.ones(3) * ud.u.nm) != make_hash_md5(np.ones(3) * ud.u.m)
+    # arrays of objects, e.g. ragged strain vectors, and sets
+    ragged = np.array([np.r_[0, 1], np.r_[0]], dtype=object)
+    changed = np.array([np.r_[0, 2], np.r_[0]], dtype=object)
+    assert make_hash_md5(ragged) != make_hash_md5(changed)
+    assert make_hash_md5({1, 2}) == make_hash_md5({2, 1})
+    assert make_hash_md5({1, 2}) != make_hash_md5({1, 3})
 
 
 def test_m_power_x():
@@ -43,6 +49,12 @@ def test_m_power_x():
     result[0, 0, 1, 0] = 6
     result[0, 0, 1, 1] = 11
     assert np.allclose(m_power_x(m, 2), result)
+    # the input is kept, e.g. for repeated calls
+    np.testing.assert_array_equal(m, np.reshape(np.arange(4), (1, 1, 2, 2)))
+    rng = np.random.default_rng(0)
+    stack = rng.random((3, 2, 4, 4))
+    powers = m_power_x(stack, 5)
+    np.testing.assert_allclose(powers[2, 1], np.linalg.matrix_power(stack[2, 1], 5))
 
 
 def test_m_times_n():
@@ -61,6 +73,8 @@ def test_finderb():
     assert np.allclose(
         finderb([1.1, 2.2, 3.3, 4.4, 5.5], np.array([1, 2, 3, 4, 5])), [0, 1, 2, 3, 4]
     )
+    # keys below the first and above the last element and on the elements
+    np.testing.assert_array_equal(finderb([0.5, 3, 9], np.arange(1, 6)), [0, 2, 4])
 
 
 def test_multi_gauss():
@@ -91,6 +105,21 @@ def test_multi_gauss():
     )
 
 
+def test_multi_gauss_of_several_gaussians():
+    """each Gaussian has its own FWHM, center, and area"""
+    x = np.linspace(-20, 20, 40001)
+    y = multi_gauss(x, s=[1, 2], x0=[-3, 4], A=[1, 2])
+    np.testing.assert_allclose(np.sum(y) * (x[1] - x[0]), 3, rtol=1e-6)
+    # with the tail of 4e-5 of the second Gaussian
+    np.testing.assert_allclose(np.sum(y[x < 0.5]) * (x[1] - x[0]), 1, rtol=1e-4)
+    left, right = x < 0.5, x >= 0.5
+    assert x[left][np.argmax(y[left])] == pytest.approx(-3)
+    assert x[right][np.argmax(y[right])] == pytest.approx(4)
+    # the FWHM of the second Gaussian is 2
+    half = y[right] >= np.max(y[right]) / 2
+    assert x[right][half][-1] - x[right][half][0] == pytest.approx(2, abs=2e-3)
+
+
 def test_convert_cartesian_to_polar():
     assert np.allclose(
         convert_cartesian_to_polar(np.array([0.0, 0.0, 0.0])), np.array([0.0, 0.0, 0.0])
@@ -113,6 +142,29 @@ def test_convert_cartesian_to_polar():
         convert_cartesian_to_polar(np.array([1.0, 1.0, 1.0])),
         np.array([1.73205081, 0.95531662, 0.78539816]),
     )
+    # the other quadrants of gamma and the lower half space of phi
+    np.testing.assert_allclose(
+        convert_cartesian_to_polar(np.array([-1.0, 0.0, 0.0])), [1, np.pi / 2, np.pi]
+    )
+    np.testing.assert_allclose(
+        convert_cartesian_to_polar(np.array([0.0, -1.0, 0.0])), [1, np.pi / 2, -np.pi / 2]
+    )
+    np.testing.assert_allclose(
+        convert_cartesian_to_polar(np.array([0.0, 0.0, -1.0])), [1, np.pi, 0], atol=1e-15
+    )
+    np.testing.assert_allclose(
+        convert_cartesian_to_polar(np.array([-1.0, -1.0, -1.0])),
+        [np.sqrt(3), np.pi - 0.95531662, -3 * np.pi / 4],
+    )
+
+
+def test_convert_polar_and_cartesian_round_trip():
+    """arrays of any shape with the components in the last dimension"""
+    rng = np.random.default_rng(0)
+    cartesian = rng.uniform(-1, 1, (4, 5, 3))
+    polar = convert_cartesian_to_polar(cartesian)
+    assert polar.shape == (4, 5, 3)
+    np.testing.assert_allclose(convert_polar_to_cartesian(polar), cartesian, atol=1e-15)
 
 
 def test_convert_polar_to_cartesian():

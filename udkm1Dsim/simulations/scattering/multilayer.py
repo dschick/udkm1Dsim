@@ -351,8 +351,8 @@ class MultilayerScattering(Scattering):
 
         Calculates an unique hash given by the energy :math:`E`, :math:`q_z`
         range, polarization states as well as the sample structure hash for
-        relevant x-ray and magnetic parameters. Optionally, part of the
-        ``strain_map``, ``magnetization_map``, and ``temp_map`` are used.
+        relevant x-ray and magnetic parameters. Optionally, the complete
+        ``strain_map``, ``magnetization_map``, and ``temp_map`` enter.
 
         Args:
             **kwargs (ndarray[float]): spatio-temporal strain, magnetization,
@@ -373,21 +373,15 @@ class MultilayerScattering(Scattering):
 
         if "strain_map" in kwargs:
             strain_map = kwargs.get("strain_map")
-            if np.size(strain_map) > 1e6:
-                strain_map = strain_map.flatten()[0:1000000]
             param.append(strain_map)
         if "magnetization_map" in kwargs:
             magnetization_map = kwargs.get("magnetization_map")
-            if np.size(magnetization_map) > 1e6:
-                magnetization_map = magnetization_map.flatten()[0:1000000]
             # cartesian magnetization maps since version 2.6.1
             param.append("cartesian")
             param.append(magnetization_map)
         if np.size(kwargs.get("temp_map", [])) > 0:
             # only a given temp_map changes the hash of former results
             temp_map = kwargs.get("temp_map")
-            if np.size(temp_map) > 1e6:
-                temp_map = temp_map.flatten()[0:1000000]
             param.append(temp_map)
         if self._azimuth != 0:
             # only an azimuth changes the hash of former results

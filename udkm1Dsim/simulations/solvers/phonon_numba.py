@@ -183,7 +183,7 @@ def _delay_index(t, delays):
 
 
 @njit(cache=True)
-def rhs(t, y, dydt, delays, force_from_heat, damping, spring_consts, masses):
+def rhs(m_idx, y, dydt, force_from_heat, damping, spring_consts, masses):
     r"""rhs
 
     Right-hand side of the equations of motion of the linear chain, written
@@ -194,10 +194,10 @@ def rhs(t, y, dydt, delays, force_from_heat, damping, spring_consts, masses):
     thermal expansion of the current delay, divided by its mass.
 
     Args:
-        t (float): time (s).
+        m_idx (int): index of the current delay, whose force of the thermal
+            expansion acts until the next delay.
         y (ndarray[float]): shifts followed by velocities :math:`2L`.
         dydt (ndarray[float]): output, velocities followed by accelerations.
-        delays (ndarray[float]): delays range of simulation (s).
         force_from_heat (ndarray[float]): forces of the thermal expansion
             :math:`L \times M` (N).
         damping (ndarray[float]): phonon damping of the layers (kg/s).
@@ -207,7 +207,6 @@ def rhs(t, y, dydt, delays, force_from_heat, damping, spring_consts, masses):
     """
     L = len(masses)
     order = spring_consts.shape[1]
-    m_idx = _delay_index(t, delays)
     for i in range(L):
         force = force_from_heat[i, m_idx]
         if i > 0:
@@ -270,7 +269,10 @@ def integrate_rk45(
     if span <= 0.0:
         return h
 
-    rhs(t, y, k[0], delays, force_from_heat, damping, spring_consts, masses)
+    # the force of the delay t0 acts on the whole interval, also at its end
+    # point t1, where the force of the next delay starts
+    m_idx = _delay_index(t0, delays)
+    rhs(m_idx, y, k[0], force_from_heat, damping, spring_consts, masses)
 
     if h <= 0.0:
         # initial step size estimate as in scipy's select_initial_step
@@ -306,10 +308,9 @@ def integrate_rk45(
                     acc += _A[s, q] * k[q, j]
                 y_new[j] = y[j] + h_step * acc
             rhs(
-                t + _C[s] * h_step,
+                m_idx,
                 y_new,
                 k[s],
-                delays,
                 force_from_heat,
                 damping,
                 spring_consts,

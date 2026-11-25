@@ -388,6 +388,30 @@ def test_dielectric_ref_index_and_pen_depth():
         anisotropic.get_ref_index(1.0)
 
 
+@pytest.mark.parametrize(
+    "strain_model, expected",
+    [
+        ("none", lambda eps0, eta: np.broadcast_to(eps0, np.shape(eta) + (2,))),
+        ("density", lambda eps0, eta: 1 + (eps0 - 1) / (1 + eta[..., np.newaxis])),
+        ("photoelastic", lambda eps0, eta: eps0 + (0.3 + 0.01j) * eta[..., np.newaxis]),
+    ],
+)
+@pytest.mark.parametrize("strain", [0.01, np.r_[-0.01, 0, 0.02]])
+def test_dielectric_ref_index_with_strain(strain_model, expected, strain):
+    """the strained refractive index is the root of eps_xx of the strained
+    tensor for a scalar strain or an array of strains"""
+    eps0 = Dispersion.from_ref_index(2 + 0.1j)
+    kwargs = {"deps_dstrain": 0.3 + 0.01j} if strain_model == "photoelastic" else {}
+    d = Dielectric(eps0=eps0, strain_model=strain_model, **kwargs)
+    energy = np.r_[1.2, 1.5]
+    n = d.get_ref_index(energy, strain)
+    assert n.shape == np.shape(strain) + (2,)
+    np.testing.assert_allclose(n**2, d.get_tensor(energy, strain)[..., 0, 0], rtol=1e-12)
+    eta = np.asarray(strain, dtype=float)
+    reference = np.broadcast_to(expected((2 + 0.1j) ** 2, eta), n.shape)
+    np.testing.assert_allclose(n**2, reference, rtol=1e-12)
+
+
 def test_dielectric_in_parameter_group():
     layer = Layer("l", "l")
     assert not layer.optical.dielectric.is_set

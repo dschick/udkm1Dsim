@@ -290,7 +290,7 @@ class XrayDyn(Scattering):
                 )
                 A.append([tmp2, sub_structure[0].name + " substructures"])
                 counter = counter + sub_structure[0].num_sub_structures
-                A.append([tmp, f"{sub_structure[1]:d}x {sub_structure[0].name:s}"])
+                A.append([tmp, f"1x {sub_structure[0].name:s}"])
                 # calculate the ref-trans matrices for N sub structures
                 tmp = m_power_x(tmp, sub_structure[1])
                 A.append([tmp, f"{sub_structure[1]:d}x {sub_structure[0].name:s}"])
@@ -723,7 +723,8 @@ class XrayDyn(Scattering):
 
         """
         if len(args) == 0:
-            strain_vectors = [np.array([1])] * self.S.num_unique_layers
+            # no strain
+            strain_vectors = [np.array([0.0])] * self.S.num_unique_layers
         else:
             strain_vectors = args[0]
 
@@ -759,9 +760,9 @@ class XrayDyn(Scattering):
         self.disp_message("Calculate all _ref_trans_matrices_ ...")
         # initialize
         uc_ids, uc_handles = self.S.unique_layers
-        # if no strain_vectors are given we just do it for no strain (1)
+        # if no strain_vectors are given we just do it for no strain
         if len(args) == 0:
-            strain_vectors = [np.array([1])] * len(uc_ids)
+            strain_vectors = [np.array([0.0])] * len(uc_ids)
         else:
             strain_vectors = args[0]
         # check if there are strains for each unique unitCell

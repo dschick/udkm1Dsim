@@ -5,41 +5,82 @@ from copy import deepcopy
 import numpy as np
 import pytest
 
-from udkm1Dsim import Heat, u
+from udkm1Dsim import Dispersion, Heat, Layer, Structure, u
 from udkm1Dsim.helpers import finderb
 from udkm1Dsim.simulations.solvers.heat_scipy import odefunc
 
 # fixtures
 
 
-@pytest.fixture(scope="module")
-def heat(structure, tmp_path_factory):
+def simulation(S, tmp_path_factory, **kwargs):
     return Heat(
-        structure,
-        force_recalc=True,
-        cache_dir=tmp_path_factory.mktemp("cache"),
-        save_data=True,
-        disp_messages=True,
-        progress_bar=True,
-    )
-
-
-@pytest.fixture(scope="module")
-def heat_excited(structure_amorph, tmp_path_factory):
-    heat = Heat(
-        structure_amorph,
+        S,
         force_recalc=True,
         cache_dir=tmp_path_factory.mktemp("cache"),
         save_data=False,
         disp_messages=False,
         progress_bar=False,
+        **kwargs,
     )
+
+
+@pytest.fixture(scope="module")
+def heat(structure, tmp_path_factory):
+    return simulation(structure, tmp_path_factory)
+
+
+def excited(S, tmp_path_factory, pulse_width, **kwargs):
+    heat = simulation(S, tmp_path_factory, **kwargs)
     heat.excitation = {
         "fluence": [5] * u.mJ / u.cm**2,
         "delay_pump": [0] * u.ps,
-        "pulse_width": [0.1] * u.ps,
+        "pulse_width": [pulse_width] * u.ps,
     }
     return heat
+
+
+@pytest.fixture(scope="module")
+def heat_delta(structure_amorph, tmp_path_factory):
+    """a delta excitation without heat diffusion, which neglects the pulse width"""
+    return excited(structure_amorph, tmp_path_factory, 0)
+
+
+@pytest.fixture(scope="module")
+def heat_excited(structure_amorph, tmp_path_factory):
+    return excited(structure_amorph, tmp_path_factory, 0.1, heat_diffusion=True)
+
+
+@pytest.fixture(scope="module")
+def heat_two_temperatures(tmp_path_factory):
+    """a two-temperature model of electrons and phonons of a metal film with
+    temperature-dependent heat capacity and thermal conductivity of the
+    electrons on an insulating substrate"""
+    metal = Layer(
+        "metal",
+        "metal",
+        thickness=1 * u.nm,
+        density=8900 * u.kg / u.m**3,
+        heat_capacity=["0.08*T", 420],
+        therm_cond=["90*T_0/T_1", 1],
+        sub_system_coupling=["-4e17*(T_0-T_1)", "4e17*(T_0-T_1)"],
+        lin_therm_exp=[0, 1.3e-5],
+        dielectric=Dispersion.from_ref_index(2.2 + 4.9j),
+    )
+    substrate = Layer(
+        "substrate",
+        "substrate",
+        thickness=1 * u.nm,
+        density=2200 * u.kg / u.m**3,
+        heat_capacity=[1, 740],
+        therm_cond=[0, 1.4],
+        sub_system_coupling=[0, 0],
+        lin_therm_exp=[0, 5e-7],
+        dielectric=Dispersion.from_ref_index(1.45),
+    )
+    S = Structure("two-temperature model")
+    S.add_sub_structure(metal, 20)
+    S.add_sub_structure(substrate, 50)
+    return excited(S, tmp_path_factory, 0.1, heat_diffusion=True)
 
 
 @pytest.fixture(scope="module")
@@ -176,12 +217,15 @@ def test_odefunc(benchmark, heat):
 
 
 @pytest.mark.benchmark
-def test_calc_temp_map(heat_excited):
-    heat_excited.heat_diffusion = False
-    heat_excited.calc_temp_map(np.r_[-1:10:0.1] * u.ps, 300)
+def test_calc_temp_map(heat_delta):
+    heat_delta.calc_temp_map(np.r_[-1:10:0.1] * u.ps, 300)
 
 
 @pytest.mark.benchmark
 def test_calc_temp_map_heat_diffusion(heat_excited):
-    heat_excited.heat_diffusion = True
     heat_excited.calc_temp_map(np.r_[-1:10:0.1] * u.ps, 300)
+
+
+@pytest.mark.benchmark
+def test_calc_temp_map_two_temperatures(heat_two_temperatures):
+    heat_two_temperatures.calc_temp_map(np.r_[-1:10:0.1] * u.ps, 300)

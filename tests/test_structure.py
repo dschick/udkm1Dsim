@@ -3,15 +3,10 @@
 import copy
 
 import numpy as np
-import pint
 import pytest
 from pint.testing import assert_allclose
 
-from udkm1Dsim import Dispersion, Layer, Structure
-
-u = pint.get_application_registry()
-u.formatter.default_format = ".4g~P"
-
+from udkm1Dsim import Dispersion, Layer, Structure, u
 
 # tests
 
@@ -26,7 +21,8 @@ def test_structure_repr(structure):
 
 
 def test_thickness(structure):
-    assert_allclose(structure.thickness, 150 * u.nm, rtol=1e-2)
+    # 20 amorphous layers of 1 nm and 20 + 20 x 12 unit cells of 0.5 nm
+    assert_allclose(structure.thickness, 150 * u.nm, rtol=1e-12)
 
 
 @pytest.mark.filterwarnings("ignore:FigureCanvasAgg is non-interactive")
@@ -37,7 +33,10 @@ def test_structure_visualize(structure, agg_backend):
 
 
 def test_structure_get_hash(structure):
-    structure.get_hash()
+    hash = structure.get_hash()
+    assert isinstance(hash, str) and len(hash) == 32
+    assert copy.deepcopy(structure).get_hash() == hash
+    assert structure.get_hash(types="heat") != structure.get_hash(types="phonon")
 
 
 @pytest.mark.parametrize(
@@ -47,10 +46,16 @@ def test_structure_add_sub_structure(request, fixture_name, structure):
     substructure = request.getfixturevalue(fixture_name)
     struc_copy = copy.deepcopy(structure)
     if isinstance(substructure, Structure):
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning, match="substrate of the sub_structure is ignored"):
             struc_copy.add_sub_structure(substructure, 10)
+        added = 10 * substructure.num_layers
     else:
         struc_copy.add_sub_structure(substructure, 10)
+        added = 10
+    assert struc_copy.num_layers == structure.num_layers + added
+    assert struc_copy.sub_structures[-1] == [substructure, 10]
+    with pytest.raises(TypeError, match="no possible sub structure"):
+        struc_copy.add_sub_structure("layer", 10)
 
 
 @pytest.mark.parametrize(
@@ -60,10 +65,13 @@ def test_structure_add_superstrate(request, fixture_name, structure):
     substructure = request.getfixturevalue(fixture_name)
     struc_copy = copy.deepcopy(structure)
     if isinstance(substructure, Structure):
-        with pytest.raises(TypeError):
+        with pytest.raises(TypeError, match="no possible superstrate"):
             struc_copy.add_superstrate(substructure)
     else:
         struc_copy.add_superstrate(substructure)
+        assert struc_copy.superstrate == [substructure, 1]
+        # the superstrate is no layer of the structure
+        assert struc_copy.num_layers == structure.num_layers
 
 
 @pytest.mark.parametrize(
@@ -73,10 +81,12 @@ def test_structure_add_substrate(request, fixture_name, structure):
     substructure = request.getfixturevalue(fixture_name)
     struc_copy = copy.deepcopy(structure)
     if isinstance(substructure, Structure):
-        with pytest.raises(TypeError):
+        with pytest.raises(TypeError, match="no possible substrate"):
             struc_copy.add_substrate(substructure)
     else:
-        struc_copy.add_substrate(substructure)
+        struc_copy.add_substrate(substructure, 3)
+        assert struc_copy.substrate == [substructure, 3]
+        assert struc_copy.num_layers == structure.num_layers
 
 
 def test_num_sub_structures(structure):
@@ -119,7 +129,8 @@ def test_positions_per_unique_layer(structure):
 
 def test_layer_distances(structure):
     d_start, _, _ = structure.layer_distances
-    assert_allclose(np.sum(d_start), 2.22e-05 * u.m, rtol=1e-2)
+    # 1 nm amorphous layers followed by 0.5 nm unit cells
+    assert_allclose(d_start[[0, 1, 19, 20, 21, 40, -1]], [0, 1, 19, 20, 20.5, 30, 149.5] * u.nm)
 
 
 def test_layer_distances_are_consistent(structure):
@@ -132,7 +143,8 @@ def test_layer_distances_are_consistent(structure):
 
 def test_interface_distances(structure):
     interfaces = structure.interface_distances
-    assert_allclose(np.sum(interfaces), 3.68e-6 * u.m, rtol=1e-2)
+    # the Fe/O interfaces of the double layers start after 20 nm + 10 nm + 2.5 nm
+    assert_allclose(interfaces[:5], [0, 10, 20, 32.5, 36] * u.nm)
     # the surface, the 2 interfaces of the amorphous layers, the 20 Fe/O and
     # 19 O/Fe interfaces of the double layers, whose first one continues the
     # Fe unit cells, and the bottom
@@ -172,10 +184,22 @@ def test_interp_distance_at_interfaces(structure):
 
 
 def test_get_layer_property_vector(structure):
-    structure.get_layer_property_vector("density")
-    structure.get_layer_property_vector("_density")
-    structure.get_layer_property_vector("heat_capacity")
-    structure.get_layer_property_vector("spring_const")
+    """the property of all layers in their order, as Quantity or magnitude"""
+    density = structure.get_layer_property_vector("density")
+    assert len(density) == structure.num_layers
+    assert_allclose(density[:20], 5000 * u.kg / u.m**3)
+    np.testing.assert_allclose(
+        structure.get_layer_property_vector("_density"), density.to("kg/m**3").magnitude
+    )
+    thickness = structure.get_layer_property_vector("structural.thickness.magnitude")
+    np.testing.assert_allclose(thickness[18:22], [1e-9, 1e-9, 5e-10, 5e-10])
+    # the functions of the temperature of each sub-system
+    heat_capacity = structure.get_layer_property_vector("heat_capacity")
+    assert [c[0](300) for c in (heat_capacity[0], heat_capacity[-1])] == [500, 500]
+    spring_const = structure.get_layer_property_vector("spring_const")
+    assert len(spring_const) == structure.num_layers
+    with pytest.raises(AttributeError):
+        structure.get_layer_property_vector("structural.not_a_parameter")
 
 
 def test_get_layer_property_vector_mag_moment_in_si(structure):
@@ -273,12 +297,26 @@ def test_get_layer_property_vector_padding(structure):
     assert np.allclose(spring_consts[anharmonic_pos, 1:], [-7e11, 1e20])
 
 
-def test_get_layer_handle(structure):
-    structure.get_layer_handle(0)
+def test_get_layer_handle(structure, amorphous_layer_iron, unit_cell_oxygen):
+    assert structure.get_layer_handle(0) is amorphous_layer_iron
+    assert structure.get_layer_handle(-1) is unit_cell_oxygen
 
 
 def test_reverse(structure):
-    structure.reverse()
+    """the reversed structure has the layers in reversed order and swaps the
+    superstrate and the substrate"""
+    reversed_structure = structure.reverse()
+    indices, ids, _ = structure.layer_vectors
+    _, reversed_ids, _ = reversed_structure.layer_vectors
+    assert reversed_ids == ids[::-1]
+    assert reversed_structure.num_layers == structure.num_layers
+    assert_allclose(reversed_structure.thickness, structure.thickness)
+    # of copies of the layers
+    assert reversed_structure.substrate[0].id == structure.superstrate[0].id
+    assert reversed_structure.superstrate[0].id == structure.substrate[0].id
+    assert reversed_structure.superstrate[1] == structure.substrate[1]
+    # the original structure is kept
+    assert structure.layer_vectors[1] == ids
 
 
 def test_structure_num_sub_systems_follows_layers():

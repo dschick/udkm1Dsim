@@ -2,11 +2,11 @@
 packages, see ``tests/data/references/README.md``."""
 
 import json
-import warnings
 from pathlib import Path
 
 import numpy as np
 import pytest
+from scipy.integrate import trapezoid
 
 import udkm1Dsim as ud
 from udkm1Dsim import u
@@ -17,8 +17,6 @@ REFERENCES = sorted(
     if not path.stem.startswith("xray_bragg")
 )
 BRAGG = Path(__file__).parent / "data" / "references" / "xray_bragg_si004.npz"
-# np.trapz is renamed to np.trapezoid in numpy 2.0
-trapezoid = getattr(np, "trapezoid", None) or np.trapz
 EXACT = [ud.BerremanElzo, ud.BerremanStepanov]
 FIRST_ORDER = [ud.Elzo, ud.Stepanov]
 
@@ -79,10 +77,8 @@ def jones(cls, S, data, meta):
     sim = cls(S, True, disp_messages=False, progress_bar=False, save_data=False)
     sim.energy = np.r_[meta["energy"]] * u.eV
     sim.theta = data["theta"] * u.deg
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        res = sim.homogeneous_jones_matrices()
-        R, T = res.jones_reflection, res.jones_transmission
+    res = sim.homogeneous_jones_matrices()
+    R, T = res.jones_reflection, res.jones_transmission
     return R[0], T[0]
 
 
@@ -221,9 +217,7 @@ def test_instrument_against_genx(path, cls, footprint):
     sim.instrument.footprint = "gauss" if footprint == "gauss" else "box"
     sim.instrument.beam_width = genx["beamw"] * (fwhm if footprint == "gauss" else 1) * u.mm
     sim.instrument.sample_length = genx["samplelen"] * u.mm
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        R = sim.calc_homogeneous_reflectivity_transmissivity()[0][0]
+    R = sim.calc_homogeneous_reflectivity_transmissivity()[0][0]
     assert_close(R, data[f"genx_R_instrument_{footprint}"], 1e-9)
 
 
@@ -332,4 +326,4 @@ def test_bragg_reflection_against_gid_sl(pol, key):
     assert np.argmax(R) == np.argmax(reference)
     np.testing.assert_allclose(np.max(R), np.max(reference), rtol=3e-3)
     integral = trapezoid(R, data["offset"]) / trapezoid(reference, data["offset"])
-    assert abs(integral - 1) < 1e-2
+    assert abs(integral - 1) < 5e-3

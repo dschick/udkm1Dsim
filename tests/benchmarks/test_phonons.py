@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from udkm1Dsim import PhononNum, u
+from udkm1Dsim import PhononAna, PhononNum, u
 from udkm1Dsim.simulations.solvers.phonon_scipy import force_from_heat as calc_force_from_heat
 from udkm1Dsim.simulations.solvers.phonon_scipy import odefunc
 
@@ -12,13 +12,14 @@ from udkm1Dsim.simulations.solvers.phonon_scipy import odefunc
 
 @pytest.fixture(scope="module")
 def phonon_num(structure, tmp_path_factory):
+    # the same settings as the numba backend for a fair comparison of both
     return PhononNum(
         structure,
         force_recalc=True,
         cache_dir=tmp_path_factory.mktemp("cache"),
-        save_data=True,
-        disp_messages=True,
-        progress_bar=True,
+        save_data=False,
+        disp_messages=False,
+        progress_bar=False,
     )
 
 
@@ -40,19 +41,28 @@ def phonon_num_numba(structure, tmp_path_factory, delays, temp_map, delta_temp_m
 
 
 @pytest.fixture(scope="module")
+def phonon_ana(structure, tmp_path_factory):
+    return PhononAna(
+        structure,
+        force_recalc=True,
+        cache_dir=tmp_path_factory.mktemp("cache"),
+        save_data=False,
+        disp_messages=False,
+        progress_bar=False,
+    )
+
+
+@pytest.fixture(scope="module")
 def delays():
     return np.r_[-1:10:0.01] * u.ps
 
 
 @pytest.fixture(scope="module")
 def temp_map(structure, delays):
-    L = structure.num_layers
-    M = len(delays)
-    temp_map = np.ones((M, L))
-    for i in range(temp_map.shape[0]):
-        for j in range(temp_map.shape[1]):
-            temp_map[i, j] = 300 * np.exp(-i) * np.exp(-j)
-    return temp_map
+    # step-like heating at t = 0 with an exponential profile of 20 nm
+    _, _, distances = structure.layer_distances
+    heated = np.exp(-distances.to("nm").magnitude / 20)
+    return 300 + 100 * (delays.magnitude >= 0)[:, np.newaxis] * heated[np.newaxis, :]
 
 
 @pytest.fixture(scope="module")
@@ -113,3 +123,16 @@ def test_phonon_num_calc_strain_map(phonon_num, delays, temp_map, delta_temp_map
 @pytest.mark.benchmark
 def test_phonon_num_calc_strain_map_numba(phonon_num_numba, delays, temp_map, delta_temp_map):
     phonon_num_numba.calc_strain_map(delays, temp_map, delta_temp_map)
+
+
+# PhononAna
+
+
+@pytest.mark.benchmark
+def test_phonon_ana_calc_eigenproblem(phonon_ana):
+    phonon_ana.calc_eigenproblem()
+
+
+@pytest.mark.benchmark
+def test_phonon_ana_calc_strain_map(phonon_ana, delays, temp_map, delta_temp_map):
+    phonon_ana.calc_strain_map(delays, temp_map, delta_temp_map)

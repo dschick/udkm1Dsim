@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-
 import copy
 import warnings
 from pathlib import Path
@@ -261,7 +260,8 @@ def test_atom_repr(request, fixture_name, cls_name):
 
 @pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_dysprosium", "atom_mixed"])
 def test_atom_read_atomic_form_factor_coeff_from_file(request, fixture_name):
-    atom = request.getfixturevalue(fixture_name)
+    # a copy keeps the tables of the module-scoped atoms for later tests
+    atom = copy.deepcopy(request.getfixturevalue(fixture_name))
     filename = Path.joinpath(Path(__file__).parent, "data", "Fe.cf")
     atom.read_atomic_form_factor_coeff(filename=filename)
     with pytest.raises(FileNotFoundError):
@@ -270,7 +270,8 @@ def test_atom_read_atomic_form_factor_coeff_from_file(request, fixture_name):
 
 @pytest.mark.parametrize("fixture_name", ["atom_iron", "atom_dysprosium", "atom_mixed"])
 def test_atom_read_magnetic_form_factor_coeff_from_file(request, fixture_name):
-    atom = request.getfixturevalue(fixture_name)
+    # a copy keeps the tables of the module-scoped atoms for later tests
+    atom = copy.deepcopy(request.getfixturevalue(fixture_name))
     # magnetic and electronic form factor files have the same format
     filename = Path.joinpath(Path(__file__).parent, "data", "Fe.cf")
     mag_coeff = atom.read_magnetic_form_factor_coeff(filename=filename)

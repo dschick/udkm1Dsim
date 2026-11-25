@@ -295,8 +295,11 @@ class Scattering(Simulation):
         return delays
 
     def _check_experiment(self):
-        """Warn for scattering vectors beyond :math:`2k`, which have no
-        incidence angle at the photon energy."""
+        """Raise an error without photon energy and warn for scattering
+        vectors beyond :math:`2k`, which have no incidence angle at the
+        photon energy."""
+        if np.size(self.experiment.energy.magnitude) == 0:
+            raise ValueError("Set the energy and the angles or qz of the experiment first!")
         invalid = ~np.isfinite(self.experiment.theta.magnitude)
         if np.any(invalid):
             energy = self.experiment.energy.magnitude[np.any(invalid, axis=1)]
@@ -536,7 +539,7 @@ class Scattering(Simulation):
         Calculates an unique hash given by the energy :math:`E`,
         :math:`q_z` range, polarization states and the ``strain_vectors`` as
         well as the sample structure hash for relevant x-ray parameters.
-        Optionally, part of the strain_map is used.
+        Optionally, the complete ``strain_map`` and ``temp_map`` enter.
 
         Args:
             strain_vectors (dict{ndarray[float]}): reduced strains per unique
@@ -562,14 +565,10 @@ class Scattering(Simulation):
 
         if "strain_map" in kwargs:
             strain_map = kwargs.get("strain_map")
-            if np.size(strain_map) > 1e6:
-                strain_map = strain_map.flatten()[0:1000000]
             param.append(strain_map)
 
         if "temp_map" in kwargs:
             temp_map = kwargs.get("temp_map")
-            if np.size(temp_map) > 1e6:
-                temp_map = temp_map.flatten()[0:1000000]
             param.append(temp_map)
 
         return self.S.get_hash(types="xray") + "_" + make_hash_md5(param)

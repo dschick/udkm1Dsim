@@ -1434,21 +1434,19 @@ class UnitCell(Layer):
         if isfunction(position):
             raise ValueError("Please use string representation of function!")
         elif isinstance(position, str):
+            # backwards compatibility for direct lambda definition
+            if ":" in position:
+                # strip lambda prefix
+                position = position.split(":")[1]
+            position_str = position.strip()
             try:
-                # backwards compatibility for direct lambda definition
-                if ":" in position:
-                    # strip lambda prefix
-                    position = position.split(":")[1]
-                position_str = position.strip()
-                position = lambdify(s, position, modules="numpy")
+                position = lambdify(s, position_str, modules="numpy")
+                position(0)
             except Exception as e:
-                print(
-                    "String input for unit cell property "
-                    + position
-                    + " \
-                    cannot be converted to function handle!"
-                )
-                print(e)
+                raise ValueError(
+                    f"String input {position_str!r} for the atom position "
+                    "cannot be converted to function handle!"
+                ) from e
         elif isinstance(position, (int, float)):
             position_str = str(position) + "*(1+s)"
             position = lambdify(s, position_str, modules="numpy")

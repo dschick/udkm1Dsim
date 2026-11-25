@@ -213,7 +213,7 @@ class XrayKin(Scattering):
         the instrument, see :meth:`calc_homogeneous_reflectivity`"""
         self._check_experiment()
         self._warn_ignored_superstrate_and_substrate()
-        if strains == 0:
+        if np.isscalar(strains) and strains == 0:
             strains = np.zeros([self.S.num_sub_structures, 1])
 
         # get the reflected field of the structure for each energy
@@ -223,12 +223,14 @@ class XrayKin(Scattering):
             theta = self.experiment.theta.magnitude[i, :]
             # a superstrate does not make too much sence here
             # calculate reflected field of the actual structure
-            Ept, A = self.homogeneous_reflected_field(self.S, energy, qz, theta, strains)
-            # add static substrate
+            Ept, A, thickness = self._reflected_field_and_thickness(
+                self.S, energy, qz, theta, strains
+            )
+            # add static substrate below the strained structure
             if isinstance(self.S.substrate[0], UnitCell):
                 temp, temp2 = self.homogeneous_reflected_field(self.S.substrate, energy, qz, theta)
                 A.append([temp2, "static substrate"])
-                Ept = Ept + (temp * np.exp(1j * qz * self.S.thickness.to_base_units().magnitude))
+                Ept = Ept + (temp * np.exp(1j * qz * thickness))
 
             # calculate the real reflectivity from Ef
             R[i, :] = np.real(Ept * np.conj(Ept))
@@ -277,7 +279,8 @@ class XrayKin(Scattering):
             E_p^t = \sum_{i=1}^M E_p^{N,i} \exp(i q_z Z_i)
 
         where :math:`Z_i = \sum_{j=1}^{i-1} N_j z_j` is the distance of the
-        :math:`i`-th layer from the surface.
+        :math:`i`-th layer from the surface. A strain :math:`\epsilon` of a
+        sub-structure stretches its distance to :math:`z (1 + \epsilon)`.
 
         Args:
             S (Structure, UnitCell): structure or sub-structure to calculate on.
@@ -293,6 +296,12 @@ class XrayKin(Scattering):
             - *A (ndarray[complex])* - reflected fields of substructures.
 
         """
+        Ept, A, _ = self._reflected_field_and_thickness(S, energy, qz, theta, strains)
+        return Ept, A
+
+    def _reflected_field_and_thickness(self, S, energy, qz, theta, strains=0):
+        """reflected fields of :meth:`homogeneous_reflected_field` and the
+        strained thickness of ``S`` (m) for the phase of the layers below"""
         if isinstance(S, Structure):
             sub_structures = S.sub_structures
         elif isinstance(S[0], (Vacuum, UnitCell)):
@@ -319,21 +328,22 @@ class XrayKin(Scattering):
             if isinstance(sub_structure[0], UnitCell):
                 # the substructure is an unit cell and we can calculate
                 # Ep directly
-                Ep = self.calc_Ep(energy, qz, theta, sub_structure[0], strains[strainCounter])
-                z = sub_structure[0].lattice.c_axis.magnitude
+                strain = float(np.asarray(strains[strainCounter]).item())
+                Ep = self.calc_Ep(energy, qz, theta, sub_structure[0], strain)
+                # the strain stretches the distance of the unit cells
+                z = sub_structure[0].lattice.c_axis.magnitude * (1 + strain)
                 strainCounter = strainCounter + 1
             elif isinstance(sub_structure[0], Structure):
                 # the substructure is a structure, so we do a recursive
                 # call of this method
                 d = sub_structure[0].num_sub_structures
-                Ep, temp = self.homogeneous_reflected_field(
+                Ep, temp, z = self._reflected_field_and_thickness(
                     sub_structure[0],
                     energy,
                     qz,
                     theta,
                     strains[strainCounter : (strainCounter + d)],
                 )
-                z = sub_structure[0].thickness.to("m").magnitude
                 strainCounter = strainCounter + d
                 A.append([temp, [sub_structure[0].name + " substructures"]])
                 A.append([Ep, f"{1:d}x {sub_structure[0].name:s}"])
@@ -355,7 +365,7 @@ class XrayKin(Scattering):
             # substructures
             Z = Z + z * sub_structure[1]
 
-        return Ept, A
+        return Ept, A, Z
 
     @u.wraps(None, (None, "m**-1", "m", None), strict=False)
     def calc_interference_function(self, qz, z, N):

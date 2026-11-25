@@ -152,8 +152,9 @@ class Magnetization(Simulation):
             if name in kwargs:
                 param.append(kwargs.pop(name))
 
-        for value in kwargs.values():
-            param.append(value)
+        # with their names, as different inputs may have equal values
+        for name, value in kwargs.items():
+            param.append((name, value))
 
         return self.S.get_hash(types="magnetic") + "_" + make_hash_md5(param)
 

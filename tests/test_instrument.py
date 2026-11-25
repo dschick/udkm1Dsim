@@ -2,10 +2,12 @@
 
 import numpy as np
 import pytest
+from scipy.integrate import trapezoid
 from scipy.special import erf
 
 import udkm1Dsim as ud
-from udkm1Dsim import Atom, Dielectric, InstrumentParameters, Layer, Parratt, Structure, u
+from tests.conftest import fe_layer
+from udkm1Dsim import InstrumentParameters, Parratt, Structure, u
 from udkm1Dsim.simulations.result import Result
 from udkm1Dsim.simulations.scattering import instrument as ins
 from udkm1Dsim.structures.parameters import Parameter
@@ -22,36 +24,11 @@ def simulation(cls, S, energy, theta, **kwargs):
     return sim
 
 
-@pytest.fixture(scope="module")
-def multilayer():
-    """Fe/O multilayer on a substrate of O for X-rays"""
-    fe = Layer(
-        "fe",
-        "fe",
-        thickness=2 * u.nm,
-        density=7874 * u.kg / u.m**3,
-        roughness=0.3 * u.nm,
-        dielectric=Dielectric.from_atoms(Atom("Fe")),
-    )
-    ox = Layer(
-        "ox",
-        "ox",
-        thickness=1.3 * u.nm,
-        density=3000 * u.kg / u.m**3,
-        dielectric=Dielectric.from_atoms(Atom("O")),
-    )
-    S = Structure("multilayer")
-    S.add_sub_structure(fe, 1)
-    S.add_sub_structure(ox, 1)
-    ML = Structure("periods")
-    ML.add_sub_structure(S, 5)
-    ML.add_substrate(ox)
-    return ML
-
-
 @pytest.fixture
-def parratt(multilayer):
-    return simulation(Parratt, multilayer, [8000] * u.eV, np.linspace(0.2, 4, 101) * u.deg)
+def parratt(periodic_multilayer):
+    return simulation(
+        Parratt, periodic_multilayer, [8000] * u.eV, np.linspace(0.2, 4, 101) * u.deg
+    )
 
 
 # ============================================================================
@@ -63,7 +40,7 @@ def parratt(multilayer):
 def test_profiles_have_unit_fwhm_and_area(shape):
     x = np.linspace(-200, 200, 2000001)
     p = ins.profile(shape, x, eta=0.3)
-    np.testing.assert_allclose(np.trapezoid(p, x), 1, atol=2e-3)
+    np.testing.assert_allclose(trapezoid(p, x), 1, atol=2e-3)
     if shape != "box":
         np.testing.assert_allclose(ins.profile(shape, 0.5, 0.3), ins.profile(shape, 0, 0.3) / 2)
 
@@ -134,7 +111,7 @@ def test_check_nodes(recwarn):
 @pytest.mark.parametrize("range_", [0.5, 2, 7])
 def test_profile_area_is_the_integral_within_the_range(shape, range_):
     x = np.linspace(-range_, range_, 200001)
-    area = np.trapezoid(ins.profile(shape, x, 0.3), x)
+    area = trapezoid(ins.profile(shape, x, 0.3), x)
     # the trapezoidal rule is less accurate at the jumps of the box
     assert ins.profile_area(shape, range_, 0.3) == pytest.approx(
         area, abs=1e-4 if shape == "box" else 1e-6
@@ -293,7 +270,12 @@ def test_partial_resolution_is_warned(parratt, settings, match):
     [
         ({"theta_points": 1}, "single node of the quadrature"),
         ({"theta_points": 3}, "3 uniform nodes .* 2 FWHM apart"),
-        ({"theta_points": 9, "theta_range": 4}, "Use at least 13 theta_points"),
+        pytest.param(
+            {"theta_points": 9, "theta_range": 4},
+            "Use at least 13 theta_points",
+            # the wide range reaches the surface at the smallest angle
+            marks=pytest.mark.filterwarnings("ignore:Some nodes of the theta resolution"),
+        ),
         (
             {"theta_mode": "convolution", "theta_width": 1e-3 * u.deg},
             "larger than the theta_width",
@@ -449,8 +431,23 @@ def test_theta_offset_footprint_I0_and_background(parratt):
     np.testing.assert_allclose(R, parratt.calc_homogeneous_reflectivity_transmissivity()[0])
 
 
-def test_theta_convolution_close_to_quadrature(multilayer):
-    sim = simulation(Parratt, multilayer, [8000] * u.eV, np.linspace(0.2, 4, 3801) * u.deg)
+def test_energy_offset(periodic_multilayer):
+    """an offset of the photon energy equals the shifted energy at the same
+    incidence angles"""
+    theta = np.linspace(0.2, 4, 101) * u.deg
+    sim = simulation(Parratt, periodic_multilayer, [700, 707] * u.eV, theta)
+    sim.instrument.energy_offset = 2 * u.eV
+    R = sim.calc_homogeneous_reflectivity_transmissivity()[0]
+    shifted = simulation(Parratt, periodic_multilayer, [702, 709] * u.eV, theta)
+    np.testing.assert_allclose(R, shifted.calc_homogeneous_reflectivity_transmissivity()[0])
+    sim.instrument.energy_offset = 0 * u.eV
+    assert not np.allclose(R, sim.calc_homogeneous_reflectivity_transmissivity()[0], rtol=1e-3)
+
+
+def test_theta_convolution_close_to_quadrature(periodic_multilayer):
+    sim = simulation(
+        Parratt, periodic_multilayer, [8000] * u.eV, np.linspace(0.2, 4, 3801) * u.deg
+    )
     sim.instrument.theta_resolution = "gauss"
     sim.instrument.theta_width = 0.05 * u.deg
     sim.instrument.theta_range = 3
@@ -468,10 +465,16 @@ def test_theta_width_along_the_angles(parratt):
     parratt.instrument.theta_resolution = "gauss"
     parratt.instrument.theta_width = width * u.deg
     R = parratt.calc_homogeneous_reflectivity_transmissivity()[0]
+    assert R.shape == (1, 101)
+    # each angle has the resolution of its own width
+    for i in (10, 50, 90):
+        parratt.instrument.theta_width = width[i] * u.deg
+        np.testing.assert_allclose(
+            R[:, i], parratt.calc_homogeneous_reflectivity_transmissivity()[0][:, i], rtol=1e-12
+        )
     parratt.instrument.theta_width = width[:50] * u.deg
     with pytest.raises(ValueError, match="theta_width"):
         parratt.calc_homogeneous_reflectivity_transmissivity()
-    assert R.shape == (1, 101)
 
 
 # ============================================================================
@@ -540,9 +543,11 @@ def test_energy_qz_mode_close_to_quadrature(xray_dyn):
     np.testing.assert_allclose(xray_dyn.calc_homogeneous_reflectivity()[0], foot * R_qz)
 
 
-def test_energy_convolution_close_to_quadrature(multilayer):
+def test_energy_convolution_close_to_quadrature(periodic_multilayer):
     """an energy scan at a fixed angle"""
-    sim = simulation(Parratt, multilayer, np.linspace(690, 740, 1001) * u.eV, [10] * u.deg)
+    sim = simulation(
+        Parratt, periodic_multilayer, np.linspace(690, 740, 1001) * u.eV, [10] * u.deg
+    )
     sim.instrument.energy_resolution = "gauss"
     sim.instrument.energy_width = 0.5
     sim.instrument.energy_range = 3
@@ -567,14 +572,7 @@ def test_energy_convolution_close_to_quadrature(multilayer):
 
 @pytest.fixture
 def magnetic_elzo():
-    fe = Layer(
-        "fe",
-        "fe",
-        thickness=5 * u.nm,
-        density=7874 * u.kg / u.m**3,
-        dielectric=Dielectric.from_atoms(ud.Atom("Fe")),
-        magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 30 * u.deg},
-    )
+    fe = fe_layer(5 * u.nm, magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 30 * u.deg})
     S = Structure("magnetic film")
     S.add_sub_structure(fe, 2)
     return simulation(ud.Elzo, S, [708] * u.eV, np.linspace(5, 30, 26) * u.deg)

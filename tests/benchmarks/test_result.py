@@ -23,12 +23,10 @@ def result():
 
 
 def test_result_save(benchmark, result, tmp_path):
-    pytest.importorskip("h5py")
     benchmark(result.save, tmp_path / "result.h5")
 
 
 def test_result_load(benchmark, result, tmp_path):
-    pytest.importorskip("h5py")
     filename = tmp_path / "result.h5"
     result.save(filename)
     benchmark(Result.load, filename)

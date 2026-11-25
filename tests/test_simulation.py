@@ -8,11 +8,16 @@ from udkm1Dsim import Result, Simulation
 
 
 @pytest.fixture(scope="module")
-def simulation(structure):
+def cache_dir(tmp_path_factory):
+    return tmp_path_factory.mktemp("cache")
+
+
+@pytest.fixture(scope="module")
+def simulation(structure, cache_dir):
     return Simulation(
         structure,
         force_recalc=True,
-        cache_dir="./",
+        cache_dir=cache_dir,
         save_data=True,
         disp_messages=True,
         progress_bar=True,
@@ -53,5 +58,7 @@ def test_simulation_save(simulation, tmp_path_factory):
         simulation.save(filename, test_array)
 
 
-def test_cache_dir(simulation):
-    assert simulation.cache_dir == "./"
+def test_cache_dir(simulation, cache_dir, structure):
+    assert simulation.cache_dir == cache_dir
+    # the current directory is the default
+    assert Simulation(structure, True, save_data=False).cache_dir == "./"
