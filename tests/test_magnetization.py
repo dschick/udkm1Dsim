@@ -79,11 +79,8 @@ def make_layer(id, **overrides):
         "mag_saturation": 5e5 * u.J / u.T / u.m**3,
     }
     props.update(overrides)
-    atom = ud.Atom("Fe")
-    atom.magnetization = (1, 0, 0)
-    return ud.AmorphousLayer(
-        id, id, thickness=1 * u.nm, density=7000 * u.kg / u.m**3, atom=atom, **props
-    )
+    props.setdefault("magnetization", (1, 0, 0))
+    return ud.Layer(id, id, thickness=1 * u.nm, density=7000 * u.kg / u.m**3, **props)
 
 
 def make_structure(*layers):
@@ -1218,8 +1215,7 @@ def test_exchange_relaxation_torque():
 
 
 def test_concentration():
-    """the concentrations are equal unless they are given, e.g. as the
-    fractions of the constituents of a mixed atom"""
+    """the concentrations are equal unless they are given"""
     J = np.diag([mf_exchange(0.5, 630)] * 2)
     magnetic = ud.MagneticParameters(eff_spin=[0.5, 0.5], mf_exch_coupling=J * u.J)
     assert np.allclose(magnetic.sublattice_values("concentration"), [0.5, 0.5])
@@ -1228,13 +1224,6 @@ def test_concentration():
     magnetic.concentration = [0.3, 0.3, 0.4]
     with pytest.raises(ValueError, match="but there are 3 sublattices"):
         magnetic.check_sublattices()
-    Fe, Gd = ud.Atom("Fe", magnetization=(0, 0, 1)), ud.Atom("Gd", magnetization=(0, 0, -1))
-    GdFe = ud.AtomMixed("GdFe")
-    GdFe.add_atom(Fe, 0.75)
-    GdFe.add_atom(Gd, 0.25)
-    layer = make_layer("GdFe", eff_spin=[0.5, 0.5], mf_exch_coupling=J * u.J)
-    layer.atom = GdFe
-    assert np.allclose(layer.magnetic.sublattice_values("concentration"), [0.75, 0.25])
 
 
 def test_magnetic_hash_depends_on_exchange_coupling():
@@ -1259,18 +1248,14 @@ def gdfeco():
     J0 = 12 * np.array([[x[0] * J_TM, x[1] * J_TMRE], [x[0] * J_TMRE, x[1] * J_RE]])
     mu = np.array([1.92, 7.63])
     Ms = x * mu * 9.2740100783e-24 / (0.74 * 0.35e-9**3)
-    FeCo = ud.Atom("Fe", magnetization=(0, 0, 1))
-    Gd = ud.Atom("Gd", magnetization=(0, 0, -1))
-    GdFeCo = ud.AtomMixed("GdFeCo")
-    GdFeCo.add_atom(FeCo, x[0])
-    GdFeCo.add_atom(Gd, x[1])
     rho, gamma_e, C_l, g_el, tau_D, T_R = 8000, 1.8e5 / 300, 3.8e6, 7e17, 10e-12, 300
-    layer = ud.AmorphousLayer(
+    layer = ud.Layer(
         "GdFeCo",
         "GdFeCo",
         thickness=1 * u.nm,
         density=rho * u.kg / u.m**3,
-        atom=GdFeCo,
+        magnetization=[(0, 0, 1), (0, 0, -1)],
+        concentration=x,
         heat_capacity=[f"{gamma_e / rho:g}*T", C_l / rho * u.J / u.kg / u.K],
         therm_cond=[20 * u.W / (u.m * u.K), 1 * u.W / (u.m * u.K)],
         sub_system_coupling=[

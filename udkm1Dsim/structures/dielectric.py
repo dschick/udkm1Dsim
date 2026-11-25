@@ -251,7 +251,7 @@ def gyrotropic_tensor(eps0, eps_mag, magnetization, polar=False):
     return eps
 
 
-def atoms_susceptibility(atoms, energy, density, magnetic=False):
+def atoms_susceptibility(atoms, energy, density, magnetic=False, select=None):
     r"""atoms_susceptibility
 
     Non-magnetic or gyrotropic susceptibility of atoms with the given number
@@ -266,6 +266,9 @@ def atoms_susceptibility(atoms, energy, density, magnetic=False):
         density (float): mass density (kg/m³).
         magnetic (bool, optional): gyrotropic instead of the non-magnetic
             susceptibility. Defaults to False.
+        select (tuple[int], optional): indices of the atoms, whose form
+            factors contribute, e.g. of a magnetic sublattice, while the mass
+            numbers of all atoms give their number density. Defaults to all.
 
     Returns:
         chi (ndarray[complex]): susceptibility.
@@ -275,11 +278,12 @@ def atoms_susceptibility(atoms, energy, density, magnetic=False):
     mass_number = sum(fraction * atom.mass_number_a for atom, fraction in atoms)
     if mass_number == 0:
         return np.zeros_like(energy, dtype=complex)
+    selected = atoms if select is None else [atoms[i] for i in select]
     if magnetic:
-        f = sum(fraction * atom.get_magnetic_form_factor(energy) for atom, fraction in atoms)
+        f = sum(fraction * atom.get_magnetic_form_factor(energy) for atom, fraction in selected)
         sign = 1
     else:
-        f = sum(fraction * atom.get_atomic_form_factor(energy) for atom, fraction in atoms)
+        f = sum(fraction * atom.get_atomic_form_factor(energy) for atom, fraction in selected)
         sign = -1
     molar_density = density / 1000 / mass_number
     return sign * _ATOMIC_SUSCEPTIBILITY_FACTOR / energy**2 * molar_density * f
@@ -292,8 +296,8 @@ class Dispersion:
     function :math:`\varepsilon`. It is either a scalar, i.e. isotropic, or
     a 3x3 tensor per photon energy and is created by :meth:`from_array`,
     :meth:`from_ref_index`, :meth:`from_file`, :meth:`from_refractiveindex`,
-    :meth:`from_opt_pen_depth`, :meth:`from_mass_attenuation`, or by
-    :meth:`.Layer.dispersion_from_atoms`.
+    :meth:`from_opt_pen_depth`, :meth:`from_mass_attenuation`,
+    :meth:`from_atoms`, or by :meth:`.Layer.dispersion_from_atoms`.
 
     Dispersions are combined by
 
@@ -791,6 +795,54 @@ class Dispersion:
         )
         return _MassAttenuation(x, mass_attenuation)
 
+    @classmethod
+    def from_atoms(cls, atoms, magnetic=False):
+        r"""from_atoms
+
+        Dispersion from the atomic or magnetic form factors of atoms, which
+        are evaluated for the density :math:`\rho` of the layer, see
+        :meth:`.Atom.get_susceptibility`. For several atoms, their mass
+        numbers and form factors are averaged by their number fractions as
+        for an :class:`.AtomMixed`, e.g. the fractions of a formula unit:
+
+        .. code-block:: python
+
+            Dispersion.from_atoms(Fe)
+            Dispersion.from_atoms([(Fe, 2), (O, 3)])
+            Dispersion.from_atoms(Fe, magnetic=True)
+
+        Args:
+            atoms (Atom, AtomMixed, list[tuple[Atom, float]]): atom or atoms
+                and their number fractions.
+            magnetic (bool, optional): gyrotropic dispersion from the
+                magnetic form factors instead of the non-magnetic one from the
+                atomic form factors. Defaults to False.
+
+        Returns:
+            dispersion (Dispersion): dispersion.
+
+        """
+        return _Atoms(_atoms_and_fractions(atoms), magnetic=magnetic)
+
+
+def _atoms_and_fractions(atoms):
+    """atoms and their number fractions from an atom or a list of atoms and
+    fractions, see :meth:`Dispersion.from_atoms`"""
+    if hasattr(atoms, "atomic"):  # a single Atom or AtomMixed
+        return [(atoms, 1.0)]
+    try:
+        pairs = [(atom, float(fraction)) for atom, fraction in atoms]
+    except (TypeError, ValueError):
+        raise TypeError(
+            "The atoms must be an Atom, an AtomMixed, or a list of atoms and their number "
+            "fractions, e.g. [(Fe, 2), (O, 3)]!"
+        ) from None
+    if not pairs or any(not hasattr(atom, "atomic") for atom, _ in pairs):
+        raise TypeError("The atoms must be a non-empty list of Atom or AtomMixed and fractions!")
+    if any(fraction < 0 for _, fraction in pairs) or sum(f for _, f in pairs) <= 0:
+        raise ValueError("The number fractions of the atoms must be positive!")
+    return pairs
+
 
 _KIND_SYMBOLS = {
     "eps": "ε",
@@ -984,9 +1036,17 @@ class _Atoms(Dispersion):
     """Dispersion from the atomic or magnetic form factors of atoms, which
     are the susceptibilities of the non-magnetic or gyrotropic part."""
 
-    def __init__(self, atoms, magnetic=False):
+    def __init__(self, atoms, magnetic=False, select=None):
         self._atoms = [(atom, float(fraction)) for atom, fraction in atoms]
         self._magnetic = magnetic
+        # indices of the contributing atoms, e.g. of a sublattice
+        self._select = None if select is None else tuple(int(i) for i in select)
+
+    def _selected(self):
+        """contributing atoms and their fractions"""
+        if self._select is None:
+            return self._atoms
+        return [self._atoms[i] for i in self._select]
 
     @property
     def kinds(self):
@@ -999,7 +1059,7 @@ class _Atoms(Dispersion):
     @property
     def energy_range(self):
         lo, hi = -np.inf, np.inf
-        for atom, _ in self._atoms:
+        for atom, _ in self._selected():
             if self._magnetic:
                 a_lo, a_hi = atom.magnetic_form_factor_range
             else:
@@ -1019,7 +1079,7 @@ class _Atoms(Dispersion):
         chi = np.full(energy.shape, np.nan, dtype=complex)
         if np.any(defined):
             chi[defined] = atoms_susceptibility(
-                self._atoms, energy[defined], density, self._magnetic
+                self._atoms, energy[defined], density, self._magnetic, self._select
             )
         return chi + vacuum
 
@@ -1035,7 +1095,8 @@ class _Atoms(Dispersion):
             if coeff is not None:
                 tables.append(np.asarray(coeff))
         kind = "magnetic form factors" if self._magnetic else "atomic form factors"
-        return f"Dispersion({kind} of {atoms}, md5={_md5(*tables)})"
+        select = "" if self._select is None else f", select={list(self._select)}"
+        return f"Dispersion({kind} of {atoms}{select}, md5={_md5(*tables)})"
 
     def _label(self):
         # atoms of the same id are counted, e.g. 3×O of a unit cell
@@ -1057,6 +1118,9 @@ class _Atoms(Dispersion):
         energies = (
             "" if not np.isfinite(lo) else (f" from {_format_energy(lo)} to {_format_energy(hi)}")
         )
+        if self._select is not None:
+            selected = ", ".join(dict.fromkeys(atom.id for atom, _ in self._selected()))
+            return f"{kind} of {selected} in {', '.join(names)}{energies}"
         return f"{kind} of {', '.join(names)}{energies}"
 
 
@@ -1345,6 +1409,28 @@ def _cartesian_magnetization(magnetization, polar=False):
     return np.array(values)
 
 
+def _is_magnetization_list(magnetization):
+    """A list of magnetizations of several sublattices, i.e. of VectorParameters
+    or of vectors, in contrast to the components of a single vector."""
+    if magnetization is None or hasattr(magnetization, "polar_rad"):
+        return False
+    if isinstance(magnetization, (u.Quantity, np.ndarray)):
+        return np.ndim(magnetization) == 2
+    return (
+        isinstance(magnetization, (list, tuple))
+        and len(magnetization) > 0
+        and all(np.ndim(m) == 1 or hasattr(m, "polar_rad") for m in magnetization)
+    )
+
+
+def _cartesian_magnetizations(magnetization, polar=False):
+    """Cartesian magnetization of shape (3,), or (P, 3) for a list of the
+    magnetizations of P sublattices, see :func:`_cartesian_magnetization`."""
+    if _is_magnetization_list(magnetization):
+        return np.array([_cartesian_magnetization(m, polar) for m in magnetization])
+    return _cartesian_magnetization(magnetization, polar)
+
+
 class Dielectric(Parameter):
     r"""Dielectric
 
@@ -1400,9 +1486,12 @@ class Dielectric(Parameter):
     Args:
         eps0 (Dispersion, optional): non-magnetic dispersion. Without, the
             dielectric is not set.
-        eps_mag (Dispersion, optional): scalar gyrotropic dispersion, i.e. the
-            off-diagonal element of the dielectric tensor, of kind ``eps``,
-            ``chi``, or ``voigt``.
+        eps_mag (Dispersion, list[Dispersion], optional): scalar gyrotropic
+            dispersion, i.e. the off-diagonal element of the dielectric
+            tensor, of kind ``eps``, ``chi``, ``delta_beta``, ``voigt``, or
+            magnetic form factors, or a list of them with one entry per
+            magnetic sublattice of the layer, where None marks a sublattice
+            without gyrotropic part, see ``gyrotropy``.
         strain_model (str, optional): ``none``, ``density``, or
             ``photoelastic``. The default ``density`` scales the
             susceptibilities with the density of the layer by
@@ -1417,6 +1506,24 @@ class Dielectric(Parameter):
             angles :math:`(\theta, \phi, \psi)` of the crystal as angle
             Quantities, e.g. ``(30, 0, 0) * u.deg``, see
             :func:`~udkm1Dsim.helpers.to_angle`. Defaults to no rotation.
+        gyrotropy (str, optional): coupling of the gyrotropic part to the
+            magnetization of a layer with several magnetic sublattices:
+
+            * ``"net"``: the sum of the gyrotropic dispersions
+              :math:`\sum_a \varepsilon^m_a` couples to the net magnetization,
+              i.e. the average of the magnetizations of the sublattices
+              weighted by their saturation magnetization, as the net
+              ``magnetization_map`` of the magnetization simulations.
+            * ``"sublattices"``: the gyrotropic dispersion of every sublattice
+              couples to its own magnetization,
+              :math:`-i \sum_a \varepsilon^m_a \epsilon_{ijk} m_{a,k}`, e.g. for
+              the element-specific magnetic dichroism at the absorption edges
+              of the elements of a ferrimagnet. It requires one dispersion per
+              sublattice.
+
+            Both are approximations, and a layer with several sublattices
+            raises an error until one of them is chosen. For a single
+            sublattice, it has no effect. Defaults to None.
 
     """
 
@@ -1429,24 +1536,97 @@ class Dielectric(Parameter):
         strain_model="density",
         deps_dstrain=0.0,
         euler_angles=None,
+        gyrotropy=None,
         name="",
         symbol=r"\varepsilon",
     ):
         self._eps0 = None
         self._eps_mag = None
+        self._gyrotropy = None
         self._strain_model = "density"
         self._deps_dstrain = 0.0
         self._euler_angles = None
         self._display_energy = None
         super().__init__("", magnitude=None, name=name, symbol=symbol)
-        self._set_fields(eps0, eps_mag, strain_model, deps_dstrain, euler_angles)
+        self._set_fields(eps0, eps_mag, strain_model, deps_dstrain, euler_angles, gyrotropy)
 
-    def _set_fields(self, eps0, eps_mag, strain_model, deps_dstrain, euler_angles=None):
+    @classmethod
+    def from_atoms(cls, atoms, fallback=None, sublattices=None):
+        """from_atoms
+
+        Dielectric from atoms with the non-magnetic dispersion from their
+        atomic form factors, the gyrotropic dispersion from their magnetic
+        form factors, if any is tabulated, and the strain model ``density``,
+        see :meth:`Dispersion.from_atoms`:
+
+        .. code-block:: python
+
+            Dielectric.from_atoms(Fe)
+            Dielectric.from_atoms([(Fe, 2), (O, 3)])
+            Dielectric.from_atoms(Fe, fallback=Dispersion.from_ref_index(2.9 + 3.4j))
+            # one gyrotropic dispersion per magnetic sublattice
+            Dielectric.from_atoms([(Fe, 0.75), (Gd, 0.25)], sublattices=[0, 1])
+
+        With the ``sublattices`` of the atoms, the gyrotropic dispersion of
+        every sublattice follows from the magnetic form factors of its atoms
+        for the number density of all atoms, so that their sum equals the
+        gyrotropic dispersion without sublattices, and the ``gyrotropy`` is
+        ``"sublattices"``, see :class:`Dielectric`.
+
+        Args:
+            atoms (Atom, AtomMixed, list[tuple[Atom, float]]): atom or atoms
+                and their number fractions.
+            fallback (Dispersion, optional): non-magnetic dispersion, which
+                is used outside of the energy range of the atomic form factors,
+                e.g. a refractive index in the optical range.
+            sublattices (list[int, None], optional): index of the magnetic
+                sublattice of every atom, or None for a non-magnetic atom.
+                Defaults to a single gyrotropic dispersion of all atoms.
+
+        Returns:
+            dielectric (Dielectric): dielectric from the atoms.
+
+        """
+        atoms = _atoms_and_fractions(atoms)
+        eps0 = _Atoms(atoms)
+        if fallback is not None:
+            eps0 = eps0 | fallback
+        if sublattices is None:
+            magnetic = any(atom.has_magnetic_form_factor for atom, _ in atoms)
+            return cls(
+                eps0=eps0,
+                eps_mag=_Atoms(atoms, magnetic=True) if magnetic else None,
+                strain_model="density",
+            )
+        sublattices = list(sublattices)
+        if len(sublattices) != len(atoms):
+            raise ValueError(
+                f"The {len(atoms):d} atoms require one sublattice each, not {len(sublattices):d}!"
+            )
+        indices = [index for index in sublattices if index is not None]
+        if not indices or any(int(index) != index or index < 0 for index in indices):
+            raise ValueError("The sublattices must be indices from 0 or None!")
+        eps_mag = []
+        for index in range(int(max(indices)) + 1):
+            select = [
+                i
+                for i, (sublattice, (atom, _)) in enumerate(zip(sublattices, atoms))
+                if sublattice == index and atom.has_magnetic_form_factor
+            ]
+            eps_mag.append(_Atoms(atoms, magnetic=True, select=select) if select else None)
+        if all(part is None for part in eps_mag):
+            raise ValueError("None of the atoms of the sublattices has magnetic form factors!")
+        return cls(eps0=eps0, eps_mag=eps_mag, strain_model="density", gyrotropy="sublattices")
+
+    def _set_fields(
+        self, eps0, eps_mag, strain_model, deps_dstrain, euler_angles=None, gyrotropy=None
+    ):
         self._eps0 = self._check_eps0(eps0)
         self._eps_mag = self._check_eps_mag(eps_mag)
         self._strain_model = self._check_strain_model(strain_model)
         self._deps_dstrain = self._check_deps_dstrain(deps_dstrain)
         self._euler_angles = self._check_euler_angles(euler_angles)
+        self._gyrotropy = self._check_gyrotropy(gyrotropy)
 
     @staticmethod
     def _check_euler_angles(value):
@@ -1470,8 +1650,21 @@ class Dielectric(Parameter):
             )
         return value
 
-    @staticmethod
-    def _check_eps_mag(value):
+    _gyrotropies = (None, "net", "sublattices")
+
+    @classmethod
+    def _check_gyrotropy(cls, value):
+        if value not in cls._gyrotropies:
+            raise ValueError(f"gyrotropy must be one of {cls._gyrotropies}, not {value!r}!")
+        return value
+
+    @classmethod
+    def _check_eps_mag(cls, value):
+        """a single gyrotropic dispersion or a list of them, one per sublattice"""
+        if isinstance(value, (list, tuple)):
+            if len(value) == 0 or all(v is None for v in value):
+                raise ValueError("eps_mag must have a Dispersion for at least one sublattice!")
+            return [None if v is None else cls._check_eps_mag(v) for v in value]
         if value is None:
             return None
         if not isinstance(value, Dispersion):
@@ -1520,7 +1713,7 @@ class Dielectric(Parameter):
     @magnitude.setter
     def magnitude(self, value):
         if value is None:
-            fields = (None, None, "none", 0.0, None)
+            fields = (None, None, "none", 0.0, None, None)
         elif isinstance(value, Dielectric):
             fields = (
                 value.eps0,
@@ -1528,9 +1721,10 @@ class Dielectric(Parameter):
                 value.strain_model,
                 value.deps_dstrain,
                 value._euler_angles,
+                value.gyrotropy,
             )
         elif isinstance(value, Dispersion):
-            fields = (value, None, "none", 0.0, None)
+            fields = (value, None, "none", 0.0, None, None)
         else:
             raise TypeError(
                 f"Cannot set the Dielectric from type {type(value).__name__}. "
@@ -1565,13 +1759,31 @@ class Dielectric(Parameter):
 
     @property
     def eps_mag(self):
-        """Dispersion: gyrotropic dielectric function :math:`\\varepsilon^m`."""
+        """Dispersion, list[Dispersion]: gyrotropic dielectric function
+        :math:`\\varepsilon^m`, or one per magnetic sublattice."""
         return self._eps_mag
 
     @eps_mag.setter
     def eps_mag(self, value):
         self._eps_mag = self._check_eps_mag(value)
         self._notify()
+
+    @property
+    def gyrotropy(self):
+        """str: coupling of the gyrotropic part to the magnetizations of
+        several sublattices, ``"net"`` or ``"sublattices"``, or None."""
+        return self._gyrotropy
+
+    @gyrotropy.setter
+    def gyrotropy(self, value):
+        self._gyrotropy = self._check_gyrotropy(value)
+        self._notify()
+
+    def _eps_mag_parts(self):
+        """gyrotropic dispersions of all sublattices, a single one, or none"""
+        if self._eps_mag is None:
+            return []
+        return self._eps_mag if isinstance(self._eps_mag, list) else [self._eps_mag]
 
     @property
     def strain_model(self):
@@ -1642,7 +1854,10 @@ class Dielectric(Parameter):
                 cartesian magnetization :math:`(m_x, m_y, m_z)`, or for
                 ``polar=True`` its amplitude and the angles :math:`\\phi` and
                 :math:`\\gamma` as angle Quantities, e.g.
-                ``(1, 90 * u.deg, 0 * u.deg)``. Defaults to none.
+                ``(1, 90 * u.deg, 0 * u.deg)``, which couples to the sum of all
+                gyrotropic dispersions. A list of the magnetizations of all
+                sublattices couples to the gyrotropic dispersion of every
+                sublattice. Defaults to none.
             density (float, optional): mass density of the layer (kg/m³),
                 which is required by dispersions from atoms.
             polar (bool, optional): the magnetization is given in polar
@@ -1657,8 +1872,7 @@ class Dielectric(Parameter):
             raise ValueError(
                 "The dielectric tensor is not set. Set it by a Dispersion, e.g. "
                 "layer.optical.dielectric = Dispersion.from_ref_index(n), or from "
-                "the atoms of the layer by layer.optical.dielectric = "
-                "layer.dielectric_from_atoms()!"
+                "atoms by layer.optical.dielectric = Dielectric.from_atoms(atom)!"
             )
         # the dispersions get the input of the user for their error messages
         spectral = energy if isinstance(energy, u.Quantity) else None
@@ -1697,13 +1911,29 @@ class Dielectric(Parameter):
         if np.ndim(strain) > 0:
             eps0 = np.broadcast_to(eps0, np.shape(strain) + eps0.shape[-3:])
 
-        magnetization = _cartesian_magnetization(magnetization, polar)
-        eps_mag = None
-        if self._eps_mag is not None and np.any(magnetization):
-            eps_mag = self._eps_mag.evaluate(spectral, density, _VACUUM_ZERO, eps_xx=eps_xx) * (
-                scale if np.ndim(scale) == 0 else scale[..., 0, 0]
+        magnetization = _cartesian_magnetizations(magnetization, polar)
+        parts = self._eps_mag_parts()
+        if not parts or not np.any(magnetization):
+            return gyrotropic_tensor(eps0, None, np.zeros(3))
+        scale_mag = scale if np.ndim(scale) == 0 else scale[..., 0, 0]
+
+        def evaluate(dispersion):
+            return dispersion.evaluate(spectral, density, _VACUUM_ZERO, eps_xx=eps_xx) * scale_mag
+
+        if magnetization.ndim == 1:
+            # the sum of all gyrotropic dispersions couples to a single magnetization
+            eps_mag = sum(evaluate(part) for part in parts if part is not None)
+            return gyrotropic_tensor(eps0, eps_mag, magnetization)
+        if len(parts) != len(magnetization):
+            raise ValueError(
+                f"The magnetizations of {len(magnetization):d} sublattices require one "
+                f"gyrotropic dispersion per sublattice in eps_mag, not {len(parts):d}!"
             )
-        return gyrotropic_tensor(eps0, eps_mag, magnetization)
+        eps = gyrotropic_tensor(eps0, None, np.zeros(3))
+        for part, m in zip(parts, magnetization):
+            if part is not None and np.any(m):
+                eps = gyrotropic_tensor(eps, evaluate(part), m)
+        return eps
 
     def get_ref_index(self, energy, strain=0.0, density=None):
         """get_ref_index
@@ -1915,6 +2145,8 @@ class Dielectric(Parameter):
         text = f"eps0={self._eps0!r}"
         if self._eps_mag is not None:
             text += f", eps_mag={self._eps_mag!r}"
+        if self._gyrotropy is not None:
+            text += f", gyrotropy={self._gyrotropy}"
         if self._euler_angles is not None:
             text += f", euler_angles={list(self._euler_angles)}"
         if self._strain_model != "none":
@@ -2007,15 +2239,26 @@ class Dielectric(Parameter):
                 for j, column in enumerate("xyz"):
                     if eps0[i, j] != 0:
                         entries.append((r"\varepsilon^0_{" + row + column + "}", eps0[i, j]))
-        if self._eps_mag is not None:
+        for symbol, part in self._eps_mag_symbols():
             try:
-                eps_mag = self._eps_mag.evaluate(
+                eps_mag = part.evaluate(
                     energy, density, _VACUUM_ZERO, eps_xx=np.array([eps0[0, 0]])
                 )[0]
-                entries.append((r"\varepsilon^\mathrm{m}", eps_mag))
+                entries.append((symbol, eps_mag))
             except ValueError as e:
-                entries.append((r"\varepsilon^\mathrm{m}", self._not_defined(self._eps_mag, e)))
+                entries.append((symbol, self._not_defined(part, e)))
         return entries
+
+    def _eps_mag_symbols(self):
+        """symbols and gyrotropic dispersions, numbered by their sublattice"""
+        if not isinstance(self._eps_mag, list):
+            parts = self._eps_mag_parts()
+            return [(r"\varepsilon^\mathrm{m}", part) for part in parts]
+        return [
+            (r"\varepsilon^\mathrm{m}_{" + f"{a + 1:d}" + "}", part)
+            for a, part in enumerate(self._eps_mag)
+            if part is not None
+        ]
 
     def _format_symbol(self, symbol, mode):
         """Subscripts without unicode characters, e.g. of yy, are kept as
@@ -2029,21 +2272,27 @@ class Dielectric(Parameter):
         """The dispersions are only described without a display energy."""
         if self._eps0 is None or self._display_energy is not None:
             return "="
-        return ":" if index < (1 if self._eps_mag is None else 2) else "="
+        return ":" if index < 1 + len(self._eps_mag_symbols()) else "="
 
     def _entries(self, mode):
         if self._eps0 is None:
             entries = [(self._latex_symbol(), "", "not set")]
         elif self._display_energy is None:
             entries = [(r"\varepsilon^0", "", self._eps0._label())]
-            if self._eps_mag is not None:
-                entries.append((r"\varepsilon^\mathrm{m}", "", self._eps_mag._label()))
+            for symbol, part in self._eps_mag_symbols():
+                entries.append((symbol, "", part._label()))
         else:
             energy = self._display_energy
             energy = f"{energy:~P}" if isinstance(energy, u.Quantity) else f"{energy:g} eV"
             if mode == "latex":
                 energy = r"\text{" + energy + "}"
             entries = [(symbol, f"({energy})", value) for symbol, value in self._value_entries()]
+        if self._eps0 is not None and self._gyrotropy is not None:
+            coupling = {
+                "net": "net magnetization of all sublattices",
+                "sublattices": "magnetization of every sublattice",
+            }[self._gyrotropy]
+            entries.append((r"\mathbf{m}", "", f"{coupling} (gyrotropy {self._gyrotropy})"))
         if self._eps0 is not None and self._euler_angles is not None:
             angles = ", ".join(f"{np.rad2deg(a):.4g}°" for a in self._euler_angles)
             entries.append(("R", "", f"Euler (z-x-z): ({angles})"))

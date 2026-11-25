@@ -5,7 +5,7 @@ import pytest
 from scipy.special import erf
 
 import udkm1Dsim as ud
-from udkm1Dsim import AmorphousLayer, Atom, InstrumentParameters, Parratt, Structure, u
+from udkm1Dsim import Atom, Dielectric, InstrumentParameters, Layer, Parratt, Structure, u
 from udkm1Dsim.simulations.result import Result
 from udkm1Dsim.simulations.scattering import instrument as ins
 from udkm1Dsim.structures.parameters import Parameter
@@ -25,15 +25,21 @@ def simulation(cls, S, energy, theta, **kwargs):
 @pytest.fixture(scope="module")
 def multilayer():
     """Fe/O multilayer on a substrate of O for X-rays"""
-    fe = AmorphousLayer(
-        "fe", "fe", thickness=2 * u.nm, density=7874 * u.kg / u.m**3, atom=Atom("Fe")
+    fe = Layer(
+        "fe",
+        "fe",
+        thickness=2 * u.nm,
+        density=7874 * u.kg / u.m**3,
+        roughness=0.3 * u.nm,
+        dielectric=Dielectric.from_atoms(Atom("Fe")),
     )
-    fe.set_dielectric_from_atoms()
-    fe.roughness = 0.3 * u.nm
-    ox = AmorphousLayer(
-        "ox", "ox", thickness=1.3 * u.nm, density=3000 * u.kg / u.m**3, atom=Atom("O")
+    ox = Layer(
+        "ox",
+        "ox",
+        thickness=1.3 * u.nm,
+        density=3000 * u.kg / u.m**3,
+        dielectric=Dielectric.from_atoms(Atom("O")),
     )
-    ox.set_dielectric_from_atoms()
     S = Structure("multilayer")
     S.add_sub_structure(fe, 1)
     S.add_sub_structure(ox, 1)
@@ -561,9 +567,14 @@ def test_energy_convolution_close_to_quadrature(multilayer):
 
 @pytest.fixture
 def magnetic_elzo():
-    Fe = ud.Atom("Fe", magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 30 * u.deg})
-    fe = AmorphousLayer("fe", "fe", thickness=5 * u.nm, density=7874 * u.kg / u.m**3, atom=Fe)
-    fe.set_dielectric_from_atoms()
+    fe = Layer(
+        "fe",
+        "fe",
+        thickness=5 * u.nm,
+        density=7874 * u.kg / u.m**3,
+        dielectric=Dielectric.from_atoms(ud.Atom("Fe")),
+        magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 30 * u.deg},
+    )
     S = Structure("magnetic film")
     S.add_sub_structure(fe, 2)
     return simulation(ud.Elzo, S, [708] * u.eV, np.linspace(5, 30, 26) * u.deg)

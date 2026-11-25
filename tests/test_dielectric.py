@@ -9,7 +9,6 @@ from pint.testing import assert_allclose
 from scipy import constants
 
 from udkm1Dsim import (
-    AmorphousLayer,
     Atom,
     Dielectric,
     Dispersion,
@@ -452,9 +451,11 @@ def test_atom_get_susceptibility(iron):
 
 
 def test_layer_dielectric_from_atoms(iron):
-    layer = AmorphousLayer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, atom=iron)
+    layer = Layer(
+        "fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, magnetization=(1, 0, 0)
+    )
     assert not layer.optical.dielectric.is_set
-    dielectric = layer.dielectric_from_atoms()
+    dielectric = Dielectric.from_atoms(iron)
     assert dielectric.strain_model == "density"
     assert dielectric.eps_mag is not None
     layer.optical.dielectric = dielectric
@@ -477,8 +478,8 @@ def test_layer_dielectric_from_atoms(iron):
     # the atomic form factors are not tabulated in the optical range
     with pytest.raises(ValueError, match="not defined"):
         layer.get_ref_index(800 * u.nm)
-    layer.optical.dielectric.eps0 = (
-        Dispersion.from_ref_index(2.9 + 3.0j) | layer.dispersion_from_atoms()
+    layer.optical.dielectric.eps0 = Dispersion.from_ref_index(2.9 + 3.0j) | Dispersion.from_atoms(
+        iron
     )
     np.testing.assert_allclose(layer.get_ref_index(800 * u.nm), 2.9 + 3.0j)
 
@@ -509,11 +510,11 @@ def test_layer_without_atoms():
 
 
 def test_dielectric_display(iron):
-    layer = AmorphousLayer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, atom=iron)
+    layer = Layer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3)
     assert str(layer.optical.dielectric) == "ε = not set"
-    layer.optical.dielectric = layer.dielectric_from_atoms()
+    layer.optical.dielectric = Dielectric.from_atoms(iron)
     dielectric = layer.optical.dielectric
-    dielectric.eps0 = layer.dispersion_from_atoms() | Dispersion.from_ref_index(2.87 + 3.36j)
+    dielectric.eps0 = Dispersion.from_atoms(iron) | Dispersion.from_ref_index(2.87 + 3.36j)
     text = str(dielectric)
     assert "ε⁰: atomic form factors of Fe" in text
     assert "| n = 2.87 + 3.36i" in text
@@ -621,9 +622,15 @@ def test_dielectric_outputs():
     assert layer.get_delta_beta([1, 2])[0].shape == (2,)
 
 
-def test_layer_set_dielectric_from_atoms_and_form_factor(iron):
-    layer = AmorphousLayer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, atom=iron)
-    layer.set_dielectric_from_atoms(fallback=Dispersion.from_ref_index(2.9 + 3.4j))
+def test_layer_dielectric_from_atoms_and_form_factor(iron):
+    layer = Layer(
+        "fe",
+        "fe",
+        thickness=1 * u.nm,
+        density=7874 * u.kg / u.m**3,
+        molar_mass=iron.mass * u.N_A,
+        dielectric=Dielectric.from_atoms(iron, fallback=Dispersion.from_ref_index(2.9 + 3.4j)),
+    )
     assert layer.optical.dielectric.strain_model == "density"
     assert layer.optical.dielectric.eps_mag is not None
     np.testing.assert_allclose(layer.get_ref_index(800 * u.nm), 2.9 + 3.4j)
@@ -632,7 +639,7 @@ def test_layer_set_dielectric_from_atoms_and_form_factor(iron):
         layer.get_form_factor([700, 710] * u.eV), iron.get_atomic_form_factor([700, 710])
     )
     np.testing.assert_allclose(layer.get_form_factor(705), iron.get_atomic_form_factor(705))
-    with pytest.raises(TypeError, match="no atoms"):
+    with pytest.raises(ValueError, match="no molar_mass"):
         Layer("l", "l").get_form_factor(700)
 
 
@@ -642,8 +649,7 @@ def test_dispersion_from_form_factors(iron, tmp_path):
     # the same file gives the same dispersion as the atom
     filename = Path(__file__).parent / "data" / "Fe.cf"
     atom = Atom("Fe", atomic_form_factor_path=str(filename))
-    layer = AmorphousLayer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, atom=atom)
-    from_atoms = layer.dispersion_from_atoms()
+    from_atoms = Dispersion.from_atoms(atom)
     from_file = Dispersion.from_form_factors(filename, molar_mass=atom.mass_number_a)
     energy = [700, 705, 710] * u.eV
     np.testing.assert_allclose(from_file.eps(energy, 7874), from_atoms.eps(energy, 7874))
@@ -666,6 +672,7 @@ def test_dispersion_from_form_factors(iron, tmp_path):
     # magnetic form factors are the gyrotropic part
     m = iron.get_magnetic_form_factor(energy)
     eps_mag = Dispersion.from_array(energy, m, kind="m", molar_mass=iron.mass_number_a)
+    layer = Layer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3)
     layer.optical.dielectric = Dielectric(eps0=from_file, eps_mag=eps_mag)
     _, chim = iron.get_susceptibility(energy, 7874)
     np.testing.assert_allclose(
@@ -685,8 +692,13 @@ def test_dispersion_from_form_factors(iron, tmp_path):
 
 
 def test_delta_beta_mag(iron):
-    layer = AmorphousLayer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, atom=iron)
-    layer.set_dielectric_from_atoms()
+    layer = Layer(
+        "fe",
+        "fe",
+        thickness=1 * u.nm,
+        density=7874 * u.kg / u.m**3,
+        dielectric=Dielectric.from_atoms(iron),
+    )
     energy = [700, 707, 710] * u.eV
     # proportional to the magnetic form factors m = m1 - i m2 as delta and beta to f1 and f2
     delta, beta = layer.get_delta_beta(energy)
@@ -751,3 +763,62 @@ def test_dielectric_tensor_for_array_of_strains(strain_model, kwargs):
         np.testing.assert_allclose(
             eps[index], dielectric.get_tensor(energy, strains[index], magnetization), rtol=1e-14
         )
+
+
+def test_dispersion_and_dielectric_from_atoms(iron, unit_cell):
+    oxygen = Atom("O")
+    energy = np.array([500.0, 710.0, 800.0])
+    # a single atom as the layer with this atom
+    chi0, chim = iron.get_susceptibility(energy, 7874)
+    np.testing.assert_allclose(Dispersion.from_atoms(iron).chi(energy, 7874), chi0)
+    np.testing.assert_allclose(Dispersion.from_atoms(iron, magnetic=True).chi(energy, 7874), chim)
+    # the fractions of a formula unit are not normalized
+    np.testing.assert_allclose(
+        Dispersion.from_atoms([(iron, 2), (oxygen, 3)]).chi(energy, 5000),
+        Dispersion.from_atoms([(iron, 0.4), (oxygen, 0.6)]).chi(energy, 5000),
+    )
+    # the dielectric of the layers equals the one from their atoms
+    for layer in (unit_cell,):
+        density = layer.structural.density.magnitude
+        dielectric = Dielectric.from_atoms(layer._atoms_and_fractions())
+        expected = layer.dielectric_from_atoms()
+        assert dielectric.strain_model == "density"
+        np.testing.assert_allclose(
+            dielectric.eps0.chi(energy, density), expected.eps0.chi(energy, density)
+        )
+    dielectric = Dielectric.from_atoms(iron, fallback=Dispersion.from_ref_index(2.9 + 3.0j))
+    assert dielectric.eps_mag is not None
+    np.testing.assert_allclose(dielectric.eps0.eps(1.55, 7874), (2.9 + 3.0j) ** 2)
+    # oxygen has no magnetic form factors
+    assert Dielectric.from_atoms(oxygen).eps_mag is None
+    # a layer with the molar mass of its atoms gives their effective form factor
+    layer = Layer(
+        "fe",
+        "fe",
+        thickness=1 * u.nm,
+        density=7874 * u.kg / u.m**3,
+        molar_mass=iron.mass * u.N_A,
+        dielectric=Dielectric.from_atoms(iron),
+    )
+    np.testing.assert_allclose(
+        layer.get_form_factor([700, 710] * u.eV), iron.get_atomic_form_factor([700, 710])
+    )
+
+
+@pytest.mark.parametrize(
+    "atoms, error, match",
+    [
+        ("Fe", TypeError, "must be an Atom"),
+        ([], TypeError, "non-empty"),
+        ([("Fe", 1)], TypeError, "non-empty"),
+        (None, TypeError, "must be an Atom"),
+    ],
+)
+def test_dispersion_from_atoms_raises(atoms, error, match):
+    with pytest.raises(error, match=match):
+        Dispersion.from_atoms(atoms)
+
+
+def test_dispersion_from_atoms_raises_for_negative_fractions(iron):
+    with pytest.raises(ValueError, match="positive"):
+        Dispersion.from_atoms([(iron, -1)])

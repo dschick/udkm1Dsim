@@ -47,7 +47,7 @@ class Structure:
     Structure (sample) which holds various `sub_structures`.
 
     Each `sub_structure` can be either of type :class:`.Layer` and its sub-classes,
-    such as :class:`.UnitCell` or :class:`.AmorphousLayer`, or a :class:`Structure`
+    such as :class:`.UnitCell` or :class:`.Vacuum`, or a :class:`Structure`
     by itself. It is possible to recursively build up samples.
 
     Args:
@@ -909,7 +909,7 @@ class Structure:
         # traverse the sub_structures
         for sub_structure, _ in self.sub_structures:
             if isinstance(sub_structure, Layer):
-                # its a AmorphousLayer or UnitCell
+                # its a Layer, e.g. a UnitCell
                 ids, handles = [sub_structure.id], [sub_structure]
             else:
                 # its a sub_structure, so get its unique layers recursively

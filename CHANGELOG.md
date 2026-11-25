@@ -7,8 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- the `molar_mass` of `StructuralParameters`, the mean molar mass of the atoms of a layer, and the derived `number_density` $n = \rho N_A / M$ of its atoms, where the molar mass of a `UnitCell` is given by its atoms and follows their changes, see #244
+- `Dispersion.from_atoms()` and `Dielectric.from_atoms()` with the dispersion or the dielectric from the atomic and magnetic form factors of an atom or of atoms and their number fractions, e.g. `[(Fe, 2), (O, 3)]`, for any `Layer`, which `Layer.dielectric_from_atoms()` uses now
+- `MagneticParameters.check_mag_moment()`, which the magnetization simulations call and which warns if a given `mag_moment` differs by more than 3 % from $M_{s,a} / (x_a n)$ by the saturation magnetization, the `concentration`, and the number density of the layer, e.g. by 7 % for the Ni of #244 with $M_s$ at room temperature
+- `MagneticParameters.mag_saturation_at_zero()`, which converts a saturation magnetization measured at the temperature $T$, e.g. at room temperature, to 0 K by the mean-field equilibrium magnetization $M_s(0) = M_s(T) / |m_e(T)|$ of the effective spin and the Curie temperature, or of the exchange matrix for several sublattices
+
+- the gyrotropic part `eps_mag` of a `Dielectric` per magnetic sublattice as a list of dispersions of any gyrotropic kind, e.g. tabulated $\Delta\delta + i\Delta\beta$ or magnetic form factors, with `None` for a sublattice without gyrotropic part, and the switch `gyrotropy` of its coupling to the magnetizations of the sublattices: `"net"` couples the sum of the dispersions to the net magnetization weighted by the saturation magnetizations, and `"sublattices"` couples the dispersion of every sublattice to its own magnetization, e.g. for the element-specific magnetic dichroism of a ferrimagnet; both are written to the structure YAML
+- `Dielectric.from_atoms(atoms, sublattices=[...])` with one gyrotropic dispersion per sublattice from the magnetic form factors of its atoms for the number density of all atoms, which sum up to the gyrotropic dispersion without sublattices
+- the multilayer formalisms take the `sublattice_magnetization_map` $M \times N \times P \times 3$ of `Magnetization.get_sublattice_magnetization_map()`, also as its `Result`, for layers with the gyrotropy `"sublattices"`
+- a section on magnetic sublattices with a ferrimagnetic GdFe alloy in the example of the dielectric tensor
+
+### Changed
+
+- the atomic magnetic moment `mag_moment` is derived as $\mu_a = M_{s,a} / (x_a n)$ from the saturation magnetization, the `concentration`, and the number density of the layer unless it is given, and follows their changes, like the derived `concentration`; it is zero without a number density as before, but a `UnitCell` without a given moment gets one from the number density of its atoms now instead of zero, which changes the results of the `LLB` and of the exchange between sublattices of such layers; cached results require `force_recalc=True`
+- the documentation of `mag_saturation` states that it is the value at 0 K for all magnetization models; a value at the temperature of the simulation gives the same fields only for the `LLG` with a fixed amplitude of 1
+- **breaking**: `Layer.get_form_factor()` takes the number density of the atoms from the `molar_mass` instead of the atoms of the layer, so that it works for any `Layer` with a `molar_mass` and raises a `ValueError` instead of a `TypeError` without one; for a `UnitCell` it is unchanged
+- the structure example, the getting started page, the gallery, and the docstring of `Layer` describe a `Layer` as a generic, homogeneous slab of any solid, liquid, or gas without any assumption on its internal structure, while only X-ray diffraction by `XrayKin` and `XrayDyn` requires the atomic positions of a `UnitCell`; the layers of the examples are no longer named amorphous, and the structure example starts with layers, followed by atoms and unit cells
+- the examples and tests use `Layer` with `Dielectric.from_atoms()` and the magnetization of the layer instead of `AmorphousLayer`, and the magnetization examples derive the atomic magnetic moment from the `molar_mass` and the saturation magnetization at 0 K by `mag_saturation_at_zero()` instead of by hand
+
+- a layer with several magnetic sublattices raises a `ValueError` in the magnetic multilayer formalisms only for a gyrotropic part of its dielectric, until its `gyrotropy` is chosen, instead of a `NotImplementedError` for any dielectric
+
+### Removed
+
+- **breaking**: `AmorphousLayer`, as its atom only carried the form factors and duplicated the magnetization of the layer, and with it the `atom` of layers in the structure YAML; an amorphous layer is a `Layer` with the `molar_mass` of its atoms, the dielectric from its atoms by `Dielectric.from_atoms(atom)`, and its own `magnetization`, see the structure example; `ud.AmorphousLayer` and the YAML type `AmorphousLayer` raise an error with this hint
+
 ### Fixed
 
+- the mass and density of a `UnitCell` follow later changes of its atoms, e.g. a constituent added to an `AtomMixed` after the mixed atom was added to the unit cell, and the averaged properties of an `AtomMixed` follow changes of its constituents, e.g. of their ionicity, also for copies and nested mixed atoms; before, they kept the values at the time the atom was added
+- the example of the microscopic three-temperature model gave the removed `atom` to a `Layer`, which raises a `TypeError` since 3.0.0a6
 - the signed projection $\tau_{ab}$ of the other sublattice in the longitudinal field of the `LLB`, which jumped between $\pm m_b$ when the norm $m_a$ of a sublattice passes through zero, e.g. on the reversal of the transition-metal sublattice of a ferrimagnet, so that the integrators of the eLLB with `exchange_relaxation=True` stalled for minutes, e.g. in the example with tighter `ode_options` or for other samples and fluences; $m_a$ in its denominators is regularized below `PROJECTION_WIDTH` = 1e-3, which leaves the results of runs, which passed before, unchanged within the precision of the integrator; cached results require `force_recalc=True`
 
 ## [3.0.0a6] 2026-11-24

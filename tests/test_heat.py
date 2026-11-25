@@ -5,7 +5,6 @@ import pytest
 from pint.testing import assert_allclose
 
 from udkm1Dsim import (
-    AmorphousLayer,
     BerremanElzo,
     BerremanStepanov,
     Dielectric,
@@ -294,7 +293,7 @@ def test_absorption_polarizations(tmp_path):
     np.testing.assert_array_equal(profiles["pi"], profiles["p"])
     assert heat.excitation["polarization"] == "pi"
 
-    fe = AmorphousLayer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, therm_cond=1)
+    fe = Layer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, therm_cond=1)
     fe.optical.dielectric = Dielectric(
         eps0=Dispersion.from_ref_index(2.9 + 3.4j),
         eps_mag=Dispersion.from_array([0, 10], [0.6 + 0.2j] * 2, kind="eps"),
@@ -392,7 +391,7 @@ def test_absorption_instance(tmp_path):
 def test_absorption_azimuth(tmp_path):
     """the azimuth of the excitation is the one of the formalism, which
     changes the circular dichroism of an in-plane magnetization"""
-    fe = AmorphousLayer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, therm_cond=1)
+    fe = Layer("fe", "fe", thickness=1 * u.nm, density=7874 * u.kg / u.m**3, therm_cond=1)
     fe.optical.dielectric = Dielectric(
         eps0=Dispersion.from_ref_index(2.9 + 3.4j),
         eps_mag=Dispersion.from_array([0, 10], [0.6 + 0.2j] * 2, kind="eps"),

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import warnings
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -8,7 +9,6 @@ import pytest
 import yaml
 
 from udkm1Dsim import (
-    AmorphousLayer,
     Atom,
     AtomMixed,
     Dielectric,
@@ -22,6 +22,7 @@ from udkm1Dsim import (
 )
 from udkm1Dsim.structures import yaml_io
 from udkm1Dsim.structures.dielectric import _OptPenDepth
+from udkm1Dsim.structures.parameter_groups import MagneticParameters
 
 HASH_TYPES = ("heat", "phonon", "xray", "optical", "magnetic")
 FE_CF = Path(__file__).parent / "data" / "Fe.cf"
@@ -82,6 +83,24 @@ def test_round_trip_of_layers(layer, amorphous_layer, unit_cell):
     for original, copy in zip(S.unique_layers[1], read.unique_layers[1]):
         assert type(copy) is type(original)
         assert repr(copy) == repr(original)
+
+
+def test_round_trip_of_molar_mass_and_derived_moment(layer):
+    layer = deepcopy(layer)
+    layer.magnetic = MagneticParameters(mag_saturation=5e5 * u.A / u.m)
+    layer.density = 8000 * u.kg / u.m**3
+    layer.structural.molar_mass = 60 * u.g / u.mol
+    S = Structure("Ni")
+    S.add_sub_structure(layer, 2)
+    text, read = round_trip(S)
+    data = yaml.safe_load(text)["layers"][layer.id]
+    # the derived moment is not written and follows the read inputs
+    assert "molar_mass" in data["structural"]
+    assert "mag_moment" not in data["magnetic"]
+    read_layer = read.unique_layers[1][0]
+    assert "mag_moment" in read_layer.magnetic._derived
+    assert read_layer.mag_moment.magnitude > 0
+    np.testing.assert_allclose(read_layer.mag_moment.magnitude, layer.mag_moment.magnitude)
 
 
 def test_shared_objects_are_written_once(structure):
@@ -290,10 +309,14 @@ def test_magnetization_of_layers():
         magnetization={"r": -0.5, "phi": 90 * u.deg, "gamma": 0 * u.deg},
     )
     cartesian = Layer("cartesian", "cartesian", thickness=1 * u.nm, magnetization=(1, 2, 3))
-    fe = Atom("Fe", magnetization=(0, 0, 1))
-    amorphous = AmorphousLayer("amorphous", "amorphous", 1 * u.nm, 7000 * u.kg / u.m**3, atom=fe)
-    # the layer differs from its atom
-    amorphous.magnetization = (1, 0, 0)
+    amorphous = Layer(
+        "amorphous",
+        "amorphous",
+        thickness=1 * u.nm,
+        density=7000 * u.kg / u.m**3,
+        dielectric=Dielectric.from_atoms(Atom("Fe")),
+        magnetization=(1, 0, 0),
+    )
     S = Structure("magnetization")
     for layer in (zero, reversed_, cartesian, amorphous):
         S.add_sub_structure(layer)
@@ -306,16 +329,13 @@ def test_magnetization_of_layers():
 
 
 def test_sublattices():
-    dy, fe = Atom("Dy", magnetization=(0, 0, 1)), Atom("Fe", magnetization=(0, 0, -1))
-    mixed = AtomMixed("DyFe")
-    mixed.add_atom(dy, 0.3)
-    mixed.add_atom(fe, 0.7)
-    layer = AmorphousLayer(
+    layer = Layer(
         "ferrimagnet",
         "ferrimagnet",
-        10 * u.nm,
-        8000 * u.kg / u.m**3,
-        atom=mixed,
+        thickness=10 * u.nm,
+        density=8000 * u.kg / u.m**3,
+        magnetization=[(0, 0, 1), (0, 0, -1)],
+        concentration=[0.3, 0.7],
         eff_spin=[np.inf, np.inf],
         lamda=[0.01, 0.02],
         anisotropy=[[0, 0, 1], [0, 0, 2]] * u.J / u.m**3,
@@ -342,6 +362,49 @@ def test_sublattices():
     magnetic = read.unique_layers[1][1].magnetic
     assert magnetic._concentration_explicit
     assert [m.r.magnitude for m in magnetic.magnetization] == [1, -0.5]
+
+
+def test_gyrotropic_parts_of_sublattices():
+    Fe, Ni, O = Atom("Fe"), Atom("Ni"), Atom("O")
+    layer = Layer(
+        "ferrimagnet",
+        "ferrimagnet",
+        thickness=10 * u.nm,
+        density=6000 * u.kg / u.m**3,
+        magnetization=[(0, 0, 1), (0, 0, -1)],
+        eff_spin=[0.5, 0.5],
+        mf_exch_coupling=EXCHANGE * u.J,
+        dielectric=Dielectric.from_atoms(
+            [(Fe, 0.5), (Ni, 0.25), (O, 0.25)], sublattices=[0, 1, None]
+        ),
+    )
+    explicit = Layer(
+        "explicit",
+        "explicit",
+        thickness=1 * u.nm,
+        magnetization=[(0, 0, 1), (0, 0, -1)],
+        eff_spin=[0.5, 0.5],
+        mf_exch_coupling=EXCHANGE * u.J,
+        dielectric=Dielectric(
+            eps0=Dispersion.from_ref_index(2),
+            eps_mag=[None, Dispersion.from_array(None, 0.1, kind="eps")],
+            gyrotropy="net",
+        ),
+    )
+    S = Structure("sublattices")
+    S.add_sub_structure(layer)
+    S.add_sub_structure(explicit)
+    text, read = round_trip(S)
+    assert_same_structure(S, read)
+    data = yaml.safe_load(text)["layers"]
+    assert data["ferrimagnet"]["optical"]["dielectric"]["gyrotropy"] == "sublattices"
+    assert data["ferrimagnet"]["optical"]["dielectric"]["eps_mag"][1]["select"] == [1]
+    assert data["explicit"]["optical"]["dielectric"]["eps_mag"][0] is None
+    dielectric = read.unique_layers[1][0].optical.dielectric
+    energy = np.array([700.0, 850.0])
+    for original, copy in zip(layer.optical.dielectric.eps_mag, dielectric.eps_mag):
+        np.testing.assert_allclose(copy.chi(energy, 6000), original.chi(energy, 6000))
+    assert read.unique_layers[1][1].optical.dielectric.gyrotropy == "net"
 
 
 # thermal and elastic parameters
@@ -413,8 +476,7 @@ def dispersions(tmp_path):
 
 
 def _atoms_dispersion(atom):
-    layer = AmorphousLayer("atoms", "atoms", 1 * u.nm, 7000 * u.kg / u.m**3, atom=atom)
-    return layer.dispersion_from_atoms()
+    return Dispersion.from_atoms(atom)
 
 
 def test_all_dispersions(tmp_path):
@@ -454,14 +516,23 @@ def test_embedded_dispersions(tmp_path):
     for name, dispersion in dispersions(tmp_path).items():
         S.add_sub_structure(layer_with(dispersion, name))
     fe = Atom("Fe", atomic_form_factor_path=FE_CF)
-    S.add_sub_structure(AmorphousLayer("Fe", "Fe", 1 * u.nm, 7000 * u.kg / u.m**3, atom=fe))
+    S.add_sub_structure(
+        Layer(
+            "Fe",
+            "Fe",
+            thickness=1 * u.nm,
+            density=7000 * u.kg / u.m**3,
+            dielectric=Dielectric.from_atoms(fe),
+        )
+    )
     data = yaml.safe_load(S.to_yaml(embed=True))
     assert not has_key(data["layers"], "file") and not has_key(data["atoms"], "file")
     assert data["layers"]["nk_file"]["optical"]["dielectric"]["table"]["origin"] == "test.nk"
     _, read = round_trip(S, embed=True)
     for types in HASH_TYPES:
         assert S.get_hash(types=types) == read.get_hash(types=types)
-    assert read.unique_layers[1][-1].atom.form_factor_source() == "Fe.cf"
+    atom, _ = read.unique_layers[1][-1].optical.dielectric.eps0._atoms[0]
+    assert atom.form_factor_source() == "Fe.cf"
 
 
 def test_dielectric_tensor():
@@ -642,7 +713,7 @@ def doc(layer, atoms=None, structures=None, sub_structure="a"):
     return data
 
 
-AMORPHOUS = {"type": "AmorphousLayer", "atom": "X"}
+AMORPHOUS = {"type": "UnitCell", "lattice": {"c_axis": "3 Å"}, "atoms": [["X", 0]]}
 
 
 @pytest.mark.parametrize(
@@ -658,7 +729,8 @@ AMORPHOUS = {"type": "AmorphousLayer", "atom": "X"}
         ),
         (doc(AMORPHOUS, {"X": {"name": "iron"}}), "symbol of the atom is missing"),
         (doc({}, structures={"a": {}}), "defined as layer and as structure"),
-        (doc({"atom": "X"}), "Only an AmorphousLayer"),
+        (doc({"type": "AmorphousLayer"}), "AmorphousLayer was removed"),
+        (doc({"atom": "X"}), "atom"),
         (doc({"atoms": [["X", 0]]}), "Only a UnitCell"),
         (doc({"type": "UnitCell"}), "lattice of the UnitCell is missing"),
         (doc({"structural": 5}), "must be a mapping"),

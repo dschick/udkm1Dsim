@@ -10,20 +10,20 @@ from scipy.integrate import simpson
 
 import udkm1Dsim as ud
 from udkm1Dsim import (
-    AmorphousLayer,
     Atom,
     BerremanElzo,
     BerremanStepanov,
     Dielectric,
     Dispersion,
     Elzo,
+    Layer,
     Parratt,
     Stepanov,
     Structure,
     Vacuum,
     u,
 )
-from udkm1Dsim.simulations.result import array_hash
+from udkm1Dsim.simulations.result import Result, array_hash
 from udkm1Dsim.simulations.scattering.berreman import berreman_modes
 from udkm1Dsim.simulations.scattering.elzo import elzo_modes
 from udkm1Dsim.simulations.scattering.multilayer import (
@@ -52,7 +52,7 @@ def relative(a, b):
 
 
 def substrate_layer(eps0=None, euler_angles=(0, 0, 0) * u.deg):
-    sub = AmorphousLayer("sub", "substrate", thickness=0 * u.nm, density=1000 * u.kg / u.m**3)
+    sub = Layer("sub", "substrate", thickness=0 * u.nm, density=1000 * u.kg / u.m**3)
     eps0 = Dispersion.from_ref_index(N_SUB) if eps0 is None else eps0
     sub.optical.dielectric = Dielectric(eps0=eps0, euler_angles=euler_angles)
     return sub
@@ -69,13 +69,21 @@ def interface(substrate):
 @pytest.fixture(scope="module")
 def magnetic_multilayer():
     """Fe/O multilayer at the Fe L3 edge with an in-plane magnetization"""
-    Fe = Atom("Fe", magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 30 * u.deg})
-    fe = AmorphousLayer("fe", "fe", thickness=2 * u.nm, density=7874 * u.kg / u.m**3, atom=Fe)
-    fe.set_dielectric_from_atoms()
-    ox = AmorphousLayer(
-        "ox", "ox", thickness=1.3 * u.nm, density=3000 * u.kg / u.m**3, atom=Atom("O")
+    fe = Layer(
+        "fe",
+        "fe",
+        thickness=2 * u.nm,
+        density=7874 * u.kg / u.m**3,
+        dielectric=Dielectric.from_atoms(Atom("Fe")),
+        magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 30 * u.deg},
     )
-    ox.set_dielectric_from_atoms()
+    ox = Layer(
+        "ox",
+        "ox",
+        thickness=1.3 * u.nm,
+        density=3000 * u.kg / u.m**3,
+        dielectric=Dielectric.from_atoms(Atom("O")),
+    )
     S = Structure("magnetic multilayer")
     S.add_sub_structure(fe, 3)
     S.add_sub_structure(ox, 2)
@@ -86,9 +94,9 @@ def magnetic_multilayer():
 
 def optical_stack(substrate=None, thickness=1):
     """non-magnetic optical stack of a metal and a dielectric"""
-    a = AmorphousLayer("a", "metal", thickness=3 * thickness * u.nm, density=7874 * u.kg / u.m**3)
+    a = Layer("a", "metal", thickness=3 * thickness * u.nm, density=7874 * u.kg / u.m**3)
     a.optical.dielectric = Dispersion.from_ref_index(2.9 + 3.4j)
-    b = AmorphousLayer("b", "oxide", thickness=2 * thickness * u.nm, density=2500 * u.kg / u.m**3)
+    b = Layer("b", "oxide", thickness=2 * thickness * u.nm, density=2500 * u.kg / u.m**3)
     b.optical.dielectric = Dispersion.from_ref_index(1.45)
     S = Structure("optical stack")
     S.add_sub_structure(a, 2)
@@ -100,7 +108,7 @@ def optical_stack(substrate=None, thickness=1):
 
 def magnetic_film(magnetization):
     """Fe film with a gyrotropic dielectric at 800 nm"""
-    fe = AmorphousLayer("fe", "fe", thickness=10 * u.nm, density=7874 * u.kg / u.m**3)
+    fe = Layer("fe", "fe", thickness=10 * u.nm, density=7874 * u.kg / u.m**3)
     fe.optical.dielectric = Dielectric(
         eps0=Dispersion.from_ref_index(2.9 + 3.4j),
         eps_mag=Dispersion.from_array([0, 10], [0.6 + 0.2j] * 2, kind="eps"),
@@ -227,7 +235,8 @@ def test_polar_kerr_effect_dielectric_superstrate(cls):
 
 def test_parratt_sublattices():
     """Parratt neglects the magnetization also of a layer with several
-    sublattices, while the magnetic formalisms require it explicitly"""
+    sublattices, as do the magnetic formalisms without gyrotropic part, while
+    they require the coupling of the gyrotropic part to the sublattices"""
     layer = ud.Layer(
         "ferri",
         "ferrimagnet",
@@ -243,8 +252,11 @@ def test_parratt_sublattices():
     absorption = sim.homogeneous_absorption()
     R = sim.homogeneous_reflectivity_transmissivity().R
     np.testing.assert_allclose(R + absorption.A_layers.sum(axis=-1) + absorption.S_sub, 1)
-    with pytest.raises(NotImplementedError, match="sublattices"):
-        simulation(Elzo, S, energy, theta).homogeneous_absorption()
+    elzo = simulation(Elzo, S, energy, theta)
+    np.testing.assert_allclose(elzo.homogeneous_reflectivity_transmissivity().R, R)
+    layer.optical.dielectric.eps_mag = Dispersion.from_array(None, 0.1, kind="eps")
+    with pytest.raises(ValueError, match="Layer 'ferri'.*gyrotropy"):
+        elzo.homogeneous_absorption()
 
 
 def test_parratt_roughness():
@@ -530,7 +542,7 @@ def test_berreman_requires_isotropic_superstrate():
 
 @pytest.mark.parametrize("cls", FORMALISMS)
 def test_formalisms_require_dielectric(cls):
-    sub = AmorphousLayer("sub", "substrate", thickness=1 * u.nm, density=1000 * u.kg / u.m**3)
+    sub = Layer("sub", "substrate", thickness=1 * u.nm, density=1000 * u.kg / u.m**3)
     with pytest.raises(ValueError, match="Layer 'sub'.*not set"):
         simulation(
             cls, interface(sub), 1.55 * u.eV, np.r_[10] * u.deg
@@ -2077,3 +2089,81 @@ def test_aliases_of_field_results(magnetic_multilayer):
         for name in result.keys():
             assert result.aliases_of(name) == (ALIASES[name],)
             assert result[ALIASES[name]] is result[name]
+
+
+def ferrimagnetic_stack(gyrotropy):
+    """a ferrimagnetic layer with a gyrotropic dispersion per sublattice on a
+    magnetic layer with a single sublattice"""
+    ferri = Layer(
+        "ferri",
+        "ferrimagnet",
+        thickness=5 * u.nm,
+        density=8000 * u.kg / u.m**3,
+        eff_spin=[0.5, 0.5],
+        mf_exch_coupling=np.array([[2e-21, -1e-21], [-1e-21, 2e-21]]) * u.J,
+        mag_saturation=[3e5, 1e5] * u.A / u.m,
+        magnetization=[(0, 1, 0), (0, -1, 0)],
+        dielectric=Dielectric(
+            eps0=Dispersion.from_ref_index(0.99 + 0.01j),
+            eps_mag=[
+                Dispersion.from_array(None, 2e-3 + 1e-3j, kind="eps"),
+                Dispersion.from_array(None, -1e-3 + 3e-3j, kind="eps"),
+            ],
+            gyrotropy=gyrotropy,
+        ),
+    )
+    fe = Layer(
+        "fe",
+        "fe",
+        thickness=3 * u.nm,
+        density=7874 * u.kg / u.m**3,
+        magnetization=(0, 1, 0),
+        dielectric=Dielectric(
+            eps0=Dispersion.from_ref_index(0.98 + 0.02j),
+            eps_mag=Dispersion.from_array(None, 4e-3j, kind="eps"),
+        ),
+    )
+    S = Structure("ferrimagnetic stack")
+    S.add_sub_structure(ferri, 2)
+    S.add_sub_structure(fe, 2)
+    S.add_substrate(Vacuum())
+    return S
+
+
+@pytest.mark.parametrize("cls", [Elzo, BerremanStepanov])
+def test_sublattice_magnetization_maps(cls):
+    """the gyrotropic part of every sublattice couples to its magnetization,
+    which equals the net one for parallel sublattices"""
+    energy, theta = np.r_[700] * u.eV, np.r_[5, 20] * u.deg
+    # parallel sublattices, padded to two sublattices for the single one of fe
+    sublattice_map = np.zeros([2, 4, 2, 3])
+    sublattice_map[0, :, 0, 1] = 1
+    sublattice_map[0, :2, 1, 1] = 1
+    sublattice_map[1] = -sublattice_map[0]
+    net_map = sublattice_map[:, :, 0, :]
+
+    sublattices = simulation(cls, ferrimagnetic_stack("sublattices"), energy, theta)
+    net = simulation(cls, ferrimagnetic_stack("net"), energy, theta)
+    R_sub = sublattices.calc_inhomogeneous_reflectivity_transmissivity(
+        magnetization_map=sublattice_map
+    )[0]
+    R_net = net.calc_inhomogeneous_reflectivity_transmissivity(magnetization_map=net_map)[0]
+    np.testing.assert_allclose(R_sub, R_net, rtol=1e-12)
+    # also as result of Magnetization.get_sublattice_magnetization_map()
+    result = Result()
+    result.add(
+        "sublattice_magnetization_map",
+        sublattice_map,
+        ("delays", "distances", "sublattices", "components"),
+    )
+    R_result = sublattices.calc_inhomogeneous_reflectivity_transmissivity(
+        magnetization_map=result
+    )[0]
+    np.testing.assert_allclose(R_result, R_sub)
+    # the antiparallel sublattices of the layer differ for both models
+    R_static = sublattices.homogeneous_reflectivity_transmissivity().R
+    R_static_net = net.homogeneous_reflectivity_transmissivity().R
+    assert relative(R_static, R_static_net) > 1e-6
+    # the net map cannot give the magnetizations of the sublattices
+    with pytest.raises(ValueError, match="Layer 'ferri'.*requires the magnetizations of all"):
+        sublattices.calc_inhomogeneous_reflectivity_transmissivity(magnetization_map=net_map)

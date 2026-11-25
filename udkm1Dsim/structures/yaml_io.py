@@ -79,7 +79,7 @@ from .dielectric import (
     _Sum,
     _Table,
 )
-from .layers import AmorphousLayer, Layer, UnitCell, Vacuum
+from .layers import Layer, UnitCell, Vacuum
 from .parameter_groups import LatticeParameters, MagneticParameters
 from .parameters import Parameter, TemperatureParameter, VectorParameter
 from .structure import Structure
@@ -94,7 +94,6 @@ _HASH_TYPES = ("heat", "phonon", "xray", "optical", "magnetic")
 
 _LAYER_TYPES = {
     Layer: "Layer",
-    AmorphousLayer: "AmorphousLayer",
     UnitCell: "UnitCell",
     Vacuum: "Vacuum",
 }
@@ -120,7 +119,14 @@ _PREFERRED_UNITS = [
     )
 ]
 
-_DIELECTRIC_KEYS = ("eps0", "eps_mag", "strain_model", "deps_dstrain", "euler_angles")
+_DIELECTRIC_KEYS = (
+    "eps0",
+    "eps_mag",
+    "strain_model",
+    "deps_dstrain",
+    "euler_angles",
+    "gyrotropy",
+)
 _DIELECTRIC_INPUTS = _DIELECTRIC_KEYS + ("display_energy",)
 
 
@@ -395,15 +401,6 @@ def _read_magnetization(value):
     return _read_vector(value)
 
 
-def _apply_magnetization(group, value):
-    """Set the magnetization exactly, keeping the VectorParameter of a single
-    magnetization."""
-    if isinstance(value, VectorParameter) and isinstance(group.magnetization, VectorParameter):
-        group.magnetization.set(value)
-    else:
-        group.magnetization = value
-
-
 # ============================================================================
 # writing
 # ============================================================================
@@ -548,12 +545,12 @@ class _Writer:
             skip = ()
             if isinstance(layer, UnitCell) and group_name == "structural":
                 # given by the lattice and the atoms
-                skip = ("thickness", "area") + (("density",) if layer.num_atoms > 0 else ())
+                skip = ("thickness", "area") + (
+                    ("density", "molar_mass") if layer.num_atoms > 0 else ()
+                )
             values = self._write_group(group, skip)
             if values:
                 data[group_name] = values
-        if isinstance(layer, AmorphousLayer) and getattr(layer, "_atom", None) is not None:
-            data["atom"] = self.atom(layer._atom)
         if isinstance(layer, UnitCell) and layer.num_atoms > 0:
             data["atoms"] = [
                 [self.atom(atom), _write_position(position)] for atom, _, position in layer.atoms
@@ -617,8 +614,15 @@ class _Writer:
         data = {}
         if dielectric.eps0 is not None:
             data["eps0"] = self.dispersion(dielectric.eps0)
-        if dielectric.eps_mag is not None:
+        if isinstance(dielectric.eps_mag, list):
+            # one per sublattice, None without gyrotropic part
+            data["eps_mag"] = [
+                None if part is None else self.dispersion(part) for part in dielectric.eps_mag
+            ]
+        elif dielectric.eps_mag is not None:
             data["eps_mag"] = self.dispersion(dielectric.eps_mag)
+        if dielectric.gyrotropy is not None:
+            data["gyrotropy"] = dielectric.gyrotropy
         if dielectric.strain_model != "density":
             data["strain_model"] = dielectric.strain_model
         deps = dielectric.deps_dstrain
@@ -673,10 +677,13 @@ class _Writer:
                 }
             }
         if kind is _Atoms:
-            return {
+            data = {
                 "atoms": [[self.atom(atom), _number(f)] for atom, f in dispersion._atoms],
                 "magnetic": dispersion._magnetic,
             }
+            if dispersion._select is not None:
+                data["select"] = list(dispersion._select)
+            return data
         if kind is _OptPenDepth:
             data = {
                 "value": _quantity_text(dispersion._opt_pen_depth, u.m),
@@ -949,6 +956,12 @@ class _Reader:
     def _read_layer(self, key, data):
         type_name = data.pop("type", "Layer")
         classes = {name: cls for cls, name in _LAYER_TYPES.items()}
+        if type_name == "AmorphousLayer":
+            raise ValueError(
+                "The type AmorphousLayer was removed in version 3.0. Use the type Layer with "
+                "the molar_mass of its atoms in structural, the magnetization in magnetic, and "
+                "a dielectric from the atoms in optical instead!"
+            )
         if type_name not in classes:
             raise ValueError(f"Unknown type '{type_name}' of a layer!")
         cls = classes[type_name]
@@ -959,12 +972,9 @@ class _Reader:
             if group_name in data:
                 group_class = getattr(cls, group_name).group_class
                 groups[group_name] = self._read_group(group_class, data.pop(group_name))
-        atom = data.pop("atom", None)
         atoms = data.pop("atoms", [])
         higher_orders = data.pop("ho_spring_constants", None)
         self._check_empty(data, "layer")
-        if atom is not None and cls is not AmorphousLayer:
-            raise ValueError("Only an AmorphousLayer has an atom!")
         if atoms and cls is not UnitCell:
             raise ValueError("Only a UnitCell has atoms!")
 
@@ -973,12 +983,6 @@ class _Reader:
             layer.id, layer.name = layer_id, name
             for group_name, values in groups.items():
                 setattr(layer, group_name, values)
-        elif cls is AmorphousLayer:
-            atom = self.atom(atom) if atom is not None else []
-            layer = AmorphousLayer(layer_id, name, atom=atom, **groups)
-            # the atom sets the magnetization of the layer
-            magnetization = groups.get("magnetic", {}).get("magnetization", VectorParameter(""))
-            _apply_magnetization(layer.magnetic, magnetization)
         else:
             if cls is UnitCell and "lattice" not in groups:
                 raise ValueError("The lattice of the UnitCell is missing!")
@@ -1023,9 +1027,17 @@ class _Reader:
             return self.dispersion(data)
         data = dict(data)
         kwargs = {}
-        for key in ("eps0", "eps_mag"):
-            if key in data:
-                kwargs[key] = self.dispersion(data.pop(key))
+        if "eps0" in data:
+            kwargs["eps0"] = self.dispersion(data.pop("eps0"))
+        if "eps_mag" in data:
+            eps_mag = data.pop("eps_mag")
+            kwargs["eps_mag"] = (
+                [None if part is None else self.dispersion(part) for part in eps_mag]
+                if isinstance(eps_mag, list)
+                else self.dispersion(eps_mag)
+            )
+        if "gyrotropy" in data:
+            kwargs["gyrotropy"] = data.pop("gyrotropy")
         if "strain_model" in data:
             kwargs["strain_model"] = data.pop("strain_model")
         if "deps_dstrain" in data:
@@ -1078,8 +1090,9 @@ class _Reader:
         if "atoms" in data:
             atoms = [(self.atom(key), fraction) for key, fraction in data.pop("atoms")]
             magnetic = data.pop("magnetic", False)
+            select = data.pop("select", None)
             self._check_empty(data, "dispersion")
-            return _Atoms(atoms, magnetic=magnetic)
+            return _Atoms(atoms, magnetic=magnetic, select=select)
         if len(data) != 1:
             raise ValueError(f"Unknown dispersion {data!r}!")
         ((kind, value),) = data.items()

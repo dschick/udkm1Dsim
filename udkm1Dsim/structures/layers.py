@@ -21,7 +21,7 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ["Layer", "Vacuum", "AmorphousLayer", "UnitCell"]
+__all__ = ["Layer", "Vacuum", "UnitCell"]
 
 __docformat__ = "restructuredtext"
 
@@ -46,12 +46,12 @@ from udkm1Dsim.structures.parameter_groups import (
     ThermalParameters,
 )
 
-from .atoms import Atom, AtomMixed
 from .dielectric import (
     _ATOMIC_SUSCEPTIBILITY_FACTOR,
     Dielectric,
     Dispersion,
     _Atoms,
+    _cartesian_magnetizations,
     _OptPenDepth,
     to_energy,
 )
@@ -110,6 +110,13 @@ class _GroupAttribute:
 
 class Layer:
     r"""Layer
+
+    Generic, homogeneous slab of any material, e.g. an amorphous,
+    polycrystalline, or single-crystalline solid, a liquid, or a gas, which
+    is given only by its physical properties without any assumption on its
+    internal structure. Only X-ray diffraction by :class:`.XrayKin` and
+    :class:`.XrayDyn` requires the positions of the atoms of a
+    :class:`UnitCell`.
 
     A layer consists of structural, thermal, elastic, optical, and magnetic properties.
     These properties are organized into dedicated parameter groups:
@@ -205,7 +212,7 @@ class Layer:
         Dielectric of the layer from its atoms with the non-magnetic
         dispersion from the atomic form factors, the gyrotropic dispersion
         from the magnetic form factors, if tabulated, and the strain model
-        ``density``, see :meth:`dispersion_from_atoms`. It is not set as
+        ``density``, see :meth:`.Dielectric.from_atoms`. It is not set as
         dielectric of the layer, e.g. to change it before, see
         :meth:`set_dielectric_from_atoms`.
 
@@ -218,16 +225,7 @@ class Layer:
             dielectric (Dielectric): dielectric from the atoms.
 
         """
-        atoms = self._atoms_and_fractions()
-        magnetic = any(atom.has_magnetic_form_factor for atom, _ in atoms)
-        eps0 = _Atoms(atoms)
-        if fallback is not None:
-            eps0 = eps0 | fallback
-        return Dielectric(
-            eps0=eps0,
-            eps_mag=_Atoms(atoms, magnetic=True) if magnetic else None,
-            strain_model="density",
-        )
+        return Dielectric.from_atoms(self._atoms_and_fractions(), fallback=fallback)
 
     def dispersion_from_atoms(self, magnetic=False):
         r"""dispersion_from_atoms
@@ -347,8 +345,11 @@ class Layer:
                 cartesian magnetization ``(x, y, z)``, or for ``polar=True``
                 its amplitude and the angles :math:`\\phi` and
                 :math:`\\gamma` as angle Quantities, e.g.
-                ``(1, 90 * u.deg, 0 * u.deg)``. Defaults to the magnetization
-                of the layer.
+                ``(1, 90 * u.deg, 0 * u.deg)``, or a list of the
+                magnetizations of all sublattices. Defaults to the
+                magnetization of the layer. For several sublattices, the
+                ``gyrotropy`` of the dielectric gives their coupling, see
+                :class:`.Dielectric`.
             polar (bool, optional): the magnetization is given in polar
                 coordinates. Defaults to False.
 
@@ -356,8 +357,11 @@ class Layer:
             eps (ndarray[complex]): dielectric tensor of shape (M, 3, 3).
 
         """
-        if magnetization is None:
-            magnetization, polar = self._magnetization_for_dielectric(), False
+        try:
+            magnetization = self._magnetization_for_dielectric(magnetization, polar)
+        except ValueError as e:
+            raise ValueError(f"Layer '{self.id}': {e}") from None
+        polar = False
         try:
             return self.optical.dielectric.get_tensor(
                 energy,
@@ -373,13 +377,14 @@ class Layer:
         r"""get_form_factor
 
         Effective atomic form factor :math:`f = f_1 - i f_2` per atom of a
-        layer with atoms, which follows from its dielectric function, e.g.
-        also from tabulated optical constants, by
+        layer, which follows from its dielectric function, e.g. also from
+        tabulated optical constants, by
 
         .. math:: \varepsilon = 1 - \frac{r_e \lambda^2}{\pi} n_a f
 
-        with the number density :math:`n_a` of its atoms for their averaged
-        mass number.
+        with the number density :math:`n_a = \rho N_A / M` of its atoms for
+        their mean ``molar_mass`` :math:`M`, which is given by the atoms of a
+        :class:`UnitCell`.
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
@@ -390,8 +395,13 @@ class Layer:
             f (complex, ndarray[complex]): effective atomic form factor.
 
         """
-        atoms = self._atoms_and_fractions()
-        mass_number = sum(fraction * atom.mass_number_a for atom, fraction in atoms)
+        molar_mass = self.structural.molar_mass.magnitude
+        if molar_mass <= 0:
+            raise ValueError(
+                f"The {type(self).__name__} '{self.id}' has no molar_mass for the number "
+                "density of its atoms!"
+            )
+        mass_number = molar_mass * 1000  # (g/mol)
         n = self._dielectric_output("get_ref_index", energy, strain)
         energy = to_energy(energy)
         density = self.structural.density.magnitude / (1 + strain)
@@ -534,8 +544,7 @@ class Layer:
     def _atoms_hash(self):
         """Hashes of the atoms of the layer, see :attr:`.Atom.hash`,
         e.g. with their positions in a :class:`UnitCell`."""
-        atom = getattr(self, "_atom", None)
-        return [] if atom is None else [atom.hash]
+        return []
 
     def get_ref_index(self, energy, strain=0.0):
         """get_ref_index
@@ -1141,7 +1150,20 @@ class Layer:
 
     def _update_layer(self):
         """Update the parameters depending on several groups."""
+        self._update_molar_mass()
+        self.magnetic._set_number_density(self.structural.number_density.magnitude)
         self._update_elastic()
+
+    def _update_molar_mass(self):
+        """Update the molar mass, which is given by the atoms of a layer with
+        atoms and kept otherwise."""
+        try:
+            atoms = self._atoms_and_fractions()
+        except TypeError:  # a layer without atoms
+            return
+        total = sum(fraction for _, fraction in atoms)
+        mass = sum((fraction * atom.mass for atom, fraction in atoms), 0 * u.kg) / total
+        self.structural.molar_mass.quantity = mass * u.N_A
 
     def _update_elastic(self):
         """Recalculate the spring constant and acoustic impedance, which
@@ -1161,15 +1183,61 @@ class Layer:
             "by a Dispersion, e.g. Dispersion.from_ref_index(n)!"
         )
 
-    def _magnetization_for_dielectric(self):
-        """Magnetization of the layer for its dielectric tensor."""
-        magnetization = self.magnetic.magnetization
-        if isinstance(magnetization, list):
-            raise NotImplementedError(
-                f"The magnetization of the layer '{self.id}' has several sublattices. "
-                "Give the magnetization of the dielectric tensor explicitly!"
+    def _magnetization_for_dielectric(self, magnetization=None, polar=False):
+        """Cartesian magnetization of the dielectric tensor of shape (3,), or
+        (P, 3) for the gyrotropy ``sublattices``, from the given one, a net or
+        one per sublattice, or of the layer, see :class:`.Dielectric`."""
+        if magnetization is None:
+            magnetization = self.magnetic.sublattice_magnetizations()
+            polar = False
+        magnetization = _cartesian_magnetizations(magnetization, polar)
+        P = self.magnetic.num_sublattices
+        if magnetization.ndim == 2 and P == 1:
+            # sublattice maps of several layers are padded to the most sublattices
+            if np.any(magnetization[1:]):
+                raise ValueError(
+                    f"The layer has a single sublattice, but {len(magnetization):d} "
+                    "magnetizations!"
+                )
+            magnetization = magnetization[0]
+        dielectric = self.optical.dielectric
+        if P == 1 or not dielectric._eps_mag_parts() or not np.any(magnetization):
+            # a single sublattice, or no gyrotropic part
+            return magnetization if magnetization.ndim == 1 else np.zeros(3)
+        gyrotropy = dielectric.gyrotropy
+        if gyrotropy is None:
+            raise ValueError(
+                f"The layer has {P:d} magnetic sublattices, whose coupling to the gyrotropic "
+                "part of the dielectric must be chosen by its gyrotropy, either "
+                'layer.optical.dielectric.gyrotropy = "net" for the net magnetization or '
+                '"sublattices" for the magnetization of every sublattice!'
             )
-        return magnetization.magnitude
+        if magnetization.ndim == 1:
+            if gyrotropy == "sublattices":
+                raise ValueError(
+                    'The gyrotropy "sublattices" requires the magnetizations of all '
+                    f"{P:d} sublattices, e.g. a sublattice_magnetization_map, not a net one!"
+                )
+            return magnetization
+        if len(magnetization) < P:
+            raise ValueError(
+                f"The layer has {P:d} sublattices, but {len(magnetization):d} magnetizations!"
+            )
+        magnetization = magnetization[:P]
+        if gyrotropy == "sublattices":
+            return magnetization
+        return self._net_weights() @ magnetization
+
+    def _net_weights(self):
+        """weights of the sublattices for the net magnetization, their
+        saturation magnetizations normalized to their sum, or equal weights
+        without saturation magnetization, as for the net magnetization map"""
+        weights = self.magnetic.sublattice_values("mag_saturation")
+        total = np.sum(weights)
+        if total <= 0:
+            weights = np.ones_like(weights)
+            total = np.sum(weights)
+        return weights / total
 
     def _dielectric_output(self, method, energy, strain):
         """Output of the dielectric tensor of the layer for its density, where errors
@@ -1218,87 +1286,6 @@ class Vacuum(Layer):
         return (
             f"<h2>Vacuum</h2><b>Thickness:</b> {self.structural.thickness.quantity.to('nm'):.4g~P}"
         )
-
-
-class AmorphousLayer(Layer):
-    r"""AmorphousLayer
-
-    Representation of amorphous layers but kept for backwards compatibility.
-
-    Use :class:`Layer` instead.
-
-    The magnetization of the layer is the one of its atom, unless a
-    ``magnetization`` is given on initialization, either as keyword argument
-    or in the dict of the ``magnetic`` parameters. Setting the ``atom``
-    afterwards sets the magnetization of the layer to the one of the atom.
-
-    """
-
-    _extra_inputs = ("atom",)
-
-    def __init__(self, id, name, thickness=None, density=None, **kwargs):
-        if thickness is not None:
-            kwargs["thickness"] = thickness
-        if density is not None:
-            kwargs["density"] = density
-        super().__init__(id, name, **kwargs)
-        magnetic = kwargs.get("magnetic")
-        given = "magnetization" in kwargs or (
-            isinstance(magnetic, dict) and "magnetization" in magnetic
-        )
-        self._set_atom(kwargs.get("atom", []), magnetization=not given)
-
-    @property
-    def atom(self):
-        """Atom or mixed atom of the layer, see :class:`.Atom` and :class:`.AtomMixed`."""
-        return self._atom
-
-    @atom.setter
-    def atom(self, atom):
-        self._set_atom(atom)
-
-    def _set_atom(self, atom, magnetization=True):
-        """Set the atom and, if ``magnetization``, the magnetization of the
-        layer to the one of the atom or to zero without an atom."""
-        if atom == []:  # no atom is set
-            if magnetization:
-                self.magnetic.magnetization.polar = (0, 0 * u.deg, 0 * u.deg)
-            return
-
-        if not isinstance(atom, (Atom, AtomMixed)):
-            raise TypeError(
-                "Class "
-                + type(atom).__name__
-                + " is no possible atom of an amorphous layer. "
-                + "Only Atom and AtomMixed are allowed!"
-            )
-        self._atom = atom
-        if isinstance(atom, AtomMixed) and atom.num_atoms == self.magnetic.num_sublattices > 1:
-            # every constituent of the mixed atom forms a sublattice
-            if magnetization:
-                self.magnetic.magnetization = [
-                    constituent.atomic.magnetization for constituent, _ in atom.atoms
-                ]
-            if not self.magnetic._concentration_explicit:
-                self.magnetic.concentration = [fraction for _, fraction in atom.atoms]
-        elif magnetization:
-            if isinstance(self.magnetic.magnetization, list):
-                self.magnetic.magnetization = (0.0, 0.0, 0.0)
-            # keeps the angles of the atom, also for a zero amplitude
-            self.magnetic.magnetization.set(atom.atomic.magnetization)
-
-    def _atoms_and_fractions(self):
-        atom = getattr(self, "_atom", None)
-        if atom is None:
-            return super()._atoms_and_fractions()
-        return [(atom, 1.0)]
-
-    def _magnetization_for_dielectric(self):
-        """For sublattices, the magnetization of the mixed atom is used, as
-        its magnetic form factor is averaged from its constituents."""
-        if isinstance(self.magnetic.magnetization, list) and hasattr(self, "_atom"):
-            return self._atom.atomic.magnetization.magnitude
-        return super()._magnetization_for_dielectric()
 
 
 class UnitCell(Layer):
@@ -1459,6 +1446,8 @@ class UnitCell(Layer):
         self.atoms.sort(key=lambda x: x[1](0))
         # increase the number of atoms
         self.num_atoms = self.num_atoms + 1
+        # the unit cell follows later changes of the atom, e.g. of a mixed atom
+        atom._register_owner(self)
 
         # drop automatic magnetization calculation for unitcell
         # self.magnetization.append([atom.mag_amplitude, atom.mag_phi, atom.mag_gamma])
@@ -1637,6 +1626,17 @@ class UnitCell(Layer):
     # ============================================================================
     # Private methods
     # ============================================================================
+
+    def _atom_changed(self):
+        """Called on changes of an atom of the unit cell, e.g. of the
+        constituents of a mixed atom, to update its mass and density."""
+        self._update_depending()
+
+    def __setstate__(self, state):
+        # a copied or unpickled unit cell follows the changes of its atoms
+        self.__dict__.update(state)
+        for atom, _, _ in self.atoms:
+            atom._register_owner(self)
 
     def _update_layer(self):
         """The thickness and area of a unit cell are given by its lattice and

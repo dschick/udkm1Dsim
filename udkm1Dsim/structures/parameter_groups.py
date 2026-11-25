@@ -38,6 +38,7 @@ __docformat__ = "restructuredtext"
 import copy
 import inspect
 import re
+import warnings
 
 import numpy as np
 import pint
@@ -348,21 +349,38 @@ class StructuralParameters(ParameterGroup):
         area (float): area of layer :math:`A` (m²).
         roughness (float): gaussian width of the top roughness of a layer :math:`\sigma` (m).
         mass (float): mass of the layer :math:`m` (kg).
+        molar_mass (float): mean molar mass of the atoms of the layer
+            :math:`M` (kg/mol), which gives their number density. It is zero,
+            i.e. unknown, by default, and given by the atoms of a
+            :class:`.UnitCell`.
+        mass (float): mass of the layer :math:`m` (kg).
         mass_unit_area (float): mass of layer normalized to unit area of 1 Å² :math:`m_A` (kg).
         volume (float): volume of layer :math:`V` (m³).
+        number_density (float): number density of all atoms of the layer
+            :math:`n = \rho N_A / M` (1/m³), which is zero for an unknown
+            molar mass.
 
     """
 
-    _derived = ("mass", "mass_unit_area", "volume")
+    _derived = ("mass", "mass_unit_area", "volume", "number_density")
 
-    def __init__(self, thickness=0.0, density=0.0, area=1.0 * u.angstrom**2, roughness=0.0):
+    def __init__(
+        self,
+        thickness=0.0,
+        density=0.0,
+        area=1.0 * u.angstrom**2,
+        roughness=0.0,
+        molar_mass=0.0,
+    ):
         self.thickness = Parameter("m", thickness, symbol="d")
         self.density = Parameter("kg/m**3", density, symbol=r"\rho")
         self.area = Parameter("m**2", area, symbol="A")
         self.roughness = Parameter("m", roughness, symbol=r"\sigma")
+        self.molar_mass = Parameter("kg/mol", molar_mass, symbol="M")
         self.mass = Parameter("kg", 0.0, symbol="m")
         self.mass_unit_area = Parameter("kg", 0.0, symbol="m_A")
         self.volume = Parameter("m**3", 0.0, symbol="V")
+        self.number_density = Parameter("1/m**3", 0.0, symbol="n")
 
         self._connect_parameters()
         self._update_group()
@@ -376,6 +394,10 @@ class StructuralParameters(ParameterGroup):
             )
         except ZeroDivisionError:
             self.mass_unit_area.quantity = 0 * u.kg
+        molar_mass = self.molar_mass.magnitude
+        self.number_density.magnitude = (
+            self.density.magnitude * constants.N_A / molar_mass if molar_mass > 0 else 0.0
+        )
 
 
 class LatticeParameters(ParameterGroup):
@@ -618,7 +640,13 @@ class MagneticParameters(ParameterGroup):
         lamda (float, ndarray[float]): intrinsic coupling to bath parameter
             :math:`\lambda` per sublattice.
         mag_moment (float, ndarray[float]): atomic magnetic moment
-            :math:`\mu` per sublattice (A m²).
+            :math:`\mu` per sublattice (A m²). Unless it is given, it is
+            derived from the saturation magnetization, the concentration, and
+            the number density :math:`n` of the atoms of the layer, see
+            :meth:`calc_mag_moment`, and follows their changes. Without a
+            number density, e.g. of a :class:`.Layer` without a
+            ``molar_mass``, it is zero. A given moment is checked against
+            them by the simulations, see :meth:`check_mag_moment`.
         aniso_exponent (float, ndarray[float]): exponent :math:`\beta` of the
             temperature dependence of the anisotropy per sublattice.
         anisotropy (ndarray[float]): anisotropy :math:`K` at T=0 K (J/m³) as
@@ -627,7 +655,11 @@ class MagneticParameters(ParameterGroup):
         exch_stiffness (float): exchange stiffness at T=0 K
             :math:`A_\mathrm{ex}` (J/m) towards the neighbouring layers.
         mag_saturation (float, ndarray[float]): saturation magnetization at
-            0 K :math:`M_s` per sublattice (J/T/m³).
+            0 K :math:`M_s` per sublattice (J/T/m³). Values measured at a
+            finite temperature, e.g. at room temperature, are converted by
+            :meth:`mag_saturation_at_zero`. Only for the LLG with a fixed
+            amplitude of 1, a value at the temperature of the simulation gives
+            the same fields as the 0 K value with the equilibrium amplitude.
         magnetization (VectorParameter, list[VectorParameter]): magnetization
             :math:`\mathbf{m}` given by its amplitude :math:`r`, which is
             negative for the reversed direction, and the angles :math:`\phi`
@@ -636,10 +668,7 @@ class MagneticParameters(ParameterGroup):
             or as dict of polar or cartesian components, e.g. ``{"r": 1,
             "phi": 90 * u.deg, "gamma": 0 * u.deg}`` or ``{"x": 0, "y": 0,
             "z": 1}``, see :class:`.VectorParameter`, and as list of such
-            inputs with one magnetization per sublattice. For an
-            :class:`.AmorphousLayer` it is inherited from its atom, i.e. from
-            the constituents of an :class:`.AtomMixed` with one constituent
-            per sublattice.
+            inputs with one magnetization per sublattice.
         gilbert_damping (float, ndarray[float]): Gilbert damping
             :math:`\alpha` of the LLG per sublattice.
         gyromagnetic_ratio (float, ndarray[float]): gyromagnetic ratio
@@ -659,9 +688,11 @@ class MagneticParameters(ParameterGroup):
             extended LLB, see
             :func:`~udkm1Dsim.simulations.solvers.magnetization_scipy.exchange_relaxation_torque`.
         concentration (float, ndarray[float]): concentration :math:`x` per
-            sublattice for the exchange relaxation. It is derived as equal
-            concentrations :math:`1/P` unless it is given, e.g. as the
-            fractions of the constituents of an :class:`.AtomMixed`.
+            sublattice, i.e. the fraction of all atoms of the layer, for the
+            exchange relaxation and the atomic magnetic moment. It is derived
+            as equal concentrations :math:`1/P` unless it is given, e.g. for
+            the fractions of the elements of an alloy, or for non-magnetic
+            atoms in the layer, e.g. :math:`x = 1/2` for the Ni of NiO.
 
     """
 
@@ -686,7 +717,7 @@ class MagneticParameters(ParameterGroup):
         eff_spin=0.0,
         curie_temp=0.0,
         lamda=0.0,
-        mag_moment=0.0,
+        mag_moment=None,
         aniso_exponent=0.0,
         anisotropy=np.array([0.0, 0.0, 0.0]),
         exch_stiffness=np.array([0.0, 0.0, 0.0]),
@@ -704,6 +735,9 @@ class MagneticParameters(ParameterGroup):
         self._exchange_derived = "mf_exch_coupling" if mf_exch_coupling is None else "curie_temp"
         # without explicit concentrations they are equal
         self._concentration_explicit = concentration is not None
+        # without an explicit moment it is derived from the number density
+        self._mag_moment_explicit = mag_moment is not None
+        self._number_density = 0.0
         self._update_derived_names()
         self.eff_spin = Parameter("", eff_spin, symbol="S")
         self.curie_temp = Parameter("K", curie_temp, symbol=r"T_\mathrm{C}")
@@ -711,7 +745,9 @@ class MagneticParameters(ParameterGroup):
             "m**2kg/s**2", 0.0 if mf_exch_coupling is None else mf_exch_coupling, symbol="J"
         )
         self.lamda = Parameter("", lamda, symbol=r"\lambda")
-        self.mag_moment = Parameter("A*m**2", mag_moment, symbol=r"\mu")
+        self.mag_moment = Parameter(
+            "A*m**2", 0.0 if mag_moment is None else mag_moment, symbol=r"\mu"
+        )
         self.aniso_exponent = Parameter("", aniso_exponent, symbol=r"\beta")
         self.anisotropy = Parameter("J/m**3", anisotropy, symbol="K")
         self.exch_stiffness = Parameter("J/m", exch_stiffness, symbol=r"A_\mathrm{ex}")
@@ -732,8 +768,10 @@ class MagneticParameters(ParameterGroup):
 
     def _update_derived_names(self):
         """the names of the derived parameters"""
-        self._derived = (self._exchange_derived,) + (
-            () if self._concentration_explicit else ("concentration",)
+        self._derived = (
+            (self._exchange_derived,)
+            + (() if self._concentration_explicit else ("concentration",))
+            + (() if self._mag_moment_explicit else ("mag_moment",))
         )
 
     # the magnetization of several sublattices is a list of VectorParameters
@@ -801,6 +839,12 @@ class MagneticParameters(ParameterGroup):
             self._concentration_explicit = True
             self._update_derived_names()
             self.concentration._caller = self
+            super().__setattr__(name, value)
+        elif name == "mag_moment" and not self._mag_moment_explicit:
+            # an explicit moment is not derived anymore
+            self._mag_moment_explicit = True
+            self._update_derived_names()
+            self.mag_moment._caller = self
             super().__setattr__(name, value)
         else:
             super().__setattr__(name, value)
@@ -950,9 +994,141 @@ class MagneticParameters(ParameterGroup):
         if not self._concentration_explicit:
             # equal concentrations, a scalar for all sublattices
             self.concentration.magnitude = 1.0 / self.num_sublattices
+        if not self._mag_moment_explicit:
+            self.calc_mag_moment()
         self.check_array(self.exch_stiffness, "Exchange stiffness")
         self.check_anisotropy()
         self.check_gyromagnetic_ratio()
+
+    def _set_number_density(self, number_density):
+        """Set the number density of the atoms of the layer (1/m³), which
+        is given by its owner, and update the derived moment."""
+        self._number_density = float(number_density)
+        if not self._mag_moment_explicit:
+            self.calc_mag_moment()
+
+    def _moment_from_number_density(self):
+        """Atomic moments (A m²) from the saturation magnetization, the
+        concentration, and the number density, zero where any is zero."""
+        mag_saturation = np.asarray(self.mag_saturation.magnitude, dtype=float)
+        concentration = np.asarray(self.concentration.magnitude, dtype=float)
+        atoms = concentration * self._number_density
+        with np.errstate(divide="ignore", invalid="ignore"):
+            moment = np.where(atoms > 0, mag_saturation / atoms, 0.0)
+        return float(moment) if moment.ndim == 0 else moment
+
+    def calc_mag_moment(self):
+        r"""calc_mag_moment
+
+        Calculate the atomic magnetic moment per sublattice from the
+        saturation magnetization at 0 K, the concentration :math:`x_a`, and
+        the number density :math:`n` of all atoms of the layer by
+
+        .. math:: \mu_a = \frac{M_{s,a}}{x_a n}
+
+        which is zero without a number density, e.g. for a :class:`.Layer`
+        without a ``molar_mass``.
+
+        """
+        self.mag_moment.magnitude = self._moment_from_number_density()
+
+    def check_mag_moment(self, rtol=0.03):
+        r"""check_mag_moment
+
+        Warns if a given atomic magnetic moment differs from the one by the
+        saturation magnetization, the concentration, and the number density
+        of the layer, see :meth:`calc_mag_moment`, by more than a relative
+        tolerance. Inconsistent values often stem from a saturation
+        magnetization at room temperature instead of 0 K, see
+        :meth:`mag_saturation_at_zero`. Layers without a number density are
+        not checked.
+
+        Args:
+            rtol (float, optional): relative tolerance. Defaults to 0.03.
+
+        """
+        if not self._mag_moment_explicit or self._number_density <= 0:
+            return
+        given = np.asarray(self.mag_moment.magnitude, dtype=float)
+        derived = np.asarray(self._moment_from_number_density(), dtype=float)
+        given, derived = np.broadcast_arrays(given, derived)
+        compared = (given > 0) & (derived > 0)
+        if not np.any(compared):
+            return
+        deviation = np.max(np.abs(given[compared] / derived[compared] - 1))
+        if deviation > rtol:
+            mu_b = constants.physical_constants["Bohr magneton"][0]
+            given, derived = (np.round(m / mu_b, 3).tolist() for m in (given, derived))
+            warnings.warn(
+                f"The given atomic magnetic moment mag_moment = {given} mu_B differs by "
+                f"{deviation:.1%} from M_s/(x n) = {derived} mu_B by the saturation "
+                "magnetization, the concentration, and the number density of the layer. Is "
+                "mag_saturation the value at 0 K? Omit mag_moment to derive it.",
+                stacklevel=2,
+            )
+
+    def mag_saturation_at_zero(self, mag_saturation, temp):
+        r"""mag_saturation_at_zero
+
+        Saturation magnetization at 0 K from a value measured at the
+        temperature :math:`T`, e.g. at room temperature,
+
+        .. math:: M_s(0) = \frac{M_s(T)}{|m_e(T)|}
+
+        with the mean-field equilibrium magnetization :math:`m_e(T)` of the
+        effective spin and the Curie temperature, or of the exchange matrix
+        for several sublattices, see
+        :func:`~udkm1Dsim.simulations.solvers.mean_field.mean_field_magnetization`.
+        The mean-field :math:`m_e(T)` deviates from measured curves by a few
+        percent, e.g. from Bloch's :math:`T^{3/2}` law at low temperatures,
+        so the result is an approximation. It is not set as
+        ``mag_saturation``.
+
+        .. code-block:: python
+
+            layer.mag_saturation = layer.magnetic.mag_saturation_at_zero(
+                4.9e5 * u.A / u.m, 293 * u.K
+            )
+
+        Args:
+            mag_saturation (float, Quantity, ndarray[float]): saturation
+                magnetization at the temperature :math:`T` per sublattice,
+                where floats are taken in A/m.
+            temp (float, Quantity): temperature :math:`T`, where floats are
+                taken in K.
+
+        Returns:
+            mag_saturation (Quantity): saturation magnetization at 0 K per
+            sublattice.
+
+        Raises:
+            ValueError: if the effective spin is not positive, or if the
+                temperature is not below the Curie temperature.
+
+        """
+        from ..simulations.solvers.mean_field import (
+            mean_field_magnetization,
+            mean_field_magnetization_coupled,
+        )
+
+        mag_saturation = u.Quantity(mag_saturation, "A/m").to("A/m").magnitude
+        temp = float(u.Quantity(temp, "K").to("K").magnitude)
+        eff_spins = self.sublattice_values("eff_spin")
+        if np.any(eff_spins <= 0):
+            raise ValueError("The effective spin must be positive for the mean-field model!")
+        curie_temp = float(self.curie_temp.magnitude)
+        if not 0 <= temp < curie_temp:
+            raise ValueError(
+                f"The temperature {temp} K must be below the Curie temperature {curie_temp} K!"
+            )
+        if self.num_sublattices == 1:
+            reduced = mean_field_magnetization(temp / curie_temp, float(eff_spins[0]))
+        else:
+            reduced = mean_field_magnetization_coupled(
+                temp, self.sublattice_values("mf_exch_coupling"), eff_spins
+            )[0]
+        result = mag_saturation / np.abs(reduced)
+        return (float(result) if np.ndim(result) == 0 else result) * u.A / u.m
 
     def check_gyromagnetic_ratio(self):
         r"""check_gyromagnetic_ratio

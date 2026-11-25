@@ -19,7 +19,7 @@ from .simulations.scattering import (
 from .simulations.simulation import Simulation
 from .structures.atoms import Atom, AtomMixed
 from .structures.dielectric import Dielectric, Dispersion
-from .structures.layers import AmorphousLayer, Layer, UnitCell, Vacuum
+from .structures.layers import Layer, UnitCell, Vacuum
 from .structures.parameter_groups import (
     AtomMixedParameters,
     AtomParameters,
@@ -52,7 +52,6 @@ __all__ = [
     "ThermalParameters",
     "Layer",
     "Vacuum",
-    "AmorphousLayer",
     "UnitCell",
     "Dielectric",
     "Dispersion",
@@ -84,3 +83,18 @@ __all__ = [
 ]
 
 __version__ = "3.0.0a6"
+
+_REMOVED = {
+    "AmorphousLayer": (
+        "AmorphousLayer was removed in version 3.0. Use Layer with the molar_mass of its atoms, "
+        "the magnetization of the layer, and dielectric=Dielectric.from_atoms(atom) instead, "
+        "see the structure example!"
+    ),
+}
+
+
+def __getattr__(name):
+    """hints for removed classes"""
+    if name in _REMOVED:
+        raise AttributeError(_REMOVED[name])
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

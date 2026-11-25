@@ -15,7 +15,7 @@
     <g fill="#ffffff" stroke="#c9ced6" stroke-width="2">
       <rect x="50" y="90" width="280" height="140" rx="14"/>
       <rect x="50" y="270" width="280" height="140" rx="14"/>
-      <rect x="400" y="132" width="300" height="236" rx="14"/>
+      <rect x="400" y="132" width="300" height="198" rx="14"/>
       <rect x="760" y="195" width="200" height="110" rx="14"/>
     </g>
 
@@ -31,9 +31,8 @@
       <text x="74" y="352">Dielectric</text>
       <text x="74" y="390">Dispersion</text>
       <text x="424" y="214">Layer</text>
-      <text x="424" y="252">AmorphousLayer</text>
-      <text x="424" y="290">UnitCell</text>
-      <text x="424" y="328">Vacuum</text>
+      <text x="424" y="252">UnitCell</text>
+      <text x="424" y="290">Vacuum</text>
       <text x="784" y="277">Structure</text>
     </g>
 

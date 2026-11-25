@@ -1101,14 +1101,24 @@ class MultilayerScattering(Scattering):
 
     @staticmethod
     def _parse_layer_inputs(layer, strain, magnetization):
-        """strain as float and magnetization as tuple, where magnetizations
-        with fewer than three elements are replaced by the one of the layer"""
+        """strain as float and the magnetization of the dielectric tensor as
+        tuple, a net one or one per sublattice for the gyrotropy
+        ``sublattices``, see :meth:`.Layer.get_dielectric_tensor`, where
+        magnetizations with fewer than three elements are replaced by the one
+        of the layer"""
         strain = float(np.ravel(strain)[0]) if np.size(strain) > 0 else 0.0
-        if magnetization is None or np.size(magnetization) < 3:
-            magnetization = layer._magnetization_for_dielectric()
-            if not np.any(magnetization):
-                _warn_for_magnetized_atoms(layer)
-        return strain, tuple(float(m) for m in np.ravel(magnetization)[:3])
+        given = magnetization is not None and np.size(magnetization) >= 3
+        try:
+            magnetization = layer._magnetization_for_dielectric(
+                np.asarray(magnetization, dtype=float) if given else None
+            )
+        except ValueError as e:
+            raise ValueError(f"Layer '{layer.id}': {e}") from None
+        if not given and not np.any(magnetization):
+            _warn_for_magnetized_atoms(layer)
+        if magnetization.ndim == 2:
+            return strain, tuple(tuple(float(c) for c in m) for m in magnetization)
+        return strain, tuple(float(c) for c in magnetization)
 
     def _layer_modes(self, layer, strain, magnetization, cache=None):
         """eigenmodes, thickness, and roughness of a layer, which are cached
@@ -2139,6 +2149,12 @@ class MultilayerScattering(Scattering):
                 returned by
                 :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
                 Its amplitude scales the magnetic part of the dielectric tensor.
+                Layers with several sublattices take the
+                ``sublattice_magnetization_map`` :math:`M \times N \times P \times 3`
+                of
+                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_sublattice_magnetization_map`
+                for the ``gyrotropy`` ``"sublattices"`` of their dielectric,
+                see :class:`.Dielectric`.
                 For its result, the metadata ``polar`` overrides ``polar``.
             temp_map (ndarray[float], Result, optional): spatio-temporal temperature
                 profile :math:`M \times N` or :math:`M \times N \times K` of
@@ -2265,6 +2281,12 @@ class MultilayerScattering(Scattering):
                 returned by
                 :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
                 Its amplitude scales the magnetic part of the dielectric tensor.
+                Layers with several sublattices take the
+                ``sublattice_magnetization_map`` :math:`M \times N \times P \times 3`
+                of
+                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_sublattice_magnetization_map`
+                for the ``gyrotropy`` ``"sublattices"`` of their dielectric,
+                see :class:`.Dielectric`.
                 For its result, the metadata ``polar`` overrides ``polar``.
             temp_map (ndarray[float], Result, optional): spatio-temporal temperature
                 profile :math:`M \times N` or :math:`M \times N \times K` of
@@ -2381,6 +2403,12 @@ class MultilayerScattering(Scattering):
                 returned by
                 :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_magnetization_map`.
                 Its amplitude scales the magnetic part of the dielectric tensor.
+                Layers with several sublattices take the
+                ``sublattice_magnetization_map`` :math:`M \times N \times P \times 3`
+                of
+                :meth:`~udkm1Dsim.simulations.magnetization.Magnetization.get_sublattice_magnetization_map`
+                for the ``gyrotropy`` ``"sublattices"`` of their dielectric,
+                see :class:`.Dielectric`.
                 For its result, the metadata ``polar`` overrides ``polar``.
             temp_map (ndarray[float], Result, optional): spatio-temporal temperature
                 profile :math:`M \times N` or :math:`M \times N \times K` of
@@ -2526,11 +2554,16 @@ class MultilayerScattering(Scattering):
 
         """
         source = find_source(strain_map, magnetization_map, temp_map)
+        name = "magnetization_map"
         if isinstance(magnetization_map, Result):
             polar = bool(magnetization_map.attrs.get("polar", polar))
+            sublattices = "sublattice_magnetization_map"
+            if name not in magnetization_map and sublattices in magnetization_map:
+                # the result of Magnetization.get_sublattice_magnetization_map()
+                name = sublattices
         return (
             get_entry(strain_map, "strain_map"),
-            get_entry(magnetization_map, "magnetization_map"),
+            get_entry(magnetization_map, name),
             get_entry(temp_map, "temp_map"),
             polar,
             source,

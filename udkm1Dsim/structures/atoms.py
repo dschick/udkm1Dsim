@@ -168,6 +168,8 @@ class Atom:
         self._atomic_form_factor_path = atomic_path
         self._magnetic_form_factor_path = magnetic_path
         self._read_cromer_mann_coeff()
+        # unit cells and mixed atoms containing the atom, which follow its changes
+        self._owners = []
         # changes of the parameters, e.g. of the ionicity, are notified to the atom
         self.atomic._owner = self
 
@@ -190,11 +192,39 @@ class Atom:
 
     def _update_depending(self):
         """Called on changes of the atomic parameters to reset the cached
-        hash and to re-read the Cromer-Mann coefficients on a change of the
-        ionicity."""
+        hash, to re-read the Cromer-Mann coefficients on a change of the
+        ionicity, and to notify the unit cells and mixed atoms containing
+        the atom."""
         self.__dict__["_hash"] = None
         if self.ionicity != getattr(self, "_cromer_mann_ionicity", None):
             self._read_cromer_mann_coeff()
+        self._notify_owners()
+
+    def _register_owner(self, owner):
+        """Register a unit cell or mixed atom containing the atom, which
+        follows its changes, e.g. of the mass of a mixed atom."""
+        owners = self.__dict__.setdefault("_owners", [])
+        if not any(other is owner for other in owners):
+            owners.append(owner)
+
+    def _notify_owners(self):
+        """Notify the unit cells and mixed atoms containing the atom."""
+        for owner in list(self.__dict__.get("_owners", ())):
+            owner._atom_changed()
+
+    def __getstate__(self):
+        # The unit cells and mixed atoms containing the atom are neither copied
+        # nor pickled with it. Instead, a copied or unpickled owner registers
+        # itself to its atoms again.
+        state = self.__dict__.copy()
+        state["_owners"] = []
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # a copied or unpickled mixed atom contains its constituents
+        for entry in self.__dict__.get("atoms", []):
+            entry[0]._register_owner(self)
 
     def _read_cromer_mann_coeff(self):
         """Read the Cromer-Mann coefficients for the current ionicity."""
@@ -797,6 +827,8 @@ class AtomMixed(Atom):
         self._magnetic_form_factor_source = os.path.basename(magnetic_path)
         self._atomic_form_factor_path = atomic_path
         self._magnetic_form_factor_path = magnetic_path
+        # unit cells and mixed atoms containing the mixed atom, which follow its changes
+        self._owners = []
         # changes of the parameters, e.g. of the magnetization, reset the hash
         self.atomic._owner = self
 
@@ -896,8 +928,30 @@ class AtomMixed(Atom):
 
     def _update_depending(self):
         """Called on changes of the atomic parameters to reset the cached
-        hash."""
+        hash and to notify the unit cells and mixed atoms containing the
+        mixed atom."""
         self.__dict__["_hash"] = None
+        if not self.__dict__.get("_averaging", False):
+            self._notify_owners()
+
+    def _atom_changed(self):
+        """Called on changes of a constituent, e.g. of its ionicity or of the
+        constituents of a nested mixed atom."""
+        self._average_constituents()
+
+    def _average_constituents(self):
+        """Average the atomic number, mass number, mass, and ionicity of the
+        constituents by their fractions and notify the owners once."""
+        p = self.atomic
+        self.__dict__["_averaging"] = True
+        try:
+            p.atomic_number.magnitude = sum(f * a.atomic_number_z for a, f in self.atoms)
+            p.mass_number.magnitude = sum(f * a.mass_number_a for a, f in self.atoms)
+            p.mass.magnitude = sum(f * a._mass for a, f in self.atoms)
+            p.ionicity.magnitude = sum(f * a.ionicity for a, f in self.atoms)
+        finally:
+            self.__dict__["_averaging"] = False
+        self._update_depending()
 
     @property
     def hash(self):
@@ -922,12 +976,10 @@ class AtomMixed(Atom):
         if isinstance(atom, Atom):
             self.atoms.append([atom, fraction])
             self.num_atoms = self.num_atoms + 1
+            # the mixed atom follows later changes of the atom
+            atom._register_owner(self)
             # calculate the mixed atomic properties of the atomMixed instance
-            p = self.atomic
-            p.atomic_number.magnitude += fraction * atom.atomic_number_z
-            p.mass_number.magnitude += fraction * atom.mass_number_a
-            p.mass.magnitude += fraction * atom._mass
-            p.ionicity.magnitude += fraction * atom.ionicity
+            self._average_constituents()
         else:
             warnings.warn("Only Atom objects can be added to a MixedAtom!")
 
