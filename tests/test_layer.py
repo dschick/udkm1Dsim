@@ -315,6 +315,30 @@ def test_gyrotropy_net_and_sublattices():
     assert "gyrotropy net" in str(layer.optical.dielectric)
 
 
+def test_delta_beta_mag_of_sublattices():
+    """eps_mag = 2 (Delta delta - i Delta beta) of the circular modes along z
+    for the magnetizations of the sublattices and their gyrotropy"""
+    layer = _ferrimagnet(EPS_MAG, "sublattices")
+    # antiparallel sublattices: eps_mag = 0.1 - 0.03j
+    expected = (0.05, 0.015)
+    np.testing.assert_allclose(
+        layer.get_delta_beta_mag(1.55 * u.eV, magnetization=layer.magnetization), expected
+    )
+    np.testing.assert_allclose(
+        layer.get_delta_beta_mag(1.55 * u.eV, magnetization=[(0, 0, 1), (0, 0, -1)]), expected
+    )
+    # per unit magnetization, the sum of the dispersions assumes parallel sublattices
+    with pytest.raises(ValueError, match="Layer 'ferri'.*require their magnetizations"):
+        layer.get_delta_beta_mag(1.55 * u.eV)
+    # the sum of the dispersions couples to the net magnetization m_net = 1/2
+    layer.optical.dielectric.gyrotropy = "net"
+    np.testing.assert_allclose(
+        layer.get_delta_beta_mag(1.55 * u.eV, magnetization=layer.magnetization),
+        (0.025, -0.0075),
+    )
+    np.testing.assert_allclose(layer.get_delta_beta_mag(1.55 * u.eV), (0.05, -0.015))
+
+
 def test_dielectric_from_atoms_of_sublattices():
     Fe, Ni, O = Atom("Fe"), Atom("Ni"), Atom("O")
     atoms = [(Fe, 0.5), (Ni, 0.25), (O, 0.25)]

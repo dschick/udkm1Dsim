@@ -310,17 +310,27 @@ class Layer:
         """
         return self._dielectric_output("get_delta_beta", energy, strain)
 
-    def get_delta_beta_mag(self, energy, strain=0.0):
+    def get_delta_beta_mag(self, energy, strain=0.0, magnetization=None, polar=False):
         """get_delta_beta_mag
 
         Magnetic optical constants :math:`\\Delta\\delta` and
-        :math:`\\Delta\\beta` of the layer per unit magnetization, see
+        :math:`\\Delta\\beta` of the layer per unit magnetization, or of the
+        circular modes along :math:`z` for a given ``magnetization``, see
         :meth:`.Dielectric.get_delta_beta_mag`.
 
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
                 floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain. Defaults to 0.
+            magnetization (tuple[float, Quantity], VectorParameter, optional):
+                cartesian magnetization or a list of the magnetizations of all
+                sublattices, e.g. the ``magnetization`` of the layer, whose
+                coupling is given by the ``gyrotropy`` of the dielectric, see
+                :meth:`get_dielectric_tensor`. Defaults to the unit
+                magnetization along :math:`z`, which requires the ``gyrotropy``
+                ``"net"`` for several gyrotropic dispersions.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates. Defaults to False.
 
         Returns:
             (tuple):
@@ -329,7 +339,15 @@ class Layer:
             - *beta_mag (float, ndarray[float])* - magnetic imaginary part.
 
         """
-        return self._dielectric_output("get_delta_beta_mag", energy, strain)
+        if magnetization is None:
+            return self._dielectric_output("get_delta_beta_mag", energy, strain)
+        try:
+            magnetization = self._magnetization_for_dielectric(magnetization, polar)
+        except ValueError as e:
+            raise ValueError(f"Layer '{self.id}': {e}") from None
+        return self._dielectric_output(
+            "get_delta_beta_mag", energy, strain, magnetization=magnetization
+        )
 
     def get_dielectric_tensor(self, energy, strain=0.0, magnetization=None, polar=False):
         """get_dielectric_tensor
@@ -1239,7 +1257,7 @@ class Layer:
             total = np.sum(weights)
         return weights / total
 
-    def _dielectric_output(self, method, energy, strain):
+    def _dielectric_output(self, method, energy, strain, **kwargs):
         """Output of the dielectric tensor of the layer for its density, where errors
         are given with the id of the layer, and a scalar for a scalar energy."""
         dielectric = self.optical.dielectric
@@ -1248,7 +1266,7 @@ class Layer:
                 # raises the error of the dielectric tensor
                 dielectric.get_tensor(energy)
             result = getattr(dielectric, method)(
-                energy, strain=strain, density=self.structural.density.magnitude
+                energy, strain=strain, density=self.structural.density.magnitude, **kwargs
             )
         except ValueError as e:
             raise ValueError(f"Layer '{self.id}': {e}") from None
