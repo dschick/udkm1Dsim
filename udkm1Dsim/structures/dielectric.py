@@ -2032,7 +2032,9 @@ class Dielectric(Parameter):
         n = self.get_ref_index(energy, strain, density)
         return 1 - n.real, n.imag
 
-    def get_delta_beta_mag(self, energy, strain=0.0, density=None):
+    def get_delta_beta_mag(
+        self, energy, strain=0.0, density=None, magnetization=None, polar=False
+    ):
         r"""get_delta_beta_mag
 
         Magnetic optical constants :math:`\Delta\delta` and :math:`\Delta\beta`
@@ -2049,11 +2051,26 @@ class Dielectric(Parameter):
         :math:`n_\pm = 1 - (\delta \pm \Delta\delta) + i (\beta \pm \Delta\beta)`.
         Without magnetic part, both are zero.
 
+        For a given ``magnetization``, they are the magnetic optical constants
+        of the circular modes along :math:`z` of this magnetization, i.e.
+        :math:`\varepsilon_{xy} = -2i (\Delta\delta - i\Delta\beta)`, e.g. the
+        sum :math:`\sum_a (\Delta\delta_a - i\Delta\beta_a) m_{a,z}` over the
+        sublattices for the ``gyrotropy`` ``"sublattices"``. Several gyrotropic
+        dispersions with this gyrotropy require the magnetizations of the
+        sublattices, as the sum of the dispersions per unit magnetization
+        assumes parallel sublattices.
+
         Args:
             energy (float, ndarray[float], Quantity): photon energies, where
                 floats are taken in eV, or other spectral Quantities.
             strain (float, optional): strain :math:`\eta`. Defaults to 0.
             density (float, optional): mass density of the layer (kg/m³).
+            magnetization (tuple[float, Quantity], VectorParameter, optional):
+                cartesian magnetization or a list of the magnetizations of all
+                sublattices, see :meth:`get_tensor`. Defaults to the unit
+                magnetization along :math:`z`.
+            polar (bool, optional): the magnetization is given in polar
+                coordinates. Defaults to False.
 
         Returns:
             (tuple):
@@ -2064,8 +2081,19 @@ class Dielectric(Parameter):
         if self._eps_mag is None:
             zeros = np.zeros(np.shape(np.atleast_1d(to_energy(energy))))
             return zeros, zeros.copy()
+        if magnetization is None:
+            if len(self._eps_mag_parts()) > 1 and self._gyrotropy != "net":
+                raise ValueError(
+                    f"The {len(self._eps_mag_parts()):d} gyrotropic dispersions of the "
+                    "sublattices require their magnetizations, e.g. "
+                    "magnetization=[(0, 0, 1), (0, 0, -1)], or the gyrotropy 'net' for the "
+                    "magnetic optical constants per unit net magnetization!"
+                )
+            magnetization, polar = (0, 0, 1), False
         # the magnetic part of eps_xy = -i eps_mag for the magnetization along z
-        eps = self.get_tensor(energy, strain, magnetization=(0, 0, 1), density=density)
+        eps = self.get_tensor(
+            energy, strain, magnetization=magnetization, density=density, polar=polar
+        )
         eps -= self.get_tensor(energy, strain, magnetization=(0, 0, 0), density=density)
         eps_mag = 1j * eps[:, 0, 1]
         return eps_mag.real / 2, -eps_mag.imag / 2
