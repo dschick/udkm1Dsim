@@ -33,6 +33,7 @@ from time import time
 import numpy as np
 from tabulate import tabulate
 
+from ..helpers import check_keys
 from .result import Result, array_hash
 
 
@@ -54,6 +55,10 @@ class Simulation:
             simulations.
         progress_bar (boolean): enable tqdm progress bar.
 
+    Unknown keyword arguments, e.g. misspelled ones, raise a ``TypeError``
+    with the closest known name as hint. Sub-classes with own keyword
+    arguments name them in the tuple ``_init_options`` of the class.
+
     Attributes:
         S (Structure): sample structure to calculate simulations on.
         force_recalc (boolean): force recalculation of results.
@@ -67,7 +72,13 @@ class Simulation:
 
     _title = "Simulation"
 
+    # keyword arguments of the initialization, which are extended by the
+    # options of the sub-classes
+    _init_options = ("save_data", "cache_dir", "disp_messages", "progress_bar")
+
     def __init__(self, S, force_recalc, **kwargs):
+        known = {key for cls in type(self).__mro__ for key in vars(cls).get("_init_options", ())}
+        check_keys(kwargs, known, f"{type(self).__name__}()")
         self.S = S
         self.force_recalc = force_recalc
         self.save_data = kwargs.get("save_data", True)

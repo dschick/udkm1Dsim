@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **breaking**: old syntax, which was ignored silently, raises an error with its replacement, see #266:
+  - the removed attributes `mag_amplitude`, `mag_phi`, and `mag_gamma` of `Atom` and `AtomMixed`, `opt_ref_index`, `opt_pen_depth`, `opt_ref_index_per_strain`, `set_opt_pen_depth_from_ref_index()`, and `atom` of layers, and the first four of `OpticalParameters` raise an `AttributeError` on reading and on assignment instead of creating an unused attribute, e.g. `atom.mag_amplitude = 0.5`, which did not change the magnetization
+  - unknown keyword arguments raise a `TypeError` with the closest known name as hint, e.g. "did you mean 'heat_diffusion'?", instead of being ignored: of `Atom` and `AtomMixed`, of all simulations, e.g. `Heat(S, True, heat_difusion=True)` or `LLB(S, True, H_ext=...)`, where sub-classes name their own ones in `_init_options`, and of the inhomogeneous methods of `XrayDyn` and the multilayer formalisms, which only take `calc_type` and `dask_client`, e.g. `num_workers` or `job` of former versions
+  - unknown keys of `Heat.excitation` and `Heat.boundary_conditions` raise a `TypeError`, e.g. a misspelled `backsid`
+  - `ud.XrayDynMag` and `ud.Xray` raise an `AttributeError` with their replacements `Elzo` and `Scattering`
+
 ### Fixed
 
 - the display of a layer or parameter, which raised a `TypeError` for a parameter set from a zero-dimensional NumPy array, e.g. `sound_vel=np.array(4.7)` from `np.loadtxt` of a single value; such a magnitude is stored as a scalar now, see #263

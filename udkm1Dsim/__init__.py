@@ -90,6 +90,8 @@ _REMOVED = {
         "the magnetization of the layer, and dielectric=Dielectric.from_atoms(atom) instead, "
         "see the structure example!"
     ),
+    "XrayDynMag": "XrayDynMag was removed in version 3.0. Use Elzo instead!",
+    "Xray": "Xray was removed in version 3.0. Use Scattering as base class instead!",
 }
 
 

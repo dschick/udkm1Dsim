@@ -175,6 +175,28 @@ def test_layer_removed_optical_inputs():
             Layer("l", "l", optical={removed: 1})
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "opt_ref_index",
+        "opt_pen_depth",
+        "opt_ref_index_per_strain",
+        "set_opt_pen_depth_from_ref_index",
+    ],
+)
+@pytest.mark.parametrize("group", [False, True])
+def test_layer_removed_optical_attributes(name, group):
+    """their assignment would create an unused attribute otherwise"""
+    obj = Layer("l", "l")
+    obj = obj.optical if group else obj
+    message = f"'{type(obj).__name__}.{name}' was removed in version 3.0, use "
+    with pytest.raises(AttributeError, match=message):
+        setattr(obj, name, 1.5)
+    with pytest.raises(AttributeError, match=message):
+        getattr(obj, name)
+    assert name not in vars(obj)
+
+
 def test_layer_dielectric_from_ref_index(layer):
     assert isinstance(layer.dielectric, Dielectric)
     assert layer.dielectric.is_isotropic
@@ -562,6 +584,10 @@ def test_amorphous_layer_was_removed():
         ud.AmorphousLayer
     with pytest.raises(AttributeError, match="has no attribute 'Amorphous'"):
         ud.Amorphous
+    # the atom of an AmorphousLayer
+    layer = Layer("l", "l")
+    with pytest.raises(AttributeError, match="'Layer.atom' was removed.*Dielectric.from_atoms"):
+        layer.atom = Atom("Fe")
 
 
 @pytest.mark.parametrize(

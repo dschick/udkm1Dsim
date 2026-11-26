@@ -34,7 +34,7 @@ import numpy as np
 import pint
 from tqdm.auto import tqdm
 
-from ...helpers import make_hash_md5, to_angle
+from ...helpers import check_keys, make_hash_md5, to_angle
 from ...structures.layers import Layer, UnitCell, Vacuum
 from ..parameter_groups import ExperimentParameters, InstrumentParameters
 from ..result import Result
@@ -166,6 +166,9 @@ class Scattering(Simulation):
     _pol_in_states = (0, 3, 4)
     _pol_out_states = (0,)
 
+    # keyword arguments of the inhomogeneous methods
+    _calc_options = ("calc_type", "dask_client")
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.experiment = ExperimentParameters()
@@ -176,6 +179,12 @@ class Scattering(Simulation):
         self._pol_out_state = 0  # no analyzer
         self.pol_in = self.calc_incoming_polarization(self._pol_in_state)
         self.pol_out = self.calc_outgoing_polarization(self._pol_out_state)
+
+    def _check_calc_options(self, kwargs, caller):
+        """Raise for unknown keyword arguments of the inhomogeneous methods,
+        e.g. ``num_workers`` of former versions, which would be ignored
+        otherwise, see :attr:`_calc_options`."""
+        check_keys(kwargs, self._calc_options, f"{caller}()")
 
     def new_scattering_result(
         self, title, num_delays=None, source=None, inputs=None, input_maps=None, delays=None

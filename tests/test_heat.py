@@ -1056,6 +1056,32 @@ def test_get_energy_maps_of_temp_map(heat):
         heat.get_energy_flux_map(temp.temp_map)
 
 
+def test_excitation_rejects_unknown_keys(heat):
+    """misspelled keys would be ignored silently otherwise"""
+    heat.excitation = {
+        "fluence": [5] * u.mJ / u.cm**2,
+        "delay_pump": [0] * u.ps,
+        "pulse_width": [0] * u.ps,
+    }
+    previous = heat.excitation
+    with pytest.raises(
+        TypeError,
+        match=r"Heat.excitation got an unexpected key 'backsid' \(did you mean 'backside'\?\)",
+    ):
+        heat.excitation = {"fluence": [1] * u.mJ / u.cm**2, "backsid": True}
+    # the excitation is kept as it was
+    assert_allclose(heat.excitation["fluence"], previous["fluence"])
+    assert not heat.excitation["backside"]
+    # the excitation can be set again as returned
+    heat.excitation = heat.excitation
+
+
+def test_boundary_conditions_reject_unknown_keys(heat):
+    with pytest.raises(TypeError, match=r"unexpected key 'top_typ' \(did you mean 'top_type'\?\)"):
+        heat.boundary_conditions = {"top_typ": "temperature", "top_value": 300 * u.K}
+    assert heat.boundary_conditions == {"top_type": "isolator", "bottom_type": "isolator"}
+
+
 def test_boundary_conditions(heat):
     heat.boundary_conditions = {"top_type": "isolator", "bottom_type": "isolator"}
     assert heat.boundary_conditions == {"top_type": "isolator", "bottom_type": "isolator"}

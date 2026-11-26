@@ -33,8 +33,10 @@ import pint
 from tabulate import tabulate
 
 from ..helpers import (
+    RemovedAttribute,
     SpectralTable,
     _format_energy,
+    check_keys,
     make_hash_md5,
     read_columns,
     to_energy,
@@ -46,6 +48,8 @@ from .parameter_groups import AtomMixedParameters, AtomParameters
 u = pint.get_application_registry()
 Q_ = u.Quantity
 
+# replacement of the removed polar shortcuts of the magnetization
+_MAG_REPLACEMENT = 'use atom.magnetization = {"r": ..., "phi": ..., "gamma": ...} instead'
 # invalid values in the tables of Henke et al.
 _INVALID_FORM_FACTOR = -9000
 
@@ -90,8 +94,9 @@ class Atom:
 
     .. deprecated:: 3.0.0
         The polar shortcuts ``mag_amplitude``, ``mag_phi``, and ``mag_gamma``
-        were removed. Use ``magnetization={"r": ..., "phi": ..., "gamma": ...}``
-        on initialization and ``atom.atomic.magnetization`` afterwards.
+        were removed and raise an error, both as keyword arguments and as
+        attributes. Use ``magnetization={"r": ..., "phi": ..., "gamma": ...}``
+        on initialization and ``atom.magnetization`` afterwards.
 
     Args:
         symbol (str): symbol of the atom.
@@ -128,7 +133,23 @@ class Atom:
 
     """
 
+    # keyword arguments of the initialization
+    _inputs = (
+        "id",
+        "ionicity",
+        "atomic_form_factor_path",
+        "atomic_form_factor_source",
+        "magnetic_form_factor_path",
+        "magnetization",
+    )
+    # removed polar shortcuts of the magnetization, whose assignment would be
+    # ignored otherwise
+    mag_amplitude = RemovedAttribute(_MAG_REPLACEMENT)
+    mag_phi = RemovedAttribute(_MAG_REPLACEMENT)
+    mag_gamma = RemovedAttribute(_MAG_REPLACEMENT)
+
     def __init__(self, symbol, **kwargs):
+        self._check_inputs(kwargs)
         self.symbol = symbol
         self.id = kwargs.get("id", symbol)
 
@@ -736,14 +757,20 @@ class Atom:
     def ionicity(self, value):
         self.atomic.ionicity.magnitude = value
 
-    def _init_magnetization(self, kwargs):
-        """Set the magnetization from the keyword arguments."""
+    def _check_inputs(self, kwargs):
+        """Raise for the removed polar shortcuts of the magnetization and for
+        unknown keyword arguments, e.g. misspelled ones, which would be
+        ignored otherwise, with the closest known names as hint."""
         removed = [key for key in ("mag_amplitude", "mag_phi", "mag_gamma") if key in kwargs]
         if removed:
             raise TypeError(
                 f"{', '.join(repr(key) for key in removed)} were removed in version 3.0.0, "
                 'use magnetization={"r": ..., "phi": ..., "gamma": ...} instead!'
             )
+        check_keys(kwargs, self._inputs, f"{type(self).__name__}()")
+
+    def _init_magnetization(self, kwargs):
+        """Set the magnetization from the keyword arguments."""
         self.atomic.magnetization.set(kwargs.get("magnetization", (0.0, 0.0, 0.0)))
 
     @property
@@ -774,8 +801,9 @@ class AtomMixed(Atom):
 
     .. deprecated:: 3.0.0
         The polar shortcuts ``mag_amplitude``, ``mag_phi``, and ``mag_gamma``
-        were removed. Use ``magnetization={"r": ..., "phi": ..., "gamma": ...}``
-        on initialization and ``atom.atomic.magnetization`` afterwards.
+        were removed and raise an error, both as keyword arguments and as
+        attributes. Use ``magnetization={"r": ..., "phi": ..., "gamma": ...}``
+        on initialization and ``atom.magnetization`` afterwards.
 
     Args:
         symbol (str): symbol of the atom.
@@ -809,7 +837,16 @@ class AtomMixed(Atom):
 
     """
 
+    _inputs = (
+        "id",
+        "name",
+        "atomic_form_factor_path",
+        "magnetic_form_factor_path",
+        "magnetization",
+    )
+
     def __init__(self, symbol, **kwargs):
+        self._check_inputs(kwargs)
         self.symbol = symbol
         self.id = kwargs.get("id", symbol)
         self.name = kwargs.get("name", symbol)

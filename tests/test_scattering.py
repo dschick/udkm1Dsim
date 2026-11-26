@@ -61,9 +61,11 @@ def relative(a, b):
 def test_former_names():
     from udkm1Dsim.simulations import xrays
 
-    for name in ["XrayDynMag", "Xray"]:
+    for name, replacement in [("XrayDynMag", "Elzo"), ("Xray", "Scattering")]:
         assert not hasattr(ud, name)
         assert not hasattr(xrays, name)
+        with pytest.raises(AttributeError, match=f"{name} was removed.*Use {replacement}"):
+            getattr(ud, name)
     assert xrays.XrayKin is ud.XrayKin
     for cls in FORMALISMS:
         assert issubclass(cls, MultilayerScattering)
@@ -904,6 +906,18 @@ def test_inhomogeneous_input_validation(magnetic_multilayer):
         sim.inhomogeneous_reflectivity_transmissivity(np.zeros((2, L)), calc_type="distributed")
     with pytest.raises(ValueError, match="dask client"):
         sim.inhomogeneous_reflectivity_transmissivity(np.zeros((2, L)), calc_type="parallel")
+    # options of former versions, which would be ignored otherwise
+    for method in [
+        "inhomogeneous_jones_matrices",
+        "inhomogeneous_reflectivity_transmissivity",
+        "calc_inhomogeneous_reflectivity_transmissivity",
+        "inhomogeneous_rotation_ellipticity",
+        "calc_inhomogeneous_rotation_ellipticity",
+    ]:
+        with pytest.raises(
+            TypeError, match=rf"^{method}\(\) got an unexpected keyword argument 'num_workers'!"
+        ):
+            getattr(sim, method)(np.zeros((2, L)), num_workers=4)
     # polar is a keyword only, so that it cannot be confused with a map
     with pytest.raises(TypeError):
         sim.inhomogeneous_reflectivity_transmissivity(
@@ -1688,6 +1702,10 @@ def test_xray_dyn_inhomogeneous_reflectivity(xray_dyn, atomistic_maps):
         xray_dyn.inhomogeneous_reflectivity(
             strain_map, strain_vectors=strain_vectors, calc_type="distributed"
         )
+    # options of former versions, which would be ignored otherwise
+    for method in ["inhomogeneous_reflectivity", "calc_inhomogeneous_reflectivity"]:
+        with pytest.raises(TypeError, match=r"unexpected keyword arguments 'job', 'num_workers'"):
+            getattr(xray_dyn, method)(strain_map, job=None, num_workers=4)
     with pytest.raises(TypeError):
         xray_dyn.inhomogeneous_reflectivity([])
     with pytest.raises(TypeError):

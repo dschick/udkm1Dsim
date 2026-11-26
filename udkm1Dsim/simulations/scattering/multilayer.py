@@ -1253,9 +1253,7 @@ class MultilayerScattering(Scattering):
         superstrate, substrate = self._superstrate_and_substrate()
         return (
             [superstrate]
-            + _merge_identical_layers(
-                self._inhomogeneous_entries(nodes, strains, magnetizations)
-            )
+            + _merge_identical_layers(self._inhomogeneous_entries(nodes, strains, magnetizations))
             + substrate
         )
 
@@ -2270,6 +2268,8 @@ class MultilayerScattering(Scattering):
                   ``dask_client``.
                 - *dask_client (Dask.Client)* - Dask client.
 
+                Other keyword arguments raise a ``TypeError``.
+
         Returns:
             result (Result): with the Jones matrices ``jones_reflection``,
             ``jones_reflection_phi``, ``jones_transmission``, and
@@ -2278,6 +2278,7 @@ class MultilayerScattering(Scattering):
             delays, see :meth:`homogeneous_jones_matrices`.
 
         """
+        self._check_calc_options(kwargs, "inhomogeneous_jones_matrices")
         strain_map, magnetization_map, temp_map, polar, source = self.parse_result_maps(
             strain_map, magnetization_map, temp_map, polar
         )
@@ -2407,6 +2408,8 @@ class MultilayerScattering(Scattering):
                   ``dask_client``.
                 - *dask_client (Dask.Client)* - Dask client.
 
+                Other keyword arguments raise a ``TypeError``.
+
         Returns:
             result (Result): with the ``reflectivity`` and ``transmissivity``,
             also for opposite magnetization ``reflectivity_phi`` and
@@ -2416,6 +2419,7 @@ class MultilayerScattering(Scattering):
             :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
 
         """
+        self._check_calc_options(kwargs, "inhomogeneous_reflectivity_transmissivity")
         return self._cached_inhomogeneous(
             "reflectivity_transmissivity",
             REFLECTIVITY_NAMES,
@@ -2457,6 +2461,7 @@ class MultilayerScattering(Scattering):
               magnetization.
 
         """
+        self._check_calc_options(kwargs, "calc_inhomogeneous_reflectivity_transmissivity")
         strain_map, magnetization_map, delays = self._parse_result_maps_to_arrays(
             strain_map, magnetization_map, temp_map, polar, delays
         )
@@ -2529,6 +2534,8 @@ class MultilayerScattering(Scattering):
                   ``dask_client``.
                 - *dask_client (Dask.Client)* - Dask client.
 
+                Other keyword arguments raise a ``TypeError``.
+
         Returns:
             result (Result): with the ``reflection_rotation`` and
             ``reflection_ellipticity``, e.g. the Kerr effect, and the
@@ -2540,6 +2547,7 @@ class MultilayerScattering(Scattering):
             :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
 
         """
+        self._check_calc_options(kwargs, "inhomogeneous_rotation_ellipticity")
         self._pi_incident()
         return self._cached_inhomogeneous(
             "rotation_ellipticity",
@@ -2578,6 +2586,7 @@ class MultilayerScattering(Scattering):
             the transmission for opposite magnetization.
 
         """
+        self._check_calc_options(kwargs, "calc_inhomogeneous_rotation_ellipticity")
         self._pi_incident()
         strain_map, magnetization_map, delays = self._parse_result_maps_to_arrays(
             strain_map, magnetization_map, temp_map, polar, delays

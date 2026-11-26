@@ -70,6 +70,8 @@ class Phonon(Simulation):
 
     _title = "Phonon simulation"
 
+    _init_options = ("only_heat",)
+
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
         self.only_heat = kwargs.get("only_heat", False)
@@ -409,6 +411,8 @@ class PhononNum(Phonon):
     """
 
     _title = "Numerical Phonon simulation"
+
+    _init_options = ("backend",)
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)

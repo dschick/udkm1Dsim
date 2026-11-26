@@ -5,6 +5,8 @@ from scipy.special import erf
 
 import udkm1Dsim as ud
 from udkm1Dsim.helpers import (
+    RemovedAttribute,
+    check_keys,
     conv_with_function,
     convert_cartesian_to_polar,
     convert_polar_to_cartesian,
@@ -272,3 +274,34 @@ def test_to_angle():
     for value in (0, 0.5, np.r_[0.5], [0.5 * u.deg, 1], 0.5 * u.dimensionless, 1 * u.sr, 1 * u.m):
         with pytest.raises(TypeError, match="alpha must be given"):
             to_angle(value, name="alpha")
+
+
+def test_check_keys():
+    check_keys({"a": 1}, ["a", "b"], "f()")
+    with pytest.raises(
+        TypeError, match=r"^f\(\) got an unexpected keyword argument 'bb' \(did you mean 'b'\?\)!$"
+    ):
+        check_keys({"a": 1, "bb": 2}, ["a", "b"], "f()")
+    with pytest.raises(
+        TypeError, match=r"^d got unexpected keys 'bb' \(did you mean 'b'\?\), 'xyz'!$"
+    ):
+        check_keys(["xyz", "bb"], ["a", "b"], "d", kind="key")
+
+
+def test_removed_attribute():
+    """an assignment of a removed attribute would create an unused attribute"""
+
+    class Owner:
+        old = RemovedAttribute("use new instead")
+
+    owner = Owner()
+    message = r"'Owner.old' was removed in version 3.0, use new instead!"
+    with pytest.raises(AttributeError, match=message):
+        owner.old
+    with pytest.raises(AttributeError, match=message):
+        owner.old = 1
+    with pytest.raises(AttributeError, match=message):
+        del owner.old
+    assert "old" not in vars(owner)
+    assert not hasattr(owner, "old")
+    assert isinstance(Owner.old, RemovedAttribute)
