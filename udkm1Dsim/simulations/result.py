@@ -121,13 +121,18 @@ class Result:
                 f"{name} has {value.ndim} dimensions, but {len(dims)} dims are given!"
             )
         for axis, dim in enumerate(dims):
-            if dim in self._coords and self._coords[dim].ndim == 1:
-                if np.size(self._coords[dim]) != shape[axis]:
+            for coord in self._axis_coords(dim):
+                if np.size(self._coords[coord]) != shape[axis]:
                     raise ValueError(
                         f"the size {shape[axis]} of axis {axis} of {name} does not agree "
-                        f"with the size {np.size(self._coords[dim])} of {dim}!"
+                        f"with the size {np.size(self._coords[coord])} of {coord}!"
                     )
         return dims
+
+    def _axis_coords(self, dim):
+        """names of the 1D coordinates along the dimension ``dim``, e.g. the
+        ``theta`` along the ``angles`` of a scattering result"""
+        return [name for name in self._coords if self._dims[name] == (dim,)]
 
     @classmethod
     def _check_name(cls, name):
@@ -437,7 +442,7 @@ class Result:
         Save the result to a HDF5 file with the data in the group ``data``
         and the coordinates in the group ``coords``. The units and
         dimension names are attributes of the datasets and 1D coordinates
-        are attached to the data as dimension scales. The metadata are
+        are attached to the data as dimension scales of their dimension. The metadata are
         attributes of the file, except for the dicts of metadata, e.g. the
         ``parameters`` of the simulation, which are groups of the same name
         with a dataset for each value with its ``units`` as attribute.
@@ -460,7 +465,7 @@ class Result:
             coords = file.create_group("coords", track_order=True)
             for name, value in self._coords.items():
                 self._create_dataset(coords, name, value)
-                if self._dims[name] == (name,):
+                if len(self._dims[name]) == 1:
                     coords[name].make_scale(name)
             data = file.create_group("data", track_order=True)
             for name, value in self._data.items():
@@ -471,8 +476,8 @@ class Result:
                 dataset.attrs["aliases"] = list(self.aliases_of(name))
                 for axis, dim in enumerate(self._dims[name]):
                     dataset.dims[axis].label = dim
-                    if dim in self._coords and self._dims[dim] == (dim,):
-                        dataset.dims[axis].attach_scale(coords[dim])
+                    for coord in self._axis_coords(dim):
+                        dataset.dims[axis].attach_scale(coords[coord])
 
     def _create_dataset(self, group, name, value):
         """dataset with its unit and dimension names as attributes"""
@@ -520,7 +525,10 @@ class Result:
 
         Convert the result to a :class:`xarray.Dataset` with the units as
         attributes. Dimensions without name are named by the entry and the
-        axis.
+        axis. 1D coordinates along a dimension of another name, e.g. the
+        scanned ``theta`` along the ``angles`` of a scattering result, are
+        indexed, so that the data can be selected by them, e.g. by
+        ``dataset.reflectivity.sel(theta=14.2, method="nearest")``.
 
         Returns:
             dataset (xarray.Dataset): result as xarray dataset.
@@ -540,7 +548,11 @@ class Result:
             if isinstance(value, np.ndarray) and value.dtype != object
         }
         attrs = {key: self._attr_value(value) for key, value in self.attrs.items()}
-        return xr.Dataset(data, coords=coords, attrs=attrs)
+        dataset = xr.Dataset(data, coords=coords, attrs=attrs)
+        for name, dims in self._dims.items():
+            if name in self._coords and len(dims) == 1 and dims != (name,):
+                dataset = dataset.set_xindex(name)
+        return dataset
 
 
 def get_entry(value, name):

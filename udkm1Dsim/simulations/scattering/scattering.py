@@ -185,9 +185,13 @@ class Scattering(Simulation):
         New :class:`~udkm1Dsim.simulations.result.Result` with the
         coordinates ``energy``, ``qz``, and ``theta`` of the experiment, see
         :meth:`~udkm1Dsim.simulations.simulation.Simulation.new_result`. The
-        ``qz`` and ``theta`` have the dimensions ``energy`` and ``angles``.
-        The ``delays`` are taken from an upstream ``source`` result, if
-        their number agrees, or are the given ``delays``.
+        scanned one of ``qz`` and ``theta``, see
+        :attr:`~udkm1Dsim.simulations.parameter_groups.ExperimentParameters.scan`,
+        has the dimension ``angles`` only, if it is the same for all photon
+        energies, while the other one depends on the photon energy and has the
+        dimensions ``energy`` and ``angles``. The ``delays`` are taken from an
+        upstream ``source`` result, if their number agrees, or are the given
+        ``delays``.
 
         Args:
             title (str): title of the result.
@@ -211,9 +215,13 @@ class Scattering(Simulation):
         elif delays is not None:
             result.add_coord("delays", delays, "s")
         result.add_coord("energy", np.atleast_1d(self.energy.to("eV").magnitude), "eV")
-        dims = ("energy", "angles")
-        result.add_coord("qz", np.atleast_2d(self.qz.to("1/nm").magnitude), "1/nm", dims)
-        result.add_coord("theta", np.atleast_2d(self.theta.to("deg").magnitude), "deg", dims)
+        for name, unit in (("qz", "1/nm"), ("theta", "deg")):
+            value = np.atleast_2d(getattr(self, name).to(unit).magnitude)
+            dims = ("energy", "angles")
+            if name == self.experiment.scan and np.all(value == value[0]):
+                # the scan is the same for all photon energies
+                value, dims = value[0], ("angles",)
+            result.add_coord(name, value, unit, dims)
         return result
 
     def _scattering_result(
@@ -682,7 +690,7 @@ class Scattering(Simulation):
         ins = self.instrument
         ins._check_resolutions()
         exp = self.experiment
-        scan = exp._scan
+        scan = exp.scan
         energy0 = np.array(exp.energy.magnitude, dtype=float)
         scan0 = np.array(exp.__dict__[scan].magnitude, dtype=float)
         theta0 = np.array(exp.theta.magnitude, dtype=float)

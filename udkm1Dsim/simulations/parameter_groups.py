@@ -61,6 +61,7 @@ class ExperimentParameters(ParameterGroup):
 
     The incidence angle and the scattering vector have the shape (M, N) for
     M photon energies, where one-dimensional inputs are used for all of them.
+    The :attr:`scan` names the independent one of both.
 
     Attributes:
         energy (ndarray[float]): photon energies :math:`E` (eV).
@@ -114,6 +115,11 @@ class ExperimentParameters(ParameterGroup):
             super().__setattr__(name, value)
         else:
             super().__setattr__(name, value)
+
+    @property
+    def scan(self):
+        """str: independent one of ``'theta'`` and ``'qz'``, which was set last."""
+        return self._scan
 
     # Planck constant times the speed of light (eV m)
     _hc = constants.h * constants.c / constants.e
