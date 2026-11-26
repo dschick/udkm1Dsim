@@ -87,6 +87,12 @@ class LayerNode:
         return isinstance(self.sub_structure, Layer)
 
 
+def _single_layer_node(layer, repetitions):
+    """:class:`LayerNode` of a single layer with its repetitions outside of a
+    :class:`Structure`, e.g. of the substrate ``[layer, N]``"""
+    return LayerNode(layer, repetitions, (), slice(0, 1), slice(0, repetitions), 1)
+
+
 def _check_repetitions(N, name="N"):
     """number of repetitions as non-negative integer, also from numpy
     integers, while floats and booleans raise a ``TypeError``"""

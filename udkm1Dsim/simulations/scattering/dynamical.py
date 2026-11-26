@@ -37,7 +37,7 @@ from tqdm.auto import trange
 
 from ...helpers import finderb, m_power_x, m_times_n, make_hash_md5
 from ...structures.layers import UnitCell, Vacuum
-from ...structures.structure import Structure
+from ...structures.structure import Structure, _single_layer_node
 from ..result import find_source, get_entry
 from .scattering import Scattering
 
@@ -217,10 +217,10 @@ class XrayDyn(Scattering):
 
         """
         if isinstance(S, Structure):
-            sub_structures = S.sub_structures
+            nodes = S.layer_tree
             L = S.num_sub_structures
         elif isinstance(S[0], (Vacuum, UnitCell)):
-            sub_structures = [S]
+            nodes = [_single_layer_node(*S)]
             L = 1
         else:
             raise TypeError("XrayDyn can only handle Layers of class UnitCell and Vacuum")
@@ -254,6 +254,12 @@ class XrayDyn(Scattering):
                     "Second dimension of temperatures must match the number of "
                     f"subsystems for the Debye-Waller factor: {numel_deb_wal_fac:d}"
                 )
+        return self._ref_trans_matrix_of_nodes(nodes, strains, temps)
+
+    def _ref_trans_matrix_of_nodes(self, nodes, strains, temps):
+        """reflectivity-transmission matrices of the nodes of the
+        :attr:`.Structure.layer_tree`, whose ``sub_structure_indices`` index
+        the ``strains`` and ``temps``, see :meth:`homogeneous_ref_trans_matrix`"""
         # initialize
         RT = np.tile(
             np.eye(2, 2)[np.newaxis, np.newaxis, :, :],
@@ -265,35 +271,29 @@ class XrayDyn(Scattering):
             ),
         )  # ref_trans_matrix
         A = []  # list of ref_trans_matrices of substructures
-        counter = 0
 
         # traverse substructures
-        for sub_structure in sub_structures:
-            if isinstance(sub_structure[0], UnitCell):
+        for node in nodes:
+            sub_structure, repetitions = node.sub_structure, node.repetitions
+            if isinstance(sub_structure, UnitCell):
                 # the sub_structure is an unitCell
                 # calculate the ref-trans matrices for N unitCells
+                i = node.sub_structure_indices.start
                 tmp = m_power_x(
-                    self.calc_uc_ref_trans_matrix(
-                        sub_structure[0], strains[counter], temps[counter, :]
-                    ),
-                    sub_structure[1],
+                    self.calc_uc_ref_trans_matrix(sub_structure, strains[i], temps[i, :]),
+                    repetitions,
                 )
-                counter += 1
                 # remember the result
-                A.append([tmp, f"{sub_structure[1]:d}x {sub_structure[0].name:s}"])
-            elif isinstance(sub_structure[0], Structure):
+                A.append([tmp, f"{repetitions:d}x {sub_structure.name:s}"])
+            elif isinstance(sub_structure, Structure):
                 # its a structure
                 # make a recursive call
-                idx = np.r_[counter : (counter + sub_structure[0].num_sub_structures)]
-                tmp, tmp2 = self.homogeneous_ref_trans_matrix(
-                    sub_structure[0], strains[idx], temps[idx, :]
-                )
-                A.append([tmp2, sub_structure[0].name + " substructures"])
-                counter = counter + sub_structure[0].num_sub_structures
-                A.append([tmp, f"1x {sub_structure[0].name:s}"])
+                tmp, tmp2 = self._ref_trans_matrix_of_nodes(node.children, strains, temps)
+                A.append([tmp2, sub_structure.name + " substructures"])
+                A.append([tmp, f"1x {sub_structure.name:s}"])
                 # calculate the ref-trans matrices for N sub structures
-                tmp = m_power_x(tmp, sub_structure[1])
-                A.append([tmp, f"{sub_structure[1]:d}x {sub_structure[0].name:s}"])
+                tmp = m_power_x(tmp, repetitions)
+                A.append([tmp, f"{repetitions:d}x {sub_structure.name:s}"])
             else:
                 raise TypeError("The substructure must be Vacuum, UnitCell or Structure type!")
 

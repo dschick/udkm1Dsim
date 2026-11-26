@@ -1535,7 +1535,8 @@ def test_xray_kin_homogeneous_reflectivity(xray_kin):
 def test_xray_homogeneous_reflectivity_of_nested_structures(
     sim_class, unit_cell_iron, unit_cell_oxygen, tmp_path
 ):
-    """a nested sub-structure reflects as its layers in a flat structure"""
+    """a nested sub-structure reflects as its layers in a flat structure,
+    also with a different strain of each sub-structure"""
     inner = ud.Structure("double layer")
     inner.add_sub_structure(unit_cell_iron, 3)
     inner.add_sub_structure(unit_cell_oxygen, 2)
@@ -1547,14 +1548,23 @@ def test_xray_homogeneous_reflectivity_of_nested_structures(
     for _ in range(5):
         flat.add_sub_structure(unit_cell_iron, 3)
         flat.add_sub_structure(unit_cell_oxygen, 2)
-    R = []
-    for S in [nested, flat]:
-        sim = sim_class(S, True, cache_dir=tmp_path, disp_messages=False)
-        sim.energy = 8000 * u.eV
-        sim.qz = np.r_[1:5:50j] / u.angstrom
-        R.append(sim.calc_homogeneous_reflectivity()[0])
+    strains = np.r_[0.01, -0.005, 0.02]
+    flat_strains = np.r_[strains[0], np.tile(strains[1:], 5)]
+    for nested_strains, flat_strains in [(0, 0), (strains, flat_strains)]:
+        R = []
+        for S, s in [(nested, nested_strains), (flat, flat_strains)]:
+            sim = sim_class(S, True, cache_dir=tmp_path, disp_messages=False)
+            sim.energy = 8000 * u.eV
+            sim.qz = np.r_[1:5:50j] / u.angstrom
+            R.append(sim.calc_homogeneous_reflectivity(*([] if np.isscalar(s) else [s]))[0])
+        np.testing.assert_allclose(R[0], R[1], rtol=1e-6)
+    # each sub-structure has its own strain, also in the nested structure
+    sim = sim_class(nested, True, cache_dir=tmp_path, disp_messages=False)
+    sim.energy = 8000 * u.eV
+    sim.qz = np.r_[1:5:50j] / u.angstrom
+    R_first = sim.calc_homogeneous_reflectivity(np.full(3, strains[0]))[0]
+    assert not np.allclose(R[0], R_first, rtol=1e-3)
     assert nested.num_sub_structures == 3
-    np.testing.assert_allclose(R[0], R[1], rtol=1e-6)
 
 
 def test_xray_dyn_matrices_of_nested_structures(unit_cell_iron, unit_cell_oxygen):
