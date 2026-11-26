@@ -346,8 +346,9 @@ class Parratt(MultilayerScattering):
 
         Calculates the Jones matrices of the sample structure for a block of
         delays of the ``strain_map`` at once, where the recursion runs over
-        the layers for all delays, photon energies, and angles in parallel.
-        The magnetization is neglected.
+        the layers for all delays, photon energies, and angles in parallel,
+        and consecutive identical layers with the same strains for all delays
+        of the block are handled at once. The magnetization is neglected.
 
         Args:
             strain_map (ndarray[float]): strain of every layer for each delay.
@@ -375,12 +376,17 @@ class Parratt(MultilayerScattering):
             )
         _, _, handles = self.S.layer_vectors
         superstrate, substrate = self._superstrate_and_substrate()
-        layers = (
-            [superstrate]
-            + [(handle, strain_map[:, i], None) for i, handle in enumerate(handles)]
-            + substrate
-        )
-        Ref, _, Trans, _ = self.calc_jones_matrices(layers, {})
+        # consecutive layers of the same handle with identical strains for all
+        # delays share one entry, so that the recursion handles them at once,
+        # see _layer_runs(), as there are no interfaces between them
+        entries = []
+        for i, handle in enumerate(handles):
+            strains = strain_map[:, i]
+            if entries and entries[-1][0] is handle and np.array_equal(entries[-1][1], strains):
+                entries.append(entries[-1])
+            else:
+                entries.append((handle, strains, None))
+        Ref, _, Trans, _ = self.calc_jones_matrices([superstrate] + entries + substrate, {})
         return Ref, Ref, Trans, Trans
 
     def _delay_block_size(self):

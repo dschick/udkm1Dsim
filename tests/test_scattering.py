@@ -797,6 +797,29 @@ def test_parratt_inhomogeneous_for_all_delays_at_once(pol_in):
         np.testing.assert_allclose(c, d, rtol=1e-10)
 
 
+def test_parratt_inhomogeneous_merges_identical_layers(magnetic_multilayer, monkeypatch):
+    """consecutive identical layers with the same strains for all delays of a
+    block are handled at once by the recursion of Parratt for all delays,
+    which gives the Jones matrices of every single delay, also for a layer of
+    a run with a different strain at a single delay"""
+    sim = simulation(Parratt, magnetic_multilayer, np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg)
+    L = magnetic_multilayer.num_layers
+    strain_map = np.full((3, L), 0.01)
+    strain_map[1, 1] = 0.02  # the 2nd of the 3 fe layers at the 2nd delay
+    constants = []
+    layer_constants = sim._layer_constants
+    monkeypatch.setattr(
+        sim, "_layer_constants", lambda *args: constants.append(args[0]) or layer_constants(*args)
+    )
+    jones = sim.calc_inhomogeneous_jones_matrices(strain_map, np.zeros((3, L, 3)))
+    # superstrate, 3 single fe, one run of 2 ox and of 2 fe, and the substrate
+    assert len(constants) == 1 + 3 + 1 + 1 + 1
+    for i, strains in enumerate(strain_map):
+        single = sim.calc_jones_matrices(sim.calc_inhomogeneous_layers(strains, np.zeros((L, 3))))
+        for a, b in zip(jones, single):
+            np.testing.assert_allclose(a[i], b, rtol=1e-12, atol=1e-15)
+
+
 def test_inhomogeneous_input_validation(magnetic_multilayer):
     sim = simulation(Stepanov, magnetic_multilayer, np.r_[707] * u.eV, np.r_[5] * u.deg)
     L = magnetic_multilayer.num_layers
