@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - the display of a layer or parameter, which raised a `TypeError` for a parameter set from a zero-dimensional NumPy array, e.g. `sound_vel=np.array(4.7)` from `np.loadtxt` of a single value; such a magnitude is stored as a scalar now, see #263
+- `Structure.to_yaml()` with pint's `force_ndarray_like`, which raised a `TypeError` for the zero-dimensional arrays of its unit conversions and wrote the constants of temperature-dependent parameters without their unit, see #267
 
 ## [3.0.0a7] 2026-11-26
 
