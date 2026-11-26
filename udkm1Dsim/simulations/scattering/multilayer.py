@@ -113,7 +113,9 @@ class _Period:
     tree is not available from the :class:`.Structure`, which only provides
     flattened vectors of all layers, e.g. by
     :attr:`.Structure.layer_vectors`, as used by the inhomogeneous
-    simulations with a strain or magnetization per layer.
+    simulations with a strain or magnetization per layer. There, only
+    consecutive identical layers become periods, see
+    :func:`_merge_identical_layers`.
     """
 
     __slots__ = ("entries", "repetitions")
@@ -141,6 +143,38 @@ def _flatten_layers(entries):
         else:
             layers.append(entry)
     return layers
+
+
+def _merge_identical_layers(layers):
+    """consecutive identical layers of a flat list of layers, i.e. the same
+    layer with the same strain and magnetization, as :class:`_Period`, e.g.
+    of an unstrained or homogeneously strained part of an inhomogeneous
+    stack, so that it is raised to the power of its repetitions with
+    :math:`\\mathcal{O}(\\log N)` matrix products as in the homogeneous
+    simulations, where the interfaces between identical layers are the
+    identity, also with roughness"""
+    runs = []
+    for entry in layers:
+        if (
+            runs
+            and not isinstance(entry, _Period)
+            and not isinstance(runs[-1][0], _Period)
+            and _identical_layers(runs[-1][0], entry)
+        ):
+            runs[-1][1] += 1
+        else:
+            runs.append([entry, 1])
+    return [entry for run in runs for entry in _repeated([run[0]], run[1])]
+
+
+def _identical_layers(entry, other):
+    """True for two entries of the same layer with equal strain and
+    magnetization"""
+    if entry[0] is not other[0] or not np.array_equal(entry[1], other[1]):
+        return False
+    if entry[2] is None or other[2] is None:
+        return entry[2] is None and other[2] is None
+    return np.array_equal(entry[2], other[2])
 
 
 def _layer_runs(entries):
@@ -2239,8 +2273,13 @@ class MultilayerScattering(Scattering):
               magnetization.
 
         """
+        # the eigenmodes are cached per delay, as their memory for all layers
+        # of a block of delays may exceed the one of the results by far
         results = [
-            self.calc_jones_matrices(self.calc_inhomogeneous_layers(strains, magnetizations))
+            self.calc_jones_matrices(
+                _merge_identical_layers(self.calc_inhomogeneous_layers(strains, magnetizations)),
+                cache={},
+            )
             for strains, magnetizations in zip(strain_map, magnetization_map)
         ]
         return tuple(np.stack(result) for result in zip(*results))
