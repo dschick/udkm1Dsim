@@ -82,7 +82,7 @@ __all__ = [
     "Q_",
 ]
 
-__version__ = "3.0.0a6"
+__version__ = "3.0.0a7"
 
 _REMOVED = {
     "AmorphousLayer": (

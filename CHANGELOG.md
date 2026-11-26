@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0a7] 2026-11-26
+
 ### Added
 
 - the `molar_mass` of `StructuralParameters`, the mean molar mass of the atoms of a layer, and the derived `number_density` $n = \rho N_A / M$ of its atoms, where the molar mass of a `UnitCell` is given by its atoms and follows their changes, see #244
