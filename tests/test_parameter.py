@@ -38,6 +38,18 @@ def test_parameter(parameter, input, expected):
     assert parameter.magnitude == expected
 
 
+@pytest.mark.parametrize(
+    "input",
+    [np.array(2e-8), np.squeeze([2e-8]), u.Quantity(np.array(2e-8), "m")],
+)
+def test_parameter_zero_dimensional_array_is_scalar(parameter, input):
+    # 0-d arrays, e.g. from np.loadtxt of a single value, see #263
+    parameter.magnitude = input
+    assert not isinstance(parameter.magnitude, np.ndarray)
+    assert parameter.magnitude == 2e-8
+    assert str(parameter) == "parameter = 2×10⁻⁸ m"
+
+
 # TemperatureParameter
 
 
@@ -581,6 +593,7 @@ def test_add_latex_subscript(symbol, subscript, expected):
         (2.44 + 4.32j, "2.44 + 4.32i", r"2.44 + 4.32\,i"),
         (2, "2", "2"),
         (np.array([1.0, 2e-8]), "[1, 2×10⁻⁸]", r"[1, 2 \times 10^{-8}]"),
+        (np.array(2e-8), "2×10⁻⁸", r"2 \times 10^{-8}"),
     ],
 )
 def test_format_number(value, text, latex):
