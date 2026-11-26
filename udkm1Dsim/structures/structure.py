@@ -37,7 +37,7 @@ import pint
 from udkm1Dsim.structures.parameter_groups import ParameterGroup
 
 from ..helpers import finderb, make_hash_md5
-from .layers import Layer, Vacuum
+from .layers import Layer, UnitCell, Vacuum
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
@@ -289,6 +289,8 @@ class Structure:
             raise ValueError("A Structure cannot contain itself as sub-structure!")
         N = _check_repetitions(N)
 
+        _check_unit_cell(sub_structure)
+
         # if a Structure is added as a sub_structure, the sub_structure's
         # superstrate and substrate are ignored (Vacuum default is ignored)
         if isinstance(sub_structure, Structure):
@@ -360,6 +362,7 @@ class Structure:
                 + " is no possible substrate. "
                 + "Only Layer or its sub-classes is allowed!"
             )
+        _check_unit_cell(layer)
 
         self.substrate = [layer, _check_repetitions(N)]
 
@@ -379,6 +382,7 @@ class Structure:
                 + " is no possible superstrate. "
                 + "Only Layer or its sub-classes is allowed!"
             )
+        _check_unit_cell(layer)
 
         # there is only one repetition of the superstrate layer
         self.superstrate = [layer, 1]
@@ -441,6 +445,26 @@ class Structure:
         from .yaml_io import structure_from_yaml
 
         return structure_from_yaml(source)
+
+    def check_densities(self):
+        """check_densities
+
+        Checks that all layers of the :class:`Structure` have a positive
+        density, which the heat and phonon simulations require for the masses
+        of the layers. Purely optical layers may have no density.
+
+        Raises:
+            ValueError: if any layer has no positive density.
+
+        """
+        ids = [layer.id for layer in self.unique_layers[1] if not layer.density.magnitude > 0]
+        if ids:
+            raise ValueError(
+                "All layers of the structure require a positive density for their mass, but "
+                "these layers have none: "
+                + ", ".join(f"'{id}'" for id in ids)
+                + ". Set the density of a Layer, or add the atoms of a UnitCell."
+            )
 
     def check_num_sub_systems(self, *property_names):
         """check_num_sub_systems
@@ -1064,3 +1088,19 @@ class Structure:
 
         add(self.layer_tree)
         return layer_ids, layer_handles
+
+
+def _check_unit_cell(layer):
+    """Raise a ValueError for a :class:`.UnitCell` without atoms and density,
+    which has no mass for any simulation and no structure factor for X-ray
+    diffraction, see #125."""
+    if (
+        isinstance(layer, UnitCell)
+        and layer.num_atoms == 0
+        and not layer.structural.density.magnitude > 0
+    ):
+        raise ValueError(
+            f"The UnitCell '{layer.id}' has neither atoms nor a density. Add its atoms by "
+            "add_atom() before adding it to a Structure, or set its density for simulations "
+            "without X-ray diffraction."
+        )

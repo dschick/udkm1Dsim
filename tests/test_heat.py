@@ -1140,6 +1140,13 @@ def test_heat_inconsistent_num_sub_systems_raises(tmp_path):
         heat.get_temp_map(np.r_[0:1:0.1] * u.ps, 300 * u.K)
 
 
+def test_heat_without_density_raises(tmp_path):
+    """instead of a failing root finder for the temperature, see #125"""
+    heat = Heat(absorbing_stack(), True, cache_dir=tmp_path, save_data=False, disp_messages=False)
+    with pytest.raises(ValueError, match="positive density"):
+        heat.get_temp_map(np.r_[0:1:0.1] * u.ps, 300 * u.K)
+
+
 @pytest.mark.parametrize("hot", [0, -1], ids=["surface", "bottom"])
 def test_heat_diffusion_conserves_energy_at_isolating_boundaries(tmp_path, hot):
     """the boundary nodes have half cells, so that a hot boundary node

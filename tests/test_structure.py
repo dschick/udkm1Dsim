@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 from pint.testing import assert_allclose
 
-from udkm1Dsim import Dispersion, Layer, Structure, u
+from tests.conftest import absorbing_stack
+from udkm1Dsim import Dispersion, Layer, Structure, UnitCell, u
 
 # tests
 
@@ -455,6 +456,32 @@ def test_structure_check_num_sub_systems():
     S.check_num_sub_systems("heat_capacity")
     with pytest.raises(ValueError, match="layer 'b': 'therm_cond' has 1"):
         S.check_num_sub_systems("heat_capacity", "therm_cond")
+
+
+@pytest.mark.parametrize(
+    "add",
+    [
+        Structure.add_sub_structure,
+        lambda S, layer: S.insert_sub_structure(0, layer),
+        Structure.add_substrate,
+        Structure.add_superstrate,
+    ],
+    ids=["sub_structure", "insert", "substrate", "superstrate"],
+)
+def test_structure_unit_cell_without_atoms_and_density_raises(add):
+    """an atom-free unit cell has no mass, see #125, unless its density is given"""
+    uc = UnitCell("uc", "uc", 4 * u.angstrom)
+    with pytest.raises(ValueError, match="UnitCell 'uc' has neither atoms nor a density"):
+        add(Structure("s"), uc)
+    uc.density = 3000 * u.kg / u.m**3
+    add(Structure("s"), uc)
+
+
+def test_structure_check_densities(structure):
+    structure.check_densities()
+    S = absorbing_stack()  # purely optical layers without density are accepted
+    with pytest.raises(ValueError, match="none: 'absorber', 'dielectric'"):
+        S.check_densities()
 
 
 def test_get_hash_does_not_depend_on_symbols_and_labels(structure):
