@@ -81,6 +81,9 @@ class Parameter:
             self._magnitude = np.asarray(value)
         else:
             raise TypeError(f"Cannot set Parameter '{self.name}' from type {type(value)}")
+        # a 0-d array, e.g. from np.loadtxt of a single value, is a scalar
+        if isinstance(self._magnitude, np.ndarray) and self._magnitude.ndim == 0:
+            self._magnitude = self._magnitude.item()
 
         if self._caller is not None:
             self._caller._update_depending()

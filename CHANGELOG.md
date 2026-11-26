@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- the display of a layer or parameter, which raised a `TypeError` for a parameter set from a zero-dimensional NumPy array, e.g. `sound_vel=np.array(4.7)` from `np.loadtxt` of a single value; such a magnitude is stored as a scalar now, see #263
+
 ## [3.0.0a7] 2026-11-26
 
 ### Added

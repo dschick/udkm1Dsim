@@ -560,6 +560,8 @@ def _format_real(value, mode):
 
 
 def _format_number(value, mode):
+    if isinstance(value, np.ndarray) and value.ndim == 0:
+        value = value.item()
     if isinstance(value, (np.ndarray, list)):
         # nested lists of matrices, e.g. the exchange matrix of sublattices
         values = value.tolist() if isinstance(value, np.ndarray) else value
