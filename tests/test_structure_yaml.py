@@ -171,6 +171,15 @@ def test_readable_and_exact_units():
     assert data["thermal"]["heat_capacity"] == "0.112*T + 455.2 - 2193500.0/T**2"
 
 
+def test_force_ndarray_like(structure, monkeypatch):
+    # pint gives zero-dimensional arrays instead of scalars (issue #267)
+    text = structure.to_yaml()
+    yaml_io._cached_quantity_text.cache_clear()
+    monkeypatch.setattr(u, "force_ndarray_like", True)
+    assert structure.to_yaml() == text
+    yaml_io._cached_quantity_text.cache_clear()
+
+
 def test_hand_written_yaml(tmp_path):
     text = """
 format_version: 1

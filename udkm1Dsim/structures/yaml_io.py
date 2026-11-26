@@ -151,7 +151,10 @@ def _same(a, b):
 
 
 def _number(value):
-    """Python number of a number, also of a numpy number."""
+    """Python number of a number, also of a numpy number or a
+    zero-dimensional array, e.g. with pint's ``force_ndarray_like``."""
+    if isinstance(value, np.ndarray) and value.ndim == 0:
+        value = value.item()
     if isinstance(value, (bool, np.bool_)):
         raise TypeError(f"Cannot write the boolean {value} as a number!")
     if isinstance(value, (int, np.integer)):
@@ -245,7 +248,7 @@ def _cached_quantity_text(original, magnitude, unit):
     best = f"{original} {_unit_text(unit)}"
     for candidate in candidates:
         try:
-            converted = quantity.to(candidate).magnitude
+            converted = _number(quantity.to(candidate).magnitude)
         except (ValueError, TypeError, pint.errors.PintError):
             continue
         # without the rounding errors of the conversion, e.g. 6.312 nm/ps
@@ -340,7 +343,7 @@ def _read_temperature(value, unit):
             try:
                 quantity = Q_(_parse_number(parts[0]), parts[1])
                 if quantity.is_compatible_with(unit):
-                    return quantity.to(unit).magnitude
+                    return _number(quantity.to(unit).magnitude)
             except (ValueError, TypeError, pint.errors.PintError):
                 pass
     return value
