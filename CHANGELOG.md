@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the warning of the numerical integration of a `TemperatureParameter` names the parameter instead of the heat capacity for all parameters
 - `helpers.m_power_x()` returns a new array instead of overwriting its input, which replaced the matrices of a single period of a nested structure in the sub-structure matrices of `XrayDyn` by their N-th power; the single period is labeled `1x` instead of `Nx`
 - the display energy of a `Dielectric` given as Quantity is formatted without the deprecation warning of pint for format specs without number format
+- a `UnitCell` without atoms and without density raises a `ValueError` when it is added to a `Structure`, and `Heat`, `PhononNum`, and `PhononAna` raise a `ValueError` for layers without a positive density by the new `Structure.check_densities()`, instead of failing with the error `f(a) and f(b) must have different signs` of the root finder of the temperature or with divisions by zero masses; purely optical layers without density are still accepted by the `Structure` and the scattering simulations, see #125
 
 ## [3.0.0a6] 2026-11-24
 

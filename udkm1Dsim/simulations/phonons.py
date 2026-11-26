@@ -561,6 +561,7 @@ class PhononNum(Phonon):
         else:
             # include coherent dynamics
             self.disp_message("Calculating coherent dynamics with ODE solver ...")
+            self.S.check_densities()  # the masses of the layers
 
             L = self.S.num_layers
             masses = self.S.get_layer_property_vector("structural.mass_unit_area.magnitude")
@@ -971,6 +972,7 @@ class PhononAna(Phonon):
             - *omega (ndarray[float])* - eigenfrequencies (rad/s).
 
         """
+        self.S.check_densities()  # the masses of the layers
         # initialize
         L = self.S.num_layers
         # initializing the symmetric three-diagonal springs-masses matrix

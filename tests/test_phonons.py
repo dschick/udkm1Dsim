@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from tests.conftest import absorbing_stack
 from udkm1Dsim import Layer, Phonon, PhononAna, PhononNum, Structure, u
 from udkm1Dsim.simulations.solvers import HAS_NUMBA
 
@@ -286,6 +287,17 @@ def test_phonon_ana_get_energy_per_eigenmode(structure_freestanding, delays, tmp
     np.testing.assert_array_equal(result.delays, strain.delays)
     assert result.E is result.energy_per_eigenmode and result.omega is result.eigenfrequencies
     assert strain.A is strain.coefficients_A and strain.B is strain.coefficients_B
+
+
+@pytest.mark.parametrize("phonon_class", [PhononNum, PhononAna])
+def test_phonon_without_density_raises(tmp_path, phonon_class):
+    """instead of divisions by zero masses, see #125"""
+    S = absorbing_stack()
+    phonon = phonon_class(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
+    delays = np.r_[0:1:0.1] * u.ps
+    temp_map = 300 * np.ones([len(delays), S.num_layers])
+    with pytest.raises(ValueError, match="positive density"):
+        phonon.get_strain_map(delays, temp_map, np.zeros_like(temp_map))
 
 
 @pytest.mark.parametrize("phonon_class", [PhononNum, PhononAna])
