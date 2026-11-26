@@ -725,8 +725,46 @@ def test_inhomogeneous_results_of_upstream_simulations(magnetic_multilayer):
     assert "delays" not in reference
     assert result.dims("reflectivity") == ("delays", "energy", "angles")
     assert result.qz.shape == result.reflectivity.shape[1:]
+    np.testing.assert_allclose(result.theta, [1, 5, 9, 13, 17])
     np.testing.assert_allclose(result.energy, [700, 707])
     assert result.unit("theta") == "deg"
+
+
+@pytest.mark.parametrize("scan", ["theta", "qz"])
+def test_scanned_coordinate_is_1d(scan, magnetic_multilayer):
+    """the scanned one of theta and qz is a 1D coordinate along the angles,
+    the other one depends on the photon energy, and the result can be
+    selected by the scanned one after the conversion to xarray"""
+    pytest.importorskip("xarray")
+    sim = simulation(Elzo, magnetic_multilayer, np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg)
+    if scan == "qz":
+        sim.qz = np.r_[0.5:2.5:0.5] / u.nm
+    other = "qz" if scan == "theta" else "theta"
+    result = sim.inhomogeneous_reflectivity_transmissivity(
+        np.zeros((3, magnetic_multilayer.num_layers))
+    )
+    assert sim.experiment.scan == scan
+    assert result.dims(scan) == ("angles",)
+    assert result.dims(other) == ("energy", "angles")
+    np.testing.assert_allclose(result[scan], getattr(sim, scan)[0].magnitude)
+    np.testing.assert_allclose(result[other], getattr(sim, other).magnitude)
+    dataset = result.to_xarray()
+    value = result[scan][2]
+    selected = dataset.reflectivity.sel({scan: 1.01 * value}, method="nearest")
+    assert selected.dims == ("delays", "energy")
+    np.testing.assert_array_equal(selected, result.reflectivity[:, :, 2])
+    assert dataset[other].dims == ("energy", "angles")
+    assert scan in dataset.xindexes and other not in dataset.xindexes
+
+
+def test_energy_dependent_scan_stays_2d(magnetic_multilayer):
+    """a scan, which differs between the photon energies, keeps the
+    dimensions of the energy and the angles"""
+    sim = simulation(Elzo, magnetic_multilayer, np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg)
+    sim.theta = np.array([np.r_[1:20:4], np.r_[2:21:4]]) * u.deg
+    result = sim.homogeneous_reflectivity_transmissivity()
+    assert result.dims("theta") == ("energy", "angles")
+    assert result.dims("qz") == ("energy", "angles")
 
 
 def test_results_of_polarization_lists(magnetic_multilayer):

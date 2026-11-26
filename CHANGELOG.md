@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Structure.layer_tree` with a `LayerNode` for every sub-structure, i.e. its layer or nested structure, its repetitions, the nodes of its sub-structures as `children`, and the slices of its sub-structures and layers in the vectors of all sub-structures and of all layers, e.g. of the strain map of the inhomogeneous simulations; it is derived from the `sub_structures` on every access, which remain the only ground truth of the nesting, and `layer_vectors`, `num_layers`, `num_sub_structures`, `unique_layers`, the multilayer formalisms, `XrayKin`, and `XrayDyn` are derived from it instead of their own walks through the sub-structures, with unchanged results
 - `Structure.insert_sub_structure()`, `Structure.remove_sub_structure()`, and `Structure.set_repetitions()` change the sub-structures by their index in the `sub_structures`, e.g. to compare a simulation with and without a layer or to scan the number of its unit cells, see #102; the structure example shows them and the kinematical X-ray example scans the number of unit cells by `set_repetitions()`
 
+- `ExperimentParameters.scan` with the scanned one of `theta` and `qz`, i.e. the one which was set last
+- `Result.to_xarray()` indexes 1D coordinates along a dimension of another name, e.g. the scanned `theta` along the `angles` of a scattering result, so that the data are selected by them, e.g. by `dataset.reflectivity.sel(theta=14.2, method="nearest")`, and `Result.save()` attaches them as dimension scales of their dimension (#265)
+
 ### Changed
 
 - the atomic magnetic moment `mag_moment` is derived as $\mu_a = M_{s,a} / (x_a n)$ from the saturation magnetization, the `concentration`, and the number density of the layer unless it is given, and follows their changes, like the derived `concentration`; it is zero without a number density as before, but a `UnitCell` without a given moment gets one from the number density of its atoms now instead of zero, which changes the results of the `LLB` and of the exchange between sublattices of such layers; cached results require `force_recalc=True`
@@ -40,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the examples of X-ray reflectivity are renamed to X-ray scattering in `examples/07-xray_scattering`, as they also cover the XMCD and Faraday rotation in transmission, which moves their pages in the documentation from `examples/xray_reflectivity/` to `examples/xray_scattering/`; the resonant magnetic X-ray example starts its static $q_z$ scans above the total reflection, where the transfer matrix of `Elzo` grows exponentially in the thick Si layers
 
 - `Heat.calc_energy_map()` and `Heat.calc_energy_flux_map()` evaluate all layers and delays of a unique layer at once, about 100 to 200 times faster, and raise a `ValueError` for a map whose number of distances differs from the number of layers or whose delays do not match; before, the first layers or delays were used silently
+
+- **breaking**: the scanned one of `theta` and `qz` of a scattering result is a 1D coordinate along the dimension `angles`, if it is the same for all photon energies, while the other one keeps the dimensions `energy` and `angles`, e.g. `res.theta` instead of `res.theta[0, :]` for a scan of the incidence angle (#265)
 
 ### Removed
 

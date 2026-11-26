@@ -222,6 +222,38 @@ def test_to_xarray(result):
     assert dataset.attrs["hash"] == "abc"
 
 
+@pytest.fixture
+def angles_result():
+    """result with a 1D coordinate along a dimension of another name"""
+    result = Result("angles")
+    result.add_coord("energy", np.r_[700, 710], "eV")
+    result.add_coord("theta", np.r_[1, 2, 3], "deg", ("angles",))
+    result.add_coord("qz", np.ones((2, 3)), "1/nm", ("energy", "angles"))
+    result.add("reflectivity", np.arange(6.0).reshape(2, 3), ("energy", "angles"))
+    return result
+
+
+def test_1d_coordinate_along_other_dimension(angles_result, tmp_path):
+    """1D coordinates are checked against the size of their dimension,
+    indexed in xarray, and dimension scales in HDF5"""
+    with pytest.raises(ValueError, match="size 3 of theta"):
+        angles_result.add("wrong", np.ones((2, 4)), ("energy", "angles"))
+    pytest.importorskip("xarray")
+    dataset = angles_result.to_xarray()
+    assert "theta" in dataset.xindexes and "qz" not in dataset.xindexes
+    assert dataset.reflectivity.dims == ("energy", "angles")
+    selected = dataset.reflectivity.sel(theta=2.2, method="nearest")
+    np.testing.assert_array_equal(selected, [1, 4])
+    h5py = pytest.importorskip("h5py")
+    filename = tmp_path / "angles.h5"
+    angles_result.save(filename)
+    with h5py.File(filename, "r") as file:
+        assert file["data/reflectivity"].dims[1][0].name == "/coords/theta"
+    loaded = Result.load(filename)
+    assert loaded.dims("theta") == ("angles",)
+    assert loaded.dims("qz") == ("energy", "angles")
+
+
 def test_chained_results(structure, tmp_path):
     """an upstream result is accepted instead of the arrays, its coordinates
     are passed on, and the result is cached in a HDF5 file"""
