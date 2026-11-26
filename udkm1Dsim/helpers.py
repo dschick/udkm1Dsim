@@ -49,6 +49,7 @@ __docformat__ = "restructuredtext"
 import hashlib
 import os
 import re
+from difflib import get_close_matches
 
 import numpy as np
 import pint
@@ -58,6 +59,94 @@ from sympy.printing.pretty.pretty_symbology import greek_unicode
 from sympy.printing.str import StrPrinter
 
 u = pint.get_application_registry()
+
+
+class RemovedAttribute:
+    """RemovedAttribute
+
+    Descriptor of a removed attribute or method, which raises an
+    ``AttributeError`` with its replacement on reading and on assignment,
+    as an assignment would otherwise create an unused instance attribute,
+    e.g. ``atom.mag_amplitude = 0.5`` after version 3.0.
+
+    Args:
+        replacement (str): what to use instead, e.g.
+            ``"use atom.magnetization instead"``.
+        version (str, optional): version of the removal. Defaults to ``"3.0"``.
+
+    """
+
+    def __init__(self, replacement, version="3.0"):
+        self.replacement = replacement
+        self.version = version
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def _error(self, obj):
+        return AttributeError(
+            f"'{type(obj).__name__}.{self.name}' was removed in version {self.version}, "
+            f"{self.replacement}!"
+        )
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        raise self._error(obj)
+
+    def __set__(self, obj, value):
+        raise self._error(obj)
+
+    def __delete__(self, obj):
+        raise self._error(obj)
+
+
+def unknown_key_hints(keys, known):
+    """unknown_key_hints
+
+    The unknown ``keys``, which are not ``known``, each quoted and with the
+    closest known name as hint, e.g. ``"'heat_capcity' (did you mean
+    'heat_capacity'?)"``.
+
+    Args:
+        keys (iterable[str]): given keys, e.g. keyword arguments.
+        known (iterable[str]): known keys.
+
+    Returns:
+        hints (list[str]): sorted unknown keys with hints.
+
+    """
+    known = sorted(set(known))
+    hints = []
+    for key in sorted(set(keys) - set(known), key=str):
+        matches = get_close_matches(str(key), known, n=1)
+        hints.append(f"{key!r}" + (f" (did you mean {matches[0]!r}?)" if matches else ""))
+    return hints
+
+
+def check_keys(keys, known, caller, kind="keyword argument"):
+    """check_keys
+
+    Raises a ``TypeError`` for ``keys``, which are not ``known``, with the
+    closest known names as hints, e.g. for keyword arguments collected by
+    ``**kwargs`` or the keys of an input dict, which would be ignored
+    otherwise, see :func:`unknown_key_hints`.
+
+    Args:
+        keys (iterable[str]): given keys.
+        known (iterable[str]): known keys.
+        caller (str): name of the caller in the message, e.g. ``"Heat()"``.
+        kind (str, optional): kind of the keys in the message. Defaults to
+            ``"keyword argument"``.
+
+    """
+    hints = unknown_key_hints(keys, known)
+    if hints:
+        plural = len(hints) > 1
+        raise TypeError(
+            f"{caller} got {'' if plural else 'an '}unexpected {kind}{'s' if plural else ''} "
+            f"{', '.join(hints)}!"
+        )
 
 
 def read_columns(filename, delimiter=None, columns=3):

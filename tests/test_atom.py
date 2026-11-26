@@ -411,6 +411,33 @@ def test_atom_removed_magnetization_shortcuts(cls, key):
     symbol = "Fe" if cls is Atom else "FeCr"
     with pytest.raises(TypeError, match=f"'{key}' were removed in version 3.0.0"):
         cls(symbol, **{key: 1})
+    # as attributes, which were assigned silently without effect before (#266)
+    atom = cls(symbol, magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 270 * u.deg})
+    before = atom.magnetization.magnitude.copy()
+    message = f"'{cls.__name__}.{key}' was removed in version 3.0, use atom.magnetization"
+    with pytest.raises(AttributeError, match=message):
+        setattr(atom, key, 0.5)
+    with pytest.raises(AttributeError, match=message):
+        getattr(atom, key)
+    np.testing.assert_array_equal(atom.magnetization.magnitude, before)
+
+
+@pytest.mark.parametrize(
+    "cls, kwargs, message",
+    [
+        (
+            Atom,
+            {"magnetisation": (0, 0, 1)},
+            r"'magnetisation' \(did you mean 'magnetization'\?\)",
+        ),
+        (Atom, {"name": "iron"}, r"Atom\(\) got an unexpected keyword argument 'name'"),
+        (AtomMixed, {"ionicity": 1}, r"AtomMixed\(\) got an unexpected keyword argument"),
+    ],
+)
+def test_atom_rejects_unknown_keyword_arguments(cls, kwargs, message):
+    """misspelled keyword arguments would be ignored silently otherwise"""
+    with pytest.raises(TypeError, match=message):
+        cls("Fe", **kwargs)
 
 
 @pytest.mark.parametrize(

@@ -52,6 +52,10 @@ u = pint.get_application_registry()
 class Parameter:
     r"""Parameter with a unit and a magnitude.
 
+    The value is given as pint Quantity, which is converted to the `unit` of
+    the parameter, or as bare number or array, which is taken in this unit,
+    e.g. ``10`` for a parameter in m is 10 m and not 10 nm.
+
     The `symbol` of the parameter is given in LaTeX, e.g. ``r"\kappa"`` or
     ``"T_\mathrm{C}"``, and is used for its display by `print()` and
     `display()` together with its value and unit. Without a symbol, the

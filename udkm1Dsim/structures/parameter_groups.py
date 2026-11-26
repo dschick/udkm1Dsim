@@ -46,6 +46,7 @@ import scipy.constants as constants
 import tabulate as tabulate_module
 from tabulate import tabulate
 
+from ..helpers import RemovedAttribute
 from .dielectric import Dielectric
 from .parameters import Parameter, TemperatureParameter, VectorParameter
 
@@ -105,9 +106,11 @@ class ParameterGroup:
         """Assignments to a parameter of the group set its value, so that the
         parameter keeps its unit, symbol and connection to the group and the
         depending parameters are updated, e.g. ``group.curie_temp = 500 * u.K``.
-        A :class:`.Parameter` of the same type replaces the parameter, e.g. to
-        give a new symbol, after its value is converted to the unit of the
-        group. Derived parameters cannot be set."""
+        A bare number is taken in the unit of the parameter, which is given in
+        the attributes of the group, except for angles, which need a pint
+        Quantity with an angular unit. A :class:`.Parameter` of the same type
+        replaces the parameter, e.g. to give a new symbol, after its value is
+        converted to the unit of the group. Derived parameters cannot be set."""
         current = self.__dict__.get(name)
         if not isinstance(current, Parameter):
             # parameters on initialization and all other attributes
@@ -599,6 +602,17 @@ class OpticalParameters(ParameterGroup):
             the layer.
 
     """
+
+    # removed attributes, whose assignment would be ignored otherwise
+    opt_ref_index = RemovedAttribute("use dielectric=Dispersion.from_ref_index(n) instead")
+    opt_pen_depth = RemovedAttribute(
+        "use dielectric=Dispersion.from_opt_pen_depth(zeta) or layer.set_opt_pen_depth(zeta) "
+        "instead"
+    )
+    opt_ref_index_per_strain = RemovedAttribute("use the strain_model of the Dielectric instead")
+    set_opt_pen_depth_from_ref_index = RemovedAttribute(
+        "use dielectric=Dispersion.from_ref_index(n) and layer.get_opt_pen_depth() instead"
+    )
 
     def __init__(self, dielectric=None):
         self.dielectric = Dielectric()

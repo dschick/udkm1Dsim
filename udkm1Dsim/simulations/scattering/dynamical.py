@@ -335,10 +335,12 @@ class XrayDyn(Scattering):
                 :attr:`instrument` only, see
                 :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.get_inhomogeneous_delays`.
             **kwargs:
-                - *calc_type (str)* - type of calculation.
+                - *calc_type (str)* - ``sequential`` (default) or ``parallel``
+                  utilizing `Dask <https://dask.org/>`_ on a local machine or
+                  a cluster, depending on the ``dask_client``.
                 - *dask_client (Dask.Client)* - Dask client.
-                - *job (Dask.job)* - Dask job.
-                - *num_workers (int)* - Dask number of workers.
+
+                Other keyword arguments raise a ``TypeError``.
 
         Returns:
             result (Result): with the ``reflectivity`` of the dimensions
@@ -347,6 +349,7 @@ class XrayDyn(Scattering):
             :meth:`~udkm1Dsim.simulations.scattering.scattering.Scattering.new_scattering_result`.
 
         """
+        self._check_calc_options(kwargs, "inhomogeneous_reflectivity")
         self._check_experiment()
         self._warn_ignored_superstrate_and_substrate()
         source = find_source(strain_map, temp_map)
@@ -390,6 +393,7 @@ class XrayDyn(Scattering):
             delays, energy, and angles.
 
         """
+        self._check_calc_options(kwargs, "calc_inhomogeneous_reflectivity")
         self._check_experiment()
         source = find_source(strain_map, temp_map)
         strain_map = get_entry(strain_map, "strain_map")

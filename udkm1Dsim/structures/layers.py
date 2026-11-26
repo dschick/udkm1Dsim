@@ -27,7 +27,6 @@ __docformat__ = "restructuredtext"
 
 import copy
 import warnings
-from difflib import get_close_matches
 from inspect import isfunction
 from operator import attrgetter
 
@@ -46,6 +45,7 @@ from udkm1Dsim.structures.parameter_groups import (
     ThermalParameters,
 )
 
+from ..helpers import RemovedAttribute, unknown_key_hints
 from .dielectric import (
     _ATOMIC_SUSCEPTIBILITY_FACTOR,
     Dielectric,
@@ -172,6 +172,22 @@ class Layer:
     magnetic = _GroupAttribute(MagneticParameters)
 
     _parameter_group_names = ("structural", "thermal", "elastic", "optical", "magnetic")
+
+    # removed attributes, whose assignment would be ignored otherwise
+    opt_ref_index = RemovedAttribute(
+        "use dielectric=Dispersion.from_ref_index(n) or layer.get_ref_index() instead"
+    )
+    opt_pen_depth = RemovedAttribute(
+        "use layer.set_opt_pen_depth(zeta) or layer.get_opt_pen_depth() instead"
+    )
+    opt_ref_index_per_strain = RemovedAttribute("use the strain_model of the Dielectric instead")
+    set_opt_pen_depth_from_ref_index = RemovedAttribute(
+        "use dielectric=Dispersion.from_ref_index(n) and layer.get_opt_pen_depth() instead"
+    )
+    atom = RemovedAttribute(
+        "use the molar_mass of its atoms, the magnetization of the layer, and "
+        "dielectric=Dielectric.from_atoms(atom) instead"
+    )
     _updating = False
 
     def __init__(self, id, name, **kwargs):
@@ -1119,14 +1135,10 @@ class Layer:
         known = set(self._parameter_group_names) | set(self._extra_inputs)
         for group_name in self._parameter_group_names:
             known.update(getattr(type(self), group_name).group_class._input_names())
-        unknown = sorted(set(kwargs) - known)
-        if not unknown:
+        names = unknown_key_hints(kwargs, known)
+        if not names:
             return
-        names = []
-        for key in unknown:
-            matches = get_close_matches(key, known, n=1)
-            names.append(f"{key!r}" + (f" (did you mean {matches[0]!r}?)" if matches else ""))
-        plural = "s" if len(unknown) > 1 else ""
+        plural = "s" if len(names) > 1 else ""
         raise TypeError(
             f"{type(self).__name__}() got {'an ' if not plural else ''}unexpected keyword "
             f"argument{plural} {', '.join(names)}, which {'are' if plural else 'is'} neither a "

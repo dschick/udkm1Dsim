@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from udkm1Dsim import Result, Simulation
+from udkm1Dsim import LLB, Elzo, Heat, PhononAna, PhononNum, Result, Simulation, XrayDyn
 
 # fixtures
 
@@ -62,3 +62,29 @@ def test_cache_dir(simulation, cache_dir, structure):
     assert simulation.cache_dir == cache_dir
     # the current directory is the default
     assert Simulation(structure, True, save_data=False).cache_dir == "./"
+
+
+@pytest.mark.parametrize(
+    "cls, kwargs, message",
+    [
+        (Simulation, {"save": False}, r"'save' \(did you mean 'save_data'\?\)"),
+        (Heat, {"heat_difusion": True}, r"'heat_difusion' \(did you mean 'heat_diffusion'\?\)"),
+        (LLB, {"H_ext": 1}, r"LLB\(\) got an unexpected keyword argument 'H_ext'"),
+        (PhononAna, {"backend": "numba"}, r"PhononAna\(\) got an unexpected keyword"),
+        (XrayDyn, {"calc_type": "parallel"}, r"XrayDyn\(\) got an unexpected keyword"),
+        (Elzo, {"num_workers": 4}, r"Elzo\(\) got an unexpected keyword"),
+    ],
+)
+def test_simulation_rejects_unknown_keyword_arguments(structure, cls, kwargs, message):
+    """misspelled keyword arguments would be ignored silently otherwise"""
+    with pytest.raises(TypeError, match=message):
+        cls(structure, True, **kwargs)
+
+
+def test_simulation_keyword_arguments_of_sub_classes(structure):
+    heat = Heat(structure, True, save_data=False, heat_diffusion=True, intp_at_interface=3)
+    assert heat.heat_diffusion
+    assert heat.intp_at_interface == 3
+    phonon = PhononNum(structure, True, only_heat=True, backend="scipy")
+    assert phonon.only_heat
+    assert phonon.backend == "scipy"

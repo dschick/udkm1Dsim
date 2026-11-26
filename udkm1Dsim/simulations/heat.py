@@ -37,7 +37,7 @@ import scipy.constants as constants
 from scipy.interpolate import RectBivariateSpline
 from scipy.optimize import brentq
 
-from ..helpers import finderb, make_hash_md5, to_angle
+from ..helpers import check_keys, finderb, make_hash_md5, to_angle
 from .result import find_source, get_entry
 from .scattering import instrument as _instrument
 from .scattering.multilayer import MultilayerScattering
@@ -79,6 +79,15 @@ _PULSE_KEYS = (
     "divergence",
     *_SAMPLING_KEYS,
 )
+# keys of the excitation dict, whose bandwidth_domain is given by the unit of
+# the bandwidth
+_EXCITATION_KEYS = (
+    "fluence",
+    "delay_pump",
+    "pulse_width",
+    *(key for key in _PULSE_KEYS if key != "bandwidth_domain"),
+)
+_BOUNDARY_KEYS = ("top_type", "top_value", "bottom_type", "bottom_value")
 
 
 class Heat(Simulation):
@@ -152,13 +161,15 @@ class Heat(Simulation):
             ``'gaussian_quadrature'``), ``*_points`` (7), ``*_range`` (2,
             in units of the FWHM), and ``*_eta`` (0.5, the Lorentzian
             fraction of a pseudo-Voigt profile), see
-            :func:`.instrument.profile_nodes`.
+            :func:`.instrument.profile_nodes`. Unknown keys, e.g. misspelled
+            ones, raise a ``TypeError``.
         boundary_conditions (dict{str, float, Quantity}): boundary conditions of
             the top and bottom boundary for the heat diffusion calculation.
             ``top_type`` or ``bottom_type`` must be one of ``boundary_types``.
             For the last two types the corresponding value, ``top_value`` and
             ``bottom_value`` have to be set as :math:`K \\times 1` array, where
-            :math:`K` is the number of sub-systems.
+            :math:`K` is the number of sub-systems. Unknown keys raise a
+            ``TypeError``.
         boundary_types (list[str]): description of boundary types.
 
             * isolator
@@ -171,6 +182,8 @@ class Heat(Simulation):
     """
 
     _title = "Heat simulation"
+
+    _init_options = ("heat_diffusion", "intp_at_interface", "backend")
 
     def __init__(self, S, force_recalc, **kwargs):
         super().__init__(S, force_recalc, **kwargs)
@@ -1746,6 +1759,7 @@ class Heat(Simulation):
     @boundary_conditions.setter
     def boundary_conditions(self, boundary_conditions):
         if isinstance(boundary_conditions, dict):
+            check_keys(boundary_conditions, _BOUNDARY_KEYS, "Heat.boundary_conditions", kind="key")
             if "top_type" in boundary_conditions:
                 try:
                     btype = self.boundary_types.index(boundary_conditions["top_type"])
@@ -1825,6 +1839,7 @@ class Heat(Simulation):
                     "The excitation key multilayer_absorption was replaced by absorption, "
                     "which is lambert_beer or a multilayer formalism, e.g. Parratt by default!"
                 )
+            check_keys(excitation, _EXCITATION_KEYS, "Heat.excitation", kind="key")
             # a scalar is a single pulse
             for key, unit in [("fluence", "J/m**2"), ("delay_pump", "s"), ("pulse_width", "s")]:
                 if key in excitation:
