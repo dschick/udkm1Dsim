@@ -58,4 +58,7 @@ def docs(session):
 @nox.session(venv_backend="uv", python="3.13", reuse_venv=reuse_venv)
 def benchmarks(session):
     session.install(".", "--group", "test")
-    session.run("pytest", "--codspeed", "tests/benchmarks/")
+    # a single thread of BLAS and LAPACK as in the CodSpeed workflow
+    names = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS")
+    threads = {name: "1" for name in names}
+    session.run("pytest", "--codspeed", "tests/benchmarks/", env=threads)

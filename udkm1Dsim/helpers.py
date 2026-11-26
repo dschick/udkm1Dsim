@@ -146,20 +146,19 @@ def m_power_x(m, x):
     """m_power_x
 
     Apply ``numpy.linalg.matrix_power`` to last 2 dimensions of 4-dimensional
-    input matrix.
+    input matrix, which is not changed.
 
     Args:
         m (ndarray[float, complex]): 4-dimensional input matrix.
-        x (float): exponent.
+        x (int): exponent.
 
     Returns:
         m (ndarray[float, complex]): resulting matrix.
 
     """
     if x > 1:
-        for i in range(np.size(m, 0)):
-            for j in range(np.size(m, 1)):
-                m[i, j, :, :] = np.linalg.matrix_power(m[i, j, :, :], x)
+        # a new array for the stack of matrices in the last 2 dimensions
+        return np.linalg.matrix_power(m, int(x))
     return m
 
 

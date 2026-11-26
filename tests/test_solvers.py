@@ -9,6 +9,7 @@ import scipy.constants as constants
 from scipy.optimize import fsolve
 
 from udkm1Dsim.simulations.solvers import (
+    HAS_NUMBA,
     heat_numba,
     heat_scipy,
     magnetization_scipy,
@@ -208,12 +209,19 @@ def test_phonon_stability_time_step_damping():
     assert dt == pytest.approx(1 / (omega + rate))
 
 
-@pytest.mark.parametrize("backend", ["scipy", "numba"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "scipy",
+        pytest.param(
+            "numba", marks=pytest.mark.skipif(not HAS_NUMBA, reason="numba is not installed")
+        ),
+    ],
+)
 def test_phonon_damping_rate(backend):
     """a standing wave of the free chain decays at the rate
     2 gamma sin^2(q d / 2) / m, i.e. quadratic in its wave vector"""
     if backend == "numba":
-        pytest.importorskip("numba")
         from udkm1Dsim.simulations.solvers.phonon_numba import solve
     else:
         solve = phonon_scipy.solve

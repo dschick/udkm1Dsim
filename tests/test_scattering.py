@@ -9,6 +9,7 @@ from pint.testing import assert_allclose as assert_quantity_allclose
 from scipy.integrate import simpson
 
 import udkm1Dsim as ud
+from tests.conftest import N_SUB, interface, magnetic_film, optical_stack, substrate_layer
 from udkm1Dsim import (
     Atom,
     BerremanElzo,
@@ -23,6 +24,7 @@ from udkm1Dsim import (
     Vacuum,
     u,
 )
+from udkm1Dsim.helpers import m_power_x
 from udkm1Dsim.simulations.result import Result, array_hash
 from udkm1Dsim.simulations.scattering.berreman import berreman_modes
 from udkm1Dsim.simulations.scattering.elzo import elzo_modes
@@ -37,7 +39,6 @@ from udkm1Dsim.simulations.scattering.multilayer import (
 
 FORMALISMS = [Parratt, Elzo, Stepanov, BerremanElzo, BerremanStepanov]
 MAGNETIC = [Elzo, Stepanov, BerremanElzo, BerremanStepanov]
-N_SUB = 1.5 + 0.1j
 
 
 def simulation(cls, S, energy, theta):
@@ -49,75 +50,6 @@ def simulation(cls, S, energy, theta):
 
 def relative(a, b):
     return np.max(np.abs(a - b)) / np.max(np.abs(b))
-
-
-def substrate_layer(eps0=None, euler_angles=(0, 0, 0) * u.deg):
-    sub = Layer("sub", "substrate", thickness=0 * u.nm, density=1000 * u.kg / u.m**3)
-    eps0 = Dispersion.from_ref_index(N_SUB) if eps0 is None else eps0
-    sub.optical.dielectric = Dielectric(eps0=eps0, euler_angles=euler_angles)
-    return sub
-
-
-def interface(substrate):
-    """a single interface of vacuum and the substrate"""
-    S = Structure("interface")
-    S.add_sub_structure(Vacuum(thickness=0 * u.nm), 1)
-    S.add_substrate(substrate)
-    return S
-
-
-@pytest.fixture(scope="module")
-def magnetic_multilayer():
-    """Fe/O multilayer at the Fe L3 edge with an in-plane magnetization"""
-    fe = Layer(
-        "fe",
-        "fe",
-        thickness=2 * u.nm,
-        density=7874 * u.kg / u.m**3,
-        dielectric=Dielectric.from_atoms(Atom("Fe")),
-        magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 30 * u.deg},
-    )
-    ox = Layer(
-        "ox",
-        "ox",
-        thickness=1.3 * u.nm,
-        density=3000 * u.kg / u.m**3,
-        dielectric=Dielectric.from_atoms(Atom("O")),
-    )
-    S = Structure("magnetic multilayer")
-    S.add_sub_structure(fe, 3)
-    S.add_sub_structure(ox, 2)
-    S.add_sub_structure(fe, 2)
-    S.add_substrate(ox)
-    return S
-
-
-def optical_stack(substrate=None, thickness=1):
-    """non-magnetic optical stack of a metal and a dielectric"""
-    a = Layer("a", "metal", thickness=3 * thickness * u.nm, density=7874 * u.kg / u.m**3)
-    a.optical.dielectric = Dispersion.from_ref_index(2.9 + 3.4j)
-    b = Layer("b", "oxide", thickness=2 * thickness * u.nm, density=2500 * u.kg / u.m**3)
-    b.optical.dielectric = Dispersion.from_ref_index(1.45)
-    S = Structure("optical stack")
-    S.add_sub_structure(a, 2)
-    S.add_sub_structure(b, 3)
-    S.add_sub_structure(a, 1)
-    S.add_substrate(Vacuum() if substrate is None else substrate)
-    return S
-
-
-def magnetic_film(magnetization):
-    """Fe film with a gyrotropic dielectric at 800 nm"""
-    fe = Layer("fe", "fe", thickness=10 * u.nm, density=7874 * u.kg / u.m**3)
-    fe.optical.dielectric = Dielectric(
-        eps0=Dispersion.from_ref_index(2.9 + 3.4j),
-        eps_mag=Dispersion.from_array([0, 10], [0.6 + 0.2j] * 2, kind="eps"),
-    )
-    fe.magnetization = magnetization
-    S = Structure("film")
-    S.add_sub_structure(fe, 1)
-    S.add_substrate(Vacuum())
-    return S
 
 
 # ============================================================================
@@ -279,7 +211,7 @@ def test_parratt_roughness():
 def test_rough_stacks_of_formalisms_agree():
     """Parratt has the transmission coefficients of the roughness matrices
     of the other formalisms, so that all agree for rough isotropic stacks"""
-    S = optical_stack(substrate_layer())
+    S = optical_stack()
     for layer in S.unique_layers[1]:
         layer.structural.roughness = 5 * u.nm
     stack = Structure("periodic")
@@ -425,6 +357,15 @@ def test_kerr_angles():
     assert rotation.units == u.deg
     rotation_p, _ = sim.calc_rotation_ellipticity(R, pi_incident=True)
     assert np.all(np.abs(rotation_p.m) > 0)
+    # the polar Kerr rotation of sigma and pi incidence have opposite signs at
+    # normal incidence in the Fresnel convention
+    sim.theta = np.r_[90] * u.deg
+    R = sim.homogeneous_jones_matrices().jones_reflection
+    rotation_s, ellipticity_s = sim.calc_rotation_ellipticity(R)
+    rotation_p, ellipticity_p = sim.calc_rotation_ellipticity(R, pi_incident=True)
+    assert np.all(np.abs(rotation_s.m) > 1e-3)
+    np.testing.assert_allclose(rotation_p.m, -rotation_s.m, rtol=1e-8)
+    np.testing.assert_allclose(ellipticity_p.m, -ellipticity_s.m, rtol=1e-8)
 
 
 @pytest.mark.parametrize("cls", MAGNETIC)
@@ -775,6 +716,29 @@ def test_inhomogeneous_close_to_berreman_stepanov(cls, magnetic_multilayer):
         reference.values(),
     ):
         np.testing.assert_allclose(a, b, rtol=rtol)
+
+
+@pytest.mark.parametrize("cls", FORMALISMS)
+def test_strain_stretches_the_layers(cls):
+    """a strain eps without change of the optical constants (strain model
+    none) equals the unstrained stack with thicknesses d (1 + eps), also for
+    a contraction"""
+    S = optical_stack(substrate_layer())
+    for layer in S.unique_layers[1]:
+        layer.optical.dielectric.strain_model = "none"
+    energy, theta = np.r_[1.55, 3.1] * u.eV, np.r_[20, 45, 70] * u.deg
+    sim = simulation(cls, S, energy, theta)
+    strains = np.r_[0.05, -0.05]
+    strain_map = strains[:, np.newaxis] * np.ones([2, S.num_layers])
+    R = sim.calc_inhomogeneous_reflectivity_transmissivity(strain_map)[0]
+    for i, eps in enumerate(strains):
+        stretched = simulation(cls, optical_stack(substrate_layer(), 1 + eps), energy, theta)
+        for layer in stretched.S.unique_layers[1]:
+            layer.optical.dielectric.strain_model = "none"
+        reference = stretched.calc_homogeneous_reflectivity_transmissivity()[0]
+        np.testing.assert_allclose(R[i], reference, rtol=1e-10)
+        # the strain changes the reflectivity
+        assert relative(R[i], sim.calc_homogeneous_reflectivity_transmissivity()[0]) > 1e-3
 
 
 @pytest.mark.parametrize("pol_in", [1, 3])
@@ -1196,6 +1160,67 @@ def test_parratt_parallel_blocks_per_worker(magnetic_multilayer):
         assert elzo._delay_blocks(3, client) == [slice(0, 1), slice(1, 2), slice(2, 3)]
 
 
+@pytest.mark.parametrize("calc_type", ["sequential", "parallel"])
+def test_xray_dyn_lookup_equals_recalculation(structure_crystalline, calc_type):
+    """the matrices looked up from the strain_vectors equal the ones
+    recalculated for the strains of each unit cell, sequentially and in
+    parallel"""
+    xray_dyn = ud.XrayDyn(
+        structure_crystalline, True, save_data=False, disp_messages=False, progress_bar=False
+    )
+    xray_dyn.energy = 8000 * u.eV
+    xray_dyn.qz = np.r_[1:5:100j] / u.angstrom
+    strains = np.r_[-0.01, 0, 0.005, 0.01]
+    rng = np.random.default_rng(0)
+    strain_map = rng.choice(strains, (3, structure_crystalline.num_layers))
+    strain_vectors = [strains] * structure_crystalline.num_unique_layers
+    reference = xray_dyn.calc_inhomogeneous_reflectivity(strain_map)
+    if calc_type == "parallel":
+        distributed = pytest.importorskip("distributed")
+        with distributed.Client(processes=False, dashboard_address=":0") as client:
+            kwargs = {"calc_type": "parallel", "dask_client": client}
+            lookup = xray_dyn.calc_inhomogeneous_reflectivity(strain_map, strain_vectors, **kwargs)
+            recalc = xray_dyn.calc_inhomogeneous_reflectivity(strain_map, **kwargs)
+        np.testing.assert_allclose(recalc, reference, rtol=1e-12)
+    else:
+        lookup = xray_dyn.calc_inhomogeneous_reflectivity(strain_map, strain_vectors)
+    np.testing.assert_allclose(lookup, reference, rtol=1e-12)
+    # the delays differ by their strains
+    assert relative(reference[0], reference[1]) > 1e-3
+
+
+def test_xray_dyn_temperature_dependent_debye_waller_factor(unit_cell_iron):
+    """the Debye-Waller factor at the temperature of the temps or temp_map
+    equals a constant one of the same value"""
+    reflectivities = []
+    sims = []
+    for deb_wal_fac in ("3e-23*T", 0.9 * u.angstrom**2):
+        unit_cell = copy.deepcopy(unit_cell_iron)  # do not alter the module-scoped fixture
+        unit_cell.deb_wal_fac = deb_wal_fac
+        S = ud.Structure("film")
+        S.add_sub_structure(unit_cell, 20)
+        xray_dyn = ud.XrayDyn(S, True, save_data=False, disp_messages=False, progress_bar=False)
+        xray_dyn.energy = 8047.8 * u.eV
+        xray_dyn.qz = np.r_[1:6:200j] / u.angstrom
+        temps = np.full(1, 300.0)
+        sims.append(xray_dyn)
+        reflectivities.append(
+            [
+                xray_dyn.calc_homogeneous_reflectivity(temps=temps)[0],
+                xray_dyn.calc_inhomogeneous_reflectivity(
+                    np.zeros([1, 20]), temp_map=np.full([1, 20], 300.0)
+                )[0],
+            ]
+        )
+    np.testing.assert_allclose(reflectivities[0][0], reflectivities[1][0], rtol=1e-12)
+    np.testing.assert_allclose(reflectivities[0][1], reflectivities[1][1], rtol=1e-12)
+    np.testing.assert_allclose(reflectivities[0][0], reflectivities[0][1], rtol=1e-12)
+    # at 0 K, the temperature-dependent factor vanishes and the (004) peak
+    # at 5 1/angstrom is higher
+    cold = sims[0].calc_homogeneous_reflectivity(temps=np.zeros(1))[0]
+    assert np.max(cold[0, -50:]) > 1.1 * np.max(reflectivities[0][0][0, -50:])
+
+
 def test_worker_copy_has_no_cached_matrices(unit_cell_iron):
     S = ud.Structure("crystal")
     S.add_sub_structure(unit_cell_iron, 5)
@@ -1282,24 +1307,26 @@ def test_unreachable_scattering_vector_warns_only_on_calculation():
 # ============================================================================
 
 
-@pytest.fixture(scope="module")
-def xray_kin(structure_crystalline, tmp_path_factory):
+@pytest.fixture
+def xray_kin(structure_crystalline, tmp_path):
+    """a new simulation per test, as many tests set their own experiment"""
     return ud.XrayKin(
         structure_crystalline,
         force_recalc=True,
-        cache_dir=tmp_path_factory.mktemp("cache"),
+        cache_dir=tmp_path,
         save_data=True,
         disp_messages=True,
         progress_bar=True,
     )
 
 
-@pytest.fixture(scope="module")
-def xray_dyn(structure_crystalline, tmp_path_factory):
+@pytest.fixture
+def xray_dyn(structure_crystalline, tmp_path):
+    """a new simulation per test, as many tests set their own experiment"""
     return ud.XrayDyn(
         structure_crystalline,
         force_recalc=True,
-        cache_dir=tmp_path_factory.mktemp("cache"),
+        cache_dir=tmp_path,
         save_data=True,
         disp_messages=True,
         progress_bar=True,
@@ -1311,6 +1338,13 @@ def atomistic_maps(structure_amorph):
     """homogeneous strain and temperature maps for 11 delays"""
     distances, _, _ = structure_amorph.layer_distances
     return 0.01 * np.ones([11, len(distances)]), 50 * np.ones([11, len(distances)])
+
+
+@pytest.mark.parametrize("fixture", ["xray_kin", "xray_dyn"])
+def test_atomistic_without_experiment_raises(fixture, request):
+    sim = request.getfixturevalue(fixture)
+    with pytest.raises(ValueError, match="energy and the angles or qz"):
+        sim.homogeneous_reflectivity()
 
 
 def test_xray_kin_update_experiment(xray_kin):
@@ -1356,13 +1390,39 @@ def test_atomistic_set_polarization(fixture, request):
 
 
 def test_xray_kin_calc_polarization_factor(xray_kin):
-    xray_kin.calc_polarization_factor(0)
+    """P = 1 for sigma, |cos 2 theta| for pi, and the root of the mean
+    intensity factor (1 + cos^2 2 theta)/2 for unpolarized X-rays"""
+    theta = np.linspace(0, np.pi / 2, 7)
+    expected = {
+        "sigma": np.ones_like(theta),
+        "pi": np.abs(np.cos(2 * theta)),
+        "unpolarized": np.sqrt((1 + np.cos(2 * theta) ** 2) / 2),
+    }
+    for polarization, P in expected.items():
+        xray_kin.set_polarization(polarization, "none")
+        np.testing.assert_allclose(
+            xray_kin.calc_polarization_factor(theta), P, rtol=1e-12, atol=1e-15
+        )
 
 
-def test_xray_kin_get_hash(xray_kin, atomistic_maps):
-    strain_map, _ = atomistic_maps
-    strain_vectors = {}
-    xray_kin.get_hash(strain_vectors, strain_map=strain_map)
+@pytest.mark.parametrize("fixture", ["xray_kin", "xray_dyn"])
+def test_atomistic_get_hash(fixture, request, atomistic_maps):
+    """the hash follows the values of the strain and temperature maps and of
+    the strain vectors, also for large maps"""
+    sim = request.getfixturevalue(fixture)
+    sim.energy = 8000 * u.eV
+    sim.qz = np.r_[1:5:10j] / u.angstrom
+    strain_map, temp_map = atomistic_maps
+    hash = sim.get_hash({}, strain_map=strain_map, temp_map=temp_map)
+    assert hash == sim.get_hash({}, strain_map=strain_map.copy(), temp_map=temp_map.copy())
+    assert hash != sim.get_hash({}, strain_map=2 * strain_map, temp_map=temp_map)
+    assert hash != sim.get_hash({}, strain_map=strain_map, temp_map=temp_map + 1)
+    assert hash != sim.get_hash([np.r_[0:1]], strain_map=strain_map, temp_map=temp_map)
+    # maps of more than 1e6 elements which differ only in their last element
+    large = np.zeros([1001, 1000])
+    changed = large.copy()
+    changed[-1, -1] = 1e-3
+    assert sim.get_hash({}, strain_map=large) != sim.get_hash({}, strain_map=changed)
 
 
 def test_xray_kin_calc_uc_structure_factor(xray_kin, unit_cell_iron):
@@ -1375,7 +1435,18 @@ def test_xray_kin_calc_uc_structure_factor(xray_kin, unit_cell_iron):
 
 
 def test_xray_kin_homogeneous_reflectivity(xray_kin):
-    xray_kin.homogeneous_reflectivity()
+    """the kinematical reflectivity is linear in P^2, so that the
+    unpolarized one is exactly the mean of the sigma and pi ones"""
+    xray_kin.energy = 8000 * u.eV
+    xray_kin.qz = np.r_[1:5:200j] / u.angstrom
+    R = {}
+    for polarization in ("sigma", "pi", "unpolarized"):
+        xray_kin.set_polarization(polarization, "none")
+        result = xray_kin.homogeneous_reflectivity()
+        assert result.reflectivity.shape == (1, 200)
+        R[polarization] = result.reflectivity
+    assert np.all(R["pi"] < R["sigma"])
+    np.testing.assert_allclose(R["unpolarized"], (R["sigma"] + R["pi"]) / 2, rtol=1e-12)
 
 
 @pytest.mark.parametrize("sim_class", [ud.XrayKin, ud.XrayDyn])
@@ -1404,6 +1475,24 @@ def test_xray_homogeneous_reflectivity_of_nested_structures(
     np.testing.assert_allclose(R[0], R[1], rtol=1e-6)
 
 
+def test_xray_dyn_matrices_of_nested_structures(unit_cell_iron, unit_cell_oxygen):
+    """the sub-structure matrices keep the one of a single period of a nested
+    structure besides its N-th power"""
+    inner = ud.Structure("double layer")
+    inner.add_sub_structure(unit_cell_iron, 3)
+    inner.add_sub_structure(unit_cell_oxygen, 2)
+    S = ud.Structure("nested")
+    S.add_sub_structure(inner, 5)
+    xray_dyn = ud.XrayDyn(S, True, save_data=False, disp_messages=False, progress_bar=False)
+    xray_dyn.energy = 8000 * u.eV
+    xray_dyn.qz = np.r_[1:5:10j] / u.angstrom
+    _, A = xray_dyn.calc_homogeneous_reflectivity()
+    matrices = {label: matrix for matrix, label in A[-2:]}
+    period, total = matrices["1x double layer"], matrices["5x double layer"]
+    np.testing.assert_allclose(total, m_power_x(period, 5), rtol=1e-10)
+    assert not np.allclose(total, period)
+
+
 def test_xray_dyn_all_ref_trans_matrices_without_strains(xray_dyn):
     xray_dyn.energy = 8000 * u.eV
     xray_dyn.qz = np.r_[1:5:10j] / u.angstrom
@@ -1419,14 +1508,14 @@ def test_xray_dyn_repr(xray_dyn):
     assert xray_dyn._repr_html_().startswith("<h2>Dynamical X-Ray Diffraction simulation</h2>")
 
 
-def test_xray_dyn_get_hash(xray_dyn, atomistic_maps):
-    strain_map, temp_map = atomistic_maps
-    strain_vectors = {}
-    xray_dyn.get_hash(strain_vectors, strain_map=strain_map, temp_map=temp_map)
-
-
 def test_xray_dyn_homogeneous_reflectivity(xray_dyn):
-    xray_dyn.homogeneous_reflectivity()
+    xray_dyn.energy = 8000 * u.eV
+    xray_dyn.qz = np.r_[1:5:100j] / u.angstrom
+    R0 = xray_dyn.homogeneous_reflectivity().reflectivity
+    # zero strains and no temperatures are the defaults
+    np.testing.assert_array_equal(
+        xray_dyn.homogeneous_reflectivity(strains=np.zeros([2])).reflectivity, R0
+    )
     xray_dyn.homogeneous_reflectivity(strains=np.zeros([2]))
     xray_dyn.homogeneous_reflectivity(temps=300 * np.ones([2]))
     result = xray_dyn.homogeneous_reflectivity(strains=np.zeros([2]), temps=300 * np.ones([2]))
@@ -1506,6 +1595,47 @@ def test_xray_kin_equals_xray_dyn_for_thin_films(unit_cell_iron, polarization):
     assert differences[0] < differences[1] < differences[2]
 
 
+@pytest.mark.parametrize("cls", [ud.XrayKin, ud.XrayDyn])
+def test_strain_shifts_the_bragg_peak(unit_cell_iron, cls):
+    """a homogeneous strain eps stretches the lattice and shifts the Bragg
+    peak of a film from q0 to q0/(1 + eps), also for the static substrate
+    below a strained film"""
+    S = ud.Structure("film")
+    S.add_sub_structure(unit_cell_iron, 20)
+    sim = cls(S, True, save_data=False, disp_messages=False, progress_bar=False)
+    sim.energy = 8047.8 * u.eV
+    sim.qz = np.linspace(1.1, 1.4, 6001) / u.angstrom  # around the (001) peak
+    qz = sim.qz[0].to("1/nm").magnitude
+    peaks = {}
+    for eps in (0, 0.02):
+        R, _ = sim.calc_homogeneous_reflectivity(strains=np.full(1, eps))
+        peaks[eps] = qz[np.argmax(R[0])]
+    assert peaks[0.02] == pytest.approx(peaks[0] / 1.02, abs=2 * (qz[1] - qz[0]))
+
+
+def test_xray_kin_strain_moves_the_static_substrate(unit_cell_iron):
+    """the phase of the static substrate follows the strained thickness of
+    the film above, so a strain of the film changes the interference with
+    the substrate"""
+    S = ud.Structure("film")
+    S.add_sub_structure(unit_cell_iron, 20)
+    S.add_substrate(unit_cell_iron, 20)
+    xray_kin = ud.XrayKin(S, True, save_data=False, disp_messages=False, progress_bar=False)
+    xray_kin.energy = 8047.8 * u.eV
+    xray_kin.qz = np.linspace(1.1, 1.4, 201) / u.angstrom
+    strains = np.full(1, 0.02)
+    R, _ = xray_kin.calc_homogeneous_reflectivity(strains=strains)
+    energy = xray_kin.energy[0]
+    qz = xray_kin.qz[0]
+    theta = xray_kin.theta[0]
+    film, _ = xray_kin.homogeneous_reflected_field(S, energy, qz, theta, strains)
+    substrate, _ = xray_kin.homogeneous_reflected_field(S.substrate, energy, qz, theta)
+    # the film of 20 cells is 20 c (1 + eps) thick
+    thickness = 20 * unit_cell_iron.lattice.c_axis.quantity.to("m").magnitude * 1.02
+    phase = np.exp(1j * qz.to("1/m").magnitude * thickness)
+    np.testing.assert_allclose(R[0], np.abs(film + substrate * phase)[0] ** 2, rtol=1e-10)
+
+
 def test_xray_calc_methods_equal_results(xray_kin, xray_dyn, atomistic_maps):
     """the calc_* methods of XrayKin and XrayDyn return the plain arrays of
     the results of the homogeneous and inhomogeneous methods"""
@@ -1534,6 +1664,8 @@ def test_aliases_of_scattering_results(xray_kin, magnetic_multilayer):
     from udkm1Dsim.simulations.scattering.scattering import ALIASES
 
     sim = simulation(Elzo, magnetic_multilayer, np.r_[707] * u.eV, np.r_[5, 10] * u.deg)
+    xray_kin.energy = 8000 * u.eV
+    xray_kin.qz = np.r_[1:5:10j] / u.angstrom
     for result in (
         sim.homogeneous_jones_matrices(),
         sim.homogeneous_reflectivity_transmissivity(),
@@ -1618,6 +1750,7 @@ def test_magnetized_atoms_of_an_unmagnetized_layer_are_warned(unit_cell_iron, re
     """the gyrotropic part of the dielectric tensor of a unit cell follows the
     magnetization of the layer, not of its magnetized atoms"""
     unit_cell = copy.deepcopy(unit_cell_iron)
+    unit_cell.magnetization = (0, 0, 0)
     S = ud.Structure("crystal")
     S.add_sub_structure(unit_cell, 5)
     sim = simulation(Elzo, S, np.r_[708] * u.eV, np.r_[10] * u.deg)
@@ -2017,7 +2150,7 @@ def test_azimuth_parameters():
 def test_absorption_with_roughness(cls):
     """the reflected flux in the superstrate agrees with the reflectivity also
     for rough interfaces and repeated sub-structures"""
-    S = optical_stack(substrate_layer())
+    S = optical_stack()
     for layer in S.unique_layers[1]:
         layer.structural.roughness = 0.5 * u.nm
     stack = Structure("periodic")

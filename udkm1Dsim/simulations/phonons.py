@@ -111,8 +111,9 @@ class Phonon(Simulation):
         param.append(temp_map)
         param.append(delta_temp_map)
 
-        for value in kwargs.values():
-            param.append(value)
+        # with their names, as different inputs may have equal values
+        for name, value in kwargs.items():
+            param.append((name, value))
 
         return self.S.get_hash(types="phonon") + "_" + make_hash_md5(param)
 

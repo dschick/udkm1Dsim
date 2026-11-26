@@ -635,7 +635,7 @@ class TemperatureParameter(Parameter):
                     self._integral_expr.append(integral)
                 except Exception:
                     warnings.warn(
-                        "Sympy's analytical integration of the heat capacity "
+                        f"Sympy's analytical integration of {self.name or 'the parameter'} "
                         "did not work. "
                         "Just do it numerically with scipy.integrate.quad"
                     )
@@ -709,12 +709,10 @@ class TemperatureParameter(Parameter):
             try:
                 expressions.append(sympify(input))
             except Exception as e:
-                print(
-                    "String input for layer property "
-                    + input
-                    + " \
-                    cannot be converted to function handle!"
-                )
-                print(e)
+                # a dropped expression would shift the sub-systems
+                raise ValueError(
+                    f"String input {input!r} for layer property {self.name!r} "
+                    "cannot be converted to function handle!"
+                ) from e
 
         return expressions

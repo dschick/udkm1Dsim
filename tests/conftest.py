@@ -45,15 +45,15 @@ def _dielectric_from_atoms_and_optics(layer):
     return layer
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def parameter():
     return Parameter("m", 0, "parameter")
 
 
-# temperature paramter
+# temperature parameter
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def temperature_parameter():
     return TemperatureParameter("J/kg/K", 0, "temperature_parameter")
 
@@ -220,7 +220,14 @@ def amorphous_layer_oxygen(atom_oxygen, properties):
 
 @pytest.fixture(scope="module")
 def unit_cell_iron(atom_iron, properties):
-    uc = UnitCell(id="unit_cell_Fe", name="unit cell iron", c_axis=5.0 * u.angstrom, **properties)
+    """a unit cell of iron with the dielectric and magnetization of the atom"""
+    uc = UnitCell(
+        id="unit_cell_Fe",
+        name="unit cell iron",
+        c_axis=5.0 * u.angstrom,
+        magnetization=atom_iron.atomic.magnetization,
+        **properties,
+    )
     uc.add_atom(atom_iron, 0.0)
     return _dielectric_from_atoms_and_optics(uc)
 
@@ -272,4 +279,197 @@ def structure_crystalline(unit_cell_iron, unit_cell_oxygen):
 
     S.add_substrate(unit_cell_iron, 100)
 
+    return S
+
+
+# stacks for the optical and X-ray scattering and the absorption
+
+# refractive index of the substrate of the stacks of the multilayer formalisms
+N_SUB = 1.5 + 0.1j
+
+
+def substrate_layer(eps0=None, euler_angles=(0, 0, 0) * u.deg):
+    """substrate of the refractive index N_SUB or a given dispersion"""
+    sub = Layer("sub", "substrate", thickness=0 * u.nm, density=1000 * u.kg / u.m**3)
+    eps0 = Dispersion.from_ref_index(N_SUB) if eps0 is None else eps0
+    sub.optical.dielectric = Dielectric(eps0=eps0, euler_angles=euler_angles)
+    return sub
+
+
+def interface(substrate):
+    """a single interface of vacuum and the substrate"""
+    S = Structure("interface")
+    S.add_sub_structure(Vacuum(thickness=0 * u.nm), 1)
+    S.add_substrate(substrate)
+    return S
+
+
+def optical_stack(substrate=None, thickness=1):
+    """non-magnetic optical stack of a metal and a dielectric, whose
+    thicknesses are scaled by ``thickness``"""
+    a = Layer("a", "metal", thickness=3 * thickness * u.nm, density=7874 * u.kg / u.m**3)
+    a.optical.dielectric = Dispersion.from_ref_index(2.9 + 3.4j)
+    b = Layer("b", "oxide", thickness=2 * thickness * u.nm, density=2500 * u.kg / u.m**3)
+    b.optical.dielectric = Dispersion.from_ref_index(1.45)
+    S = Structure("optical stack")
+    S.add_sub_structure(a, 2)
+    S.add_sub_structure(b, 3)
+    S.add_sub_structure(a, 1)
+    S.add_substrate(Vacuum() if substrate is None else substrate)
+    return S
+
+
+def magnetic_film(magnetization, num_layers=1, thickness=10 * u.nm, **kwargs):
+    """Fe film with a gyrotropic dielectric at 800 nm of ``num_layers``
+    layers of the ``thickness``"""
+    fe = Layer("fe", "fe", thickness=thickness, density=7874 * u.kg / u.m**3, **kwargs)
+    fe.optical.dielectric = Dielectric(
+        eps0=Dispersion.from_ref_index(2.9 + 3.4j),
+        eps_mag=Dispersion.from_array([0, 10], [0.6 + 0.2j] * 2, kind="eps"),
+    )
+    fe.magnetization = magnetization
+    S = Structure("film")
+    S.add_sub_structure(fe, num_layers)
+    S.add_substrate(Vacuum())
+    return S
+
+
+def optical_layer(id, n, thickness=1 * u.nm):
+    """layer of a constant refractive index for the optical excitation"""
+    return Layer(
+        id, id, thickness=thickness, dielectric=Dispersion.from_ref_index(n), therm_cond=1
+    )
+
+
+def absorbing_stack(substrate_index=3.7 + 0.01j):
+    """stack of an absorber and a dielectric on an absorbing substrate"""
+    absorber = optical_layer("absorber", 3.5 + 4.0j)
+    S = Structure("stack")
+    S.add_sub_structure(absorber, 20)
+    S.add_sub_structure(optical_layer("dielectric", 1.5 + 0.01j), 50)
+    S.add_sub_structure(absorber, 10)
+    S.add_substrate(optical_layer("substrate", substrate_index, 0 * u.nm))
+    return S
+
+
+def fe_layer(thickness=2 * u.nm, **kwargs):
+    """Fe layer with the dielectric of its atoms for soft and hard X-rays"""
+    return Layer(
+        "fe",
+        "fe",
+        thickness=thickness,
+        density=7874 * u.kg / u.m**3,
+        dielectric=Dielectric.from_atoms(Atom("Fe")),
+        **kwargs,
+    )
+
+
+def oxide_layer():
+    """O layer with the dielectric of its atoms"""
+    return Layer(
+        "ox",
+        "ox",
+        thickness=1.3 * u.nm,
+        density=3000 * u.kg / u.m**3,
+        dielectric=Dielectric.from_atoms(Atom("O")),
+    )
+
+
+@pytest.fixture(scope="module")
+def magnetic_multilayer():
+    """Fe/O multilayer at the Fe L3 edge with an in-plane magnetization"""
+    fe = fe_layer(magnetization={"r": 1, "phi": 90 * u.deg, "gamma": 30 * u.deg})
+    ox = oxide_layer()
+    S = Structure("magnetic multilayer")
+    S.add_sub_structure(fe, 3)
+    S.add_sub_structure(ox, 2)
+    S.add_sub_structure(fe, 2)
+    S.add_substrate(ox)
+    return S
+
+
+@pytest.fixture(scope="module")
+def periodic_multilayer():
+    """5 periods of rough Fe and O on a substrate of O for X-rays"""
+    ox = oxide_layer()
+    S = Structure("multilayer")
+    S.add_sub_structure(fe_layer(roughness=0.3 * u.nm), 1)
+    S.add_sub_structure(ox, 1)
+    ML = Structure("periods")
+    ML.add_sub_structure(S, 5)
+    ML.add_substrate(ox)
+    return ML
+
+
+# samples of the heat, phonon, and magnetization simulations
+
+
+@pytest.fixture(scope="module")
+def structure_freestanding(amorphous_layer_iron):
+    """a freestanding layer of 50 nm, whose backside reflects strain waves"""
+    S = Structure("freestanding layer")
+    S.add_sub_structure(amorphous_layer_iron, 50)
+    return S
+
+
+def slab(therm_cond=10, num_layers=10, heat_capacity=500, **kwargs):
+    """slab of 1 nm layers with constant thermal properties and the
+    absorbing optical constants of a metal at 800 nm"""
+    layer = Layer(
+        "a",
+        "a",
+        thickness=1 * u.nm,
+        density=1000 * u.kg / u.m**3,
+        heat_capacity=heat_capacity,
+        therm_cond=therm_cond,
+        dielectric=Dispersion.from_ref_index(3.5 + 4.0j),
+        **kwargs,
+    )
+    S = Structure("slab")
+    S.add_sub_structure(layer, num_layers)
+    return S
+
+
+def magnetic_layer(id, **overrides):
+    """a magnetic layer of 1 nm with sensible defaults, magnetized along x,
+    unlike the fixtures above with a Curie temperature of 100 K"""
+    props = {
+        "heat_capacity": 1,
+        "therm_cond": 0,
+        "lin_therm_exp": 0,
+        "sub_system_coupling": 0,
+        "eff_spin": 0.5,
+        "curie_temp": 630 * u.K,
+        "lamda": 0.005,
+        "mag_moment": 0.393 * u.bohr_magneton,
+        "aniso_exponent": 2,
+        "anisotropy": [0, 0, 0] * u.J / u.m**3,
+        "exch_stiffness": 0 * u.J / u.m,
+        "mag_saturation": 5e5 * u.J / u.T / u.m**3,
+    }
+    props.update(overrides)
+    props.setdefault("magnetization", (1, 0, 0))
+    density = props.pop("density", 7000 * u.kg / u.m**3)
+    return Layer(id, id, thickness=1 * u.nm, density=density, **props)
+
+
+@pytest.fixture(scope="module")
+def structure_magnetic():
+    """a Ni-like film with all parameters of the LLG, iLLG, and LLB"""
+    layer = magnetic_layer(
+        "Ni",
+        density=8900 * u.kg / u.m**3,
+        heat_capacity=444 * u.J / (u.kg * u.K),
+        therm_cond=90 * u.W / (u.m * u.K),
+        lin_therm_exp=1.3e-5,
+        lamda=0.01,
+        mag_moment=0.6 * u.bohr_magneton,
+        mag_saturation=4.9e5 * u.A / u.m,
+        gilbert_damping=0.1,
+        inertial_time=1 * u.fs,
+        anisotropy=[0, 0, 1e5] * u.J / u.m**3,
+        exch_stiffness=1e-11 * u.J / u.m,
+    )
+    S = Structure("Ni film")
+    S.add_sub_structure(layer, 20)
     return S

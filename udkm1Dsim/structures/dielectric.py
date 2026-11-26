@@ -2311,7 +2311,7 @@ class Dielectric(Parameter):
                 entries.append((symbol, "", part._label()))
         else:
             energy = self._display_energy
-            energy = f"{energy:~P}" if isinstance(energy, u.Quantity) else f"{energy:g} eV"
+            energy = f"{energy:g~P}" if isinstance(energy, u.Quantity) else f"{energy:g} eV"
             if mode == "latex":
                 energy = r"\text{" + energy + "}"
             entries = [(symbol, f"({energy})", value) for symbol, value in self._value_entries()]

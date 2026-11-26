@@ -343,8 +343,9 @@ class Heat(Simulation):
                 # the formalism depends also on the roughness and magnetization
                 param.append(self.create_multilayer_formalism(pulse_index=index).get_hash())
 
-        for value in kwargs.values():
-            param.append(value)
+        # with their names, as different inputs may have equal values
+        for name, value in kwargs.items():
+            param.append((name, value))
 
         return self.S.get_hash(types="heat") + "_" + make_hash_md5(param)
 
@@ -1549,18 +1550,16 @@ class Heat(Simulation):
         (M, N, K) = temp_map.shape
         init_temp = self.check_initial_temperature(init_temp)
 
-        energy_map = np.zeros_like(temp_map)
+        energy_map = np.zeros_like(temp_map, dtype=float)
 
-        int_heat_capacities = self.S.get_layer_property_vector("thermal.heat_capacity.integral")
         masses = self.S.get_layer_property_vector("structural.mass.magnitude")
-
-        for k in range(K):
-            for i in range(M):
-                for j in range(N):
-                    energy_map[i, j, k] = masses[j] * (
-                        int_heat_capacities[j][k](temp_map[i, j, k])
-                        - int_heat_capacities[j][k](init_temp[j, k])
-                    )
+        # all layers and delays of a unique layer at once
+        for layer, columns in self._unique_layer_columns(N):
+            for k, integral in enumerate(layer.thermal.heat_capacity.integral):
+                energy_map[:, columns, k] = masses[columns] * (
+                    _evaluate(integral, temp_map[:, columns, k])
+                    - _evaluate(integral, init_temp[columns, k])
+                )
 
         self.disp_message(f"Elapsed time for _energy_map_: {time() - t1:f} s")
 
@@ -1601,36 +1600,48 @@ class Heat(Simulation):
         temp_map = np.atleast_3d(temp_map)
         delta_temp_map = np.atleast_3d(delta_temp_map)
         (M, N, K) = temp_map.shape
+        if len(delays) != M:
+            raise ValueError(
+                f"The {len(delays):d} delays do not match the {M:d} delays of the map!"
+            )
 
         energy_flux_map = np.zeros((M, N, K, 3))
 
-        heat_capacities = self.S.get_layer_property_vector("thermal.heat_capacity.functional")
-        sub_system_couplings = self.S.get_layer_property_vector(
-            "thermal.sub_system_coupling.functional"
-        )
         masses = self.S.get_layer_property_vector("structural.mass.magnitude")
         volumes = self.S.get_layer_property_vector("structural.volume.magnitude")
-
-        for k in range(K):
-            for i in range(M):
-                for j in range(N):
-                    energy_flux_map[i, j, k, 0] = (
-                        masses[j]
-                        * heat_capacities[j][k](temp_map[i, j, k])
-                        * delta_temp_map[i, j, k]
-                        / delay_intervals[i]
+        # all layers and delays of a unique layer at once
+        for layer, columns in self._unique_layer_columns(N):
+            temps = temp_map[:, columns, :]
+            for k in range(K):
+                energy_flux_map[:, columns, k, 0] = (
+                    masses[columns]
+                    * _evaluate(layer.thermal.heat_capacity.functional[k], temps[..., k])
+                    * delta_temp_map[:, columns, k]
+                    / delay_intervals[:, np.newaxis]
+                )
+                if K > 1:
+                    # the vector of the temperatures of all sub-systems first
+                    coupling = layer.thermal.sub_system_coupling.functional[k]
+                    energy_flux_map[:, columns, k, 1] = volumes[columns] * _evaluate(
+                        coupling, np.moveaxis(temps, -1, 0), temps.shape[:-1]
                     )
-                    if K > 1:
-                        energy_flux_map[i, j, k, 1] = volumes[j] * sub_system_couplings[j][k](
-                            temp_map[i, j, :]
-                        )
-                        energy_flux_map[i, j, k, 2] = (
-                            energy_flux_map[i, j, k, 0] - energy_flux_map[i, j, k, 1]
-                        )
+        # the rest of the total flux is the one by diffusion
+        energy_flux_map[..., 2] = energy_flux_map[..., 0] - energy_flux_map[..., 1]
 
         self.disp_message(f"Elapsed time for _energy_flux_map_: {time() - t1:f} s")
 
         return energy_flux_map
+
+    def _unique_layer_columns(self, N):
+        """the unique layers and the positions of their layers in a map of the
+        N layers of the structure, see :attr:`.Structure.positions_per_unique_layer`"""
+        if N != self.S.num_layers:
+            raise ValueError(
+                f"The map has {N:d} distances instead of the {self.S.num_layers:d} layers of "
+                "the structure!"
+            )
+        _, layers = self.S.unique_layers
+        return zip(layers, self.S.positions_per_unique_layer.values())
 
     # ---- properties -------------------------------------------------------------
 
@@ -2238,3 +2249,34 @@ class Heat(Simulation):
 
         names = [name(self._pulse(i)["absorption"]) for i in range(self.num_pulses)]
         return names[0] if len(set(names)) == 1 else names
+
+
+def _evaluate(function, temperatures, shape=None):
+    """values of a function of the temperature for an array of temperatures,
+    also for constant functions, which return a scalar, and for numerical
+    integrals, which take only scalars
+
+    Args:
+        function (@lambda): function of the temperature or of the vector of
+            the temperatures of all sub-systems, which come first.
+        temperatures (ndarray[float]): temperatures.
+        shape (tuple[int], optional): shape of the result, defaults to the
+            shape of the temperatures.
+
+    Returns:
+        values (ndarray[float]): values of the function.
+
+    """
+    shape = np.shape(temperatures) if shape is None else shape
+    try:
+        values = np.asarray(function(temperatures), dtype=float)
+    except (TypeError, ValueError):
+        values = None
+    if values is None or values.shape not in ((), shape):
+        # element-wise, e.g. for scipy.integrate.quad
+        if shape == np.shape(temperatures):
+            values = np.vectorize(lambda T: float(function(T)))(temperatures)
+        else:
+            flat = np.reshape(temperatures, (len(temperatures), -1))
+            values = np.array([float(function(T)) for T in flat.T]).reshape(shape)
+    return np.broadcast_to(values, shape)

@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the GdFeCo film of the eLLB example is deposited on a Si$_3$N$_4$ membrane instead of a glass substrate for the transmission of soft X-rays, which shifts the switching threshold to higher fluences, the run with tighter tolerances is dropped, and its sublattice magnetization map is saved to `GdFeCo_sublattice_magnetization.h5` for the XMCD example
 - a layer with several magnetic sublattices raises a `ValueError` in the magnetic multilayer formalisms only for a gyrotropic part of its dielectric, until its `gyrotropy` is chosen, instead of a `NotImplementedError` for any dielectric
 
+- `Heat.calc_energy_map()` and `Heat.calc_energy_flux_map()` evaluate all layers and delays of a unique layer at once, about 100 to 200 times faster, and raise a `ValueError` for a map whose number of distances differs from the number of layers or whose delays do not match; before, the first layers or delays were used silently
+
 ### Removed
 
 - **breaking**: `AmorphousLayer`, as its atom only carried the form factors and duplicated the magnetization of the layer, and with it the `atom` of layers in the structure YAML; an amorphous layer is a `Layer` with the `molar_mass` of its atoms, the dielectric from its atoms by `Dielectric.from_atoms(atom)`, and its own `magnetization`, see the structure example; `ud.AmorphousLayer` and the YAML type `AmorphousLayer` raise an error with this hint
@@ -41,6 +43,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the mass and density of a `UnitCell` follow later changes of its atoms, e.g. a constituent added to an `AtomMixed` after the mixed atom was added to the unit cell, and the averaged properties of an `AtomMixed` follow changes of its constituents, e.g. of their ionicity, also for copies and nested mixed atoms; before, they kept the values at the time the atom was added
 - the example of the microscopic three-temperature model gave the removed `atom` to a `Layer`, which raises a `TypeError` since 3.0.0a6
 - the signed projection $\tau_{ab}$ of the other sublattice in the longitudinal field of the `LLB`, which jumped between $\pm m_b$ when the norm $m_a$ of a sublattice passes through zero, e.g. on the reversal of the transition-metal sublattice of a ferrimagnet, so that the integrators of the eLLB with `exchange_relaxation=True` stalled for minutes, e.g. in the example with tighter `ode_options` or for other samples and fluences; $m_a$ in its denominators is regularized below `PROJECTION_WIDTH` = 1e-3, which leaves the results of runs, which passed before, unchanged within the precision of the integrator; cached results require `force_recalc=True`
+- a homogeneous strain of `XrayKin` shifts the Bragg peaks to $q_0/(1+\eta)$ as in `XrayDyn`, as the strain stretches the distance of the unit cells and the thickness of nested structures in the interference function and the phase of the static substrate; before, it only moved the atoms within the unstrained unit cells; cached results require `force_recalc=True`
+- the hashes of the magnetization, phonon, and heat simulations contain the names of their optional inputs, so that equal values of different inputs, e.g. `B_ext` and `init_velocity` of the `iLLG`, no longer share a cached result; the hashes of the magnetization maps change and are recalculated once
+- the hashes of `XrayKin`, `XrayDyn`, and the multilayer formalisms contain the complete strain, magnetization, and temperature maps instead of their first 1e6 elements, so that large maps which differ only beyond them no longer share a cached result
+- the numba backend of `PhononNum` keeps the force of the thermal expansion of a delay up to the next delay, also at its end point, as the scipy backend; before, the force of the next delay entered the last step of each interval, so that a heating step from a state at rest let the step size of the adaptive integrator underflow, e.g. for delay steps of 50 fs
+- the default `strain_vectors` of `XrayDyn.calc_all_ref_trans_matrices()` are no strain instead of a strain of 1
+- `XrayKin` and `XrayDyn` raise a `ValueError` without a photon energy of the experiment instead of an `UnboundLocalError` or a `TypeError`
+- a string of a `TemperatureParameter` or of an atom position, which cannot be parsed, raises a `ValueError` instead of only printing a message, which dropped the expression and shifted the following ones to the wrong sub-systems
+- the diffusion part of `Heat.calc_energy_flux_map()` of a single sub-system is its total energy flux instead of zero
+- the warning of the numerical integration of a `TemperatureParameter` names the parameter instead of the heat capacity for all parameters
+- `helpers.m_power_x()` returns a new array instead of overwriting its input, which replaced the matrices of a single period of a nested structure in the sub-structure matrices of `XrayDyn` by their N-th power; the single period is labeled `1x` instead of `Nx`
+- the display energy of a `Dielectric` given as Quantity is formatted without the deprecation warning of pint for format specs without number format
 
 ## [3.0.0a6] 2026-11-24
 
