@@ -35,6 +35,7 @@ from udkm1Dsim.simulations.scattering.multilayer import (
     MultilayerScattering,
     _flatten_layers,
     _layer_runs,
+    _Period,
 )
 
 FORMALISMS = [Parratt, Elzo, Stepanov, BerremanElzo, BerremanStepanov]
@@ -624,6 +625,38 @@ def test_inhomogeneous_merges_identical_layers(cls, magnetic_multilayer, monkeyp
         single = sim.calc_jones_matrices(sim.calc_inhomogeneous_layers(strains, magnetizations))
         for a, b in zip(jones, single):
             np.testing.assert_allclose(a[i], b, rtol=1e-10, atol=1e-14)
+
+
+@pytest.mark.parametrize("cls", MAGNETIC)
+def test_inhomogeneous_keeps_identical_periods(cls, periodic_multilayer):
+    """the repetitions of a nested structure with identical strains and
+    magnetizations of all their layers are kept as period, as in the
+    homogeneous simulations, and otherwise expanded to their layers, which
+    gives the Jones matrices of the stack of all single layers"""
+    sim = simulation(cls, periodic_multilayer, np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg)
+    L = periodic_multilayer.num_layers
+    strain_map = np.full((2, L), 0.01)
+    strain_map[1, 7] = 0.02  # the oxide of the 4th period
+    magnetization_map = np.zeros((2, L, 3))
+    magnetization_map[..., 2] = 1
+    periodic, single = (
+        sim._inhomogeneous_layer_tree(strains, magnetizations)
+        for strains, magnetizations in zip(strain_map, magnetization_map)
+    )
+    assert isinstance(periodic[1], _Period) and periodic[1].repetitions == 5
+    assert len(periodic) == 3 and len(periodic[1].entries) == 2
+    assert not any(isinstance(entry, _Period) for entry in single[1:-1]) and len(single) == 12
+    jones = sim.calc_inhomogeneous_jones_matrices(strain_map, magnetization_map)
+    for i, (strains, magnetizations) in enumerate(zip(strain_map, magnetization_map)):
+        flat = sim.calc_jones_matrices(sim.calc_inhomogeneous_layers(strains, magnetizations))
+        for a, b in zip(jones, flat):
+            np.testing.assert_allclose(a[i], b, rtol=1e-10, atol=1e-14)
+    # the homogeneous result for the same strain and magnetization
+    homogeneous = sim.calc_homogeneous_jones_matrices(
+        np.full(2, 0.01), np.tile([0.0, 0.0, 1.0], (2, 1))
+    )
+    for a, b in zip(jones, homogeneous):
+        np.testing.assert_allclose(a[0], b, rtol=1e-10, atol=1e-14)
 
 
 @pytest.mark.parametrize("cls", FORMALISMS)
