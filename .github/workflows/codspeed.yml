@@ -37,6 +37,12 @@ jobs:
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
+        # a single thread of BLAS and LAPACK, e.g. of np.linalg.eigh, whose idle
+        # threads would otherwise spin and dominate the simulated instructions
+        env:
+          OPENBLAS_NUM_THREADS: "1"
+          OMP_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
         with:
           mode: simulation
           token: ${{ secrets.CODSPEED_TOKEN }}

@@ -578,8 +578,14 @@ def test_angles_in_deg():
     text, _ = round_trip(single(layer))
     data = yaml.safe_load(text)["layers"]["z"]
     assert data["optical"]["dielectric"]["euler_angles"][:2] == [10, 20.5]
+    # the cartesian components are written, if they are read exactly, which
+    # depends on the rounding of the trigonometric functions of the platform
     magnetization = data["magnetic"]["magnetization"]
-    assert u.Quantity(magnetization["phi"]).to("deg").magnitude == pytest.approx(30)
+    if isinstance(magnetization, dict):
+        assert magnetization["phi"].endswith(" deg")
+        assert u.Quantity(magnetization["phi"]).to("deg").magnitude == pytest.approx(30)
+    else:
+        np.testing.assert_array_equal(magnetization, layer.magnetic.magnetization.magnitude)
     hand_written = """
 format_version: 1
 layers:

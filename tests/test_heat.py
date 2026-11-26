@@ -958,6 +958,76 @@ def test_calc_energy_flux_map(heat):
     np.testing.assert_array_equal(flux[..., 2], flux[..., 0])
 
 
+def test_energy_maps_of_sub_systems(tmp_path, monkeypatch):
+    """the energy and flux maps of two sub-systems with temperature-dependent
+    heat capacities, also of a numerical integral, and their coupling equal
+    the evaluation of every element"""
+    metal = Layer(
+        "metal",
+        "metal",
+        thickness=1 * u.nm,
+        density=8900 * u.kg / u.m**3,
+        heat_capacity=["0.08*T", 420],
+        therm_cond=[90, 1],
+        sub_system_coupling=["-4e17*(T_0-T_1)", "4e17*(T_0-T_1)"],
+    )
+    special = Layer(
+        "special",
+        "special",
+        thickness=2 * u.nm,
+        density=2200 * u.kg / u.m**3,
+        heat_capacity=["700 + 0.1*T", 740],
+        therm_cond=[1, 1],
+        sub_system_coupling=[0, 0],
+    )
+    S = Structure("two sub-systems")
+    S.add_sub_structure(metal, 2)
+    S.add_sub_structure(special, 2)
+    S.add_sub_structure(metal, 1)
+    heat = Heat(S, True, cache_dir=tmp_path, save_data=False, disp_messages=False)
+
+    # without sympy, the energy is integrated numerically by quad, which
+    # takes only scalars
+    def fail(*args, **kwargs):
+        raise NotImplementedError
+
+    monkeypatch.setattr("udkm1Dsim.structures.parameters.integrate", fail)
+    special.heat_capacity = ["700 + 0.1*T", 740]
+    rng = np.random.default_rng(0)
+    temp_map = 300 + 100 * rng.random((4, 5, 2))
+    delta_temp_map = rng.random((4, 5, 2))
+    delays = np.r_[0, 1, 2, 4] * 1e-12
+    with pytest.warns(UserWarning, match="integration of heat_capacity did not work"):
+        energy_map = heat.calc_energy_map(temp_map, 300)
+    flux_map = heat.calc_energy_flux_map(temp_map, delta_temp_map, delays)
+    intervals = np.diff(delays, prepend=2 * delays[0] - delays[1])
+    for j in range(5):
+        layer = S.get_layer_handle(j)
+        mass = layer.structural.mass.magnitude
+        volume = layer.structural.volume.magnitude
+        for k in range(2):
+            integral = layer.thermal.heat_capacity.integral[k]
+            capacity = layer.thermal.heat_capacity.functional[k]
+            coupling = layer.thermal.sub_system_coupling.functional[k]
+            for i in range(4):
+                T = temp_map[i, j, k]
+                assert energy_map[i, j, k] == pytest.approx(
+                    mass * (integral(T) - integral(300)), rel=1e-10
+                )
+                total = mass * capacity(T) * delta_temp_map[i, j, k] / intervals[i]
+                assert flux_map[i, j, k, 0] == pytest.approx(total, rel=1e-12)
+                assert flux_map[i, j, k, 1] == pytest.approx(
+                    volume * coupling(temp_map[i, j, :]), rel=1e-12
+                )
+    np.testing.assert_allclose(flux_map[..., 2], flux_map[..., 0] - flux_map[..., 1])
+    # the coupling exchanges the energy between the sub-systems
+    np.testing.assert_allclose(flux_map[..., 0, 1], -flux_map[..., 1, 1], rtol=1e-12)
+    with pytest.raises(ValueError, match="distances instead of the 5 layers"):
+        heat.calc_energy_map(temp_map[:, :4], 300)
+    with pytest.raises(ValueError, match="The 3 delays do not match the 4 delays"):
+        heat.calc_energy_flux_map(temp_map, delta_temp_map, delays[:3])
+
+
 def test_get_energy_maps_of_temp_map(heat):
     """the energy and energy flux maps of the result of get_temp_map equal the
     ones of its arrays"""

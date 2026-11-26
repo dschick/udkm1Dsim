@@ -155,7 +155,7 @@ def test_calc_energy_map(benchmark, heat):
 
 
 def test_calc_energy_flux_map(benchmark, heat):
-    delays = np.r_[-1:10:0.01] * u.ps
+    delays = np.linspace(-1, 10, 100) * u.ps
     dists, _, _ = heat.S.layer_distances
 
     temp_map = 1000 * np.ones((100, len(dists)))

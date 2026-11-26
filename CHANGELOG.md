@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the GdFeCo film of the eLLB example is deposited on a Si$_3$N$_4$ membrane instead of a glass substrate for the transmission of soft X-rays, which shifts the switching threshold to higher fluences, the run with tighter tolerances is dropped, and its sublattice magnetization map is saved to `GdFeCo_sublattice_magnetization.h5` for the XMCD example
 - a layer with several magnetic sublattices raises a `ValueError` in the magnetic multilayer formalisms only for a gyrotropic part of its dielectric, until its `gyrotropy` is chosen, instead of a `NotImplementedError` for any dielectric
 
+- `Heat.calc_energy_map()` and `Heat.calc_energy_flux_map()` evaluate all layers and delays of a unique layer at once, about 100 to 200 times faster, and raise a `ValueError` for a map whose number of distances differs from the number of layers or whose delays do not match; before, the first layers or delays were used silently
+
 ### Removed
 
 - **breaking**: `AmorphousLayer`, as its atom only carried the form factors and duplicated the magnetization of the layer, and with it the `atom` of layers in the structure YAML; an amorphous layer is a `Layer` with the `molar_mass` of its atoms, the dielectric from its atoms by `Dielectric.from_atoms(atom)`, and its own `magnetization`, see the structure example; `ud.AmorphousLayer` and the YAML type `AmorphousLayer` raise an error with this hint
