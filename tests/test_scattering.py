@@ -35,6 +35,7 @@ from udkm1Dsim.simulations.scattering.multilayer import (
     MultilayerScattering,
     _flatten_layers,
     _layer_runs,
+    _Period,
 )
 
 FORMALISMS = [Parratt, Elzo, Stepanov, BerremanElzo, BerremanStepanov]
@@ -624,6 +625,38 @@ def test_inhomogeneous_merges_identical_layers(cls, magnetic_multilayer, monkeyp
         single = sim.calc_jones_matrices(sim.calc_inhomogeneous_layers(strains, magnetizations))
         for a, b in zip(jones, single):
             np.testing.assert_allclose(a[i], b, rtol=1e-10, atol=1e-14)
+
+
+@pytest.mark.parametrize("cls", MAGNETIC)
+def test_inhomogeneous_keeps_identical_periods(cls, periodic_multilayer):
+    """the repetitions of a nested structure with identical strains and
+    magnetizations of all their layers are kept as period, as in the
+    homogeneous simulations, and otherwise expanded to their layers, which
+    gives the Jones matrices of the stack of all single layers"""
+    sim = simulation(cls, periodic_multilayer, np.r_[700, 707] * u.eV, np.r_[1:20:4] * u.deg)
+    L = periodic_multilayer.num_layers
+    strain_map = np.full((2, L), 0.01)
+    strain_map[1, 7] = 0.02  # the oxide of the 4th period
+    magnetization_map = np.zeros((2, L, 3))
+    magnetization_map[..., 2] = 1
+    periodic, single = (
+        sim._inhomogeneous_layer_tree(strains, magnetizations)
+        for strains, magnetizations in zip(strain_map, magnetization_map)
+    )
+    assert isinstance(periodic[1], _Period) and periodic[1].repetitions == 5
+    assert len(periodic) == 3 and len(periodic[1].entries) == 2
+    assert not any(isinstance(entry, _Period) for entry in single[1:-1]) and len(single) == 12
+    jones = sim.calc_inhomogeneous_jones_matrices(strain_map, magnetization_map)
+    for i, (strains, magnetizations) in enumerate(zip(strain_map, magnetization_map)):
+        flat = sim.calc_jones_matrices(sim.calc_inhomogeneous_layers(strains, magnetizations))
+        for a, b in zip(jones, flat):
+            np.testing.assert_allclose(a[i], b, rtol=1e-10, atol=1e-14)
+    # the homogeneous result for the same strain and magnetization
+    homogeneous = sim.calc_homogeneous_jones_matrices(
+        np.full(2, 0.01), np.tile([0.0, 0.0, 1.0], (2, 1))
+    )
+    for a, b in zip(jones, homogeneous):
+        np.testing.assert_allclose(a[0], b, rtol=1e-10, atol=1e-14)
 
 
 @pytest.mark.parametrize("cls", FORMALISMS)
@@ -1502,7 +1535,8 @@ def test_xray_kin_homogeneous_reflectivity(xray_kin):
 def test_xray_homogeneous_reflectivity_of_nested_structures(
     sim_class, unit_cell_iron, unit_cell_oxygen, tmp_path
 ):
-    """a nested sub-structure reflects as its layers in a flat structure"""
+    """a nested sub-structure reflects as its layers in a flat structure,
+    also with a different strain of each sub-structure"""
     inner = ud.Structure("double layer")
     inner.add_sub_structure(unit_cell_iron, 3)
     inner.add_sub_structure(unit_cell_oxygen, 2)
@@ -1514,14 +1548,23 @@ def test_xray_homogeneous_reflectivity_of_nested_structures(
     for _ in range(5):
         flat.add_sub_structure(unit_cell_iron, 3)
         flat.add_sub_structure(unit_cell_oxygen, 2)
-    R = []
-    for S in [nested, flat]:
-        sim = sim_class(S, True, cache_dir=tmp_path, disp_messages=False)
-        sim.energy = 8000 * u.eV
-        sim.qz = np.r_[1:5:50j] / u.angstrom
-        R.append(sim.calc_homogeneous_reflectivity()[0])
+    strains = np.r_[0.01, -0.005, 0.02]
+    flat_strains = np.r_[strains[0], np.tile(strains[1:], 5)]
+    for nested_strains, flat_strains in [(0, 0), (strains, flat_strains)]:
+        R = []
+        for S, s in [(nested, nested_strains), (flat, flat_strains)]:
+            sim = sim_class(S, True, cache_dir=tmp_path, disp_messages=False)
+            sim.energy = 8000 * u.eV
+            sim.qz = np.r_[1:5:50j] / u.angstrom
+            R.append(sim.calc_homogeneous_reflectivity(*([] if np.isscalar(s) else [s]))[0])
+        np.testing.assert_allclose(R[0], R[1], rtol=1e-6)
+    # each sub-structure has its own strain, also in the nested structure
+    sim = sim_class(nested, True, cache_dir=tmp_path, disp_messages=False)
+    sim.energy = 8000 * u.eV
+    sim.qz = np.r_[1:5:50j] / u.angstrom
+    R_first = sim.calc_homogeneous_reflectivity(np.full(3, strains[0]))[0]
+    assert not np.allclose(R[0], R_first, rtol=1e-3)
     assert nested.num_sub_structures == 3
-    np.testing.assert_allclose(R[0], R[1], rtol=1e-6)
 
 
 def test_xray_dyn_matrices_of_nested_structures(unit_cell_iron, unit_cell_oxygen):

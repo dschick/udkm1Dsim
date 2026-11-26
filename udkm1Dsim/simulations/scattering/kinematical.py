@@ -33,7 +33,7 @@ import pint
 import scipy.constants as constants
 
 from ...structures.layers import UnitCell, Vacuum
-from ...structures.structure import Structure
+from ...structures.structure import Structure, _single_layer_node
 from .scattering import Scattering
 
 u = pint.get_application_registry()
@@ -303,9 +303,9 @@ class XrayKin(Scattering):
         """reflected fields of :meth:`homogeneous_reflected_field` and the
         strained thickness of ``S`` (m) for the phase of the layers below"""
         if isinstance(S, Structure):
-            sub_structures = S.sub_structures
+            nodes = S.layer_tree
         elif isinstance(S[0], (Vacuum, UnitCell)):
-            sub_structures = [S]
+            nodes = [_single_layer_node(*S)]
         else:
             raise TypeError("XrayKin can only handle Layers of class UnitCell and Vacuum")
 
@@ -316,54 +316,52 @@ class XrayKin(Scattering):
             except AttributeError:
                 # its a single Layer
                 strains = np.array([0])
+        return self._reflected_field_of_nodes(nodes, energy, qz, theta, strains)
 
+    def _reflected_field_of_nodes(self, nodes, energy, qz, theta, strains):
+        """reflected fields and strained thickness of the nodes of the
+        :attr:`.Structure.layer_tree`, whose ``sub_structure_indices`` index
+        the ``strains``"""
         N = len(qz)  # nb of qz
         Ept = np.zeros([1, N])  # total reflected field
         Z = 0  # total length of the substructure from the surface
         A = list([0, 2])  # cell matrix of reflected fields EpN of substructures
-        strainCounter = 0  # the is the index of the strain vector if applied
 
         # traverse substructures
-        for sub_structure in sub_structures:
-            if isinstance(sub_structure[0], UnitCell):
+        for node in nodes:
+            sub_structure = node.sub_structure
+            if isinstance(sub_structure, UnitCell):
                 # the substructure is an unit cell and we can calculate
                 # Ep directly
-                strain = float(np.asarray(strains[strainCounter]).item())
-                Ep = self.calc_Ep(energy, qz, theta, sub_structure[0], strain)
+                strain = float(np.asarray(strains[node.sub_structure_indices.start]).item())
+                Ep = self.calc_Ep(energy, qz, theta, sub_structure, strain)
                 # the strain stretches the distance of the unit cells
-                z = sub_structure[0].lattice.c_axis.magnitude * (1 + strain)
-                strainCounter = strainCounter + 1
-            elif isinstance(sub_structure[0], Structure):
+                z = sub_structure.lattice.c_axis.magnitude * (1 + strain)
+            elif isinstance(sub_structure, Structure):
                 # the substructure is a structure, so we do a recursive
                 # call of this method
-                d = sub_structure[0].num_sub_structures
-                Ep, temp, z = self._reflected_field_and_thickness(
-                    sub_structure[0],
-                    energy,
-                    qz,
-                    theta,
-                    strains[strainCounter : (strainCounter + d)],
+                Ep, temp, z = self._reflected_field_of_nodes(
+                    node.children, energy, qz, theta, strains
                 )
-                strainCounter = strainCounter + d
-                A.append([temp, [sub_structure[0].name + " substructures"]])
-                A.append([Ep, f"{1:d}x {sub_structure[0].name:s}"])
+                A.append([temp, [sub_structure.name + " substructures"]])
+                A.append([Ep, f"{1:d}x {sub_structure.name:s}"])
             else:
                 raise TypeError("The substructure must be Vacuum, UnitCell or Structure type!")
 
             # calculate the interference function for N repetitions of
             # the substructure with the length z
-            psi = self.calc_interference_function(qz, z, sub_structure[1])
+            psi = self.calc_interference_function(qz, z, node.repetitions)
             # calculate the reflected field for N repetitions of
             # the substructure with the length z
             EpN = Ep * psi
             # remember the result
-            A.append([EpN, f"{sub_structure[1]:d}x {sub_structure[0].name:s}"])
+            A.append([EpN, f"{node.repetitions:d}x {sub_structure.name:s}"])
             # add the reflected field of the current substructure
             # phase-correct to the already calculated substructures
             Ept = Ept + (EpN * np.exp(1j * qz * Z))
             # update the total length $Z$ of the already calculated
             # substructures
-            Z = Z + z * sub_structure[1]
+            Z = Z + z * node.repetitions
 
         return Ept, A, Z
 

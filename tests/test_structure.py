@@ -122,6 +122,117 @@ def test_layer_vectors(structure, unit_cell_iron, unit_cell_oxygen):
     ]
 
 
+def test_layer_tree(
+    structure, amorphous_layer_iron, amorphous_layer_oxygen, unit_cell_iron, unit_cell_oxygen
+):
+    """the nodes of the sub-structures with their positions in the vectors of
+    all sub-structures and of all layers"""
+    tree = structure.layer_tree
+    assert [node.sub_structure for node in tree[:3]] == [
+        amorphous_layer_iron,
+        amorphous_layer_oxygen,
+        unit_cell_iron,
+    ]
+    assert [node.repetitions for node in tree] == [10, 10, 20, 20]
+    assert [node.layer_indices for node in tree] == [
+        slice(0, 10),
+        slice(10, 20),
+        slice(20, 40),
+        slice(40, 280),
+    ]
+    assert [node.sub_structure_indices for node in tree] == [
+        slice(0, 1),
+        slice(1, 2),
+        slice(2, 3),
+        slice(3, 5),
+    ]
+    assert [node.is_layer for node in tree] == [True, True, True, False]
+    assert [node.period for node in tree] == [1, 1, 1, 12]
+    assert all(node.children == () for node in tree[:3])
+    # the children of the first repetition of the double layer
+    fe, ox = tree[3].children
+    assert (fe.sub_structure, ox.sub_structure) == (unit_cell_iron, unit_cell_oxygen)
+    assert (fe.layer_indices, ox.layer_indices) == (slice(40, 45), slice(45, 52))
+    assert (fe.sub_structure_indices, ox.sub_structure_indices) == (slice(3, 4), slice(4, 5))
+    # the layers of each node are its layers in the layer vectors
+    handles = structure.layer_vectors[2]
+    for node in tree[:3] + [fe, ox]:
+        assert all(h is node.sub_structure for h in handles[node.layer_indices][: node.period])
+
+
+def test_layer_tree_of_shared_sub_structure(unit_cell_iron, unit_cell_oxygen):
+    """the same nested structure at two positions has two nodes with their
+    own positions, and the tree follows changes of the sub-structures"""
+    DL = Structure("double layer")
+    DL.add_sub_structure(unit_cell_iron, 2)
+    DL.add_sub_structure(unit_cell_oxygen, 3)
+    S = Structure("shared")
+    S.add_sub_structure(DL, 2)
+    S.add_sub_structure(unit_cell_iron, 4)
+    S.add_sub_structure(DL, 1)
+    first, _, last = S.layer_tree
+    assert first.layer_indices == slice(0, 10) and last.layer_indices == slice(14, 19)
+    assert [c.layer_indices for c in last.children] == [slice(14, 16), slice(16, 19)]
+    assert [c.sub_structure_indices for c in last.children] == [slice(3, 4), slice(4, 5)]
+    DL.set_repetitions(0, 1)
+    assert S.layer_tree[-1].layer_indices == slice(12, 16)
+    assert S.num_layers == 16
+    assert S.num_sub_structures == 5
+
+
+def test_insert_remove_and_set_repetitions(structure, unit_cell_oxygen):
+    """convenience methods to change the sub_structures by their index"""
+    S = copy.deepcopy(structure)
+    num_layers = S.num_layers
+    S.insert_sub_structure(1, unit_cell_oxygen, 3)
+    assert S.sub_structures[1] == [unit_cell_oxygen, 3]
+    assert S.num_layers == num_layers + 3
+    assert S.layer_vectors[1][10:13] == [unit_cell_oxygen.id] * 3
+    assert S.remove_sub_structure(1) == (unit_cell_oxygen, 3)
+    assert S.layer_vectors[1] == structure.layer_vectors[1]
+    # e.g. the number of unit cells of a layer, which zero removes from the layers
+    S.set_repetitions(0, np.int64(4))
+    assert S.sub_structures[0][1] == 4 and isinstance(S.sub_structures[0][1], int)
+    assert S.num_layers == num_layers - 6
+    S.set_repetitions(-1, 0)
+    assert S.num_layers == num_layers - 6 - 240
+    assert S.num_sub_structures == structure.num_sub_structures
+    layer, N = S.remove_sub_structure(-1)
+    assert isinstance(layer, Structure) and N == 0
+    assert S.num_sub_structures == structure.num_sub_structures - 2
+
+
+@pytest.mark.parametrize(
+    "N, error, match",
+    [
+        (2.0, TypeError, "integer number of repetitions"),
+        ("2", TypeError, "integer number of repetitions"),
+        (True, TypeError, "not a boolean"),
+        (-1, ValueError, "non-negative"),
+    ],
+)
+def test_repetitions_are_validated(structure, unit_cell_oxygen, N, error, match):
+    S = copy.deepcopy(structure)
+    with pytest.raises(error, match=match):
+        S.set_repetitions(0, N)
+    with pytest.raises(error, match=match):
+        S.add_sub_structure(unit_cell_oxygen, N)
+    with pytest.raises(error, match=match):
+        S.insert_sub_structure(0, unit_cell_oxygen, N)
+    with pytest.raises(error, match=match):
+        S.add_substrate(unit_cell_oxygen, N)
+    assert S.layer_vectors[1] == structure.layer_vectors[1]
+
+
+def test_structure_cannot_contain_itself(structure):
+    S = copy.deepcopy(structure)
+    with pytest.raises(ValueError, match="cannot contain itself"):
+        S.add_sub_structure(S)
+    nested = S.sub_structures[-1][0]
+    with pytest.raises(ValueError, match="cannot contain itself"):
+        nested.insert_sub_structure(0, S)
+
+
 def test_positions_per_unique_layer(structure):
     pos = structure.positions_per_unique_layer
     assert np.allclose(pos["amorphous_layer_Fe"], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])

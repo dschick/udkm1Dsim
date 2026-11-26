@@ -21,12 +21,14 @@
 # OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 # OR OTHER DEALINGS IN THE SOFTWARE.
 
-__all__ = ["Structure"]
+__all__ = ["Structure", "LayerNode"]
 
 __docformat__ = "restructuredtext"
 
 
+import operator
 import warnings
+from dataclasses import dataclass
 from operator import attrgetter
 
 import numpy as np
@@ -39,6 +41,72 @@ from .layers import Layer, Vacuum
 
 u = pint.get_application_registry()
 Q_ = u.Quantity
+
+
+@dataclass(frozen=True)
+class LayerNode:
+    """LayerNode
+
+    Node of the :attr:`Structure.layer_tree`, i.e. a :class:`.Layer` or a
+    nested :class:`Structure` of the ``sub_structures`` with its repetitions
+    and its position in the flat vectors of all sub-structures and of all
+    layers.
+
+    The nodes are derived from the ``sub_structures`` on every access of the
+    :attr:`Structure.layer_tree`, which remain the only ground truth of the
+    nesting, as the same sub-structure may be added at several positions.
+
+    Attributes:
+        sub_structure (Layer, Structure): the layer or the nested structure.
+        repetitions (int): number of repetitions.
+        children (tuple[LayerNode]): nodes of the sub-structures of a nested
+            structure for its first repetition, empty for a layer.
+        sub_structure_indices (slice): indices of the sub-structures of the
+            node in the vector of all sub-structures of
+            :attr:`Structure.num_sub_structures`, e.g. of the strains per
+            sub-structure of the homogeneous simulations, which do not
+            depend on the repetitions.
+        layer_indices (slice): indices of the layers of all repetitions in the
+            vector of all layers of :attr:`Structure.layer_vectors`, e.g. of
+            the strain map of the inhomogeneous simulations.
+        period (int): number of layers of a single repetition, i.e. 1 for a
+            layer.
+
+    """
+
+    sub_structure: object
+    repetitions: int
+    children: tuple
+    sub_structure_indices: slice
+    layer_indices: slice
+    period: int
+
+    @property
+    def is_layer(self):
+        """bool: whether the node is a :class:`.Layer`."""
+        return isinstance(self.sub_structure, Layer)
+
+
+def _single_layer_node(layer, repetitions):
+    """:class:`LayerNode` of a single layer with its repetitions outside of a
+    :class:`Structure`, e.g. of the substrate ``[layer, N]``"""
+    return LayerNode(layer, repetitions, (), slice(0, 1), slice(0, repetitions), 1)
+
+
+def _check_repetitions(N, name="N"):
+    """number of repetitions as non-negative integer, also from numpy
+    integers, while floats and booleans raise a ``TypeError``"""
+    if isinstance(N, (bool, np.bool_)):
+        raise TypeError(f"{name} must be an integer number of repetitions, not a boolean!")
+    try:
+        N = operator.index(N)
+    except TypeError:
+        raise TypeError(
+            f"{name} must be an integer number of repetitions, not {type(N).__name__}!"
+        ) from None
+    if N < 0:
+        raise ValueError(f"{name} must be a non-negative number of repetitions, not {N}!")
+    return N
 
 
 class Structure:
@@ -187,6 +255,24 @@ class Structure:
             N (int): number or repetitions.
 
         """
+        self.insert_sub_structure(len(self.sub_structures), sub_structure, N)
+
+    def insert_sub_structure(self, i, sub_structure, N=1):
+        """insert_sub_structure
+
+        Insert :math:`N` sub_structures of type :class:`.Layer` or its
+        sub-classes, or :class:`Structure` before the index ``i`` of the
+        ``sub_structures``, see :meth:`add_sub_structure`.
+
+        Args:
+            i (int): index in the ``sub_structures``, before which the
+                sub-structure is inserted, also negative from the end.
+            sub_structure (Layer, Structure):
+               Layer or its sub-classes, or Structure to insert as
+               sub-structure.
+            N (int): number or repetitions.
+
+        """
         # check of the sub_structure is of type Layer
         # or its sub-classes, or Structure
         if not isinstance(sub_structure, (Layer, Structure)):
@@ -197,6 +283,11 @@ class Structure:
                 + "Only Layer, its sub-classes, and "
                 + "Structure classes are allowed!"
             )
+        if sub_structure is self or (
+            isinstance(sub_structure, Structure) and sub_structure._contains(self)
+        ):
+            raise ValueError("A Structure cannot contain itself as sub-structure!")
+        N = _check_repetitions(N)
 
         # if a Structure is added as a sub_structure, the sub_structure's
         # superstrate and substrate are ignored (Vacuum default is ignored)
@@ -206,8 +297,51 @@ class Structure:
             if not isinstance(sub_structure.substrate[0], Vacuum):
                 warnings.warn("The substrate of the sub_structure is ignored.")
 
-        # add a sub_structure of N repetitions to the structure with
-        self.sub_structures.append([sub_structure, N])
+        # insert a sub_structure of N repetitions to the structure
+        self.sub_structures.insert(i, [sub_structure, N])
+
+    def remove_sub_structure(self, i):
+        """remove_sub_structure
+
+        Removes the sub-structure at the index ``i`` of the ``sub_structures``,
+        e.g. to compare the results of a simulation with and without it, see
+        :meth:`insert_sub_structure` to insert it again.
+
+        Args:
+            i (int): index in the ``sub_structures``, also negative from the
+                end.
+
+        Returns:
+            (tuple):
+            - *sub_structure (Layer, Structure)* - removed Layer or Structure.
+            - *N (int)* - its number of repetitions.
+
+        """
+        sub_structure, N = self.sub_structures.pop(i)
+        return sub_structure, N
+
+    def set_repetitions(self, i, N):
+        """set_repetitions
+
+        Sets the number of repetitions of the sub-structure at the index ``i``
+        of the ``sub_structures``, e.g. to scan the number of unit cells of a
+        layer, where zero repetitions remove it from all results, but keep
+        it in the ``sub_structures`` and in :attr:`num_sub_structures`.
+
+        Args:
+            i (int): index in the ``sub_structures``, also negative from the
+                end.
+            N (int): number of repetitions.
+
+        """
+        self.sub_structures[i][1] = _check_repetitions(N)
+
+    def _contains(self, structure):
+        """whether the ``structure`` is one of the nested sub-structures"""
+        return any(
+            sub is structure or (isinstance(sub, Structure) and sub._contains(structure))
+            for sub, _ in self.sub_structures
+        )
 
     def add_substrate(self, layer, N=1):
         """add_substrate
@@ -227,7 +361,7 @@ class Structure:
                 + "Only Layer or its sub-classes is allowed!"
             )
 
-        self.substrate = [layer, N]
+        self.substrate = [layer, _check_repetitions(N)]
 
     def add_superstrate(self, layer):
         """add_superstrate
@@ -772,6 +906,73 @@ class Structure:
         return d_start, d_end, d_mid
 
     @property
+    def layer_tree(self):
+        """list[LayerNode]: nodes of the ``sub_structures`` with their
+        repetitions and their positions in the vectors of all sub-structures
+        and of all layers, where nested structures hold the nodes of their
+        sub-structures as ``children``, see :class:`LayerNode`.
+
+        The tree is derived from the ``sub_structures`` on every access, so
+        that it follows their changes, e.g. by :meth:`set_repetitions`. It
+        excludes the superstrate and the substrate, as
+        :attr:`layer_vectors` does.
+
+        """
+        return self._layer_tree(0, 0)[0]
+
+    def _layer_tree(self, sub_structure_start, layer_start):
+        """_layer_tree
+
+        Returns the :attr:`layer_tree` for the given start indices of the
+        sub-structures and the layers, which are handed on to the recursive
+        calls of the nested sub structures.
+
+        Args:
+            sub_structure_start (int): index of the first sub-structure.
+            layer_start (int): index of the first layer.
+
+        Returns:
+            (tuple):
+            - *nodes (list[LayerNode])* - nodes of the sub-structures.
+            - *num_sub_structures (int)* - number of all sub-structures.
+            - *num_layers (int)* - number of all layers of all repetitions.
+
+        """
+        nodes = []
+        sub_index, layer_index = sub_structure_start, layer_start
+        for sub_structure, repetitions in self.sub_structures:
+            if isinstance(sub_structure, Layer):
+                children, num_sub, period = (), 1, 1
+            else:
+                children, num_sub, period = sub_structure._layer_tree(sub_index, layer_index)
+                children = tuple(children)
+            num = period * repetitions
+            nodes.append(
+                LayerNode(
+                    sub_structure,
+                    repetitions,
+                    children,
+                    slice(sub_index, sub_index + num_sub),
+                    slice(layer_index, layer_index + num),
+                    period,
+                )
+            )
+            sub_index += num_sub
+            layer_index += num
+        return nodes, sub_index - sub_structure_start, layer_index - layer_start
+
+    @staticmethod
+    def _layer_handles(nodes):
+        """handles of all layers of all repetitions of the nodes"""
+        handles = []
+        for node in nodes:
+            if node.is_layer:
+                handles += [node.sub_structure] * node.repetitions
+            else:
+                handles += Structure._layer_handles(node.children) * node.repetitions
+        return handles
+
+    @property
     def layer_vectors(self):
         """tuple: numeric indices of all :class:`.Layer` in the
         :class:`Structure` in the order of :attr:`unique_layers`, as well as
@@ -784,65 +985,16 @@ class Structure:
           Structure.
 
         """
-        return self._layer_vectors(self.unique_layers)
-
-    def _layer_vectors(self, layers):
-        """_layer_vectors
-
-        Returns the :attr:`layer_vectors` for the given list of unique
-        :class:`.Layer`, which is handed on to the recursive calls of the
-        nested sub structures.
-
-        Args:
-            layers (tuple): ids and handles of the unique Layer, see
-                :attr:`unique_layers`.
-
-        Returns:
-            (tuple):
-            - *indices (ndarray[float])* - numeric index of all Layer in the
-              Structure.
-            - *layer_ids (list[str])* - ids of all Layer in the Structure.
-            - *layer_handles (list[Layer])* - handles of all Layer in the
-              Structure.
-
-        """
-        indices = []
-        layer_ids = []
-        layer_handles = []
-        # traverse the substructres
-        for sub_structure, repetitions in self.sub_structures:
-            if isinstance(sub_structure, Layer):
-                # its a Layer or sub-class
-                # find the index of the current layer id in the unique
-                # layer list and add it N times to the indices vector
-                index = layers[0].index(sub_structure.id)
-                indices = np.append(indices, index * np.ones(repetitions))
-                # add N layer ids and handles to the lists
-                layer_ids = layer_ids + [sub_structure.id] * repetitions
-                layer_handles = layer_handles + [sub_structure] * repetitions
-            else:
-                # its a structure
-                # make a recursive call and hand in the same unique
-                # layer vector as we used before
-                temp1, temp2, temp3 = sub_structure._layer_vectors(layers)
-                # concat the temporary arrays N times
-                indices = np.append(indices, list(temp1) * repetitions)
-                layer_ids = layer_ids + list(temp2) * repetitions
-                layer_handles = layer_handles + list(temp3) * repetitions
+        layer_handles = self._layer_handles(self.layer_tree)
+        layer_ids = [layer.id for layer in layer_handles]
+        positions = {layer_id: i for i, layer_id in enumerate(self.unique_layers[0])}
+        indices = np.array([positions[layer_id] for layer_id in layer_ids], dtype=float)
         return indices, layer_ids, layer_handles
 
     @property
     def num_layers(self):
         """int: number of all :class:`.Layer` in the :class:`Structure`."""
-        L = 0
-        # traverse the substructures
-        for sub_structure, repetitions in self.sub_structures:
-            if isinstance(sub_structure, Layer):
-                L += repetitions
-            else:
-                # its a structure, so get its number of layers recursively
-                L += sub_structure.num_layers * repetitions
-        return L
+        return self._layer_tree(0, 0)[2]
 
     @property
     def num_sub_structures(self):
@@ -852,13 +1004,7 @@ class Structure:
         :class:`Structure`, see :attr:`num_layers`.
 
         """
-        N = 0
-        for sub_structure, _ in self.sub_structures:
-            if isinstance(sub_structure, Layer):
-                N += 1
-            else:
-                N += sub_structure.num_sub_structures
-        return N
+        return self._layer_tree(0, 0)[1]
 
     @property
     def num_sub_systems(self):
@@ -906,18 +1052,15 @@ class Structure:
         """
         layer_ids = []
         layer_handles = []
-        # traverse the sub_structures
-        for sub_structure, _ in self.sub_structures:
-            if isinstance(sub_structure, Layer):
-                # its a Layer, e.g. a UnitCell
-                ids, handles = [sub_structure.id], [sub_structure]
-            else:
-                # its a sub_structure, so get its unique layers recursively
-                ids, handles = sub_structure.unique_layers
-            for layer_id, handle in zip(ids, handles):
-                # add only the ids which are not in the list yet
-                if layer_id not in layer_ids:
-                    layer_ids.append(layer_id)
-                    layer_handles.append(handle)
 
+        def add(nodes):
+            # depth first in the order of the sub_structures
+            for node in nodes:
+                if not node.is_layer:
+                    add(node.children)
+                elif node.sub_structure.id not in layer_ids:
+                    layer_ids.append(node.sub_structure.id)
+                    layer_handles.append(node.sub_structure)
+
+        add(self.layer_tree)
         return layer_ids, layer_handles

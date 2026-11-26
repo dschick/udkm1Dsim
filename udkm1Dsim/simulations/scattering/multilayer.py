@@ -109,13 +109,12 @@ class _Period:
     repetitions, e.g. 100 periods of a superlattice, as list of layers and
     periods, see :meth:`MultilayerScattering._homogeneous_layer_tree`, so
     that every period is assembled only once and then raised to the power of
-    its repetitions with :math:`\\mathcal{O}(\\log N)` matrix products. This
-    tree is not available from the :class:`.Structure`, which only provides
-    flattened vectors of all layers, e.g. by
-    :attr:`.Structure.layer_vectors`, as used by the inhomogeneous
-    simulations with a strain or magnetization per layer. There, only
-    consecutive identical layers become periods, see
-    :func:`_merge_identical_layers`.
+    its repetitions with :math:`\\mathcal{O}(\\log N)` matrix products. Both
+    are built from the :attr:`.Structure.layer_tree`. The inhomogeneous
+    simulations with a strain or magnetization per layer keep only the
+    repetitions with identical values of all their layers and consecutive
+    identical layers as periods, see
+    :meth:`MultilayerScattering._inhomogeneous_layer_tree`.
     """
 
     __slots__ = ("entries", "repetitions")
@@ -165,6 +164,14 @@ def _merge_identical_layers(layers):
         else:
             runs.append([entry, 1])
     return [entry for run in runs for entry in _repeated([run[0]], run[1])]
+
+
+def _identical_repetitions(values, N):
+    """True for values of the layers of ``N`` repetitions, which are
+    identical for all repetitions"""
+    values = np.asarray(values)
+    values = values.reshape((N, -1) + values.shape[1:])
+    return bool(np.all(values == values[:1]))
 
 
 def _identical_layers(entry, other):
@@ -1172,28 +1179,85 @@ class MultilayerScattering(Scattering):
             cache[key] = result
         return result
 
-    def _expand_sub_structures(self, S, strains, magnetizations):
-        """layers of all sub-structures with their strain and magnetization
-        from the values per sub-structure, see :meth:`homogeneous_reflectivity_transmissivity`"""
+    @staticmethod
+    def _homogeneous_entries(nodes, strains, magnetizations):
+        """layers of the nodes of the :attr:`.Structure.layer_tree` with their
+        strain and magnetization from the values per sub-structure, see
+        :meth:`homogeneous_reflectivity_transmissivity`"""
         entries = []
-        counter = 0
-        for sub_structure, repetitions in S.sub_structures:
-            if isinstance(sub_structure, Layer):
-                entry = (sub_structure, strains[counter], magnetizations[counter])
-                entries += _repeated([entry], repetitions)
-                counter += 1
+        for node in nodes:
+            if node.is_layer:
+                i = node.sub_structure_indices.start
+                inner = [(node.sub_structure, strains[i], magnetizations[i])]
             else:
-                num = sub_structure.num_sub_structures
-                entries += _repeated(
-                    self._expand_sub_structures(
-                        sub_structure,
-                        strains[counter : counter + num],
-                        magnetizations[counter : counter + num],
-                    ),
-                    repetitions,
+                inner = MultilayerScattering._homogeneous_entries(
+                    node.children, strains, magnetizations
                 )
-                counter += num
+            entries += _repeated(inner, node.repetitions)
         return entries
+
+    @staticmethod
+    def _inhomogeneous_entries(nodes, strains, magnetizations, offset=0):
+        """layers of the nodes of the :attr:`.Structure.layer_tree` with their
+        strain and magnetization from the values per layer, where the
+        repetitions of a node with identical values of all its layers become
+        a :class:`_Period`, as in the homogeneous simulations, and ``offset``
+        shifts the layer indices of the nodes to a later repetition of their
+        parent"""
+        entries = []
+        for node in nodes:
+            start = node.layer_indices.start + offset
+            N, P = node.repetitions, node.period
+
+            def inner(shift):
+                # layers of a single repetition shifted by `shift` layers
+                if node.is_layer:
+                    i = start + shift
+                    return [(node.sub_structure, strains[i], magnetizations[i])]
+                return MultilayerScattering._inhomogeneous_entries(
+                    node.children, strains, magnetizations, offset + shift
+                )
+
+            if N > 1 and all(
+                _identical_repetitions(values[start : start + N * P], N)
+                for values in (strains, magnetizations)
+            ):
+                entries += _repeated(_merge_identical_layers(inner(0)), N)
+            else:
+                for r in range(N):
+                    entries += inner(r * P)
+        return entries
+
+    def _inhomogeneous_layer_tree(self, strains, magnetizations, nodes=None):
+        """_inhomogeneous_layer_tree
+
+        List of all layers of the stack from the superstrate to the substrate
+        with their strain and magnetization for a single delay of the
+        ``strain_map`` and ``magnetization_map``, see
+        :meth:`calc_inhomogeneous_layers`, where repeated sub-structures with
+        identical values of all their repetitions and consecutive identical
+        layers are kept as repetitions, see :func:`_merge_identical_layers`.
+
+        Args:
+            strains (ndarray[float]): strain of every layer.
+            magnetizations (ndarray[float]): magnetization of every layer.
+            nodes (list[LayerNode], optional): :attr:`.Structure.layer_tree`
+                of the sample, e.g. for all delays at once. Defaults to None.
+
+        Returns:
+            layers (list[tuple, _Period]): layer, strain, and magnetization.
+
+        """
+        if nodes is None:
+            nodes = self.S.layer_tree
+        superstrate, substrate = self._superstrate_and_substrate()
+        return (
+            [superstrate]
+            + _merge_identical_layers(
+                self._inhomogeneous_entries(nodes, strains, magnetizations)
+            )
+            + substrate
+        )
 
     def _superstrate_and_substrate(self):
         """the superstrate and the layers of the substrate"""
@@ -1229,7 +1293,7 @@ class MultilayerScattering(Scattering):
         superstrate, substrate = self._superstrate_and_substrate()
         return (
             [superstrate]
-            + self._expand_sub_structures(self.S, strains, magnetizations)
+            + self._homogeneous_entries(self.S.layer_tree, strains, magnetizations)
             + substrate
         )
 
@@ -2275,10 +2339,10 @@ class MultilayerScattering(Scattering):
         """
         # the eigenmodes are cached per delay, as their memory for all layers
         # of a block of delays may exceed the one of the results by far
+        nodes = self.S.layer_tree
         results = [
             self.calc_jones_matrices(
-                _merge_identical_layers(self.calc_inhomogeneous_layers(strains, magnetizations)),
-                cache={},
+                self._inhomogeneous_layer_tree(strains, magnetizations, nodes), cache={}
             )
             for strains, magnetizations in zip(strain_map, magnetization_map)
         ]
